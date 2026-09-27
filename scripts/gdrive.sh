@@ -24,7 +24,7 @@ fi
 
 # 2. LOCAL CORE INITIALIZATION (ZCP Independence)
 LOCAL_ROOT="/var/www/.rclone"
-MOUNT_DIR="/var/www/baiosfera"
+MOUNT_DIR="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
 
 # Clean up legacy symlink if it exists from previous installations
 if [ -L "$MOUNT_DIR" ]; then
@@ -69,6 +69,7 @@ fi
 GDRIVE_CLIENT_ID="${GDRIVE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}"
 GDRIVE_CLIENT_SECRET="${GDRIVE_CLIENT_SECRET:-${GOOGLE_CLIENT_SECRET:-}}"
 GDRIVE_REFRESH_TOKEN="${GDRIVE_REFRESH_TOKEN:-}"
+GDRIVE_REMOTE_NAME="${GDRIVE_REMOTE_NAME:-baiosfera}"
 
 if [ -z "$GDRIVE_CLIENT_ID" ] || [ -z "$GDRIVE_CLIENT_SECRET" ] || [ -z "$GDRIVE_REFRESH_TOKEN" ]; then
     echo "❌ [GDRIVE-ERROR] Missing Google Drive OAuth credentials."
@@ -79,7 +80,7 @@ fi
 
 RCLONE_CONF="$LOCAL_ROOT/config/rclone/rclone.conf"
 sudo tee "$RCLONE_CONF" > /dev/null << EOF
-[baiosfera]
+[${GDRIVE_REMOTE_NAME}]
 type = drive
 scope = drive
 client_id = ${GDRIVE_CLIENT_ID}
@@ -370,7 +371,7 @@ After=$AFTER_SERVICES
 [Service]
 Type=simple
 ExecStartPre=/bin/bash -c '(umount -l /mnt/*/baiosfera 2>/dev/null || true); (fusermount3 -uz $MOUNT_DIR 2>/dev/null || true); (umount -l $MOUNT_DIR 2>/dev/null || true)'
-ExecStart=$LOCAL_ROOT/bin/rclone mount baiosfera: $MOUNT_DIR \\
+ExecStart=$LOCAL_ROOT/bin/rclone mount ${GDRIVE_REMOTE_NAME}: $MOUNT_DIR \\
     --config $RCLONE_CONF \\
     --cache-dir $LOCAL_ROOT/vault/rclone \\
     --vfs-cache-mode full \\

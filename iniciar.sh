@@ -11,11 +11,34 @@ echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.0)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
-REPO_URL="${1:-https://github.com/catalinaglamur/zerops-astrobranding.git}"
+REPO_URL="https://github.com/catalinaglamur/zerops-astrobranding.git"
 REPO_NAME="$(basename "$REPO_URL" .git)"
-REPO_DIR="${PROJECT_ROOT}/${2:-$REPO_NAME}"
-DRIVE_MOUNT="/var/www/baiosfera"
+REPO_DIR="${PROJECT_ROOT}/zerops-astrobranding"
+DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
 SSOT_SCRIPTS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/scripts"
+
+# Manejo de argumentos opcionales (--keys, --repo)
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --keys|-k)
+            if [ -f "$2" ]; then
+                echo "• Cargando archivo de credenciales externas: $2"
+                set -a; source "$2"; set +a
+            fi
+            shift 2 ;;
+        --repo|-r)
+            REPO_URL="$2"
+            REPO_NAME="$(basename "$REPO_URL" .git)"
+            REPO_DIR="${PROJECT_ROOT}/$REPO_NAME"
+            shift 2 ;;
+        *) shift ;;
+    esac
+done
+
+# Cargar gdrive.env si existe en la raíz
+if [ -f "$PROJECT_ROOT/gdrive.env" ]; then
+    set -a; source "$PROJECT_ROOT/gdrive.env"; set +a
+fi
 
 # Exportar identidad de proyecto agnóstica para Engram y el entorno
 export PROJECT_NAME="$REPO_NAME"
