@@ -18,12 +18,14 @@ DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
 SSOT_SCRIPTS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/scripts"
 
 # Manejo de argumentos opcionales (--keys, --repo)
+KEYS_FILE_ARG=""
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
         --keys|-k)
             if [ -f "$2" ]; then
                 echo "• Cargando archivo de credenciales externas: $2"
                 set -a; source "$2"; set +a
+                KEYS_FILE_ARG="$2"
             fi
             shift 2 ;;
         --repo|-r)
@@ -72,7 +74,13 @@ fi
 # 3. Ejecutar orquestador maestro unisetup.sh desde Drive SSoT
 if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
     echo "• [3/4] Ejecutando unisetup.sh desde Google Drive SSoT..."
-    bash "$SSOT_SCRIPTS/unisetup.sh" --all
+    KEYS_FLAG=()
+    if [ -n "${KEYS_FILE_ARG:-}" ] && [ -f "$KEYS_FILE_ARG" ]; then
+        KEYS_FLAG=("--file" "$KEYS_FILE_ARG")
+    elif [ -f "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/elplacerdc-keys.md" ]; then
+        KEYS_FLAG=("--file" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/elplacerdc-keys.md")
+    fi
+    bash "$SSOT_SCRIPTS/unisetup.sh" --all "${KEYS_FLAG[@]}" < /dev/null
 else
     echo "❌ Error: $SSOT_SCRIPTS/unisetup.sh no disponible tras el montaje."
     exit 1

@@ -53,6 +53,12 @@ sudo ln -sf "$LOCAL_ROOT/bin/rclone" /usr/local/bin/rclone
 
 # 5. VAULT CONFIGURATION
 # Load environment credentials if not in current shell
+if [ -f "/var/www/gdrive.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source /var/www/gdrive.env 2>/dev/null || true
+    set +a
+fi
 if [ -f "/var/www/.env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -85,7 +91,7 @@ type = drive
 scope = drive
 client_id = ${GDRIVE_CLIENT_ID}
 client_secret = ${GDRIVE_CLIENT_SECRET}
-token = {"token_type":"Bearer","refresh_token":"${GDRIVE_REFRESH_TOKEN}"}
+token = {"access_token":"ya29","token_type":"Bearer","refresh_token":"${GDRIVE_REFRESH_TOKEN}","expiry":"2000-01-01T00:00:00Z"}
 EOF
 sudo chmod 644 "$RCLONE_CONF"
 
