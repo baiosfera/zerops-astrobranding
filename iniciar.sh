@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh)
-# Repositorio: https://github.com/catalinaglamur/zerops-astrobranding
-# Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/catalinaglamur/zerops-astrobranding/main/iniciar.sh | bash
+# Repositorio: https://github.com/elplacerdc/zerops-astrobranding
+# Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/elplacerdc/zerops-astrobranding/main/iniciar.sh | bash
 # ==============================================================================
 set -euo pipefail
 
@@ -11,7 +11,7 @@ echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.0)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
-REPO_URL="https://github.com/catalinaglamur/zerops-astrobranding.git"
+REPO_URL="https://github.com/elplacerdc/zerops-astrobranding.git"
 REPO_NAME="$(basename "$REPO_URL" .git)"
 REPO_DIR="${PROJECT_ROOT}/zerops-astrobranding"
 DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
