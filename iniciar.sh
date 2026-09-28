@@ -17,19 +17,23 @@ REPO_DIR="${PROJECT_ROOT}/zerops-astrobranding"
 DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
 SSOT_SCRIPTS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/scripts"
 
-# Manejo de argumentos opcionales (--keys, --repo)
+# Manejo de argumentos opcionales (--keys, --project, --repo)
 KEYS_FILE_ARG=""
+PROJECT_NAME_ARG=""
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
         --keys|-k)
-            if [ -f "$2" ]; then
+            if [ -n "${2:-}" ] && [ -f "$2" ]; then
                 echo "• Cargando archivo de credenciales externas: $2"
                 set -a; source "$2"; set +a
                 KEYS_FILE_ARG="$2"
             fi
             shift 2 ;;
+        --project|-p|--client|-c)
+            PROJECT_NAME_ARG="${2:-}"
+            shift 2 ;;
         --repo|-r)
-            REPO_URL="$2"
+            REPO_URL="${2:-}"
             REPO_NAME="$(basename "$REPO_URL" .git)"
             REPO_DIR="${PROJECT_ROOT}/$REPO_NAME"
             shift 2 ;;
@@ -42,11 +46,14 @@ if [ -f "$PROJECT_ROOT/gdrive.env" ]; then
     set -a; source "$PROJECT_ROOT/gdrive.env"; set +a
 fi
 
-# Exportar identidad de proyecto agnóstica para Engram y el entorno
-export PROJECT_NAME="$REPO_NAME"
-export ENGRAM_PROJECT="$REPO_NAME"
+# Determinar identidad agnóstica de proyecto (prioridad: CLI > gdrive.env / env > repo name)
+TARGET_PROJECT="${PROJECT_NAME_ARG:-${PROJECT_NAME:-${CLIENT_NAME:-}}}"
+APP_IDENTITY="${TARGET_PROJECT:-$REPO_NAME}"
+
+export PROJECT_NAME="$APP_IDENTITY"
+export ENGRAM_PROJECT="$APP_IDENTITY"
 [ -f "$PROJECT_ROOT/.env" ] && sed -i '/^ENGRAM_PROJECT=/d' "$PROJECT_ROOT/.env" 2>/dev/null || true
-echo "ENGRAM_PROJECT=$REPO_NAME" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
+echo "ENGRAM_PROJECT=$APP_IDENTITY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
 
 # 1. Asegurar clonación del repositorio de la aplicación
 if [ ! -d "$REPO_DIR" ]; then
@@ -73,13 +80,47 @@ fi
 
 # 3. Ejecutar orquestador maestro unisetup.sh desde Drive SSoT
 if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
-    echo "• [3/4] Ejecutando unisetup.sh desde Google Drive SSoT..."
-    KEYS_FLAG=()
+    echo "• [3/4] Resolviendo credenciales y ejecutando unisetup.sh..."
+    RESOLVED_KEYS=""
+    
+    # Cascada de resolución agnóstica de credenciales:
     if [ -n "${KEYS_FILE_ARG:-}" ] && [ -f "$KEYS_FILE_ARG" ]; then
-        KEYS_FLAG=("--file" "$KEYS_FILE_ARG")
-    elif [ -f "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/elplacerdc-keys.md" ]; then
-        KEYS_FLAG=("--file" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/elplacerdc-keys.md")
+        RESOLVED_KEYS="$KEYS_FILE_ARG"
+    elif [ -n "${KEYS_FILE:-}" ] && [ -f "$KEYS_FILE" ]; then
+        RESOLVED_KEYS="$KEYS_FILE"
+    elif [ -f "$PROJECT_ROOT/keys.md" ]; then
+        RESOLVED_KEYS="$PROJECT_ROOT/keys.md"
+    elif [ -f "$PROJECT_ROOT/keys.env" ]; then
+        RESOLVED_KEYS="$PROJECT_ROOT/keys.env"
+    elif [ -n "$TARGET_PROJECT" ]; then
+        # Búsqueda específica en SSoT según el proyecto/cliente configurado
+        for candidate in \
+            "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/${TARGET_PROJECT}-keys.md" \
+            "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/${TARGET_PROJECT}.md" \
+            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}-keys.md" \
+            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}.md" \
+            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/glamur-keys.md" \
+            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/elplacerdc.md"; do
+            if [ -f "$candidate" ]; then
+                RESOLVED_KEYS="$candidate"
+                break
+            fi
+        done
     fi
+
+    # Fallback genérico agnóstico en SSoT (si existiese)
+    if [ -z "$RESOLVED_KEYS" ] && [ -f "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/keys.md" ]; then
+        RESOLVED_KEYS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/keys.md"
+    fi
+
+    KEYS_FLAG=()
+    if [ -n "$RESOLVED_KEYS" ]; then
+        echo "  🔑 Archivo de claves asignado: $RESOLVED_KEYS"
+        KEYS_FLAG=("--file" "$RESOLVED_KEYS")
+    else
+        echo "  ℹ️ Modo agnóstico: Sin archivo de claves previo asignado. Se usarán variables del entorno del contenedor."
+    fi
+
     bash "$SSOT_SCRIPTS/unisetup.sh" --all "${KEYS_FLAG[@]}" < /dev/null
 else
     echo "❌ Error: $SSOT_SCRIPTS/unisetup.sh no disponible tras el montaje."
