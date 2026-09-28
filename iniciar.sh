@@ -88,16 +88,22 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
         RESOLVED_KEYS="$KEYS_FILE_ARG"
     elif [ -n "${KEYS_FILE:-}" ] && [ -f "$KEYS_FILE" ]; then
         RESOLVED_KEYS="$KEYS_FILE"
+    elif [ -f "$PROJECT_ROOT/key.md" ]; then
+        RESOLVED_KEYS="$PROJECT_ROOT/key.md"
     elif [ -f "$PROJECT_ROOT/keys.md" ]; then
         RESOLVED_KEYS="$PROJECT_ROOT/keys.md"
+    elif [ -f "$PROJECT_ROOT/key.env" ]; then
+        RESOLVED_KEYS="$PROJECT_ROOT/key.env"
     elif [ -f "$PROJECT_ROOT/keys.env" ]; then
         RESOLVED_KEYS="$PROJECT_ROOT/keys.env"
     elif [ -n "$TARGET_PROJECT" ]; then
         # Búsqueda específica en SSoT según el proyecto/cliente configurado
         for candidate in \
             "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/${TARGET_PROJECT}-keys.md" \
+            "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/${TARGET_PROJECT}-key.md" \
             "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/${TARGET_PROJECT}.md" \
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}-keys.md" \
+            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}-key.md" \
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}.md" \
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/glamur-keys.md" \
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/elplacerdc.md"; do
