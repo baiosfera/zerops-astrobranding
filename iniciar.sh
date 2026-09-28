@@ -78,6 +78,17 @@ else
     echo "• [2/4] Google Drive montado y verificado en $DRIVE_MOUNT."
 fi
 
+# 2b. Aprovisionar catálogo soberano de skills desde GitHub (zerops-astro-skills)
+SKILLS_REPO_URL="https://github.com/elplacerdc/zerops-astro-skills.git"
+SKILLS_LOCAL_DIR="/var/www/zerops-astro-skills"
+if [ ! -d "$SKILLS_LOCAL_DIR/.git" ]; then
+    echo "• [2b/4] Clonando 65 skills soberanas desde GitHub ($SKILLS_REPO_URL)..."
+    git clone --depth 1 "$SKILLS_REPO_URL" "$SKILLS_LOCAL_DIR" 2>/dev/null || true
+else
+    echo "• [2b/4] Actualizando skills soberanas desde GitHub..."
+    git -C "$SKILLS_LOCAL_DIR" pull --ff-only 2>/dev/null || true
+fi
+
 # 3. Ejecutar orquestador maestro unisetup.sh desde Drive SSoT
 if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
     echo "• [3/4] Resolviendo credenciales y ejecutando unisetup.sh..."
