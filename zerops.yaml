@@ -114,6 +114,11 @@ zerops:
         FREEAPI_DB_PATH: "/mnt/localstorage/freellmapi/freellmapi.db"
         FREEAPI_CONFIG_PATH: "/var/www/apps/freellmapi/config.json"
         ENCRYPTION_KEY: "c8e2b109e4d56f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a"
+      prepareCommands:
+        - sudo mkdir -p /mnt/localstorage/freellmapi
+        - sudo chown -R zerops:zerops /mnt/localstorage/freellmapi
+      initCommands:
+        - test -f /var/www/apps/freellmapi/config.json || cp /var/www/apps/freellmapi/config.example.json /var/www/apps/freellmapi/config.json
       start: node apps/freellmapi/server/dist/index.js
       healthCheck:
         httpGet:
