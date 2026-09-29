@@ -63,23 +63,18 @@ El flujo operativo para el sucesor AGY es:
 
 ## 4. Hoja de Ruta de Implementación Paso a Paso
 
-### Paso 1: Crear Recetas Modulares de Infraestructura (`recipes/`)
-En lugar de un único `import.yaml` monolítico, modularizar en perfiles claros dentro de `/var/www/zerops-astrobranding/recipes/`:
+### Paso 1: Recetas Quirúrgicas Escalonadas (`recipes/steps/`)
+En lugar de fragmentar el monorepo en recetas parciales que mutilan dependencias, la arquitectura se basa en **UN SOLO ECOSISTEMA SOBERANO COMPLETO**, aprovisionado quirúrgicamente paso a paso dentro de `/var/www/zerops-astrobranding/recipes/steps/` para su validación física independiente:
 
-1. `recipes/landing-minimal.yaml`:
-   - `astrobranding` (runtime: `ubuntu/bun@1.3.9`)
-   - `localstorage` (opcional para persistencia de assets generados)
-2. `recipes/brandview-studio.yaml`:
-   - `brandview` (runtime: `ubuntu/nodejs@22`, puerto 3000 HTTP, build Vite, Hono server)
-3. `recipes/ecommerce.yaml`:
-   - `astrobranding`
-   - `valkey` (`valkey:single@7.2`, profile `hobby`)
-   - `localstorage`
-   - *(Nota: plantilla preparada para `database` postgresql:single@18, pero comentada o marcada como opcional hasta autorización del usuario).*
-4. `recipes/full-mesh.yaml`:
-   - Los servicios completos (`freellmapi`, `bifrost`, `evolution`, `hermes`, etc.) para clientes enterprise.
-5. `import.yaml` (raíz):
-   - Enlazar o definir el perfil mínimo/estándar por defecto.
+1. `recipes/steps/01-freellmapi.yaml`: `localstorage` (POSIX volume) + `freellmapi` (Node.js 24).
+2. `recipes/steps/02-bifrost-postgres.yaml`: `database` (PostgreSQL 18) + `valkey` (Valkey 7.2) + `bifrost` (Go 1.22).
+3. `recipes/steps/03-hermes-nats.yaml`: `nats` (NATS 2.12) + `hermes` (Python 3.12).
+4. `recipes/steps/04-evolution.yaml`: `evolution` (Go whatsmeow / WhatsApp Engine).
+5. `recipes/steps/05-listmonk.yaml`: `listmonk` (Email Marketing / Newsletter Engine).
+6. `recipes/steps/06-astro-web.yaml`: `objectstorage` (S3) + `astrobranding` (Bun 1.3 / Node 24).
+
+> **Invariante de Agnolicidad**: La aplicación web `astrobranding` es agnóstica a cualquier producto (sea landing, ecommerce, funnel de ventas o app astrológica), pero consume la infraestructura completa conectándose a PostgreSQL, Valkey, NATS, Bifrost, Evolution y Almacenamiento.
+
 
 ---
 
@@ -172,9 +167,10 @@ Y el agente (AGY) ejecute el hito de punta a punta de forma 100% autónoma, cons
    - Auto-rotación de claves, circuit breaker ante 429 y caché interna probada (reducción de 580ms a 3.7ms).
 2. **Hito 2 (PostgreSQL 18 + Valkey 7.2 + Bifrost v2.2.3)**:
    - 65 tablas relacionales migradas y activas en PostgreSQL 18 (`database`).
-   - **Invariante RediSearch**: Valkey 7.2 vainilla carece del módulo `FT.*`. Por lo tanto, `vector_store.type` en Bifrost debe ser `chromem` (embebido en Go) o `qdrant`. Al configurar `chromem`, la caché semántica se activó (`status: active`) y redujo la latencia de DeepSeek de 1730 ms a **2.91 ms (98.6% de reducción real)**.
-   - **5 Virtual Keys Oficiales Registradas**: Dadas de alta con sus hashes y tokens `sk-bf-...` en PostgreSQL 18 vía `/api/governance/virtual-keys`: `Production Sovereign Key`, `Hermes Agent Autonomous`, `AstroBranding Production`, `Evolution WhatsApp Bot` y `Antigravity AGY Operator`.
-   - **`bifrost-cli` Integrado**: Binario oficial enlazado en `/usr/local/bin/bifrost-cli` e incorporado en `iniciar.sh` para arranques limpios.
+    - **Invariante RediSearch & Desacople de Valkey**: Valkey 7.2 vainilla carece del módulo `FT.*`. Por lo tanto, `vector_store.type` en Bifrost debe ser `chromem` (embebido en Go) o `qdrant`. Al configurar `chromem`, la caché semántica se activó (`status: active`) y redujo la latencia de DeepSeek de 1730 ms a **2.91 ms (98.6% de reducción real)**.
+    - **Independencia de Valkey**: Bifrost es 100% independiente de Valkey (persistencia en PostgreSQL 18 y caché en RAM vía `chromem`). Valkey 7.2 existe en el clúster para las sesiones de WhatsApp de `evolution` y las colas BullMQ de `astrobranding`.
+    - **5 Virtual Keys Oficiales Registradas**: Dadas de alta con sus hashes y tokens `sk-bf-...` en PostgreSQL 18 vía `/api/governance/virtual-keys`: `Production Sovereign Key`, `Hermes Agent Autonomous`, `AstroBranding Production`, `Evolution WhatsApp Bot` y `Antigravity AGY Operator`.
+    - **`bifrost-cli` Integrado**: Binario oficial enlazado en `/usr/local/bin/bifrost-cli` e incorporado en `iniciar.sh` para arranques limpios.
 
 ### C. Matriz de Relevo y Guía de Ejecución para los Siguientes Hitos (Hito 3 a Hito 6)
 
@@ -184,13 +180,10 @@ Para que cualquier agente sucesor (AGY) opere con certeza matemática y sin ensa
 |---|---|---|---|---|---|
 | **Hito 3** | **Hermes Agent + NATS JetStream**<br>`recipes/steps/03-hermes-nats.yaml` | `nats:single@2.12`<br>`hermes` (Ubuntu Python 3.12) | - `HERMES_LLM_API_BASE`: `http://bifrost:8080/v1`<br>- `HERMES_LLM_API_KEY`: `sk-bf-f702a2c4-c967-4ea3-90bc-7c8f5dad5cd0` (Virtual Key `Hermes Agent Autonomous` en PG18)<br>- `NATS_URL`: `nats://nats:4222` | [`nats`](file:///var/www/zerops-astro-skills/nats/SKILL.md)<br>[`hermes-agent`](file:///var/www/zerops-astro-skills/hermes-agent/SKILL.md) | - Endpoint `/health` HTTP 200 en Hermes<br>- Publicación y suscripción en NATS JetStream<br>- Inferencia LLM ejecutada a través de Bifrost con Virtual Key |
 | **Hito 4** | **Evolution API / WhatsApp Engine**<br>`recipes/steps/04-evolution.yaml` | `evolution` (Alpine Go 1.22 / Node) | - Base en PostgreSQL 18 (`database`)<br>- Cache/Sesiones en Valkey 7.2 (`valkey`)<br>- Eventos en NATS (`nats`)<br>- LLM Virtual Key: `sk-bf-426d0421-f755-4634-ad98-7dad075ba60b` (`Evolution WhatsApp Bot`) | [`whatsapp-engine`](file:///var/www/zerops-astro-skills/whatsapp-engine/SKILL.md) | - Handshake QR / sesión activa<br>- Eventos despachados a NATS JetStream<br>- Proxy LLM operativo contra Bifrost |
-| **Hito 5** | **Listmonk / Marketing Transaccional**<br>`recipes/steps/05-listmonk.yaml` | `listmonk` | - Base relacional en PostgreSQL 18 (`database`) | [`listmonk`](file:///var/www/zerops-astro-skills/listmonk/SKILL.md)<br>[`email-marketing`](file:///var/www/zerops-astro-skills/email-marketing/SKILL.md) | - Dashboard administrativo y API REST `/api/health` activos |
+| **Hito 5** | **Listmonk / Marketing Transaccional**<br>`recipes/steps/05-listmonk.yaml` | `listmonk` | - Base relacional en PostgreSQL 18 (`database`)<br>*(Nota: requiere andamiar `apps/listmonk` y su bloque en `zerops.yaml` previo a su despliegue físico).* | [`listmonk`](file:///var/www/zerops-astro-skills/listmonk/SKILL.md)<br>[`email-marketing`](file:///var/www/zerops-astro-skills/email-marketing/SKILL.md) | - Dashboard administrativo y API REST `/api/health` activos |
 | **Hito 6** | **AstroBranding Sovereign Fullstack**<br>`recipes/steps/06-astro-web.yaml` | `objectstorage` (S3)<br>`astrobranding` (Ubuntu Bun 1.3 / Node 24) | - Ingestión de 15 Shards astrológicos<br>- Colas BullMQ sobre Valkey 7.2 (`valkey`)<br>- S3 Object Storage montado<br>- LLM Virtual Key: `sk-bf-9eef443c-d7fe-48ac-8eb0-706702bf9ea9` (`AstroBranding Production`) | [`astro-web`](file:///var/www/zerops-astro-skills/astro-web/SKILL.md)<br>[`frnt`](file:///var/www/zerops-astro-skills/frnt/SKILL.md)<br>[`brandbook`](file:///var/www/zerops-astro-skills/brandbook/SKILL.md) | - SSR en puerto 3000 con React 19 Islands<br>- Shards astrológicos consumidos desde packages/engine |
 
-### D. Catálogo de Recetas por Bundles / Ecosistemas Completos
-Si el usuario solicita un bundle en lugar de un paso individual:
-- *"Instala la landing minimal"*: Ejecuta `recipes/landing-minimal.yaml` (`astrobranding` + `localstorage`).
-- *"Instala brandview studio"*: Ejecuta `recipes/brandview-studio.yaml` (`brandview` Node 22 + Vite + Hono).
-- *"Instala la tienda online / ecommerce"*: Ejecuta `recipes/ecommerce.yaml` (`astrobranding` + `valkey` + `localstorage`).
-- *"Instala el ecosistema completo"*: Ejecuta `recipes/full-mesh.yaml` (los 10 servicios con autoescalado frugal).
+### D. Consolidación Final: Esqueleto Canónico Completo (`import.yaml`)
+Una vez completada y auditada la secuencia quirúrgica de hitos 1 a 6, el monorepo queda listo para que cualquier futuro despliegue en frío del esqueleto se realice de una sola vez mediante el manifiesto canónico `import.yaml`. Se eliminaron las recetas de bundles falsos (`landing-minimal`, `ecommerce`, etc.) ya que AstroBranding es una aplicación agnóstica que consume la malla completa.
+
 
