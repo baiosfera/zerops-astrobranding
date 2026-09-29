@@ -10,6 +10,7 @@
 
 import { execSync } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 
 const PORT = parseInt(process.env.COCKPIT_PORT || "3050", 10);
 const PID_FILE = "/tmp/cockpit-web.pid";
@@ -41,7 +42,11 @@ process.on("SIGINT", cleanupAndExit);
 function getMetrics() {
   lastActivity = Date.now();
   try {
-    const raw = execSync("bun /var/www/zerops-astrobranding/scripts/cockpit-status.ts --json", {
+    const scriptPath = fs.existsSync("/var/www/zerops-astrobranding/scripts/cockpit-status.ts")
+      ? "/var/www/zerops-astrobranding/scripts/cockpit-status.ts"
+      : "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/cockpit-status.ts";
+    const runner = typeof (globalThis as any).Bun !== "undefined" ? "bun" : "node --no-warnings --experimental-strip-types";
+    const raw = execSync(`${runner} "${scriptPath}" --json`, {
       encoding: "utf-8",
       timeout: 6000,
     });
@@ -78,7 +83,7 @@ function renderHtml(data: any): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Glamur · Cockpit Soberano de Telemetría</title>
+  <title>Cockpit Soberano de Telemetría · Zerops</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -109,7 +114,7 @@ function renderHtml(data: any): string {
       <div>
         <div class="flex items-center gap-3">
           <span class="text-2xl">🏛️</span>
-          <h1 class="text-xl md:text-2xl font-bold tracking-tight text-white">GLAMUR SOVEREIGN COCKPIT</h1>
+          <h1 class="text-xl md:text-2xl font-bold tracking-tight text-white">${(process.env.PROJECT_NAME || process.env.ENGRAM_PROJECT || process.env.ZEROPS_ProjectName || "SOVEREIGN").toUpperCase()} COCKPIT</h1>
           <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">0 MB Idle Target</span>
           <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Zero-Token Local Execution</span>
         </div>
@@ -572,37 +577,74 @@ function renderHtml(data: any): string {
 </html>`;
 }
 
-// Start Bun HTTP Server
-Bun.serve({
-  port: PORT,
-  async fetch(req) {
-    const url = new URL(req.url);
+// Universal HTTP Server (Bun.serve or Node.js http)
+if (typeof (globalThis as any).Bun !== "undefined") {
+  (globalThis as any).Bun.serve({
+    port: PORT,
+    async fetch(req: Request) {
+      const url = new URL(req.url);
 
-    // Support both direct '/' and proxied '/cockpit' paths
+      if (url.pathname === "/" || url.pathname === "/cockpit" || url.pathname === "/cockpit/") {
+        const metrics = getMetrics();
+        return new Response(renderHtml(metrics), {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+
+      if (url.pathname === "/api/metrics" || url.pathname === "/cockpit/api/metrics") {
+        const metrics = getMetrics();
+        return Response.json(metrics);
+      }
+
+      if (url.pathname === "/health" || url.pathname === "/cockpit/health") {
+        return Response.json({ status: "ok", port: PORT });
+      }
+
+      if ((url.pathname === "/api/stop" || url.pathname === "/cockpit/api/stop") && req.method === "POST") {
+        setTimeout(cleanupAndExit, 200);
+        return Response.json({ message: "Cockpit server shutting down" });
+      }
+
+      return new Response("Not Found", { status: 404 });
+    },
+  });
+} else {
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+
     if (url.pathname === "/" || url.pathname === "/cockpit" || url.pathname === "/cockpit/") {
       const metrics = getMetrics();
-      return new Response(renderHtml(metrics), {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(renderHtml(metrics));
+      return;
     }
 
     if (url.pathname === "/api/metrics" || url.pathname === "/cockpit/api/metrics") {
       const metrics = getMetrics();
-      return Response.json(metrics);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(metrics));
+      return;
     }
 
     if (url.pathname === "/health" || url.pathname === "/cockpit/health") {
-      return Response.json({ status: "ok", port: PORT });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok", port: PORT }));
+      return;
     }
 
     if ((url.pathname === "/api/stop" || url.pathname === "/cockpit/api/stop") && req.method === "POST") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ message: "Cockpit server shutting down" }));
       setTimeout(cleanupAndExit, 200);
-      return Response.json({ message: "Cockpit server shutting down" });
+      return;
     }
 
-    return new Response("Not Found", { status: 404 });
-  },
-});
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Not Found");
+  });
+
+  server.listen(PORT);
+}
 
 console.log(`[Cockpit Web] Running at http://localhost:${PORT} (PID: ${process.pid})`);
 console.log(`[Cockpit Web] Auto-shutdown configured after 30 minutes of inactivity.`);
