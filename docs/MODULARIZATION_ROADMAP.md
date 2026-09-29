@@ -28,9 +28,11 @@ En esta sesión completamos hitos de infraestructura, metacognición y diseño q
    - Publicado en GitHub: **[https://github.com/elplacerdc/brandview](https://github.com/elplacerdc/brandview)**.
    - Cuenta con recetas Zerops listas: `zerops.yaml` (Node 22) e `import.yaml` (receta Frugal-First).
 
-3. **Invariante Crítico de Base de Datos**:
-   - **RESTRICCIÓN EXPRESA:** **NO tocar ni aprovisionar PostgreSQL en Zerops en este momento**.
-   - Toda definición de PostgreSQL en recetas o esquemas se mantiene como plantilla/código hermético para cuando el usuario decida activarla.
+3. **Invariante de Base de Datos y Persistencia Relacional**:
+   - PostgreSQL 18 (`database: postgresql:single@18`) es el motor relacional central y soberano del ecosistema.
+   - Es utilizado obligatoriamente por Bifrost (`config_store` y `logs_store`), Evolution (`evogo_auth`), Listmonk (`listmonk_db`) y AstroBranding.
+   - Se aprovisiona en el Hito 2 con profile `oltp-hobby` y persistencia WAL sobre NVMe.
+
 
 ---
 
