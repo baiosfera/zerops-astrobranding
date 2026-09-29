@@ -111,22 +111,3 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 
 <!-- CUSTOM:END -->
 
-<!-- ZEROPS:REFLOG -->
-### 2026-09-29 — Bootstrap: 
-
-- **Runtime:** freellmapi (ubuntu/nodejs@24, simple)
-- **Dependencies:** localstorage (local-storage:single@1)
-- **Session:** 6389f5502dcf82d4
-
-> This is a historical record. Verify current state via `zerops_discover`.
-<!-- /ZEROPS:REFLOG -->
-
-<!-- ZEROPS:REFLOG -->
-### 2026-09-29 — Bootstrap: Aprovisionar Hito 2: database (PostgreSQL 18), valkey y bifrost
-
-- **Runtime:** bifrost (alpine/go@1.22, simple)
-- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2)
-- **Session:** 4214743e16ad3edb
-
-> This is a historical record. Verify current state via `zerops_discover`.
-<!-- /ZEROPS:REFLOG -->
