@@ -250,6 +250,13 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
         echo "• [3b/4] Sembrando claves declarativas y aprovisionando secrets de IA..."
         bash "$REPO_DIR/scripts/seed-freellmapi-keys.sh" ${RESOLVED_KEYS:+--keys "$RESOLVED_KEYS"} || echo "  ⚠️ Seeding diferido hasta disponibilidad del servicio."
     fi
+
+    # 3c. Garantizar instalación global de bifrost-cli para el puente agéntico
+    if ! command -v bifrost-cli >/dev/null 2>&1; then
+        echo "• [3c/4] Instalando @maximhq/bifrost-cli como puente agéntico de desarrollo..."
+        sudo npm install -g @maximhq/bifrost-cli >/dev/null 2>&1 || true
+        [ -f /usr/bin/bifrost ] && sudo ln -sf /usr/bin/bifrost /usr/local/bin/bifrost-cli || true
+    fi
 else
     echo "❌ Error: $SSOT_SCRIPTS/unisetup.sh no disponible tras el montaje."
     exit 1

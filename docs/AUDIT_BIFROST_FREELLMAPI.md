@@ -44,13 +44,15 @@ Ejecución física real en vivo contra `https://bifrost-252-8080.ny1.zerops.app`
   - **Reducción de Latencia**: **97.3%**
 
 ### B. Proveedor DeepSeek Comercial (`deepseek/deepseek-chat`)
-- **Paso 1 (Inferencia viva)**:
-  - Latencia HTTP: **1406.06 ms**
-  - Tokens: 130
-  - Costo registrado en DB: **$0.00027852 USD**
-- **Paso 2 y 3 (Inferencia viva)**:
-  - Latencias: **1425.82 ms** y **1519.34 ms**
-  - Sin impacto de caché por ausencia de modelo de embeddings para cálculo vectorial.
+- **Paso 1 (Inferencia viva - Miss / Poblar Caché)**:
+  - Latencia HTTP externa: **1769.73 ms**
+  - Registro interno en PostgreSQL `logs`: **1730.08 ms**
+  - Tokens: 119
+- **Paso 2 (Hit de Caché Semántico Activo con `chromem`)**:
+  - Latencia HTTP externa: **24.00 ms**
+  - Registro interno en PostgreSQL `logs`: **2.91 ms**
+  - **Reducción de Latencia**: **98.6%** (De 1730ms a 2.91ms).
+- **Causa Raíz Resuelta**: Valkey 7.2 carecía del módulo RediSearch (`FT.*`). Al configurar `vector_store.type: chromem`, el plugin `semantic_cache` inicializó en estado `active`, habilitando la caché vectorial en caliente.
 
 ---
 

@@ -32,7 +32,7 @@
   },
   "vector_store": {
     "enabled": true,
-    "type": "redis",
+    "type": "chromem",
     "config": {
       "addr": "env.VALKEY_ADDR",
       "password": "env.VALKEY_PASSWORD",
