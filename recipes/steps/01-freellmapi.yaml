@@ -1,0 +1,17 @@
+# Hito 1: Almacenamiento Local Persistente + FreeLLMAPI Multi-Provider Proxy
+services:
+  - hostname: localstorage
+    type: local-storage:single@1
+    priority: 10
+
+  - hostname: freellmapi
+    type: ubuntu/nodejs@24
+    priority: 5
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 2
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10

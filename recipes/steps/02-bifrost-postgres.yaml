@@ -1,0 +1,23 @@
+# Hito 2: PostgreSQL 18 + Valkey 7.2 Cache + Maxim AI Bifrost Enterprise Gateway
+services:
+  - hostname: database
+    type: postgresql:single@18
+    profile: oltp-hobby
+    priority: 10
+
+  - hostname: valkey
+    type: valkey:single@7.2
+    profile: hobby
+    priority: 10
+
+  - hostname: bifrost
+    type: alpine/go@1.22
+    priority: 5
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 2
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10

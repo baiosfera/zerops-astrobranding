@@ -1,0 +1,17 @@
+# Hito 3: NATS 2.12 JetStream RPC Broker + Hermes-Agent Copilot (Ubuntu Python 3.12)
+services:
+  - hostname: nats
+    type: nats:single@2.12
+    priority: 10
+
+  - hostname: hermes
+    type: ubuntu/python@3.12
+    priority: 5
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 2
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10

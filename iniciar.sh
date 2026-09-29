@@ -116,7 +116,6 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}-keys.md" \
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}-key.md" \
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}.md" \
-            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/glamur-keys.md" \
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/elplacerdc.md"; do
             if [ -f "$candidate" ]; then
                 RESOLVED_KEYS="$candidate"
@@ -146,7 +145,7 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
                 for f in "$d"/*keys*.md "$d"/*.md; do
                     if [ -f "$f" ]; then
                         f_base=$(basename "$f")
-                        [[ "$f_base" =~ ^(directus|catalinaglamur_deployment|prompt-maestro) ]] && continue
+                        [[ "$f_base" =~ ^(directus|prompt-maestro) ]] && continue
                         DETECTED_PROFILES+=("$d_name")
                         DETECTED_PATHS+=("$f")
                         break
