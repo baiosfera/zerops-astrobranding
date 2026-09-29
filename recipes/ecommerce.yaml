@@ -1,0 +1,22 @@
+# Bundle: E-Commerce Sovereign Store (AstroBranding + Valkey Cache + LocalStorage)
+services:
+  - hostname: valkey
+    type: valkey:single@7.2
+    profile: hobby
+    priority: 10
+
+  - hostname: localstorage
+    type: local-storage:single@1
+    priority: 10
+
+  - hostname: astrobranding
+    type: ubuntu/bun@1.3.9
+    priority: 5
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 2
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10

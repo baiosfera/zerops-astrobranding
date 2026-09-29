@@ -175,3 +175,22 @@ Y el agente (AGY) ejecute el hito de punta a punta de forma 100% autónoma, cons
    - **Invariante RediSearch**: Valkey 7.2 vainilla carece del módulo `FT.*`. Por lo tanto, `vector_store.type` en Bifrost debe ser `chromem` (embebido en Go) o `qdrant`. Al configurar `chromem`, la caché semántica se activó (`status: active`) y redujo la latencia de DeepSeek de 1730 ms a **2.91 ms (98.6% de reducción real)**.
    - **5 Virtual Keys Oficiales Registradas**: Dadas de alta con sus hashes y tokens `sk-bf-...` en PostgreSQL 18 vía `/api/governance/virtual-keys`: `Production Sovereign Key`, `Hermes Agent Autonomous`, `AstroBranding Production`, `Evolution WhatsApp Bot` y `Antigravity AGY Operator`.
    - **`bifrost-cli` Integrado**: Binario oficial enlazado en `/usr/local/bin/bifrost-cli` e incorporado en `iniciar.sh` para arranques limpios.
+
+### C. Matriz de Relevo y Guía de Ejecución para los Siguientes Hitos (Hito 3 a Hito 6)
+
+Para que cualquier agente sucesor (AGY) opere con certeza matemática y sin ensayo y error, esta es la secuencia exacta de hitos pendientes:
+
+| Hito | Nombre & Receta | Servicios | Cableado y Secretos | Skills Requeridas | Criterios de Aceptación Física |
+|---|---|---|---|---|---|
+| **Hito 3** | **Hermes Agent + NATS JetStream**<br>`recipes/steps/03-hermes-nats.yaml` | `nats:single@2.12`<br>`hermes` (Ubuntu Python 3.12) | - `HERMES_LLM_API_BASE`: `http://bifrost:8080/v1`<br>- `HERMES_LLM_API_KEY`: `sk-bf-f702a2c4-c967-4ea3-90bc-7c8f5dad5cd0` (Virtual Key `Hermes Agent Autonomous` en PG18)<br>- `NATS_URL`: `nats://nats:4222` | [`nats`](file:///var/www/zerops-astro-skills/nats/SKILL.md)<br>[`hermes-agent`](file:///var/www/zerops-astro-skills/hermes-agent/SKILL.md) | - Endpoint `/health` HTTP 200 en Hermes<br>- Publicación y suscripción en NATS JetStream<br>- Inferencia LLM ejecutada a través de Bifrost con Virtual Key |
+| **Hito 4** | **Evolution API / WhatsApp Engine**<br>`recipes/steps/04-evolution.yaml` | `evolution` (Alpine Go 1.22 / Node) | - Base en PostgreSQL 18 (`database`)<br>- Cache/Sesiones en Valkey 7.2 (`valkey`)<br>- Eventos en NATS (`nats`)<br>- LLM Virtual Key: `sk-bf-426d0421-f755-4634-ad98-7dad075ba60b` (`Evolution WhatsApp Bot`) | [`whatsapp-engine`](file:///var/www/zerops-astro-skills/whatsapp-engine/SKILL.md) | - Handshake QR / sesión activa<br>- Eventos despachados a NATS JetStream<br>- Proxy LLM operativo contra Bifrost |
+| **Hito 5** | **Listmonk / Marketing Transaccional**<br>`recipes/steps/05-listmonk.yaml` | `listmonk` | - Base relacional en PostgreSQL 18 (`database`) | [`listmonk`](file:///var/www/zerops-astro-skills/listmonk/SKILL.md)<br>[`email-marketing`](file:///var/www/zerops-astro-skills/email-marketing/SKILL.md) | - Dashboard administrativo y API REST `/api/health` activos |
+| **Hito 6** | **AstroBranding Sovereign Fullstack**<br>`recipes/steps/06-astro-web.yaml` | `objectstorage` (S3)<br>`astrobranding` (Ubuntu Bun 1.3 / Node 24) | - Ingestión de 15 Shards astrológicos<br>- Colas BullMQ sobre Valkey 7.2 (`valkey`)<br>- S3 Object Storage montado<br>- LLM Virtual Key: `sk-bf-9eef443c-d7fe-48ac-8eb0-706702bf9ea9` (`AstroBranding Production`) | [`astro-web`](file:///var/www/zerops-astro-skills/astro-web/SKILL.md)<br>[`frnt`](file:///var/www/zerops-astro-skills/frnt/SKILL.md)<br>[`brandbook`](file:///var/www/zerops-astro-skills/brandbook/SKILL.md) | - SSR en puerto 3000 con React 19 Islands<br>- Shards astrológicos consumidos desde packages/engine |
+
+### D. Catálogo de Recetas por Bundles / Ecosistemas Completos
+Si el usuario solicita un bundle en lugar de un paso individual:
+- *"Instala la landing minimal"*: Ejecuta `recipes/landing-minimal.yaml` (`astrobranding` + `localstorage`).
+- *"Instala brandview studio"*: Ejecuta `recipes/brandview-studio.yaml` (`brandview` Node 22 + Vite + Hono).
+- *"Instala la tienda online / ecommerce"*: Ejecuta `recipes/ecommerce.yaml` (`astrobranding` + `valkey` + `localstorage`).
+- *"Instala el ecosistema completo"*: Ejecuta `recipes/full-mesh.yaml` (los 10 servicios con autoescalado frugal).
+
