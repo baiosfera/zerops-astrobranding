@@ -1,0 +1,40 @@
+zerops:
+  - setup: freellmapi
+    build:
+      base: ubuntu/nodejs@24
+      buildCommands:
+        - npm ci
+        - npm run build
+      deployFiles:
+        - .
+      cache:
+        - ~/.npm
+    run:
+      base: ubuntu/nodejs@24
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
+      ports:
+        - port: 3001
+          httpSupport: true
+      envVariables:
+        PORT: 3001
+        HOST: "0.0.0.0"
+        NODE_ENV: "production"
+        RESPONSE_CACHE: "true"
+        RESPONSE_CACHE_PERSIST: "true"
+        RESPONSE_CACHE_TTL_SECONDS: "86400"
+        FREEAPI_DB_PATH: "/mnt/localstorage/freellmapi/freellmapi.db"
+        FREEAPI_CONFIG_PATH: "/var/www/config.json"
+        ENCRYPTION_KEY: "c8e2b109e4d56f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a"
+      prepareCommands:
+        - sudo mkdir -p /mnt/localstorage/freellmapi
+        - sudo chown -R zerops:zerops /mnt/localstorage/freellmapi
+      initCommands:
+        - test -f /var/www/config.json || cp /var/www/config.example.json /var/www/config.json
+      start: node server/dist/index.js
+      healthCheck:
+        httpGet:
+          port: 3001
+          path: /api/ping

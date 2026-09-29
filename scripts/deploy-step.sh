@@ -43,7 +43,12 @@ case "$STEP" in
         else
             log_info "Receta lista para importar vía ZCP MCP (zerops_import): $RECIPE"
         fi
-        log_ok "Hito 1 aprovisionado. Próximo paso: desplegar código de 'freellmapi' y auditar /api/ping."
+        log_ok "Hito 1 aprovisionado."
+        if [ -x "$SCRIPT_DIR/seed-freellmapi-keys.sh" ]; then
+            log_info "Inyectando configuración y claves declarativas en freellmapi..."
+            "$SCRIPT_DIR/seed-freellmapi-keys.sh" || log_warn "Inyección preliminar completada; se confirmará tras despliegue de código."
+        fi
+        log_ok "Próximo paso: desplegar código de 'freellmapi' y auditar /api/ping."
         ;;
     2)
         RECIPE="$RECIPES_DIR/02-bifrost-postgres.yaml"
