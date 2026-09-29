@@ -1,16 +1,44 @@
 {
   "$schema": "https://www.getbifrost.ai/schema",
   "version": 2,
+  "encryption_key": "env.BIFROST_ENCRYPTION_KEY",
   "server": {
     "port": 8080,
     "host": "0.0.0.0"
   },
+  "config_store": {
+    "enabled": true,
+    "type": "postgres",
+    "config": {
+      "host": "env.PG_HOST",
+      "port": "5432",
+      "user": "env.PG_USER",
+      "password": "env.PG_PASSWORD",
+      "db_name": "env.PG_DATABASE",
+      "ssl_mode": "disable"
+    }
+  },
+  "logs_store": {
+    "enabled": true,
+    "type": "postgres",
+    "config": {
+      "host": "env.PG_HOST",
+      "port": "5432",
+      "user": "env.PG_USER",
+      "password": "env.PG_PASSWORD",
+      "db_name": "env.PG_DATABASE",
+      "ssl_mode": "disable"
+    }
+  },
   "vector_store": {
     "enabled": true,
-    "type": "chromem",
+    "type": "redis",
     "config": {
-      "path": "/app/data/chromem",
-      "compress": true
+      "addr": "env.VALKEY_ADDR",
+      "password": "env.VALKEY_PASSWORD",
+      "db": 0,
+      "use_tls": false,
+      "cluster_mode": false
     }
   },
   "plugins": [
@@ -20,6 +48,7 @@
       "config": {
         "dimension": 1,
         "ttl": 86400,
+        "threshold": 0.8,
         "vector_store_namespace": "BifrostLocalCache",
         "default_cache_key": "elplacerdc-production-cache",
         "cache_by_model": true,

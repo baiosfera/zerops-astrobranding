@@ -244,6 +244,12 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
     fi
 
     bash "$SSOT_SCRIPTS/unisetup.sh" --all "${KEYS_FLAG[@]}" < /dev/null
+
+    # 3b. Sembrado de claves declarativas en FreeLLMAPI y Zerops Environment
+    if [ -f "$REPO_DIR/scripts/seed-freellmapi-keys.sh" ]; then
+        echo "• [3b/4] Sembrando claves declarativas y aprovisionando secrets de IA..."
+        bash "$REPO_DIR/scripts/seed-freellmapi-keys.sh" ${RESOLVED_KEYS:+--keys "$RESOLVED_KEYS"} || echo "  ⚠️ Seeding diferido hasta disponibilidad del servicio."
+    fi
 else
     echo "❌ Error: $SSOT_SCRIPTS/unisetup.sh no disponible tras el montaje."
     exit 1

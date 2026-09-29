@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BIFROST_VERSION="v2.0.0"
+BIFROST_VERSION="v2.2.3"
 TARGET_DIR="${1:-/usr/local/bin}"
 
 echo "==> [Bifrost Setup] Installing Maxim AI Bifrost Gateway (${BIFROST_VERSION})..."
@@ -15,7 +15,7 @@ case "$ARCH" in
   *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
-DOWNLOAD_URL="https://github.com/maximhq/bifrost/releases/download/${BIFROST_VERSION}/bifrost-${OS}-${ARCH}"
+DOWNLOAD_URL="https://downloads.getmaxim.ai/bifrost/${BIFROST_VERSION}/${OS}/${ARCH}/bifrost-http"
 
 echo "==> Downloading from: ${DOWNLOAD_URL}"
 curl -fsSL -o /tmp/bifrost "${DOWNLOAD_URL}"

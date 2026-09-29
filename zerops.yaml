@@ -66,10 +66,10 @@ zerops:
           httpSupport: true
       prepareCommands:
         - sudo apk add --no-cache ca-certificates tzdata
-        - sudo mkdir -p /mnt/localstorage/bifrost/chromem
+        - sudo mkdir -p /mnt/localstorage/bifrost
         - sudo chown -R zerops:zerops /mnt/localstorage/bifrost
       initCommands:
-        - test -f /mnt/localstorage/bifrost/config.json || cp /var/www/data/config.json /mnt/localstorage/bifrost/config.json
+        - cp /var/www/data/config.json /mnt/localstorage/bifrost/config.json
         - chmod +x /var/www/bifrost
       start: /var/www/bifrost -app-dir /mnt/localstorage/bifrost -port 8080 -host 0.0.0.0 -log-level info -log-style json
       healthCheck:
@@ -82,9 +82,20 @@ zerops:
         APP_DIR: "/mnt/localstorage/bifrost"
         GOMEMLIMIT: "900MiB"
         GOGC: "200"
+        PG_HOST: ${database_hostname}
+        PG_PORT: "5432"
+        PG_USER: ${database_user}
+        PG_PASSWORD: ${database_password}
+        PG_DATABASE: ${database_dbName}
+        DATABASE_URL: ${database_connectionString}
+        BIFROST_DB_TYPE: "postgres"
+        BIFROST_DB_DSN: ${database_connectionString}
         VALKEY_ADDR: "valkey:6379"
         VALKEY_PASSWORD: ${valkey_password}
         FREELLMAPI_URL: "http://freellmapi:3001/v1"
+        FREELLMAPI_UNIFIED_KEY: "freellmapi-273e0696aa7e39dac2f950ced0b38e48afc4806f23b72786"
+        BIFROST_ENCRYPTION_KEY: "9d8352b055dfd87e5a973a96927ac82b41e6b537af22637485b46c4714153690"
+        BIFROST_VIRTUAL_KEY: "vk-production-main"
 
   # 3. FreeLLMAPI Multi-Provider Free Inference Proxy (Node.js 24)
   - setup: freellmapi
