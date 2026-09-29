@@ -20,44 +20,56 @@ Este repositorio es una **plantilla de monorepo soberano, agnóstico y multi-ZCP
 
 ---
 
-## 🚀 Protocolo de Inicialización y Despliegue en un ZCP Limpio
+## 🏛️ Desarrollo Conjunto Obligatorio con `zerops-astro-skills`
 
-Cuando un operador humano o un agente AGY abra este repositorio en un contenedor ZCP nuevo (incluso con memoria Engram vacía), debe seguir estrictamente este flujo secuencial y determinista:
+Este repositorio NO se programa ni se despliega en el vacío:
+1. **SSoT de Skills Soberanas (`zerops-astro-skills`)**:
+   - Cada servicio, runtime, base de datos y framework cuenta con una skill viva en `/var/www/zerops-astro-skills/<nombre>/SKILL.md` (y su réplica activa en `.agents/skills/`).
+   - **Regla Mandatoria**: ANTES de diseñar, modificar, configurar o desplegar un servicio (`freellmapi`, `local-storage`, `bifrost`, `postgresql`, `valkey`, `nats`, `hermes`, `evolution`, `listmonk`, `astro-web`, `bknd`, `frnt`), el agente DEBE leer físicamente su `SKILL.md` y cumplir sus Invariantes Duros.
+   - Si al desplegar un servicio se descubre un comportamiento de producción, un gotcha o una optimización, el agente DEBE auditar y actualizar la skill correspondiente en `zerops-astro-skills` bajo una rama descriptiva (`feat/<servicio>-audit`).
 
-### 1. Pre-vuelo y Verificación de Entorno
-Ejecutar la compuerta de sanidad del plano de control:
-```bash
-./setup.sh --step 1
-```
-- Verifica la presencia física de `.env` (creándolo desde `.env.example` si falta).
-- Comprueba que el entorno base de Node esté disponible para los scripts de utilidad.
+---
 
-### 2. Ingesta de Credenciales y Quota Stacking (FreeLLMAPI)
-Ingestar las claves API sin hardcodearlas en el código ni exponerlas en git:
-```bash
-./setup.sh --step 2 /ruta/a/credenciales1.md /ruta/a/credenciales2.md
-```
-- Acepta uno o más archivos Markdown de cuentas (por ejemplo, doble free-tier de Google AI Studio, Groq, Cerebras, OpenRouter).
-- Extrae y balancea las claves en [`apps/freellmapi/data/seed.json`](file:///var/www/zerops-astrobranding/apps/freellmapi/data/seed.json) para alimentar la base SQLite persistente cuando FreeLLMAPI se despliegue.
+## 🚀 Protocolo de Inicialización y Despliegue Quirúrgico
 
-### 3. Validación de Topología y Fronteras Arquitectónicas
-Auditar los contratos antes de tocar la plataforma:
-```bash
-./setup.sh --step 3
-```
-- Ejecuta `zcp-validate yaml import.yaml` para asegurar que la sintaxis y perfiles de los 10 servicios cumplen con la especificación de Zerops.
-- Ejecuta [`scripts/architecture-check.mjs`](file:///var/www/zerops-astrobranding/scripts/architecture-check.mjs) para auditar que no haya violaciones entre capas de dominio (`apps` y `packages/contracts`).
+Para evitar desplegar contenedores vacíos o placeholders rotos, el aprovisionamiento se realiza hito por hito mediante las recetas quirúrgicas de [`recipes/steps/`](recipes/steps/) usando [`scripts/deploy-step.sh`](scripts/deploy-step.sh):
 
-### 4. Aprovisionamiento de la Malla en Zerops
-Aprovisionar los 10 servicios en la nube de Zerops mediante el MCP nativo:
-1. Iniciar workflow de bootstrap en Zerops:
-   ```json
-   zerops_workflow action="start" workflow="bootstrap" route="classic" intent="Aprovisionar plantilla monorepo astrobranding"
-   ```
-2. Importar el manifiesto de infraestructura:
-   ```json
-   zerops_import filePath="import.yaml"
-   ```
+### Hito 1: Almacenamiento Local + FreeLLMAPI Multi-Provider Proxy
+- **Receta:** `recipes/steps/01-freellmapi.yaml` (`localstorage` + `freellmapi`).
+- **Skill:** [`freellmapi`](/var/www/zerops-astro-skills/freellmapi/SKILL.md) y [`local-storage`](/var/www/zerops-astro-skills/local-storage/SKILL.md).
+- **Inyección de Claves en ZCP Limpio:**
+  Ejecutar el inyector soberano de credenciales:
+  ```bash
+  ./scripts/seed-freellmapi-keys.sh [--keys /ruta/a/keys.md]
+  ```
+  O inyectar `FREEAPI_CONFIG_JSON` directamente en `zerops_env`.
+- **Sensor de Validación Física:**
+  - Health check: `curl -s http://freellmapi:3001/api/ping` $\to$ `{"status":"ok"}`.
+  - Inferencia real: `curl -s POST http://freellmapi:3001/v1/chat/completions` con `model: "auto"` $\to$ HTTP 200 con header `_routed_via`.
+
+### Hito 2: Datos Relacionales + Caché + Bifrost AI Gateway
+- **Receta:** `recipes/steps/02-bifrost-postgres.yaml` (`database` postgresql:single@18, `valkey:single@7.2`, `bifrost`).
+- **Skills:** [`bifrost`](/var/www/zerops-astro-skills/bifrost/SKILL.md), [`postgresql`](/var/www/zerops-astro-skills/postgresql/SKILL.md), [`valkey`](/var/www/zerops-astro-skills/valkey/SKILL.md).
+- **Invariante:** Bifrost DEBE persistir en PostgreSQL (`BIFROST_DB_TYPE=postgres`) y consumir FreeLLMAPI como upstream en `http://freellmapi:3001/v1`.
+
+### Hito 3: RPC de Ultra-Baja Latencia + Agente Autónomo Hermes
+- **Receta:** `recipes/steps/03-hermes-nats.yaml` (`nats:single@2.12`, `hermes` ubuntu/python@3.12).
+- **Skills:** [`nats`](/var/www/zerops-astro-skills/nats/SKILL.md), [`hermes-agent`](/var/www/zerops-astro-skills/hermes-agent/SKILL.md).
+
+### Hito 4: Gateway Omnicanal WhatsApp (Evolution)
+- **Receta:** `recipes/steps/04-evolution.yaml` (`evolution` alpine/go@1.22 en PostgreSQL + NATS).
+- **Skill:** [`whatsapp-engine`](/var/www/zerops-astro-skills/whatsapp-engine/SKILL.md).
+
+### Hito 5: Email Marketing Soberano (Listmonk)
+- **Receta:** `recipes/steps/05-listmonk.yaml` (`listmonk` alpine/go@1.22 en PostgreSQL).
+- **Skill:** [`listmonk`](/var/www/zerops-astro-skills/listmonk/SKILL.md), [`email-marketing`](/var/www/zerops-astro-skills/email-marketing/SKILL.md).
+
+### Hito 6: Webapp Agnóstica SSR + S3 Object Storage
+- **Receta:** `recipes/steps/06-astro-web.yaml` (`objectstorage`, `astrobranding` ubuntu/bun@1.3.9).
+- **Skills:** [`astro-web`](/var/www/zerops-astro-skills/astro-web/SKILL.md), [`bun`](/var/www/zerops-astro-skills/bun/SKILL.md), [`frnt`](/var/www/zerops-astro-skills/frnt/SKILL.md).
+
+### Consolidación Final: Blueprint de 1-Solo-Paso
+Una vez que cada hito individual ha sido desplegado, auditado y validado en vivo, se compila [`import.yaml`](import.yaml) consolidado para levantar la infraestructura completa fluida en una sola importación.
 3. Zerops aprovisiona la infraestructura en cascada estricta por prioridades:
    - **Prioridad 10 (Datos y Colas):** `database` (PostgreSQL 18), `valkey` (Valkey 7.2), `nats` (NATS 2.12), `objectstorage` (S3) y `localstorage` (volumen POSIX).
    - **Prioridad 8 (Inferencia Upstream):** `freellmapi` (Node.js 24 + SQLite).
