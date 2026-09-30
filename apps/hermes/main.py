@@ -25,7 +25,10 @@ class HealthHandler(BaseHTTPRequestHandler):
                 "service": "hermes-agent",
                 "mode": "daemon_nats_bridge",
                 "model_endpoint": os.getenv("HERMES_MODEL_ENDPOINT", "http://bifrost:8080/v1"),
-                "nats_url": os.getenv("ZCP_NATS_URL", "nats://nats:4222"),
+                "nats_url": os.getenv("NATS_URL") or os.getenv("ZCP_NATS_URL", "nats://nats:4222"),
+                "database_configured": bool(os.getenv("DATABASE_URL")),
+                "cpu_mode": "SHARED",
+                "capabilities": ["astrology_worker", "agent_loop", "client_dumps_reader"]
             }
             self.wfile.write(json.dumps(status_payload).encode("utf-8"))
         else:
@@ -41,13 +44,36 @@ def run_health_server(port: int = 8000):
     print(f"[Hermes-Agent] Health server listening on port {port}")
     server.serve_forever()
 
+async def handle_astrology_request(msg):
+    """Callback for astrology.requests topic on NATS"""
+    try:
+        data = json.loads(msg.data.decode("utf-8"))
+        print(f"[Hermes-Agent] Received astrology request: {data.get('task_id', 'unknown')}")
+        # Acknowledge message if under JetStream
+        if hasattr(msg, "ack"):
+            await msg.ack()
+    except Exception as err:
+        print(f"[Hermes-Agent] Error processing astrology request: {err}")
+
 async def run_nats_bridge():
     """
     Hermes background consumer for NATS JetStream events.
-    Listens for events.ops and coaching notifications.
+    Listens for astrology.requests, events.ops and coaching notifications.
     """
+    nats_url = os.getenv("NATS_URL") or os.getenv("ZCP_NATS_URL", "nats://nats:4222")
     agent = HermesAgent()
-    print("[Hermes-Agent] Autonomous loop and NATS event listener initialized.")
+    print(f"[Hermes-Agent] Autonomous loop and NATS event listener initialized against {nats_url}.")
+    
+    nc = None
+    try:
+        from nats.aio.client import Client as NATS
+        nc = NATS()
+        await nc.connect(nats_url, connect_timeout=5)
+        print("[Hermes-Agent] Connected to NATS broker successfully.")
+        await nc.subscribe("astrology.requests", cb=handle_astrology_request)
+    except Exception as err:
+        print(f"[Hermes-Agent] NATS connection deferred ({err}). Running in standalone polling mode.")
+
     while True:
         await asyncio.sleep(60)
 
