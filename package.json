@@ -14,7 +14,7 @@
     "start": "bun --filter @astrobranding/astrobranding start",
     "check": "tsc --noEmit",
     "check:arch": "bun scripts/architecture-check.mjs",
-    "db:migrate": "echo '✓ Database schema verified and up to date'"
+    "db:migrate": "bun packages/database/src/migrate.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

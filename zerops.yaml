@@ -241,3 +241,27 @@ zerops:
         LISTMONK_db__ssl_mode: "disable"
         LISTMONK_ADMIN_USER: "admin"
         LISTMONK_ADMIN_PASSWORD: "adminpassword"
+
+  # 7. Astrological Engine & Decoupled MCPs (Python 3.12 Ubuntu)
+  - setup: engine
+    build:
+      base: ubuntu/python@3.12
+      buildCommands:
+        - pip install --upgrade pip setuptools wheel
+        - pip install httpx mcp pydantic python-dotenv
+      deployFiles:
+        - apps/engine
+    run:
+      base: ubuntu/python@3.12
+      ports:
+        - port: 8001
+          httpSupport: true
+      envVariables:
+        PORT: "8001"
+        DATABASE_URL: ${database_connectionString}
+        NATS_URL: ${nats_connectionString}
+      start: python apps/engine/main.py
+      healthCheck:
+        httpGet:
+          port: 8001
+          path: /health
