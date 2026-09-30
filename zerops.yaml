@@ -2,8 +2,7 @@ zerops:
   # 1. Main Monorepo Service: Bun 1.4 + Astro 5 + Hono
   - setup: astrobranding
     build:
-      base: bun@1.3.9
-      os: ubuntu
+      base: ubuntu/bun@1.3.9
       envVariables:
         BUN_INSTALL: ./.bun
       buildCommands:
@@ -24,8 +23,7 @@ zerops:
           port: 3000
           path: /health
     run:
-      base: bun@1.3.9
-      os: ubuntu
+      base: ubuntu/bun@1.3.9
       ports:
         - port: 3000
           httpSupport: true
@@ -37,6 +35,7 @@ zerops:
         NATS_URL: ${nats_connectionString}
         BIFROST_GATEWAY_URL: "http://bifrost:8080/v1"
         EVOLUTION_GATEWAY_URL: "http://evolution:8085"
+        ASTRO_KEY: "c8e2b109e4d56f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a"
       initCommands:
         - test -n "$DATABASE_URL" && bun run db:migrate || true
       start: bun run apps/astrobranding/dist/server/entry.mjs
@@ -103,7 +102,10 @@ zerops:
       base: ubuntu/nodejs@24
       buildCommands:
         - cd apps/freellmapi && npm ci && npm run build
-      deployFiles: .
+      deployFiles:
+        - apps/freellmapi
+        - node_modules
+        - package.json
       cache:
         - ~/.npm
     run:
@@ -139,8 +141,7 @@ zerops:
   # 4. EvolutionGo WhatsApp Engine (Go 1.22)
   - setup: evolution
     build:
-      base: go@1.22
-      os: alpine
+      base: alpine/go@1.22
       prepareCommands:
         - apk add --no-cache git gcc musl-dev
       buildCommands:
@@ -149,6 +150,8 @@ zerops:
         - apps/evolution/evolution-go
       cache:
         - /go/pkg/mod
+    deploy:
+      temporaryShutdown: true
     run:
       base: alpine@3.21
       ports:
@@ -172,8 +175,7 @@ zerops:
   # 5. Nous Research Hermes-Agent Copilot (Python 3.12 Ubuntu)
   - setup: hermes
     build:
-      base: python@3.12
-      os: ubuntu
+      base: ubuntu/python@3.12
       buildCommands:
         - cd apps/hermes && pip install --upgrade pip setuptools wheel && pip install --target=./vendor -r requirements.txt
       deployFiles:
@@ -181,8 +183,7 @@ zerops:
       cacheFiles:
         - /root/.cache/pip
     run:
-      base: python@3.12
-      os: ubuntu
+      base: ubuntu/python@3.12
       ports:
         - port: 8000
           httpSupport: true
@@ -236,4 +237,7 @@ zerops:
         LISTMONK_db__user: ${database_user}
         LISTMONK_db__password: ${database_password}
         LISTMONK_db__database: ${database_dbName}
+        LISTMONK_db__params: "search_path=listmonk"
         LISTMONK_db__ssl_mode: "disable"
+        LISTMONK_ADMIN_USER: "admin"
+        LISTMONK_ADMIN_PASSWORD: "adminpassword"

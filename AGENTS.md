@@ -76,7 +76,7 @@ Shape: `{code, error, suggestion?, apiCode?, diagnostic?, apiMeta?, checks?, rec
 
 <!-- CUSTOM:BEGIN -->
 
-## 🏛️ Gobernanza Soberana & Marco Normativo (v8.2)
+## 🏛️ Gobernanza Soberana & Marco Normativo (v8.4)
 Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) (Fases F0–F5, 6 Invariantes Soberanos, CoHaLo Positivo, Reality Over Checklist Theater). Referencia enciclopédica: [`.agents/references/supreme_directive_encyclopedia.md`](file:///var/www/.agents/references/supreme_directive_encyclopedia.md).
 
 ## 🧭 PROTOCOLO DE DESPLIEGUE MODULAR POR LENGUAJE NATURAL (INVARIANTE ABSOLUTO)
@@ -94,9 +94,14 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
      - Aprovisiona vía `zerops_workflow action="start" workflow="bootstrap"` o `develop`.
      - Inyecta secrets en `zerops_env` y cablea las variables de servicio.
      - **Invariantes Técnicos Probados (No Negociables)**:
-       - **Bifrost**: `config_store` y `logs_store` en PostgreSQL 18. `vector_store.type` en `chromem` o `qdrant` (nunca `redis` contra Valkey 7.2 por ausencia de RediSearch `FT.*`). Registra las 5 Virtual Keys en `/api/governance/virtual-keys`.
+       - **Bifrost**: `config_store` y `logs_store` en PostgreSQL 18. `vector_store.type` en `chromem` o `qdrant` (nunca `redis` contra Valkey 7.2 por ausencia de RediSearch `FT.*`). Registra las 5 Virtual Keys oficiales (`vk-production-main`, `vk-staging-test`, `vk-hermes-agent`, `vk-astrobranding-engine`, `vk-agy-operator`).
        - **FreeLLMAPI**: Persistencia en `localstorage`, circuit breaker 429 con cooldown y rotación de keys.
+       - **Evolution Go (WhatsApp Web)**: Estricto `minContainers: 1, maxContainers: 1` con `deploy.temporaryShutdown: true`. El protocolo Noise de WhatsApp Web exige un socket único TCP persistente; correr >1 réplica produce colisión 440 y baneo inmediato por Meta.
      - Valida la salud física (`/health`, `/metrics`), paridad SSoT (`ssot-parity-check`) y commit descriptivo en Git.
+4. **Multi-Proyecto & Multi-Organización**:
+   - Cada cliente o aplicación adopta el modelo **Single Sovereign Template Repo** (`gh repo create <cliente-app> --template elplacerdc/zerops-astrobranding`).
+   - Dentro de la misma organización en Zerops: aislamiento de red VXLAN por proyecto y desglose de costos detallado en billing.
+   - En organizaciones separadas: aislamiento total de facturación y tarjeta de crédito independiente (`zcli project project-import --projectId <target> --importYaml import.yaml`).
 
 ## 🛑 Contratos Operativos ZCP & Seguridad
 1. **Jerarquía ZCP-First & SSoT Indivisible**: El desarrollo activo ocurre en ZCP (`/var/www`). Los cambios validados se reflejan indivisiblemente hacia Google Drive SSoT (`/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/`). Drive solo fluye hacia ZCP en arranques fríos (`iniciar.sh` $\to$ `unisetup.sh`).

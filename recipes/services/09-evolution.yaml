@@ -6,7 +6,7 @@ services:
     startWithoutCode: true
     enableSubdomainAccess: true
     minContainers: 1
-    maxContainers: 2
+    maxContainers: 1
     verticalAutoscaling:
       cpuMode: SHARED
       minFreeRamGB: 0.25

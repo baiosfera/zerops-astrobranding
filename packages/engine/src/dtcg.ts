@@ -5,13 +5,21 @@
 
 export interface DtcgToken<T = string | number> {
   $value: T;
-  $type: "color" | "fontFamily" | "fontWeight" | "dimension" | "duration" | "shadow";
+  $type: "color" | "fontFamily" | "fontWeight" | "dimension" | "duration" | "shadow" | "string";
   $description?: string;
 }
 
 export interface DtcgBrandbook {
-  $name: string;
-  $version: string;
+  $schema?: string;
+  name: string;
+  version: string;
+  description?: string;
+  brand: {
+    name: DtcgToken<string>;
+    slogan?: DtcgToken<string>;
+    initials?: DtcgToken<string>;
+    ecosystem?: DtcgToken<string>;
+  };
   color: {
     primary: DtcgToken<string>;
     secondary: DtcgToken<string>;
@@ -21,11 +29,19 @@ export interface DtcgBrandbook {
     text: DtcgToken<string>;
   };
   typography: {
+    display?: DtcgToken<string>;
+    body?: DtcgToken<string>;
+    accent?: DtcgToken<string>;
+    slogan?: DtcgToken<string>;
     fontPrimary: DtcgToken<string>;
     fontSecondary: DtcgToken<string>;
     fontSizeBase: DtcgToken<string>;
     fontWeightBold: DtcgToken<number>;
   };
+  motion?: Record<string, unknown>;
+  sound?: Record<string, unknown>;
+  vectors?: Record<string, unknown>;
+  accessibility?: Record<string, unknown>;
   metadata: {
     clientId?: string;
     generatedAt: string;
@@ -35,7 +51,7 @@ export interface DtcgBrandbook {
 }
 
 /**
- * Builds a standard W3C DTCG compliant brandbook manifest
+ * Builds a standard W3C DTCG compliant brandbook manifest compatible with Brandview Studio
  */
 export function buildDtcgBrandbook(params: {
   brandName: string;
@@ -48,8 +64,16 @@ export function buildDtcgBrandbook(params: {
   sourceShard?: string;
 }): DtcgBrandbook {
   return {
-    $name: params.brandName,
-    $version: "1.0.0",
+    $schema: "https://www.designtokens.org/TR/2025.10/format/",
+    name: params.brandName,
+    version: "1.0.0",
+    description: `Design Tokens Maestros W3C DTCG para ${params.brandName}`,
+    brand: {
+      name: { $value: params.brandName, $type: "string" },
+      slogan: { $value: "Sovereign Archetypal Brand", $type: "string" },
+      initials: { $value: params.brandName.substring(0, 2).toUpperCase(), $type: "string" },
+      ecosystem: { $value: "Ecosistema Rector", $type: "string" },
+    },
     color: {
       primary: {
         $value: params.primaryColor || "#f59e0b",

@@ -9,7 +9,10 @@ import json
 import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
-from .agent import HermesAgent
+try:
+    from agent import HermesAgent
+except (ImportError, ValueError):
+    from .agent import HermesAgent
 
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):

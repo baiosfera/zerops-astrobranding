@@ -13,3 +13,4 @@ apps/freellmapi/config.json
 *.db
 # Local AI runtime state
 .atl/
+__pycache__/
