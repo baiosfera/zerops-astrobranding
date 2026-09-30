@@ -178,7 +178,7 @@ zerops:
           port: 8085
           path: /server/ok
 
-  # 5. Nous Research Hermes-Agent Copilot (Python 3.12 Ubuntu)
+  # 5. Nous Research Hermes-Agent Copilot & MCP Engine (Python 3.12 Ubuntu)
   - setup: hermes
     build:
       base: ubuntu/python@3.12
@@ -190,16 +190,33 @@ zerops:
         - /root/.cache/pip
     run:
       base: ubuntu/python@3.12
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
       ports:
         - port: 8000
           httpSupport: true
+      prepareCommands:
+        - sudo mkdir -p /mnt/localstorage/hermes
+        - sudo chown -R zerops:zerops /mnt/localstorage/hermes
       envVariables:
         PORT: "8000"
         PYTHONPATH: "./apps/hermes/vendor:./apps/hermes"
         HERMES_MODEL_ENDPOINT: "http://bifrost:8080/v1"
         HERMES_MODEL_NAME: "hermes-3-llama-3.1-8b"
         BIFROST_VIRTUAL_KEY: "vk-hermes-agent"
+        DATABASE_URL: ${database_connectionString}
+        SUPERUSER_URL: "postgresql://${database_superUser}:${database_superUserPassword}@${database_hostname}:${database_port}/${database_dbName}"
+        NATS_URL: ${nats_connectionString}
         ZCP_NATS_URL: ${nats_connectionString}
+        S3_ENDPOINT: ${objectstorage_apiUrl}
+        S3_ACCESS_KEY: ${objectstorage_accessKeyId}
+        S3_SECRET_KEY: ${objectstorage_secretAccessKey}
+        S3_BUCKET: ${objectstorage_bucketName}
+        S3_REGION: "us-east-1"
+        AWS_USE_PATH_STYLE_ENDPOINT: "true"
+        LOCAL_STORAGE_PATH: "/mnt/localstorage/hermes"
       start: python apps/hermes/main.py
       healthCheck:
         httpGet:
@@ -247,41 +264,3 @@ zerops:
         LISTMONK_db__ssl_mode: "disable"
         LISTMONK_ADMIN_USER: "admin"
         LISTMONK_ADMIN_PASSWORD: "adminpassword"
-
-  # 7. Astrological Engine & Decoupled MCPs (Python 3.12 Ubuntu)
-  - setup: engine
-    build:
-      base: ubuntu/python@3.12
-      buildCommands:
-        - pip install --upgrade pip setuptools wheel
-        - pip install httpx mcp pydantic python-dotenv
-      deployFiles:
-        - apps/engine
-    run:
-      base: ubuntu/python@3.12
-      volume:
-        hostname: localstorage
-        mountPath: /mnt/localstorage
-        readOnly: false
-      ports:
-        - port: 8001
-          httpSupport: true
-      prepareCommands:
-        - sudo mkdir -p /mnt/localstorage/engine
-        - sudo chown -R zerops:zerops /mnt/localstorage/engine
-      envVariables:
-        PORT: "8001"
-        DATABASE_URL: ${database_connectionString}
-        NATS_URL: ${nats_connectionString}
-        S3_ENDPOINT: ${objectstorage_apiUrl}
-        S3_ACCESS_KEY: ${objectstorage_accessKeyId}
-        S3_SECRET_KEY: ${objectstorage_secretAccessKey}
-        S3_BUCKET: ${objectstorage_bucketName}
-        S3_REGION: "us-east-1"
-        AWS_USE_PATH_STYLE_ENDPOINT: "true"
-        LOCAL_STORAGE_PATH: "/mnt/localstorage/engine"
-      start: python apps/engine/main.py
-      healthCheck:
-        httpGet:
-          port: 8001
-          path: /health
