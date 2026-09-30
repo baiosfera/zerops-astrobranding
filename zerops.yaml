@@ -36,6 +36,12 @@ zerops:
         BIFROST_GATEWAY_URL: "http://bifrost:8080/v1"
         EVOLUTION_GATEWAY_URL: "http://evolution:8085"
         ASTRO_KEY: "c8e2b109e4d56f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a"
+        S3_ENDPOINT: ${objectstorage_apiUrl}
+        S3_ACCESS_KEY: ${objectstorage_accessKeyId}
+        S3_SECRET_KEY: ${objectstorage_secretAccessKey}
+        S3_BUCKET: ${objectstorage_bucketName}
+        S3_REGION: "us-east-1"
+        AWS_USE_PATH_STYLE_ENDPOINT: "true"
       initCommands:
         - test -n "$DATABASE_URL" && bun run db:migrate || true
       start: bun run apps/astrobranding/dist/server/entry.mjs
@@ -253,13 +259,27 @@ zerops:
         - apps/engine
     run:
       base: ubuntu/python@3.12
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
       ports:
         - port: 8001
           httpSupport: true
+      prepareCommands:
+        - sudo mkdir -p /mnt/localstorage/engine
+        - sudo chown -R zerops:zerops /mnt/localstorage/engine
       envVariables:
         PORT: "8001"
         DATABASE_URL: ${database_connectionString}
         NATS_URL: ${nats_connectionString}
+        S3_ENDPOINT: ${objectstorage_apiUrl}
+        S3_ACCESS_KEY: ${objectstorage_accessKeyId}
+        S3_SECRET_KEY: ${objectstorage_secretAccessKey}
+        S3_BUCKET: ${objectstorage_bucketName}
+        S3_REGION: "us-east-1"
+        AWS_USE_PATH_STYLE_ENDPOINT: "true"
+        LOCAL_STORAGE_PATH: "/mnt/localstorage/engine"
       start: python apps/engine/main.py
       healthCheck:
         httpGet:
