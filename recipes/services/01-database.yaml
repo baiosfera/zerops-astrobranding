@@ -1,0 +1,10 @@
+# Service: PostgreSQL 18 Relational & Vector Lakehouse
+services:
+  - hostname: database
+    type: postgresql:single@18
+    profile: oltp-hobby
+    priority: 10
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10

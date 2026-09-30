@@ -1,6 +1,6 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import { BrandStudioApp } from "../../components/studio/BrandStudioApp";
+import BrandStudioIsland from "../../components/islands/BrandStudioIsland.astro";
 
 const masterKeyCookie = Astro.cookies.get("coach_session")?.value;
 const isAuthorized = !!masterKeyCookie || import.meta.env.DEV;
@@ -9,7 +9,11 @@ const isAuthorized = !!masterKeyCookie || import.meta.env.DEV;
 <BaseLayout title="Brand Identity Preview Studio — AstroBranding">
   {
     isAuthorized ? (
-      <BrandStudioApp client:only="react" />
+      <BrandStudioIsland server:defer>
+        <div slot="fallback" class="p-8 text-center text-xs text-neutral-500 font-mono animate-pulse">
+          Cargando tokens de diseño vía Server Island...
+        </div>
+      </BrandStudioIsland>
     ) : (
       <div class="min-h-screen flex items-center justify-center bg-neutral-950 p-6 font-mono">
         <div class="max-w-md w-full bg-neutral-900 border border-neutral-800 rounded-xl p-8 text-center space-y-4">

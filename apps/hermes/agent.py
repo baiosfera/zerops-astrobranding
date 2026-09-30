@@ -8,6 +8,7 @@ from .tools import get_system_health, calculate_natal_chart, send_whatsapp_otp
 
 BIFROST_URL = os.getenv("HERMES_MODEL_ENDPOINT", "http://bifrost:8080/v1")
 MODEL_NAME = os.getenv("HERMES_MODEL_NAME", "hermes-3-llama-3.1-8b")
+BIFROST_KEY = os.getenv("BIFROST_VIRTUAL_KEY", "vk-hermes-agent")
 
 class HermesAgent:
     def __init__(self, system_prompt: str = HERMES_SYSTEM_PROMPT):
@@ -21,6 +22,7 @@ class HermesAgent:
             try:
                 res = await client.post(
                     f"{BIFROST_URL}/chat/completions",
+                    headers={"Authorization": f"Bearer {BIFROST_KEY}"},
                     json={
                         "model": MODEL_NAME,
                         "messages": [

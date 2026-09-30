@@ -1,0 +1,13 @@
+# Service: EvolutionGo WhatsApp Messaging Engine (Go 1.22 Alpine)
+services:
+  - hostname: evolution
+    type: alpine/go@1.22
+    priority: 6
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 2
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10

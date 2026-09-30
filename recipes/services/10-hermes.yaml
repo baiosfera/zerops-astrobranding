@@ -1,0 +1,13 @@
+# Service: Nous Research Hermes-Agent Autonomous Copilot (Python 3.12 Ubuntu)
+services:
+  - hostname: hermes
+    type: ubuntu/python@3.12
+    priority: 4
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 2
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10

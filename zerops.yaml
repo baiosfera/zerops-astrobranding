@@ -37,6 +37,8 @@ zerops:
         NATS_URL: ${nats_connectionString}
         BIFROST_GATEWAY_URL: "http://bifrost:8080/v1"
         EVOLUTION_GATEWAY_URL: "http://evolution:8085"
+      initCommands:
+        - test -n "$DATABASE_URL" && bun run db:migrate || true
       start: bun run apps/astrobranding/dist/server/entry.mjs
       healthCheck:
         httpGet:
@@ -90,8 +92,6 @@ zerops:
         DATABASE_URL: ${database_connectionString}
         BIFROST_DB_TYPE: "postgres"
         BIFROST_DB_DSN: ${database_connectionString}
-        VALKEY_ADDR: "valkey:6379"
-        VALKEY_PASSWORD: ${valkey_password}
         FREELLMAPI_URL: "http://freellmapi:3001/v1"
         FREELLMAPI_UNIFIED_KEY: "freellmapi-273e0696aa7e39dac2f950ced0b38e48afc4806f23b72786"
         BIFROST_ENCRYPTION_KEY: "9d8352b055dfd87e5a973a96927ac82b41e6b537af22637485b46c4714153690"
@@ -191,9 +191,49 @@ zerops:
         PYTHONPATH: "./apps/hermes/vendor:./apps/hermes"
         HERMES_MODEL_ENDPOINT: "http://bifrost:8080/v1"
         HERMES_MODEL_NAME: "hermes-3-llama-3.1-8b"
+        BIFROST_VIRTUAL_KEY: "vk-hermes-agent"
         ZCP_NATS_URL: ${nats_connectionString}
       start: python apps/hermes/main.py
       healthCheck:
         httpGet:
           port: 8000
           path: /healthz
+
+  # 6. Listmonk Sovereign Email Marketing & Transactional Engine (Go 1.22 Alpine)
+  - setup: listmonk
+    build:
+      base: alpine/go@1.22
+      prepareCommands:
+        - sudo apk add --no-cache curl tar ca-certificates
+        - curl -sSL https://github.com/knadh/listmonk/releases/download/v5.1.0/listmonk_5.1.0_linux_amd64.tar.gz -o listmonk.tar.gz
+        - tar -xzf listmonk.tar.gz
+        - chmod +x listmonk
+      deployFiles:
+        - listmonk
+        - static
+        - i18n
+      cache:
+        - listmonk.tar.gz
+    run:
+      base: alpine/go@1.22
+      ports:
+        - port: 9000
+          httpSupport: true
+      prepareCommands:
+        - sudo apk add --no-cache ca-certificates tzdata curl
+      initCommands:
+        - zsc execOnce ${appVersionId} -- ./listmonk --install --idempotent --yes --config=""
+        - zsc execOnce ${appVersionId} -- ./listmonk --upgrade --yes --config=""
+      start: ./listmonk --config=""
+      healthCheck:
+        httpGet:
+          port: 9000
+          path: /
+      envVariables:
+        LISTMONK_app__address: "0.0.0.0:9000"
+        LISTMONK_db__host: ${database_hostname}
+        LISTMONK_db__port: "5432"
+        LISTMONK_db__user: ${database_user}
+        LISTMONK_db__password: ${database_password}
+        LISTMONK_db__database: ${database_dbName}
+        LISTMONK_db__ssl_mode: "disable"

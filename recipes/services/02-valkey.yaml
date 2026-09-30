@@ -1,0 +1,10 @@
+# Service: Valkey 7.2 In-Memory Caching & Session Engine
+services:
+  - hostname: valkey
+    type: valkey:single@7.2
+    profile: hobby
+    priority: 10
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.125
+      minFreeRamPercent: 10

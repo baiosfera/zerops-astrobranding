@@ -1,0 +1,24 @@
+---
+import { BrandStudioApp } from "../studio/BrandStudioApp";
+
+interface Props {
+  clientId?: string;
+  theme?: string;
+}
+
+const { clientId = "default", theme = "obsidian_gold" } = Astro.props;
+
+// Server-side simulated dynamic token resolution
+const generatedAt = new Date().toLocaleTimeString();
+---
+
+<div class="brand-studio-island relative">
+  <div class="mb-4 flex items-center justify-between text-xs text-neutral-400 font-mono">
+    <span class="inline-flex items-center gap-1.5">
+      <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      Server Island Active (Client: {clientId})
+    </span>
+    <span>Synced: {generatedAt}</span>
+  </div>
+  <BrandStudioApp client:load />
+</div>

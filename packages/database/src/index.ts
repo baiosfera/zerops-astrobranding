@@ -7,20 +7,42 @@ export * from "./schema";
 export * from "./outbox-drain";
 export { eq, sql } from "drizzle-orm";
 
-const connectionString = process.env.DATABASE_URL || "postgres://postgres:postgres@localhost:5432/astrobranding";
+let _queryClient: ReturnType<typeof postgres> | null = null;
+let _db: ReturnType<typeof drizzle> | null = null;
 
-// Query client for pooled connections
-const queryClient = postgres(connectionString, {
-  max: 10,
-  idle_timeout: 20,
-  connect_timeout: 10,
+export function getQueryClient() {
+  if (!_queryClient) {
+    const connectionString = process.env.DATABASE_URL || "postgres://postgres:postgres@localhost:5432/astrobranding";
+    _queryClient = postgres(connectionString, {
+      max: 10,
+      idle_timeout: 20,
+      connect_timeout: 10,
+      onnotice: () => {},
+    });
+  }
+  return _queryClient;
+}
+
+export function getDb() {
+  if (!_db) {
+    _db = drizzle(getQueryClient(), { schema });
+  }
+  return _db;
+}
+
+// Transparent Proxy for backwards compatibility and zero-crash evaluation
+export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
+  get(_target, prop) {
+    const instance = getDb();
+    const value = Reflect.get(instance, prop);
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
 });
-
-export const db = drizzle(queryClient, { schema });
 
 export async function checkDatabaseConnection(): Promise<boolean> {
   try {
-    await queryClient`SELECT 1`;
+    const client = getQueryClient();
+    await client`SELECT 1`;
     return true;
   } catch (error) {
     console.error("[Database] Connection check failed:", error);
@@ -30,7 +52,8 @@ export async function checkDatabaseConnection(): Promise<boolean> {
 
 export async function initPgVector(): Promise<void> {
   try {
-    await queryClient`CREATE EXTENSION IF NOT EXISTS vector;`;
+    const client = getQueryClient();
+    await client`CREATE EXTENSION IF NOT EXISTS vector;`;
     console.log("[Database] pgvector extension initialized successfully");
   } catch (error) {
     console.error("[Database] Failed to initialize pgvector extension:", error);

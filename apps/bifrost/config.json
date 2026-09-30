@@ -34,11 +34,8 @@
     "enabled": true,
     "type": "chromem",
     "config": {
-      "addr": "env.VALKEY_ADDR",
-      "password": "env.VALKEY_PASSWORD",
-      "db": 0,
-      "use_tls": false,
-      "cluster_mode": false
+      "path": "/mnt/localstorage/bifrost/chromem",
+      "compress": true
     }
   },
   "plugins": [
@@ -175,29 +172,6 @@
         "id": "vk-evolution-wa",
         "name": "Evolution WhatsApp Bot",
         "value": "env.BIFROST_VK_EVOLUTION",
-        "is_active": true,
-        "rate_limits": {
-          "requests_per_minute": 60
-        },
-        "provider_configs": [
-          {
-            "provider": "freellmapi",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
-            "weight": 1.0
-          },
-          {
-            "provider": "deepseek",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
-            "weight": 1.0
-          }
-        ]
-      },
-      {
-        "id": "vk-agy-operator",
-        "name": "Antigravity AGY Operator",
-        "value": "env.BIFROST_VK_AGY",
         "is_active": true,
         "rate_limits": {
           "requests_per_minute": 60

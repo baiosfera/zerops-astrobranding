@@ -1,0 +1,13 @@
+# Service: Maxim AI Bifrost Enterprise AI Gateway (Go 1.22 Alpine)
+services:
+  - hostname: bifrost
+    type: alpine/go@1.22
+    priority: 6
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 2
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10

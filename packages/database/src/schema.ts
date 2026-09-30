@@ -169,3 +169,29 @@ export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
 export type TaskOutboxRecord = typeof taskOutbox.$inferSelect;
 export type NewTaskOutboxRecord = typeof taskOutbox.$inferInsert;
+
+/**
+ * Normalized Client Shards Table (Decoupled Agnostic Multi-Domain Store)
+ * Supports dynamic sharding across any vertical (astrology, commerce, CRM, branding)
+ */
+export const clientShards = pgTable(
+  "client_shards",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    clientId: uuid("client_id")
+      .references(() => clients.id, { onDelete: "cascade" })
+      .notNull(),
+    shardType: text("shard_type").notNull(),
+    payload: jsonb("payload").default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("client_shards_client_id_shard_type_idx").on(table.clientId, table.shardType),
+    index("client_shards_shard_type_idx").on(table.shardType),
+  ]
+);
+
+export type ClientShard = typeof clientShards.$inferSelect;
+export type NewClientShard = typeof clientShards.$inferInsert;
+

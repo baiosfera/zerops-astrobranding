@@ -1,0 +1,5 @@
+# Service: Zerops Local Storage POSIX Persistent Volume
+services:
+  - hostname: localstorage
+    type: local-storage:single@1
+    priority: 10

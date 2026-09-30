@@ -43,6 +43,13 @@ services:
     enableSubdomainAccess: true
     priority: 6
 
+  # Tier 2.5 Runtime: Listmonk Newsletter & Email Marketing Engine (Priority 5)
+  - hostname: listmonk
+    type: alpine/go@1.22
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    priority: 5
+
   # Tier 3 Runtime: Hermes Agent (Priority 4)
   - hostname: hermes
     type: ubuntu/python@3.12

@@ -12,4 +12,5 @@ export * from "./payments";
 export * from "./frappe";
 export * from "./clients";
 export * from "./native";
+export * from "./dtcg";
 

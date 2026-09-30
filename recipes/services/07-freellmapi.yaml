@@ -1,0 +1,13 @@
+# Service: FreeLLMAPI Multi-Provider Inference Gateway (Node.js 24)
+services:
+  - hostname: freellmapi
+    type: ubuntu/nodejs@24
+    priority: 8
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 2
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10

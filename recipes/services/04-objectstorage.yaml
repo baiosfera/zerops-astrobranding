@@ -1,0 +1,7 @@
+# Service: S3 Compatible Object Storage for DTCG Brandbook & Media
+services:
+  - hostname: objectstorage
+    type: object-storage
+    objectStorageSize: 10
+    objectStoragePolicy: public-objects-read
+    priority: 10

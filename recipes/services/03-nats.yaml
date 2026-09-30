@@ -1,0 +1,9 @@
+# Service: NATS 2.12 JetStream High-Throughput Event Mesh
+services:
+  - hostname: nats
+    type: nats:single@2.12
+    priority: 10
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.125
+      minFreeRamPercent: 10
