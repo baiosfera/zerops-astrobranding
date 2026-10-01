@@ -2,6 +2,7 @@ node_modules/
 .bun/
 dist/
 **/dist/
+!apps/evolution/manager/dist/
 **/.astro/
 **/vendor/
 .DS_Store

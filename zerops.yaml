@@ -151,9 +151,13 @@ zerops:
       prepareCommands:
         - sudo apk add --no-cache git gcc musl-dev
       buildCommands:
-        - cd apps/evolution && go build -o evolution-go main.go
+        - test -d src || git clone --depth 1 --branch 0.7.2 https://github.com/evolution-foundation/evolution-go.git src
+        - cd src && CGO_ENABLED=1 go build -ldflags "-s -w" -o ../evolution-go ./cmd/evolution-go
+        - cp -r apps/evolution/manager/dist ./manager_dist 2>/dev/null || cp -r src/manager/dist ./manager_dist
       deployFiles:
-        - apps/evolution/evolution-go
+        - evolution-go
+        - manager_dist
+        - apps/evolution/db_init.sql
       cache:
         - /go/pkg/mod
     deploy:
@@ -165,6 +169,7 @@ zerops:
           httpSupport: true
       prepareCommands:
         - sudo apk add --no-cache ca-certificates tzdata
+        - mkdir -p /var/www/manager && cp -rn /var/www/manager_dist /var/www/manager/dist 2>/dev/null || true
       envVariables:
         SERVER_PORT: "8085"
         CLIENT_NAME: "astrobranding"
@@ -172,7 +177,7 @@ zerops:
         POSTGRES_USERS_DB: "postgresql://${database_user}:${database_password}@database:${database_port}/evogo_users?sslmode=disable"
         DATABASE_SAVE_MESSAGES: "true"
         NATS_URL: ${nats_connectionString}
-      start: ./apps/evolution/evolution-go
+      start: ./evolution-go
       healthCheck:
         httpGet:
           port: 8085

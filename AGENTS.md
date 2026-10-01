@@ -77,7 +77,7 @@ Shape: `{code, error, suggestion?, apiCode?, diagnostic?, apiMeta?, checks?, rec
 <!-- CUSTOM:BEGIN -->
 
 ## 🏛️ Gobernanza Soberana & Marco Normativo (v8.4)
-Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) (Fases F0–F5, 6 Invariantes Soberanos, CoHaLo Positivo, Reality Over Checklist Theater). Referencia enciclopédica: [`.agents/references/supreme_directive_encyclopedia.md`](file:///var/www/.agents/references/supreme_directive_encyclopedia.md).
+Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) (Fases F0–F5, 6 Invariantes Soberanos, CoHaLo Positivo, Reality Over Checklist Theater, Dogma de Salida de la Caja Negra y Arnés Obsesivo con Plan-First Gate). Referencia enciclopédica: [`.agents/references/supreme_directive_encyclopedia.md`](file:///var/www/.agents/references/supreme_directive_encyclopedia.md).
 
 ## 🧭 PROTOCOLO DE DESPLIEGUE MODULAR POR LENGUAJE NATURAL (INVARIANTE ABSOLUTO)
 1. **Frontera Sagrada del Plano de Control (`zcp`)**:
@@ -94,9 +94,8 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
      - Aprovisiona vía `zerops_workflow action="start" workflow="bootstrap"` o `develop`.
      - Inyecta secrets en `zerops_env` y cablea las variables de servicio.
      - **Invariantes Técnicos Probados (No Negociables)**:
-       - **Bifrost**: `config_store` y `logs_store` en PostgreSQL 18. `vector_store.type` en `chromem` o `qdrant` (nunca `redis` contra Valkey 7.2 por ausencia de RediSearch `FT.*`). Registra las 5 Virtual Keys oficiales (`vk-production-main`, `vk-staging-test`, `vk-hermes-agent`, `vk-astrobranding-engine`, `vk-agy-operator`).
+       - **Bifrost**: `config_store` y `logs_store` en PostgreSQL 18. `vector_store.type` en `chromem` o `qdrant` (nunca `redis` contra Valkey 7.2 por ausencia de RediSearch `FT.*`). Registra las 5 Virtual Keys en `/api/governance/virtual-keys`.
        - **FreeLLMAPI**: Persistencia en `localstorage`, circuit breaker 429 con cooldown y rotación de keys.
-       - **Evolution Go (WhatsApp Web)**: Estricto `minContainers: 1, maxContainers: 1` con `deploy.temporaryShutdown: true`. El protocolo Noise de WhatsApp Web exige un socket único TCP persistente; correr >1 réplica produce colisión 440 y baneo inmediato por Meta.
       - **Arquitectura Lego Desacoplada & Orden Libre de Steps (Zero-Hardcoding)**:
         - Los hitos y servicios son **100% modulares y aditivos**: pueden solicitarse en cualquier orden o de forma completamente aislada.
         - **Cero Acoplamiento Artificial**: El agente JAMÁS fuerza dependencias lineales inexistentes. Una landing (`growth-engine`) o e-commerce (`checkout-funnels`) aprovisiona únicamente lo que su caso de uso requiere, sin obligar a levantar el stack de IA si no se utiliza.
@@ -106,21 +105,43 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
           * Las apps personalizadas usan el modelo **Multi-Servicio** (`<app>-prod` en rama `main`, `<app>-stage` en rama `stage`).
           * El entorno `stage` es **efímero**: se crea para validar cambios en `stage.midominio.com` y puede eliminarse al terminar para costo cero.
      - Valida la salud física (`/health`, `/metrics`), paridad SSoT (`ssot-parity-check`) y commit descriptivo en Git.
-4. **Multi-Proyecto & Multi-Organización**:
-   - Cada cliente o aplicación adopta el modelo **Single Sovereign Template Repo** (`gh repo create <cliente-app> --template baiosfera/zerops-astrobranding`).
-   - Dentro de la misma organización en Zerops: aislamiento de red VXLAN por proyecto y desglose de costos detallado en billing.
-   - En organizaciones separadas: aislamiento total de facturación y tarjeta de crédito independiente (`zcli project project-import --projectId <target> --importYaml import.yaml`).
 
 ## 🛑 Contratos Operativos ZCP & Seguridad
 1. **Jerarquía ZCP-First & SSoT Indivisible**: El desarrollo activo ocurre en ZCP (`/var/www`). Los cambios validados se reflejan indivisiblemente hacia Google Drive SSoT (`/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/`). Drive solo fluye hacia ZCP en arranques fríos (`iniciar.sh` $\to$ `unisetup.sh`).
 2. **Entorno y Secretos**: Credenciales en `/var/www/.env` se referencian por variable de shell (`$VAR`), nunca en texto plano.
 3. **Seguridad Nativa a Nivel de Proceso**: `tool-guard.py` intercepta en `PreToolUse`/`PreInvocation` comandos destructivos, fugas de rutas relativas (`0zcp-123/`), protege handovers, asegura backups pre-mutación y deduplica eventos para máxima eficiencia de tokens.
 4. **Higiene de Procesos**: Comandos con `timeout 10s` y `WaitMsBeforeAsync: 10000`. Servidores continuos vía `zerops_dev_server`.
+5. **Grounding Epistémico Fuera de Caja Negra**: Obligatorio contrastar código y arquitectura contra el mundo exterior en tiempo presente mediante triangulación multi-motor en `research` (Exa para conceptos/código, Context7 para APIs oficiales, Jina Reader para extracción verbatim y Firecrawl para scraping/skills). Prohibido el conformismo con snippets aislados de un único buscador.
+6. **Contrato Anti-Redundancia y Brevedad en Chat**: Prohibido duplicar o re-resumir listas de nodos/pasos de planes en el mensaje del chat. En F4, el mensaje se limita estrictamente al enlace canónico al plan en `/var/www/artifacts/` y la solicitud de Go. En F5, el mensaje se limita a la atestación de sensores físicos (exit 0) y el enlace al plan en `archive/` en <= 3 líneas.
 
 ## 📦 Catálogo y Herramientas Soberanas
 - **Catálogo Oficial (141 skills)**: [`.atl/skill-registry.md`](file:///var/www/.atl/skill-registry.md).
 - **Bootstrapper Universal**: [`iniciar.sh`](file:///var/www/zerops-astrobranding/iniciar.sh) (raíz frío) y [`unisetup.sh`](file:///var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh) aprovisionan dependencias, herramientas y sincronizan SSoT sin drift.
-- **Herramientas Globales en PATH**: `docu-validate`, `research-validate`, `astrobranding-check`, `ssot-parity-check`, `skills-suite-validate`, `plan-validate`, `bifrost-cli`.
+- **Herramientas Globales en PATH**: `docu-validate`, `research-validate`, `astrobranding-check`, `ssot-parity-check`, `skills-suite-validate`, `plan-validate`, `bifrost-cli`, `zcp-preflight-gate`, `zcp-wa`, `zcp-mail`.
 
 <!-- CUSTOM:END -->
 
+
+<!-- ZEROPS:REFLOG -->
+### 2026-09-30 — Bootstrap: Aprovisionar infraestructura gestionada y runtime hermes
+
+- **Runtime:** hermes (ubuntu/python@3.12, simple)
+- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2), nats (nats:single@2.12), objectstorage (object-storage), localstorage (local-storage:single@1)
+- **Session:** 1df42c53b6e76bc8
+
+> This is a historical record. Verify current state via `zerops_discover`.
+<!-- /ZEROPS:REFLOG -->
+
+<!-- ZEROPS:REFLOG -->
+### 2026-10-01 — Bootstrap: provision elplacerdc core data mesh, evolution, listmonk, web-dev
+
+- **Runtime:** webdev (ubuntu/bun@1.3, simple)
+- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2), nats (nats:single@2.12), objectstorage (object-storage), localstorage (local-storage:single@1)
+- **Runtime:** evolution (alpine/go@1.22, simple)
+- **Dependencies:** database (postgresql:single@18), nats (nats:single@2.12)
+- **Runtime:** listmonk (alpine/go@1.22, simple)
+- **Dependencies:** database (postgresql:single@18)
+- **Session:** 7975ecd8ff7a9b20
+
+> This is a historical record. Verify current state via `zerops_discover`.
+<!-- /ZEROPS:REFLOG -->
