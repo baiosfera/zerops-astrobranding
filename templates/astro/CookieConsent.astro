@@ -1,0 +1,88 @@
+---
+// Sovereign Zero-Fee RGPD/GDPR Cookie Consent Component
+interface Props {
+  privacyPolicyUrl?: string;
+  cookieName?: string;
+}
+
+const {
+  privacyPolicyUrl = '/privacidad',
+  cookieName = 'zcp_cookie_consent'
+} = Astro.props;
+---
+
+<div id="zcp-cookie-banner" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 max-w-md z-50 p-4 rounded-xl border border-white/10 bg-neutral-950/90 backdrop-blur-md text-white shadow-2xl transition-all duration-300 hidden">
+  <div class="flex flex-col gap-3">
+    <div class="flex items-start justify-between gap-2">
+      <h3 class="text-sm font-semibold tracking-wide text-neutral-200">Privacidad y Cookies</h3>
+      <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+    </div>
+    <p class="text-xs text-neutral-400 leading-relaxed">
+      Utilizamos cookies necesarias para el funcionamiento del sitio y herramientas analíticas soberanas para mejorar tu experiencia.
+      <a href={privacyPolicyUrl} class="underline hover:text-white transition-colors">Leer política</a>.
+    </p>
+    <div class="flex items-center gap-2 pt-1">
+      <button id="zcp-cookie-accept" type="button" class="flex-1 py-2 px-3 text-xs font-medium rounded-lg bg-white text-black hover:bg-neutral-200 transition-colors">
+        Aceptar todas
+      </button>
+      <button id="zcp-cookie-reject" type="button" class="py-2 px-3 text-xs font-medium rounded-lg bg-neutral-800 text-neutral-300 hover:bg-neutral-700 transition-colors">
+        Rechazar analítica
+      </button>
+    </div>
+  </div>
+</div>
+
+<script is:inline define:vars={{ cookieName }}>
+  (function() {
+    const CONSENT_KEY = cookieName || 'zcp_cookie_consent';
+
+    function getConsent() {
+      return localStorage.getItem(CONSENT_KEY);
+    }
+
+    function setConsent(status) {
+      localStorage.setItem(CONSENT_KEY, status);
+      if (status === 'accepted') {
+        activateScripts();
+      }
+      hideBanner();
+    }
+
+    function hideBanner() {
+      const banner = document.getElementById('zcp-cookie-banner');
+      if (banner) banner.classList.add('hidden');
+    }
+
+    function showBanner() {
+      const banner = document.getElementById('zcp-cookie-banner');
+      if (banner) banner.classList.remove('hidden');
+    }
+
+    function activateScripts() {
+      const blockedScripts = document.querySelectorAll('script[type="text/plain"][data-category="analytics"]');
+      blockedScripts.forEach(oldScript => {
+        const newScript = document.createElement('script');
+        Array.from(oldScript.attributes).forEach(attr => {
+          if (attr.name !== 'type') {
+            newScript.setAttribute(attr.name, attr.value);
+          }
+        });
+        newScript.type = 'text/javascript';
+        newScript.innerHTML = oldScript.innerHTML;
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const consent = getConsent();
+      if (!consent) {
+        showBanner();
+      } else if (consent === 'accepted') {
+        activateScripts();
+      }
+
+      document.getElementById('zcp-cookie-accept')?.addEventListener('click', () => setConsent('accepted'));
+      document.getElementById('zcp-cookie-reject')?.addEventListener('click', () => setConsent('rejected'));
+    });
+  })();
+</script>

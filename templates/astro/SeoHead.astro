@@ -1,0 +1,57 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  image?: string;
+  canonicalURL?: string | URL;
+  type?: 'website' | 'article';
+  siteName?: string;
+  twitterHandle?: string;
+  themeColor?: string;
+  schema?: Record<string, any>;
+}
+
+const {
+  title,
+  description,
+  image = '/og-image.jpg',
+  canonicalURL = Astro.url,
+  type = 'website',
+  siteName = 'Zerops Astro',
+  twitterHandle = '@zeropsio',
+  themeColor = '#000000',
+  schema,
+} = Astro.props;
+
+const resolvedImage = new URL(image, Astro.url).toString();
+const resolvedCanonical = new URL(canonicalURL, Astro.url).toString();
+---
+
+<!-- Essential Meta Tags -->
+<title>{title}</title>
+<meta name="title" content={title} />
+<meta name="description" content={description} />
+<link rel="canonical" href={resolvedCanonical} />
+<meta name="theme-color" content={themeColor} />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content={type} />
+<meta property="og:url" content={resolvedCanonical} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:image" content={resolvedImage} />
+<meta property="og:site_name" content={siteName} />
+
+<!-- Twitter / X -->
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:url" content={resolvedCanonical} />
+<meta property="twitter:title" content={title} />
+<meta property="twitter:description" content={description} />
+<meta property="twitter:image" content={resolvedImage} />
+{twitterHandle && <meta property="twitter:site" content={twitterHandle} />}
+
+<!-- Structured Data (JSON-LD) -->
+{schema && (
+  <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+)}
