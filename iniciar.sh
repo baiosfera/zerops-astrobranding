@@ -98,6 +98,13 @@ else
     git -C "$SKILLS_LOCAL_DIR" pull --ff-only 2>/dev/null || true
 fi
 
+# 2c. Verificar disponibilidad de scripts SSoT en Google Drive (tolerancia de indexación FUSE)
+echo "• [2c/4] Verificando disponibilidad de scripts SSoT en Google Drive..."
+for i in $(seq 1 10); do
+    [ -f "$SSOT_SCRIPTS/unisetup.sh" ] && break
+    sleep 1
+done
+
 # 3. Ejecutar orquestador maestro unisetup.sh desde Drive SSoT
 if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
     echo "• [3/4] Resolviendo credenciales y ejecutando unisetup.sh..."
@@ -268,6 +275,10 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
     fi
 else
     echo "❌ Error: $SSOT_SCRIPTS/unisetup.sh no disponible tras el montaje."
+    if command -v systemctl >/dev/null 2>&1 && ! systemctl is-active --quiet rclone-baiosfera.service; then
+        echo "   El servicio rclone-baiosfera.service no está activo. Verificando diagnóstico:"
+        sudo journalctl -u rclone-baiosfera.service -n 25 --no-pager || true
+    fi
     exit 1
 fi
 

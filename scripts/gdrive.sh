@@ -417,6 +417,28 @@ fi
 
 sudo systemctl enable --now rclone-baiosfera.service
 
+echo "[ZCP-BOOT] Esperando disponibilidad del montaje FUSE en $MOUNT_DIR (timeout 15s)..."
+MOUNT_READY=false
+for i in $(seq 1 15); do
+    if mountpoint -q "$MOUNT_DIR"; then
+        MOUNT_READY=true
+        echo "  ✓ Montaje FUSE detectado y verificado en ${i}s."
+        break
+    fi
+    if ! systemctl is-active --quiet rclone-baiosfera.service; then
+        echo "❌ [GDRIVE-ERROR] rclone-baiosfera.service falló durante el arranque:"
+        sudo journalctl -u rclone-baiosfera.service -n 25 --no-pager
+        exit 1
+    fi
+    sleep 1
+done
+
+if [ "$MOUNT_READY" = false ]; then
+    echo "❌ [GDRIVE-ERROR] Timeout de 15s esperando punto de montaje FUSE en $MOUNT_DIR."
+    sudo journalctl -u rclone-baiosfera.service -n 25 --no-pager
+    exit 1
+fi
+
 echo "[ZCP-BOOT] GDrive mounted natively at primary path: $MOUNT_DIR"
 if [ -n "$DISCOVERED_TARGET" ] && [ -d "/mnt/$DISCOVERED_TARGET" ]; then
     echo "[ZCP-BOOT] GDrive integrated at $STORAGE_TYPE path: /mnt/$DISCOVERED_TARGET/baiosfera"
