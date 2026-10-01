@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh)
-# Repositorio: https://github.com/elplacerdc/zerops-astrobranding
-# Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/elplacerdc/zerops-astrobranding/main/iniciar.sh | bash
+# Repositorio: https://github.com/baiosfera/zerops-astrobranding
+# Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash
 # ==============================================================================
 set -euo pipefail
 
@@ -11,7 +11,7 @@ echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.0)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
-REPO_URL="https://github.com/elplacerdc/zerops-astrobranding.git"
+REPO_URL="https://github.com/baiosfera/zerops-astrobranding.git"
 REPO_NAME="$(basename "$REPO_URL" .git)"
 REPO_DIR="${PROJECT_ROOT}/zerops-astrobranding"
 DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
@@ -88,7 +88,7 @@ else
 fi
 
 # 2b. Aprovisionar catálogo soberano de skills desde GitHub (zerops-astro-skills)
-SKILLS_REPO_URL="https://github.com/elplacerdc/zerops-astro-skills.git"
+SKILLS_REPO_URL="https://github.com/baiosfera/zerops-astro-skills.git"
 SKILLS_LOCAL_DIR="/var/www/zerops-astro-skills"
 if [ ! -d "$SKILLS_LOCAL_DIR/.git" ]; then
     echo "• [2b/4] Clonando 65 skills soberanas desde GitHub ($SKILLS_REPO_URL)..."
