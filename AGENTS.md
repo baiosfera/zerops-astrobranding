@@ -97,9 +97,17 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
        - **Bifrost**: `config_store` y `logs_store` en PostgreSQL 18. `vector_store.type` en `chromem` o `qdrant` (nunca `redis` contra Valkey 7.2 por ausencia de RediSearch `FT.*`). Registra las 5 Virtual Keys oficiales (`vk-production-main`, `vk-staging-test`, `vk-hermes-agent`, `vk-astrobranding-engine`, `vk-agy-operator`).
        - **FreeLLMAPI**: Persistencia en `localstorage`, circuit breaker 429 con cooldown y rotación de keys.
        - **Evolution Go (WhatsApp Web)**: Estricto `minContainers: 1, maxContainers: 1` con `deploy.temporaryShutdown: true`. El protocolo Noise de WhatsApp Web exige un socket único TCP persistente; correr >1 réplica produce colisión 440 y baneo inmediato por Meta.
+      - **Arquitectura Lego Desacoplada & Orden Libre de Steps (Zero-Hardcoding)**:
+        - Los hitos y servicios son **100% modulares y aditivos**: pueden solicitarse en cualquier orden o de forma completamente aislada.
+        - **Cero Acoplamiento Artificial**: El agente JAMÁS fuerza dependencias lineales inexistentes. Una landing (`growth-engine`) o e-commerce (`checkout-funnels`) aprovisiona únicamente lo que su caso de uso requiere, sin obligar a levantar el stack de IA si no se utiliza.
+        - **Service Discovery Dinámico**: Los servicios se interconectan en caliente vía DNS interno privado (`http://bifrost:8080`, `http://evolution:8085`, `http://listmonk:9000`). El agente inspecciona en vivo (`zerops_discover`) y solo cablea lo existente.
+        - **GitOps Multi-Servicio & Staging Efímero en Apps (`astro-web`)**:
+          * La plantilla `zerops-astrobranding` es puramente chasis/herramientas y nunca corre workflows de deploy propios.
+          * Las apps personalizadas usan el modelo **Multi-Servicio** (`<app>-prod` en rama `main`, `<app>-stage` en rama `stage`).
+          * El entorno `stage` es **efímero**: se crea para validar cambios en `stage.midominio.com` y puede eliminarse al terminar para costo cero.
      - Valida la salud física (`/health`, `/metrics`), paridad SSoT (`ssot-parity-check`) y commit descriptivo en Git.
 4. **Multi-Proyecto & Multi-Organización**:
-   - Cada cliente o aplicación adopta el modelo **Single Sovereign Template Repo** (`gh repo create <cliente-app> --template elplacerdc/zerops-astrobranding`).
+   - Cada cliente o aplicación adopta el modelo **Single Sovereign Template Repo** (`gh repo create <cliente-app> --template baiosfera/zerops-astrobranding`).
    - Dentro de la misma organización en Zerops: aislamiento de red VXLAN por proyecto y desglose de costos detallado en billing.
    - En organizaciones separadas: aislamiento total de facturación y tarjeta de crédito independiente (`zcli project project-import --projectId <target> --importYaml import.yaml`).
 
