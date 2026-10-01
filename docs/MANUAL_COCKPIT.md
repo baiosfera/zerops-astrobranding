@@ -84,13 +84,13 @@ Inspección en vivo mediante consultas autenticadas y lectura de cabeceras ofici
 - **VedAstro Jyotish**: 60 RPM | 677 calculadores atómicos védicos.
 - **Kundali MCP Engine**: Ilimitado (Motor local Jyotish Shadbala, Vimshottari 5 niveles & Pramaan BPHS).
 
-### 📨 [5/6] Cloud, Mensajería Transaccional & Edge (AWS, ZeptoMail, WhatsApp, Cloudflare)
-- **Amazon Web Services (AWS)**: Integración con **SES v2** en `us-east-1` · Cuota: **50,000 emails/día** · Enviados hoy: 0 · Configuration Set `deliverability-set` · DMARC & DKIM 2048.
+### 📨 [5/6] Cloud, Mensajería Transaccional & Edge (Listmonk, ZeptoMail, WhatsApp, Cloudflare)
+- **Zerops Listmonk**: Motor soberano de correo transaccional y boletines en contenedor LXC dedicado (`http://listmonk:9000`).
 - **Zoho ZeptoMail**: Capacidad transaccional: **0 / 10,000 emails consumidos** (10,000 restantes en welcome pack transaccional sin caducidad mensual).
 - **Resend Email Relay**: Detectada como `NO CONFIGURADA` (pendiente de aprovisionar clave real).
 - **Meta WhatsApp Cloud**: Detectada como `NO CONFIGURADA` (sin WABA ID / token real activo).
 - **Evolution WhatsApp API**: Microservicio Go/whatsmeow en Zerops (`http://evolution:8080`).
-- **Cloudflare Edge CDN/WAF**: SSL Full Strict, Edge WAF y sincronización de DNS sin límite para `elplacerdecompartir.com`.
+- **Cloudflare Edge CDN/WAF**: SSL Full Strict, Edge WAF y sincronización de DNS sin límite para dominios configurados.
 
 ### 💳 [6/6] Pasarelas de Pago, Logística & CRM E-Commerce
 - **Wompi Colombia**: Validación criptográfica SHA256 de webhooks, llaves pública/privada y secret de integridad (`ACTIVO`).
@@ -113,7 +113,7 @@ cockpit-status --llm         # Solo LLMOps (Bifrost & FreeLLMAPI)
 cockpit-status --infra       # Solo Contenedores Zerops, RAM real, discos y costos
 cockpit-status --browsers    # Solo Cuotas de Búsqueda y Scraping (Tavily, Firecrawl, Exa)
 cockpit-status --astrology   # Solo APIs Astrológicas y Efemérides
-cockpit-status --apis        # Solo Cloud, Mensajería y Edge (AWS, Zepto, WA, CF)
+cockpit-status --apis        # Solo Cloud, Mensajería y Edge (Listmonk, Zepto, WA, CF)
 cockpit-status --ecommerce   # Solo Pasarelas de Pago, Logística y CRM
 ```
 
