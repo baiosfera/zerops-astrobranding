@@ -55,6 +55,15 @@ export ENGRAM_PROJECT="$APP_IDENTITY"
 [ -f "$PROJECT_ROOT/.env" ] && sed -i '/^ENGRAM_PROJECT=/d' "$PROJECT_ROOT/.env" 2>/dev/null || true
 echo "ENGRAM_PROJECT=$APP_IDENTITY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
 
+# Auto-adopción de ZCP_API_KEY desde el runtime Zerops
+if [ -n "${ZCP_API_KEY:-}" ]; then
+    export Z_TOKEN="$ZCP_API_KEY"
+    export ZEROPS_TOKEN="$ZCP_API_KEY"
+    [ -f "$PROJECT_ROOT/.env" ] && sed -i '/^Z_TOKEN=/d;/^ZEROPS_TOKEN=/d' "$PROJECT_ROOT/.env" 2>/dev/null || true
+    echo "Z_TOKEN=$ZCP_API_KEY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
+    echo "ZEROPS_TOKEN=$ZCP_API_KEY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
+fi
+
 # 1. Asegurar clonación del repositorio de la aplicación
 if [ ! -d "$REPO_DIR" ]; then
     echo "• [1/4] Clonando repositorio de aplicación ($REPO_URL)..."
