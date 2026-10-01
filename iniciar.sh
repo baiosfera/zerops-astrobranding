@@ -55,6 +55,10 @@ export ENGRAM_PROJECT="$APP_IDENTITY"
 [ -f "$PROJECT_ROOT/.env" ] && sed -i '/^ENGRAM_PROJECT=/d' "$PROJECT_ROOT/.env" 2>/dev/null || true
 echo "ENGRAM_PROJECT=$APP_IDENTITY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
 
+# Garantizar aislamiento soberano de espacio de nombres en Engram (.engram/config.json)
+mkdir -p "$PROJECT_ROOT/.engram"
+echo "{\"project_name\": \"$APP_IDENTITY\"}" > "$PROJECT_ROOT/.engram/config.json"
+
 # Auto-adopción de ZCP_API_KEY desde el runtime Zerops
 if [ -n "${ZCP_API_KEY:-}" ]; then
     export Z_TOKEN="$ZCP_API_KEY"
@@ -257,6 +261,17 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
         KEYS_FLAG=("--file" "$RESOLVED_KEYS")
     else
         echo "  ℹ️ Continuando con credenciales existentes en las variables del contenedor."
+    fi
+
+    # Re-sincronizar identidad y Engram si TARGET_PROJECT fue resuelto dinámicamente
+    if [ -n "$TARGET_PROJECT" ] && [ "$TARGET_PROJECT" != "$APP_IDENTITY" ]; then
+        APP_IDENTITY="$TARGET_PROJECT"
+        export PROJECT_NAME="$APP_IDENTITY"
+        export ENGRAM_PROJECT="$APP_IDENTITY"
+        [ -f "$PROJECT_ROOT/.env" ] && sed -i '/^ENGRAM_PROJECT=/d' "$PROJECT_ROOT/.env" 2>/dev/null || true
+        echo "ENGRAM_PROJECT=$APP_IDENTITY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
+        mkdir -p "$PROJECT_ROOT/.engram"
+        echo "{\"project_name\": \"$APP_IDENTITY\"}" > "$PROJECT_ROOT/.engram/config.json"
     fi
 
     bash "$SSOT_SCRIPTS/unisetup.sh" --all "${KEYS_FLAG[@]}" < /dev/null
