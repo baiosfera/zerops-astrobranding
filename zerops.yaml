@@ -149,7 +149,7 @@ zerops:
     build:
       base: alpine/go@1.22
       prepareCommands:
-        - apk add --no-cache git gcc musl-dev
+        - sudo apk add --no-cache git gcc musl-dev
       buildCommands:
         - cd apps/evolution && go build -o evolution-go main.go
       deployFiles:
@@ -164,7 +164,7 @@ zerops:
         - port: 8085
           httpSupport: true
       prepareCommands:
-        - apk add --no-cache ca-certificates tzdata
+        - sudo apk add --no-cache ca-certificates tzdata
       envVariables:
         SERVER_PORT: "8085"
         CLIENT_NAME: "astrobranding"
@@ -244,8 +244,9 @@ zerops:
         - port: 9000
           httpSupport: true
       prepareCommands:
-        - sudo apk add --no-cache ca-certificates tzdata curl
+        - sudo apk add --no-cache ca-certificates tzdata curl postgresql-client
       initCommands:
+        - zsc execOnce ${appVersionId} -- sh -c 'PGPASSWORD=${database_password} psql -h ${database_hostname} -U ${database_user} -d ${database_dbName} -c "CREATE SCHEMA IF NOT EXISTS listmonk;"'
         - zsc execOnce ${appVersionId} -- ./listmonk --install --idempotent --yes --config=""
         - zsc execOnce ${appVersionId} -- ./listmonk --upgrade --yes --config=""
       start: ./listmonk --config=""
@@ -262,5 +263,5 @@ zerops:
         LISTMONK_db__database: ${database_dbName}
         LISTMONK_db__params: "search_path=listmonk"
         LISTMONK_db__ssl_mode: "disable"
-        LISTMONK_ADMIN_USER: "admin"
-        LISTMONK_ADMIN_PASSWORD: "adminpassword"
+        LISTMONK_admin__username: "admin"
+        LISTMONK_admin__password: "adminpassword"
