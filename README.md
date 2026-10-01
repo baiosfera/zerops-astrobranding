@@ -228,6 +228,6 @@ ssh hermes "python3 -c 'import nats; print(nats.__version__)'"
 
 ## 🔗 Connected Repositories & SSoT Ecosystem
 
-- **Skills Soberanas (141 skills v8.4)**: [github.com/elplacerdc/zerops-astro-skills](https://github.com/elplacerdc/zerops-astro-skills)
-- **Brandview Visualizer Studio**: [github.com/elplacerdc/brandview](https://github.com/elplacerdc/brandview)
+- **Skills Soberanas (141 skills v8.4)**: [github.com/baiosfera/zerops-astro-skills](https://github.com/baiosfera/zerops-astro-skills)
+- **Brandview Visualizer Studio**: [github.com/baiosfera/brandview](https://github.com/baiosfera/brandview)
 - **Roadmap & Matrix for Successor AGYs**: [`docs/MODULARIZATION_ROADMAP.md`](docs/MODULARIZATION_ROADMAP.md)
