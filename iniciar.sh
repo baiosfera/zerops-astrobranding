@@ -73,7 +73,8 @@ if [ ! -d "$REPO_DIR" ]; then
     echo "• [1/4] Clonando repositorio de aplicación ($REPO_URL)..."
     git clone "$REPO_URL" "$REPO_DIR"
 else
-    echo "• [1/4] Repositorio detectado en $REPO_DIR."
+    echo "• [1/4] Repositorio detectado en $REPO_DIR. Sincronizando con origen..."
+    git -C "$REPO_DIR" pull --ff-only 2>/dev/null || true
 fi
 
 # 2. Asegurar montaje de Google Drive SSoT vía gdrive.sh
@@ -108,6 +109,18 @@ for i in $(seq 1 10); do
     [ -f "$SSOT_SCRIPTS/unisetup.sh" ] && break
     sleep 1
 done
+
+# 2d. Garantizar paridad activa de scripts de bootstrap entre SSoT y repositorio
+if [ -f "$SSOT_SCRIPTS/iniciar.sh" ] && [ -f "$REPO_DIR/iniciar.sh" ]; then
+    if ! cmp -s "$SSOT_SCRIPTS/iniciar.sh" "$REPO_DIR/iniciar.sh"; then
+        cp -f "$SSOT_SCRIPTS/iniciar.sh" "$REPO_DIR/iniciar.sh" 2>/dev/null || true
+    fi
+fi
+if [ -f "$SSOT_SCRIPTS/gdrive.sh" ] && [ -f "$REPO_DIR/scripts/gdrive.sh" ]; then
+    if ! cmp -s "$SSOT_SCRIPTS/gdrive.sh" "$REPO_DIR/scripts/gdrive.sh"; then
+        cp -f "$SSOT_SCRIPTS/gdrive.sh" "$REPO_DIR/scripts/gdrive.sh" 2>/dev/null || true
+    fi
+fi
 
 # 3. Ejecutar orquestador maestro unisetup.sh desde Drive SSoT
 if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
