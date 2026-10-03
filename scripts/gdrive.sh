@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ==============================================================================
-# ZCP ZERO-TRUST GDRIVE INSTALLER (V5.5: Platform-First Zerops Env & SSoT Parity)
+# ZCP ZERO-TRUST GDRIVE INSTALLER (V5.6: Resilient Local Storage & Clean Decouple)
 # Supports: Local Storage (POSIX), SeaweedFS (Distributed HA), Object Storage (MinIO S3)
 # ==============================================================================
 
@@ -270,12 +270,35 @@ if [ -n "$DISCOVERED_TARGET" ] && [ "$STORAGE_TYPE" != "none" ]; then
 
     case "$STORAGE_TYPE" in
         "local-storage")
+            AFTER_SERVICES="network-online.target zerops-localstorage.service"
             # In ZCP control-plane, if not yet mounted, attach via SSHFS to the service's /data volume
             if ! mountpoint -q "$STORAGE_DIR"; then
                 sudo mkdir -p "$STORAGE_DIR"
                 echo "[ZCP-BOOT] Attaching $DISCOVERED_TARGET:/data to $STORAGE_DIR via SSHFS..."
                 sudo sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "${DISCOVERED_TARGET}:/data" "$STORAGE_DIR" || true
             fi
+            # Instalar unidad systemd para persistencia nativa de montaje en reinicios y stop/start
+            sudo tee /etc/systemd/system/zerops-localstorage.service > /dev/null << LSEOF
+[Unit]
+Description=Zerops Local Storage SSHFS Persistent Mount
+After=network-online.target
+Before=rclone-baiosfera.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/mkdir -p $STORAGE_DIR
+ExecStart=/bin/bash -c 'if ! mountpoint -q $STORAGE_DIR; then /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 ${DISCOVERED_TARGET}:/data $STORAGE_DIR; fi; ln -sfn $STORAGE_DIR /var/www/${DISCOVERED_TARGET}'
+ExecStop=/bin/bash -c 'if mountpoint -q $STORAGE_DIR; then /usr/bin/fusermount3 -uz $STORAGE_DIR || true; fi'
+TimeoutStartSec=30
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
+LSEOF
+            sudo systemctl daemon-reload
+            sudo systemctl enable zerops-localstorage.service 2>/dev/null || true
             ;;
 
         "seaweedfs")
@@ -333,49 +356,7 @@ S3EOF
             ;;
     esac
 
-    # Generate Portable Runtime Kit in Storage for other runtime services
-    if [ -d "$STORAGE_DIR" ] && [ "$STORAGE_TYPE" != "object-storage" ]; then
-        sudo mkdir -p "$EXPORT_DIR/bin" "$EXPORT_DIR/config" 2>/dev/null || true
-        if [ -d "$EXPORT_DIR/bin" ]; then
-            sudo cp "$LOCAL_ROOT/bin/rclone" "$EXPORT_DIR/bin/"
-            sudo cp "$RCLONE_CONF" "$EXPORT_DIR/config/"
-            sudo chmod 644 "$EXPORT_DIR/config/rclone.conf"
-            
-            RUNTIME_SCRIPT="$EXPORT_DIR/gdrive"
-            sudo tee "$RUNTIME_SCRIPT" > /dev/null << 'EOF'
-#!/usr/bin/env bash
-set -e
-if [ -z "$1" ]; then
-    echo "Usage: $0 <target_mount_directory>"
-    exit 1
-fi
-TARGET="$1"
-mkdir -p "$TARGET"
-LOCAL_CACHE="/tmp/.rclone_cache_$(cat /proc/sys/kernel/random/uuid 2>/dev/null || tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 16)"
-mkdir -p "$LOCAL_CACHE"
-
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-"$DIR/bin/rclone" mount baiosfera: "$TARGET" \
-    --config "$DIR/config/rclone.conf" \
-    --cache-dir "$LOCAL_CACHE" \
-    --vfs-cache-mode full \
-    --dir-cache-time 60s \
-    --allow-other \
-    --allow-non-empty \
-    --daemon
-echo "GDrive mounted at $TARGET using local cache $LOCAL_CACHE"
-EOF
-            sudo chmod +x "$RUNTIME_SCRIPT"
-        fi
-    fi
-
-    # Bind mount setup con timeout protegido (evita bloqueos infinitos en boot)
-    BIND_MOUNT_SCRIPT="ExecStartPost=/bin/bash -c 'for i in \$(seq 1 15); do if mountpoint -q $MOUNT_DIR; then break; fi; sleep 1; done; if mountpoint -q $MOUNT_DIR && [ -d \"$STORAGE_DIR\" ]; then (umount -l $STORAGE_MOUNT 2>/dev/null || true); mkdir -p $STORAGE_MOUNT && mount --bind $MOUNT_DIR $STORAGE_MOUNT; fi'"
-    
-    # Clean unmount of bind mount before unmounting main FUSE
-    EXEC_STOP="ExecStop=/bin/bash -c 'if mountpoint -q $STORAGE_MOUNT; then umount -l $STORAGE_MOUNT || true; fi; if mountpoint -q $MOUNT_DIR; then /usr/bin/fusermount3 -uz $MOUNT_DIR || true; fi'"
-    EXEC_STOP_POST="ExecStopPost=/bin/bash -c 'if mountpoint -q $STORAGE_MOUNT; then umount -l $STORAGE_MOUNT || true; fi; if mountpoint -q $MOUNT_DIR; then /usr/bin/fusermount3 -uz $MOUNT_DIR || true; fi'"
-    
+    # Desacople total: Local Storage permanece limpio exclusivamente para SQLite (Engram/FreeLLMAPI) y cachés.
     # Expose Storage directly in /var/www/ for convenient access alongside codebases
     if [ -d "$STORAGE_DIR" ]; then
         sudo ln -sfn "$STORAGE_DIR" "/var/www/$DISCOVERED_TARGET"
@@ -385,11 +366,11 @@ else
     echo "[ZCP-BOOT] No external Zerops Storage service detected. Running in standalone local core mode."
 fi
 
-# 7. SYSTEMD INJECTION (LOCAL MOUNT + RESILIENT STORAGE BIND MOUNT)
+# 7. SYSTEMD INJECTION (LOCAL MOUNT SSoT)
 SERVICE_FILE="/etc/systemd/system/rclone-baiosfera.service"
 sudo tee "$SERVICE_FILE" > /dev/null << EOF
 [Unit]
-Description=Rclone Mount Baiosfera (Local Core + Zerops $STORAGE_TYPE Bind Mount)
+Description=Rclone Mount Baiosfera (Local Core SSoT)
 After=$AFTER_SERVICES
 
 [Service]

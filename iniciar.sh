@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.4)
+# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.5)
 # Repositorio: https://github.com/baiosfera/zerops-astrobranding
 # Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash
 # ==============================================================================
@@ -33,7 +33,7 @@ for var in $(env | grep -E '^core_' | sed 's/=.*//' || true); do
 done
 
 echo "============================================================"
-echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.3 - Zero-Env)"
+echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.5 - Storage Resilient)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
@@ -43,11 +43,9 @@ REPO_DIR="${PROJECT_ROOT}/zerops-astrobranding"
 DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
 SSOT_SCRIPTS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/scripts"
 
-# Manejo de argumentos opcionales (--keys, --project, --repo, --skip-storage, --allow-ephemeral)
+# Manejo de argumentos opcionales (--keys, --project, --repo)
 KEYS_FILE_ARG=""
 PROJECT_NAME_ARG=""
-SKIP_STORAGE="${SKIP_STORAGE:-false}"
-ALLOW_EPHEMERAL_STORAGE="${ALLOW_EPHEMERAL_STORAGE:-false}"
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
         --keys|-k)
@@ -65,12 +63,6 @@ while [[ "$#" -gt 0 ]]; do
             REPO_NAME="$(basename "$REPO_URL" .git)"
             REPO_DIR="${PROJECT_ROOT}/$REPO_NAME"
             shift 2 ;;
-        --skip-storage|--no-storage)
-            SKIP_STORAGE=true
-            shift ;;
-        --allow-ephemeral)
-            ALLOW_EPHEMERAL_STORAGE=true
-            shift ;;
         *) shift ;;
     esac
 done
@@ -110,61 +102,59 @@ if [ -n "${ZCP_API_KEY:-}" ]; then
     fi
 fi
 
-# 0b. Guardia Pre-Flight: Detección y Verificación de Local Storage Persistente
-echo "• Verificando servicio de almacenamiento persistente localstorage..."
+# 0b. Guardia Pre-Flight: Detección y Montaje Obligatorio de Local Storage Persistente
+echo "• Verificando servicio de almacenamiento persistente localstorage (OBLIGATORIO)..."
 LOCALSTORAGE_FOUND=false
 LOCALSTORAGE_HOST=""
 
-if [ "$SKIP_STORAGE" = "true" ]; then
-    echo "  ℹ️ Verificación de localstorage omitida por flag (--skip-storage). Operando en modo efímero."
-else
-    # 1. Comprobación de puntos de montaje ya existentes en /mnt/
+# 1. Comprobación de puntos de montaje ya existentes en /mnt/
+for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
+    [ -z "$cand" ] && continue
+    if [ -d "/mnt/$cand" ] && mountpoint -q "/mnt/$cand" 2>/dev/null; then
+        LOCALSTORAGE_FOUND=true
+        LOCALSTORAGE_HOST="$cand"
+        break
+    fi
+done
+
+# 2. Comprobación de conectividad de red SSH al servicio Zerops
+if [ "$LOCALSTORAGE_FOUND" = false ]; then
     for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
         [ -z "$cand" ] && continue
-        if [ -d "/mnt/$cand" ] && mountpoint -q "/mnt/$cand" 2>/dev/null; then
+        if timeout 5s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=3 "$cand" "test -d /data" 2>/dev/null; then
             LOCALSTORAGE_FOUND=true
-            LOCALSTORAGE_HOST="$cand (ya montado en /mnt/$cand)"
+            LOCALSTORAGE_HOST="$cand"
             break
         fi
     done
+fi
 
-    # 2. Comprobación de conectividad de red SSH al servicio Zerops
-    if [ "$LOCALSTORAGE_FOUND" = false ]; then
-        for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
-            [ -z "$cand" ] && continue
-            if timeout 5s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=3 "$cand" "test -d /data" 2>/dev/null; then
-                LOCALSTORAGE_FOUND=true
-                LOCALSTORAGE_HOST="$cand"
-                break
-            fi
-        done
+if [ "$LOCALSTORAGE_FOUND" = false ]; then
+    echo ""
+    echo "============================================================"
+    echo "  ❌ ERROR CRÍTICO: SERVICIO 'localstorage' NO DETECTADO"
+    echo "============================================================"
+    echo "Este stack agéntico requiere OBLIGATORIAMENTE un servicio de"
+    echo "almacenamiento persistente ('local-storage:single@1' con hostname 'localstorage')"
+    echo "para garantizar la persistencia de las bases de datos SQLite (Engram),"
+    echo "caché y artefactos (/artifacts) a prueba de reinicios y stop/start."
+    echo ""
+    echo "Solución para inicializar este ZCP:"
+    echo "  1. Aprovisiona un servicio Local Storage en tu proyecto Zerops:"
+    echo "     - Tipo: local-storage:single@1"
+    echo "     - Hostname: localstorage"
+    echo "  2. Vuelve a ejecutar iniciar.sh una vez que esté en estado ACTIVE."
+    echo "============================================================"
+    exit 1
+else
+    echo "  ✓ Servicio persistente localstorage detectado y activo ($LOCALSTORAGE_HOST)."
+    # Asegurar montaje inmediato en /mnt/localstorage y symlink en /var/www/localstorage
+    sudo mkdir -p "/mnt/$LOCALSTORAGE_HOST"
+    if ! mountpoint -q "/mnt/$LOCALSTORAGE_HOST"; then
+        sudo sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" || true
     fi
-
-    if [ "$LOCALSTORAGE_FOUND" = false ]; then
-        if [ "$ALLOW_EPHEMERAL_STORAGE" = "true" ]; then
-            echo "  ⚠️ Advertencia: Servicio 'localstorage' no detectado. Continuando en modo efímero (--allow-ephemeral)..."
-        else
-            echo ""
-            echo "============================================================"
-            echo "  ❌ ERROR CRÍTICO: SERVICIO 'localstorage' NO DETECTADO"
-            echo "============================================================"
-            echo "Este stack agéntico requiere un servicio de almacenamiento"
-            echo "persistente ('local-storage:single@1' con hostname 'localstorage')"
-            echo "para blindar la persistencia de datos, caché y artefactos (/artifacts)."
-            echo ""
-            echo "Solución para inicializar este ZCP:"
-            echo "  1. Aprovisiona un servicio Local Storage en tu proyecto Zerops:"
-            echo "     - Tipo: local-storage:single@1"
-            echo "     - Hostname: localstorage"
-            echo "  2. Vuelve a ejecutar iniciar.sh una vez que esté ACTIVE."
-            echo ""
-            echo "  Nota: Para inicializar código y herramientas sin almacenamiento persistente,"
-            echo "  ejecuta con: iniciar.sh --skip-storage"
-            echo "============================================================"
-            exit 1
-        fi
-    else
-        echo "  ✓ Servicio persistente localstorage detectado y activo ($LOCALSTORAGE_HOST)."
+    if [ ! -L "/var/www/$LOCALSTORAGE_HOST" ]; then
+        sudo ln -sfn "/mnt/$LOCALSTORAGE_HOST" "/var/www/$LOCALSTORAGE_HOST"
     fi
 fi
 
