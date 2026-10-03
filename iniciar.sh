@@ -452,6 +452,12 @@ fi
 
 # 4b. Purga obligatoria de archivos de entorno efímeros y residuales en raíz
 echo "• [4b/4] Purgando archivos residuales de credenciales en /var/www/ para blindar el arranque de Zerops..."
+# Resguardar gdrive.env en .rclone/ antes de purgar la raíz para no perder credenciales en reinicios
+if [ -f "$PROJECT_ROOT/gdrive.env" ]; then
+    mkdir -p "$PROJECT_ROOT/.rclone" 2>/dev/null || sudo mkdir -p "$PROJECT_ROOT/.rclone"
+    cp -f "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT/.rclone/gdrive.env" 2>/dev/null || sudo cp -f "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT/.rclone/gdrive.env"
+    chmod 600 "$PROJECT_ROOT/.rclone/gdrive.env" 2>/dev/null || sudo chmod 600 "$PROJECT_ROOT/.rclone/gdrive.env"
+fi
 rm -f "$PROJECT_ROOT/.env" "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT"/key*.md "$PROJECT_ROOT"/key*.env 2>/dev/null || true
 
 echo "============================================================"

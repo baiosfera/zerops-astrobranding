@@ -70,6 +70,19 @@ if [ -f "/var/www/gdrive.env" ]; then
     # shellcheck disable=SC1091
     source /var/www/gdrive.env 2>/dev/null || true
     set +a
+    # Proteger credenciales respaldándolas en el core local oculto (.rclone)
+    sudo cp -f "/var/www/gdrive.env" "$LOCAL_ROOT/gdrive.env" 2>/dev/null || true
+fi
+
+# Inyectar en /etc/environment para blindar persistencia nativa del contenedor tras stop/start
+if [ -n "${GDRIVE_REFRESH_TOKEN:-}" ]; then
+    if [ -w /etc/environment ] || command -v sudo >/dev/null 2>&1; then
+        for gvar in GDRIVE_CLIENT_ID GDRIVE_CLIENT_SECRET GDRIVE_REFRESH_TOKEN GDRIVE_REMOTE_NAME GDRIVE_MOUNT_DIR; do
+            if [ -n "${!gvar:-}" ] && ! grep -q "^${gvar}=" /etc/environment 2>/dev/null; then
+                echo "${gvar}=${!gvar}" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
+            fi
+        done
+    fi
 fi
 
 GDRIVE_CLIENT_ID="${GDRIVE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}"
@@ -356,8 +369,8 @@ EOF
         fi
     fi
 
-    # Bind mount setup: wait for primary FUSE mount, then bind into storage target
-    BIND_MOUNT_SCRIPT="ExecStartPost=/bin/bash -c 'while ! mountpoint -q $MOUNT_DIR; do sleep 1; done; if [ -d \"$STORAGE_DIR\" ]; then (umount -l $STORAGE_MOUNT 2>/dev/null || true); mkdir -p $STORAGE_MOUNT && mount --bind $MOUNT_DIR $STORAGE_MOUNT; fi'"
+    # Bind mount setup con timeout protegido (evita bloqueos infinitos en boot)
+    BIND_MOUNT_SCRIPT="ExecStartPost=/bin/bash -c 'for i in \$(seq 1 15); do if mountpoint -q $MOUNT_DIR; then break; fi; sleep 1; done; if mountpoint -q $MOUNT_DIR && [ -d \"$STORAGE_DIR\" ]; then (umount -l $STORAGE_MOUNT 2>/dev/null || true); mkdir -p $STORAGE_MOUNT && mount --bind $MOUNT_DIR $STORAGE_MOUNT; fi'"
     
     # Clean unmount of bind mount before unmounting main FUSE
     EXEC_STOP="ExecStop=/bin/bash -c 'if mountpoint -q $STORAGE_MOUNT; then umount -l $STORAGE_MOUNT || true; fi; if mountpoint -q $MOUNT_DIR; then /usr/bin/fusermount3 -uz $MOUNT_DIR || true; fi'"
@@ -381,6 +394,8 @@ After=$AFTER_SERVICES
 
 [Service]
 Type=simple
+TimeoutStartSec=30
+TimeoutStopSec=15
 ExecStartPre=/bin/bash -c '(umount -l /mnt/*/baiosfera 2>/dev/null || true); (fusermount3 -uz $MOUNT_DIR 2>/dev/null || true); (umount -l $MOUNT_DIR 2>/dev/null || true)'
 ExecStart=$LOCAL_ROOT/bin/rclone mount ${GDRIVE_REMOTE_NAME}: $MOUNT_DIR \\
     --config $RCLONE_CONF \\
