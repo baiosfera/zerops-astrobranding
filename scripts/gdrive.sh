@@ -59,16 +59,16 @@ if [ -f "/etc/environment" ]; then
     source /etc/environment 2>/dev/null || true
     set +a
 fi
+if [ -f "/var/www/.rclone/gdrive.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source /var/www/.rclone/gdrive.env 2>/dev/null || true
+    set +a
+fi
 if [ -f "/var/www/gdrive.env" ]; then
     set -a
     # shellcheck disable=SC1091
     source /var/www/gdrive.env 2>/dev/null || true
-    set +a
-fi
-if [ -f "/var/www/.env" ]; then
-    set -a
-    # shellcheck disable=SC1091
-    source /var/www/.env 2>/dev/null || true
     set +a
 fi
 

@@ -7,7 +7,7 @@
 set -euo pipefail
 
 echo "============================================================"
-echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.3)"
+echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.3 - Zero-Env)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
@@ -41,8 +41,10 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
-# Cargar gdrive.env si existe en la raíz
-if [ -f "$PROJECT_ROOT/gdrive.env" ]; then
+# Cargar gdrive.env si existe en .rclone o en la raíz (compatibilidad)
+if [ -f "$PROJECT_ROOT/.rclone/gdrive.env" ]; then
+    set -a; source "$PROJECT_ROOT/.rclone/gdrive.env"; set +a
+elif [ -f "$PROJECT_ROOT/gdrive.env" ]; then
     set -a; source "$PROJECT_ROOT/gdrive.env"; set +a
 fi
 
@@ -388,9 +390,9 @@ elif [ -f "$SSOT_SCRIPTS/ssot-parity-check.sh" ]; then
     bash "$SSOT_SCRIPTS/ssot-parity-check.sh"
 fi
 
-# 4b. Purga obligatoria de archivos de entorno efímeros en raíz
-echo "• [4b/4] Purgando archivos de entorno temporales (.env, gdrive.env) de la raíz..."
-rm -f "$PROJECT_ROOT/.env" "$PROJECT_ROOT/gdrive.env"
+# 4b. Purga obligatoria de archivos de entorno efímeros y residuales en raíz
+echo "• [4b/4] Purgando archivos residuales de credenciales en /var/www/ para blindar el arranque de Zerops..."
+rm -f "$PROJECT_ROOT/.env" "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT"/key*.md "$PROJECT_ROOT"/key*.env 2>/dev/null || true
 
 echo "============================================================"
 echo "  🎉 BOOTSTRAP COMPLETADO CON ÉXITO — ENTORNO LISTO"
