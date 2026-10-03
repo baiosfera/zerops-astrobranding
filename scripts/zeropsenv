@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Sovereign Zerops Environment Helper & Autonomous Sync (zeropsenv)
+# Version: 2.1 (Direct Platform Env Parser & Autonomous MCP zcp JSON-RPC Sync)
+# ==============================================================================
+set -euo pipefail
+
+DO_SYNC=false
+OUTPUT_JSON=false
+ENV_FILE="/etc/environment"
+
+for arg in "$@"; do
+    case "$arg" in
+        sync|--sync)
+            DO_SYNC=true
+            ;;
+        -j|--json)
+            OUTPUT_JSON=true
+            ;;
+        -h|--help)
+            echo "Uso: zeropsenv [sync|--sync] [-j|--json] [/path/to/env_or_keys]"
+            echo "  (sin args)  : Muestra variables detectadas con valores enmascarados."
+            echo "  sync        : Sincroniza las variables hacia Zerops Cloud vía zcp serve (CERO tokens)."
+            echo "  -j, --json  : Imprime el payload JSON para zerops_env."
+            exit 0
+            ;;
+        *)
+            if [ -f "$arg" ]; then
+                ENV_FILE="$arg"
+            fi
+            ;;
+    esac
+done
+
+if [ ! -f "$ENV_FILE" ]; then
+    [ -f /var/www/.env ] && ENV_FILE="/var/www/.env"
+fi
+
+if [ ! -f "$ENV_FILE" ]; then
+    echo "❌ Error: No se encontró archivo de variables en $ENV_FILE ni en el entorno" >&2
+    exit 1
+fi
+
+python3 - << EOF_PY
+import sys, os, re, json, subprocess
+
+env_path = "$ENV_FILE"
+output_json = "$OUTPUT_JSON" == "true"
+do_sync = "$DO_SYNC" == "true"
+
+sys_ignore = re.compile(r"^(PATH|PWD|HOME|USER|SHELL|SHLVL|_|LS_COLORS|DEBIAN_FRONTEND|TERM|HOSTNAME|LANG|LC_.*|SSH_.*|MAIL|LOGNAME|HIST.*|LESS.*)$")
+
+vars_dict = {}
+with open(env_path, "r", encoding="utf-8", errors="ignore") as f:
+    for line in f:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        match = re.match(r"^([A-Za-z0-9_]+)=(.*)$", line)
+        if match:
+            k, v = match.group(1), match.group(2).strip()
+            # Strip trailing comments if unquoted
+            if not ((v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'"))):
+                v = v.split(" #")[0].strip()
+            v = v.strip("\"'")
+            if not sys_ignore.match(k) and v:
+                vars_dict[k] = v
+
+vars_list = [f"{k}={v}" for k, v in sorted(vars_dict.items())]
+
+if do_sync:
+    print("============================================================")
+    print("  🚀 Sincronizando .env hacia Zerops Cloud (zeropsenv v2.0)")
+    print("============================================================")
+    print(f"• Archivo origen: {env_path}")
+    print(f"• Total variables a sincronizar: {len(vars_list)}")
+    print("• Conectando con /usr/local/bin/zcp serve por canal JSON-RPC...")
+    
+    if not os.path.exists("/usr/local/bin/zcp"):
+        print("❌ Error: No se encontró el binario /usr/local/bin/zcp en este contenedor.")
+        sys.exit(1)
+
+    proc = subprocess.Popen(["/usr/local/bin/zcp", "serve"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    def send_and_wait(msg):
+        proc.stdin.write(json.dumps(msg) + "\n")
+        proc.stdin.flush()
+        req_id = msg.get("id")
+        while True:
+            line = proc.stdout.readline()
+            if not line:
+                return None
+            try:
+                data = json.loads(line)
+                if req_id is not None and data.get("id") == req_id:
+                    return data
+            except Exception:
+                continue
+
+    try:
+        init_res = send_and_wait({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "zeropsenv-cli", "version": "2.0"}
+            }
+        })
+        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+        proc.stdin.flush()
+
+        resp = send_and_wait({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "zerops_env",
+                "arguments": {
+                    "action": "set",
+                    "project": True,
+                    "skipRestart": True,
+                    "variables": vars_list
+                }
+            }
+        })
+        proc.terminate()
+        
+        result_text = resp.get("result", {}).get("content", [{}])[0].get("text", "") if resp else ""
+        if resp and not resp.get("error"):
+            print("✅ Sincronización exitosa: Variables inyectadas en Zerops Cloud.")
+        else:
+            err_msg = resp.get("error", {}).get("message", result_text[:200]) if resp else "Sin respuesta"
+            print(f"⚠️ Aviso del plano de control: {err_msg}")
+    except Exception as e:
+        proc.kill()
+        print(f"❌ Error durante el enlace con zcp: {e}")
+        sys.exit(1)
+    print("============================================================")
+elif output_json:
+    payload = {
+        "action": "set",
+        "project": True,
+        "variables": vars_list
+    }
+    print(json.dumps(payload, indent=2))
+else:
+    print("============================================================")
+    print("  🌐 Zerops Environment Helper (zeropsenv v2.0)")
+    print("============================================================")
+    print(f"• Archivo origen: {env_path}")
+    print(f"• Total variables listas: {len(vars_dict)}\n")
+    print("Variables detectadas (valores enmascarados):")
+    for k in sorted(vars_dict.keys()):
+        v = vars_dict[k]
+        masked = f"{v[:3]}...{v[-3:]}" if len(v) > 8 else "<set>"
+        print(f"  🔑 {k:<28} : {masked}")
+    print("\n💡 Para sincronizar en frío a Zerops Cloud, ejecutá:")
+    print("   zeropsenv sync")
+    print("============================================================")
+EOF_PY

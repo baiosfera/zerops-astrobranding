@@ -16,4 +16,8 @@ apps/freellmapi/config.json
 .atl/
 __pycache__/
 *.bak
-
+scripts/engram
+scripts/gentle-ai
+scripts/*.bak
+scripts/**/*.bak
+scripts/**/__pycache__/
