@@ -11,8 +11,8 @@ import subprocess
 import sys
 
 
-def load_env(env_path="/var/www/.env"):
-    env = {}
+def load_env(env_path="/etc/environment"):
+    env = dict(os.environ)
     p = Path(env_path)
     if p.exists():
         with open(p, "r", encoding="utf-8") as f:
@@ -20,15 +20,16 @@ def load_env(env_path="/var/www/.env"):
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     k, v = line.split("=", 1)
-                    env[k.strip()] = v.strip().strip("'\"")
+                    if k.strip() not in env:
+                        env[k.strip()] = v.strip().strip("'\"")
     return env
 
 
 def main():
     env = load_env()
-    db_url = env.get("DATABASE_URL")
+    db_url = env.get("DATABASE_URL") or os.environ.get("DATABASE_URL") or os.environ.get("db_connectionString")
     if not db_url:
-        print("❌ Error: DATABASE_URL no encontrada en /var/www/.env", file=sys.stderr)
+        print("❌ Error: DATABASE_URL o db_connectionString no encontrada en variables de Zerops ni /etc/environment", file=sys.stderr)
         sys.exit(1)
 
     dumps_json_path = Path("/var/www/baiosfera/ASTROLOGÍA/DIAG/JUAN_DAMAREN_AGY/raw/json/dumps/client_dumps_15_shards.json")

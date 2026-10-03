@@ -35,10 +35,9 @@ echo "=================================================================="
 # STEP 1: Workspace & Environment Pre-flight
 # ------------------------------------------------------------------------------
 step_1_preflight() {
-  echo "==> [Step 1/4] Verifying Workspace & Control Plane Baseline..."
-  if [ ! -f .env ] && [ -f .env.example ]; then
-    echo "    Creating .env from .env.example..."
-    cp .env.example .env
+  # Zerops Platform-First: environment variables are injected natively by Zerops
+  if [ -f /etc/environment ]; then
+    echo "    Zerops environment baseline (/etc/environment) verified."
   fi
 
   # Check Node availability (standard in zcp for CLI scripts)

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.2)
+# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.3)
 # Repositorio: https://github.com/baiosfera/zerops-astrobranding
 # Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash
 # ==============================================================================
 set -euo pipefail
 
 echo "============================================================"
-echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.2)"
+echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.3)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
@@ -53,8 +53,11 @@ APP_IDENTITY_LOWER="$(echo "$APP_IDENTITY" | tr '[:upper:]' '[:lower:]')"
 
 export PROJECT_NAME="$APP_IDENTITY"
 export ENGRAM_PROJECT="$APP_IDENTITY_LOWER"
-[ -f "$PROJECT_ROOT/.env" ] && sed -i '/^ENGRAM_PROJECT=/d' "$PROJECT_ROOT/.env" 2>/dev/null || true
-echo "ENGRAM_PROJECT=$APP_IDENTITY_LOWER" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
+if [ -w /etc/environment ] || command -v sudo >/dev/null 2>&1; then
+    sudo sed -i '/^ENGRAM_PROJECT=/d;/^PROJECT_NAME=/d' /etc/environment 2>/dev/null || true
+    echo "ENGRAM_PROJECT=$APP_IDENTITY_LOWER" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
+    echo "PROJECT_NAME=$APP_IDENTITY" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
+fi
 
 # Garantizar aislamiento soberano de espacio de nombres en Engram (.engram/config.json)
 mkdir -p "$PROJECT_ROOT/.engram"
@@ -64,9 +67,11 @@ echo "{\"project_name\": \"$APP_IDENTITY_LOWER\"}" > "$PROJECT_ROOT/.engram/conf
 if [ -n "${ZCP_API_KEY:-}" ]; then
     export Z_TOKEN="$ZCP_API_KEY"
     export ZEROPS_TOKEN="$ZCP_API_KEY"
-    [ -f "$PROJECT_ROOT/.env" ] && sed -i '/^Z_TOKEN=/d;/^ZEROPS_TOKEN=/d' "$PROJECT_ROOT/.env" 2>/dev/null || true
-    echo "Z_TOKEN=$ZCP_API_KEY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
-    echo "ZEROPS_TOKEN=$ZCP_API_KEY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
+    if [ -w /etc/environment ] || command -v sudo >/dev/null 2>&1; then
+        sudo sed -i '/^Z_TOKEN=/d;/^ZEROPS_TOKEN=/d' /etc/environment 2>/dev/null || true
+        echo "Z_TOKEN=$ZCP_API_KEY" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
+        echo "ZEROPS_TOKEN=$ZCP_API_KEY" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
+    fi
 fi
 
 # 0b. Guardia Pre-Flight Obligatoria: Detección y Verificación de Local Storage Persistente
@@ -340,8 +345,11 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
         APP_IDENTITY_LOWER="$(echo "$APP_IDENTITY" | tr '[:upper:]' '[:lower:]')"
         export PROJECT_NAME="$APP_IDENTITY"
         export ENGRAM_PROJECT="$APP_IDENTITY_LOWER"
-        [ -f "$PROJECT_ROOT/.env" ] && sed -i '/^ENGRAM_PROJECT=/d' "$PROJECT_ROOT/.env" 2>/dev/null || true
-        echo "ENGRAM_PROJECT=$APP_IDENTITY_LOWER" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
+        if [ -w /etc/environment ] || command -v sudo >/dev/null 2>&1; then
+            sudo sed -i '/^ENGRAM_PROJECT=/d;/^PROJECT_NAME=/d' /etc/environment 2>/dev/null || true
+            echo "ENGRAM_PROJECT=$APP_IDENTITY_LOWER" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
+            echo "PROJECT_NAME=$APP_IDENTITY" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
+        fi
         mkdir -p "$PROJECT_ROOT/.engram"
         echo "{\"project_name\": \"$APP_IDENTITY_LOWER\"}" > "$PROJECT_ROOT/.engram/config.json"
         if command -v engram-sync >/dev/null 2>&1; then
@@ -379,6 +387,10 @@ if command -v ssot-parity-check >/dev/null 2>&1; then
 elif [ -f "$SSOT_SCRIPTS/ssot-parity-check.sh" ]; then
     bash "$SSOT_SCRIPTS/ssot-parity-check.sh"
 fi
+
+# 4b. Purga obligatoria de archivos de entorno efímeros en raíz
+echo "• [4b/4] Purgando archivos de entorno temporales (.env, gdrive.env) de la raíz..."
+rm -f "$PROJECT_ROOT/.env" "$PROJECT_ROOT/gdrive.env"
 
 echo "============================================================"
 echo "  🎉 BOOTSTRAP COMPLETADO CON ÉXITO — ENTORNO LISTO"

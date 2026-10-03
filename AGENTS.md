@@ -108,7 +108,7 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 
 ## 🛑 Contratos Operativos ZCP & Seguridad
 1. **Jerarquía ZCP-First & SSoT Indivisible**: El desarrollo activo ocurre en ZCP (`/var/www`). Los cambios validados se reflejan indivisiblemente hacia Google Drive SSoT (`/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/`). Drive solo fluye hacia ZCP en arranques fríos (`iniciar.sh` $\to$ `unisetup.sh`).
-2. **Entorno y Secretos**: Credenciales en `/var/www/.env` se referencian por variable de shell (`$VAR`), nunca en texto plano.
+2. **Entorno y Secretos (Soberanía Zerops Env & Cero .env en Disco)**: Prohibido almacenar credenciales en `/var/www/.env` o `gdrive.env` (archivos efímeros purgados tras bootstrap). Toda variable o secreto se gestiona en la plataforma vía `zerops_env`, se inyecta en el runtime (`/etc/environment` y shell) y se referencia exclusivamente por variable de entorno (`$VAR` o `process.env`), nunca en texto plano.
 3. **Seguridad Nativa a Nivel de Proceso**: `tool-guard.py` intercepta en `PreToolUse`/`PreInvocation` comandos destructivos, fugas de rutas relativas (`0zcp-123/`), protege handovers, asegura backups pre-mutación y deduplica eventos para máxima eficiencia de tokens.
 4. **Higiene de Procesos**: Comandos con `timeout 10s` y `WaitMsBeforeAsync: 10000`. Servidores continuos vía `zerops_dev_server`.
 5. **Grounding Epistémico Fuera de Caja Negra**: Obligatorio contrastar código y arquitectura contra el mundo exterior en tiempo presente mediante triangulación multi-motor en `research` (Exa para conceptos/código, Context7 para APIs oficiales, Jina Reader para extracción verbatim y Firecrawl para scraping/skills). Prohibido el conformismo con snippets aislados de un único buscador.
@@ -142,6 +142,18 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 - **Runtime:** listmonk (alpine/go@1.22, simple)
 - **Dependencies:** database (postgresql:single@18)
 - **Session:** 7975ecd8ff7a9b20
+
+> This is a historical record. Verify current state via `zerops_discover`.
+<!-- /ZEROPS:REFLOG -->
+
+<!-- ZEROPS:REFLOG -->
+### 2026-10-02 — Bootstrap: 
+
+- **Runtime:** freellmapi (ubuntu/nodejs@24, simple)
+- **Dependencies:** localstorage (local-storage:single@1)
+- **Runtime:** bifrost (alpine/go@1.22, simple)
+- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2)
+- **Session:** a9605864db17978d
 
 > This is a historical record. Verify current state via `zerops_discover`.
 <!-- /ZEROPS:REFLOG -->

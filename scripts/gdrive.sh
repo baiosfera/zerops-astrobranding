@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ==============================================================================
-# ZCP ZERO-TRUST GDRIVE INSTALLER (V5.4: Mandatory Local Storage & Artifacts Persistence Invariant)
+# ZCP ZERO-TRUST GDRIVE INSTALLER (V5.5: Platform-First Zerops Env & SSoT Parity)
 # Supports: Local Storage (POSIX), SeaweedFS (Distributed HA), Object Storage (MinIO S3)
 # ==============================================================================
 
@@ -53,6 +53,12 @@ sudo ln -sf "$LOCAL_ROOT/bin/rclone" /usr/local/bin/rclone
 
 # 5. VAULT CONFIGURATION
 # Load environment credentials if not in current shell
+if [ -f "/etc/environment" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source /etc/environment 2>/dev/null || true
+    set +a
+fi
 if [ -f "/var/www/gdrive.env" ]; then
     set -a
     # shellcheck disable=SC1091
@@ -65,12 +71,6 @@ if [ -f "/var/www/.env" ]; then
     source /var/www/.env 2>/dev/null || true
     set +a
 fi
-if [ -f "/etc/environment" ]; then
-    set -a
-    # shellcheck disable=SC1091
-    source /etc/environment 2>/dev/null || true
-    set +a
-fi
 
 GDRIVE_CLIENT_ID="${GDRIVE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}"
 GDRIVE_CLIENT_SECRET="${GDRIVE_CLIENT_SECRET:-${GOOGLE_CLIENT_SECRET:-}}"
@@ -80,7 +80,7 @@ GDRIVE_REMOTE_NAME="${GDRIVE_REMOTE_NAME:-baiosfera}"
 if [ -z "$GDRIVE_CLIENT_ID" ] || [ -z "$GDRIVE_CLIENT_SECRET" ] || [ -z "$GDRIVE_REFRESH_TOKEN" ]; then
     echo "❌ [GDRIVE-ERROR] Missing Google Drive OAuth credentials."
     echo "   Ensure GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, and GDRIVE_REFRESH_TOKEN are set in"
-    echo "   Zerops project env, /var/www/.env, or exported in the environment."
+    echo "   Zerops project env, /etc/environment, or exported in the environment."
     exit 1
 fi
 
