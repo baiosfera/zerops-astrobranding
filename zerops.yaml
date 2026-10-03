@@ -34,6 +34,8 @@ zerops:
         VALKEY_URL: ${valkey_connectionString}
         NATS_URL: ${nats_connectionString}
         BIFROST_GATEWAY_URL: "http://bifrost:8080/v1"
+        EVOLUTION_URL: "http://evolution:8085"
+        EVOLUTION_API_URL: "http://evolution:8085"
         EVOLUTION_GATEWAY_URL: "http://evolution:8085"
         ASTRO_KEY: ${ASTRO_KEY}
         S3_ENDPOINT: ${objectstorage_apiUrl}
@@ -175,6 +177,8 @@ zerops:
       envVariables:
         SERVER_PORT: "8085"
         CLIENT_NAME: "${APP_IDENTITY:-app}"
+        AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+        GLOBAL_API_KEY: ${EVOLUTION_API_KEY}
         POSTGRES_AUTH_DB: "postgresql://${database_user}:${database_password}@database:${database_port}/evogo_auth?sslmode=disable"
         POSTGRES_USERS_DB: "postgresql://${database_user}:${database_password}@database:${database_port}/evogo_users?sslmode=disable"
         DATABASE_SAVE_MESSAGES: "true"
