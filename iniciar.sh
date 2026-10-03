@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh)
+# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.1)
 # Repositorio: https://github.com/baiosfera/zerops-astrobranding
 # Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash
 # ==============================================================================
 set -euo pipefail
 
 echo "============================================================"
-echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.0)"
+echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.1)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
@@ -68,6 +68,38 @@ if [ -n "${ZCP_API_KEY:-}" ]; then
     echo "ZEROPS_TOKEN=$ZCP_API_KEY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
 fi
 
+# 0b. Guardia Pre-Flight Obligatoria: Detección y Verificación de Local Storage Persistente
+echo "• Verificando servicio de almacenamiento persistente localstorage..."
+LOCALSTORAGE_FOUND=false
+LOCALSTORAGE_HOST=""
+for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
+    [ -z "$cand" ] && continue
+    if timeout 5s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=3 "$cand" "test -d /data" 2>/dev/null; then
+        LOCALSTORAGE_FOUND=true
+        LOCALSTORAGE_HOST="$cand"
+        break
+    fi
+done
+
+if [ "$LOCALSTORAGE_FOUND" = false ]; then
+    echo ""
+    echo "============================================================"
+    echo "  ❌ ERROR CRÍTICO: SERVICIO 'localstorage' NO DETECTADO"
+    echo "============================================================"
+    echo "Este stack agéntico requiere obligatoriamente un servicio de"
+    echo "almacenamiento persistente ('local-storage:single@1' con hostname 'localstorage')"
+    echo "para blindar la persistencia de datos, caché y artefactos (/artifacts)."
+    echo ""
+    echo "Solución para inicializar este ZCP:"
+    echo "  1. Aprovisiona un servicio Local Storage en tu proyecto Zerops:"
+    echo "     - Tipo: local-storage:single@1"
+    echo "     - Hostname: localstorage"
+    echo "  2. Vuelve a ejecutar iniciar.sh una vez que esté ACTIVE."
+    echo "============================================================"
+    exit 1
+fi
+echo "  ✓ Servicio persistente localstorage detectado y activo ($LOCALSTORAGE_HOST)."
+
 # 1. Asegurar clonación del repositorio de la aplicación
 if [ ! -d "$REPO_DIR" ]; then
     echo "• [1/4] Clonando repositorio de aplicación ($REPO_URL)..."
@@ -91,6 +123,21 @@ if [ ! -d "$DRIVE_MOUNT/0ZEROPS-AGY" ]; then
 else
     echo "• [2/4] Google Drive montado y verificado en $DRIVE_MOUNT."
 fi
+
+# 2a. Garantizar adopción de /artifacts como symlink persistente a Google Drive SSoT
+SSOT_ARTIFACTS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/artifacts"
+LOCAL_ARTIFACTS="$PROJECT_ROOT/artifacts"
+mkdir -p "$SSOT_ARTIFACTS" 2>/dev/null || true
+if [ -d "$LOCAL_ARTIFACTS" ] && [ ! -L "$LOCAL_ARTIFACTS" ]; then
+    echo "• Migrando artefactos locales preexistentes hacia Google Drive SSoT..."
+    cp -rn "$LOCAL_ARTIFACTS"/* "$SSOT_ARTIFACTS/" 2>/dev/null || true
+    rm -rf "$LOCAL_ARTIFACTS"
+fi
+if [ ! -L "$LOCAL_ARTIFACTS" ]; then
+    echo "• Enlazando /artifacts permanentemente a Google Drive SSoT..."
+    ln -sfn "$SSOT_ARTIFACTS" "$LOCAL_ARTIFACTS"
+fi
+echo "  ✓ Symlink de /artifacts verificado -> $SSOT_ARTIFACTS"
 
 # 2b. Aprovisionar catálogo soberano de skills desde GitHub (zerops-astro-skills)
 SKILLS_REPO_URL="https://github.com/baiosfera/zerops-astro-skills.git"

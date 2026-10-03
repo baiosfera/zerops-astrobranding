@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ==============================================================================
-# ZCP ZERO-TRUST GDRIVE INSTALLER (V5.3: Tripartite Storage Support & AutoForwardPorts Invariant)
+# ZCP ZERO-TRUST GDRIVE INSTALLER (V5.4: Mandatory Local Storage & Artifacts Persistence Invariant)
 # Supports: Local Storage (POSIX), SeaweedFS (Distributed HA), Object Storage (MinIO S3)
 # ==============================================================================
 
@@ -188,41 +188,21 @@ discover_tripartite_storage() {
         fi
     fi
 
-    # 2. Probe for Object Storage (Check env variables for *_apiUrl)
-    for var in $(env | grep -E '_apiUrl=' | sed 's/_apiUrl=.*//' || true); do
-        DISCOVERED_TARGET="$var"
-        STORAGE_TYPE="object-storage"
-        return 0
+    # 2. Primary: Probe and wait for Local Storage (POSIX persistent volume law)
+    echo "[ZCP-BOOT] Probing and waiting for persistent localstorage (timeout 15s)..."
+    for cand in "localstorage" "storage" "sharedfiles" "sharedstorage" "vol" "volume" "data" "disk"; do
+        for attempt in $(seq 1 15); do
+            if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -o BatchMode=yes "$cand" "test -d /data" 2>/dev/null; then
+                DISCOVERED_TARGET="$cand"
+                STORAGE_TYPE="local-storage"
+                echo "[ZCP-BOOT] Persistent local-storage target ready: $cand (connected in ${attempt}s)"
+                return 0
+            fi
+            sleep 1
+        done
     done
 
-    # 3. Probe for SeaweedFS (Check internal Filer HTTP port 8888)
-    for cand in "${CANDIDATES[@]}"; do
-        if curl -s -m 1 "http://${cand}.zerops:8888/" >/dev/null 2>&1 || nc -z -w 1 "$cand" 8888 2>/dev/null; then
-            DISCOVERED_TARGET="$cand"
-            STORAGE_TYPE="seaweedfs"
-            return 0
-        fi
-    done
-
-    # 4. Probe for existing mounts in /mnt/
-    local mnt_cand
-    mnt_cand=$(ls -1 /mnt/ 2>/dev/null | grep -v 'lost+found' | head -n 1 || true)
-    if [ -n "$mnt_cand" ]; then
-        DISCOVERED_TARGET="$mnt_cand"
-        STORAGE_TYPE="local-storage"
-        return 0
-    fi
-
-    # 5. Probe for Local Storage via SSH into candidate hostnames (test -d /data)
-    for cand in "${CANDIDATES[@]}"; do
-        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -o BatchMode=yes "$cand" "test -d /data" 2>/dev/null; then
-            DISCOVERED_TARGET="$cand"
-            STORAGE_TYPE="local-storage"
-            return 0
-        fi
-    done
-
-    # 6. Probe any *_hostname environment variable
+    # 3. Probe any *_hostname environment variable for local-storage
     for var in $(env | grep -E '_hostname=' | sed 's/.*_hostname=//' || true); do
         if [ "$var" != "zcp" ] && [ "$var" != "core" ]; then
             if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -o BatchMode=yes "$var" "test -d /data" 2>/dev/null; then
@@ -232,6 +212,31 @@ discover_tripartite_storage() {
             fi
         fi
     done
+
+    # 4. Probe for SeaweedFS (Check internal Filer HTTP port 8888)
+    for cand in "${CANDIDATES[@]}"; do
+        if curl -s -m 1 "http://${cand}.zerops:8888/" >/dev/null 2>&1 || nc -z -w 1 "$cand" 8888 2>/dev/null; then
+            DISCOVERED_TARGET="$cand"
+            STORAGE_TYPE="seaweedfs"
+            return 0
+        fi
+    done
+
+    # 5. Probe for Object Storage (Check env variables for *_apiUrl)
+    for var in $(env | grep -E '_apiUrl=' | sed 's/_apiUrl=.*//' || true); do
+        DISCOVERED_TARGET="$var"
+        STORAGE_TYPE="object-storage"
+        return 0
+    done
+
+    # 6. Probe for existing mounts in /mnt/
+    local mnt_cand
+    mnt_cand=$(ls -1 /mnt/ 2>/dev/null | grep -v 'lost+found' | head -n 1 || true)
+    if [ -n "$mnt_cand" ]; then
+        DISCOVERED_TARGET="$mnt_cand"
+        STORAGE_TYPE="local-storage"
+        return 0
+    fi
 
     return 1
 }
@@ -443,3 +448,17 @@ echo "[ZCP-BOOT] GDrive mounted natively at primary path: $MOUNT_DIR"
 if [ -n "$DISCOVERED_TARGET" ] && [ -d "/mnt/$DISCOVERED_TARGET" ]; then
     echo "[ZCP-BOOT] GDrive integrated at $STORAGE_TYPE path: /mnt/$DISCOVERED_TARGET/baiosfera"
 fi
+
+# 9. ARTIFACTS PERSISTENCE INVARIANT (Google Drive SSoT Live Symlink)
+SSOT_ARTIFACTS="$MOUNT_DIR/0ZEROPS-AGY/0zcp-123/artifacts"
+LOCAL_ARTIFACTS="/var/www/artifacts"
+sudo mkdir -p "$SSOT_ARTIFACTS" 2>/dev/null || true
+if [ -d "$LOCAL_ARTIFACTS" ] && [ ! -L "$LOCAL_ARTIFACTS" ]; then
+    echo "[ZCP-BOOT] Migrando artefactos locales preexistentes hacia Google Drive SSoT..."
+    sudo cp -rn "$LOCAL_ARTIFACTS"/* "$SSOT_ARTIFACTS/" 2>/dev/null || true
+    sudo rm -rf "$LOCAL_ARTIFACTS"
+fi
+if [ ! -L "$LOCAL_ARTIFACTS" ]; then
+    sudo ln -sfn "$SSOT_ARTIFACTS" "$LOCAL_ARTIFACTS"
+fi
+echo "[ZCP-BOOT] Symlink /var/www/artifacts -> $SSOT_ARTIFACTS verificado y activo."
