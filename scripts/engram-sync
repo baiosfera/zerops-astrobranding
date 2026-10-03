@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# engram-sync — Sincronizador Atómico Tiered Hot/Cold para Memoria Engram
+# Versión: v1.0 | SSoT Governance Track A
+# ==============================================================================
+set -euo pipefail
+
+# 1. Determinar identidad del proyecto
+PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
+APP_IDENTITY="${ENGRAM_PROJECT:-}"
+
+if [ -z "$APP_IDENTITY" ] && [ -f "$PROJECT_ROOT/.env" ]; then
+    APP_IDENTITY="$(grep -E '^ENGRAM_PROJECT=' "$PROJECT_ROOT/.env" 2>/dev/null | head -n1 | cut -d'=' -f2- | tr -d '\"'\'' ' || true)"
+fi
+
+if [ -z "$APP_IDENTITY" ] && [ -f "$PROJECT_ROOT/.engram/config.json" ]; then
+    APP_IDENTITY="$(grep -o '"project_name": *"[^"]*"' "$PROJECT_ROOT/.engram/config.json" 2>/dev/null | head -n1 | cut -d'"' -f4 || true)"
+fi
+
+if [ -z "$APP_IDENTITY" ]; then
+    APP_IDENTITY="${PROJECT_NAME:-${CLIENT_NAME:-default}}"
+fi
+
+# Normalización canónica obligatoria a minúsculas para el filesystem
+APP_IDENTITY_LOWER="$(echo "$APP_IDENTITY" | tr '[:upper:]' '[:lower:]')"
+
+# 2. Rutas canónicas
+LOCALSTORAGE_DIR="/var/www/localstorage"
+HOT_DIR="${LOCALSTORAGE_DIR}/engram/${APP_IDENTITY_LOWER}"
+HOT_DB="${HOT_DIR}/engram.db"
+COLD_DIR="/var/www/baiosfera/0ZEROPS-AGY/${APP_IDENTITY_LOWER}/engram"
+COLD_DB="${COLD_DIR}/engram.db"
+AGENT_ENGRAM_DIR="/home/zerops/.engram"
+AGENT_DB="${AGENT_ENGRAM_DIR}/engram.db"
+
+# Parsear argumentos
+ACTION="status"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --push|-p)
+            ACTION="push"
+            shift ;;
+        --pull|-u)
+            ACTION="pull"
+            shift ;;
+        --status|-s)
+            ACTION="status"
+            shift ;;
+        --project)
+            APP_IDENTITY="$2"
+            APP_IDENTITY_LOWER="$(echo "$APP_IDENTITY" | tr '[:upper:]' '[:lower:]')"
+            HOT_DIR="${LOCALSTORAGE_DIR}/engram/${APP_IDENTITY_LOWER}"
+            HOT_DB="${HOT_DIR}/engram.db"
+            COLD_DIR="/var/www/baiosfera/0ZEROPS-AGY/${APP_IDENTITY_LOWER}/engram"
+            COLD_DB="${COLD_DIR}/engram.db"
+            shift 2 ;;
+        *)
+            echo "Uso: engram-sync [--push | --pull | --status] [--project <nombre>]"
+            exit 1 ;;
+    esac
+done
+
+do_push() {
+    echo "• [engram-sync] Ejecutando volcado Hot (localstorage) -> Cold (Google Drive SSoT)..."
+    
+    # Si la base reside en el home y no se ha movido aún a HOT_DIR, migrarla primero
+    if [ ! -f "$HOT_DB" ] && [ -f "$AGENT_DB" ] && [ ! -L "$AGENT_DB" ]; then
+        mkdir -p "$HOT_DIR"
+        cp -p "$AGENT_DB" "$HOT_DB"
+        ln -sfn "$HOT_DB" "$AGENT_DB"
+    fi
+
+    if [ ! -f "$HOT_DB" ]; then
+        echo "  ⚠️ No existe base de datos Hot en: $HOT_DB. Nada que sincronizar."
+        return 0
+    fi
+
+    mkdir -p "$COLD_DIR"
+    if command -v sqlite3 >/dev/null 2>&1; then
+        sqlite3 "$HOT_DB" ".backup '$COLD_DB'"
+    else
+        cp -f "$HOT_DB" "$COLD_DB"
+    fi
+
+    # Copiar configuración si existe
+    if [ -f "$AGENT_ENGRAM_DIR/protocol-mode.json" ]; then
+        cp -f "$AGENT_ENGRAM_DIR/protocol-mode.json" "$HOT_DIR/" 2>/dev/null || true
+        cp -f "$AGENT_ENGRAM_DIR/protocol-mode.json" "$COLD_DIR/" 2>/dev/null || true
+    fi
+
+    echo "  ✓ Volcado atómico completado con éxito:"
+    echo "    Hot : $HOT_DB ($(stat -c%s "$HOT_DB" 2>/dev/null || ls -l "$HOT_DB" | awk '{print $5}') bytes)"
+    echo "    Cold: $COLD_DB ($(stat -c%s "$COLD_DB" 2>/dev/null || ls -l "$COLD_DB" | awk '{print $5}') bytes)"
+}
+
+do_pull() {
+    echo "• [engram-sync] Ejecutando hidratación Cold (Google Drive SSoT) -> Hot (localstorage)..."
+    if [ ! -f "$COLD_DB" ]; then
+        echo "  ℹ️ No existe backup previo en Cold SSoT ($COLD_DB). Proyecto virgen."
+        return 0
+    fi
+
+    mkdir -p "$HOT_DIR"
+    if command -v sqlite3 >/dev/null 2>&1; then
+        sqlite3 "$COLD_DB" ".backup '$HOT_DB'"
+    else
+        cp -f "$COLD_DB" "$HOT_DB"
+    fi
+
+    if [ -f "$COLD_DIR/protocol-mode.json" ]; then
+        cp -f "$COLD_DIR/protocol-mode.json" "$HOT_DIR/" 2>/dev/null || true
+    fi
+
+    mkdir -p "$AGENT_ENGRAM_DIR"
+    ln -sfn "$HOT_DB" "$AGENT_DB"
+    if [ -f "$HOT_DIR/protocol-mode.json" ]; then
+        ln -sfn "$HOT_DIR/protocol-mode.json" "$AGENT_ENGRAM_DIR/protocol-mode.json" 2>/dev/null || true
+    fi
+
+    echo "  ✓ Hidratación completada para proyecto: $APP_IDENTITY_LOWER"
+}
+
+do_status() {
+    echo "============================================================"
+    echo "  🧠 Engram Tiered Storage Status [Proyecto: $APP_IDENTITY_LOWER]"
+    echo "============================================================"
+    echo "• Identidad normalizada: $APP_IDENTITY_LOWER"
+    echo "• Hot Path (localstorage): $HOT_DB"
+    if [ -f "$HOT_DB" ]; then
+        echo "  ✓ Estado: PRESENTE ($(stat -c%s "$HOT_DB" 2>/dev/null || ls -l "$HOT_DB" | awk '{print $5}') bytes)"
+    else
+        echo "  ✗ Estado: NO ENCONTRADO"
+    fi
+
+    echo "• Cold Path (Drive SSoT) : $COLD_DB"
+    if [ -f "$COLD_DB" ]; then
+        echo "  ✓ Estado: PRESENTE ($(stat -c%s "$COLD_DB" 2>/dev/null || ls -l "$COLD_DB" | awk '{print $5}') bytes)"
+    else
+        echo "  ✗ Estado: NO ENCONTRADO"
+    fi
+
+    echo "• Agent Link Target     : $AGENT_DB"
+    if [ -L "$AGENT_DB" ]; then
+        echo "  ✓ Estado: ENLACE SIMBÓLICO -> $(readlink "$AGENT_DB")"
+    elif [ -f "$AGENT_DB" ]; then
+        echo "  ⚠️ Estado: ARCHIVO REGULAR (No enlazado a localstorage)"
+    else
+        echo "  ✗ Estado: NO ENCONTRADO"
+    fi
+    echo "============================================================"
+}
+
+case "$ACTION" in
+    push) do_push ;;
+    pull) do_pull ;;
+    status) do_status ;;
+esac

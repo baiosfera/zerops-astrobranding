@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.1)
+# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.2)
 # Repositorio: https://github.com/baiosfera/zerops-astrobranding
 # Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash
 # ==============================================================================
 set -euo pipefail
 
 echo "============================================================"
-echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.1)"
+echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.2)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
@@ -49,15 +49,16 @@ fi
 # Determinar identidad agnóstica de proyecto (prioridad: CLI > gdrive.env / env > repo name)
 TARGET_PROJECT="${PROJECT_NAME_ARG:-${PROJECT_NAME:-${CLIENT_NAME:-}}}"
 APP_IDENTITY="${TARGET_PROJECT:-$REPO_NAME}"
+APP_IDENTITY_LOWER="$(echo "$APP_IDENTITY" | tr '[:upper:]' '[:lower:]')"
 
 export PROJECT_NAME="$APP_IDENTITY"
-export ENGRAM_PROJECT="$APP_IDENTITY"
+export ENGRAM_PROJECT="$APP_IDENTITY_LOWER"
 [ -f "$PROJECT_ROOT/.env" ] && sed -i '/^ENGRAM_PROJECT=/d' "$PROJECT_ROOT/.env" 2>/dev/null || true
-echo "ENGRAM_PROJECT=$APP_IDENTITY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
+echo "ENGRAM_PROJECT=$APP_IDENTITY_LOWER" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
 
 # Garantizar aislamiento soberano de espacio de nombres en Engram (.engram/config.json)
 mkdir -p "$PROJECT_ROOT/.engram"
-echo "{\"project_name\": \"$APP_IDENTITY\"}" > "$PROJECT_ROOT/.engram/config.json"
+echo "{\"project_name\": \"$APP_IDENTITY_LOWER\"}" > "$PROJECT_ROOT/.engram/config.json"
 
 # Auto-adopción de ZCP_API_KEY desde el runtime Zerops
 if [ -n "${ZCP_API_KEY:-}" ]; then
@@ -138,6 +139,16 @@ if [ ! -L "$LOCAL_ARTIFACTS" ]; then
     ln -sfn "$SSOT_ARTIFACTS" "$LOCAL_ARTIFACTS"
 fi
 echo "  ✓ Symlink de /artifacts verificado -> $SSOT_ARTIFACTS"
+
+# 2a-bis. Aprovisionar Persistencia Híbrida Hot/Cold de Engram
+echo "• [2a-bis] Verificando persistencia híbrida Hot/Cold para Engram ($APP_IDENTITY_LOWER)..."
+if command -v engram-sync >/dev/null 2>&1; then
+    engram-sync --pull --project "$APP_IDENTITY_LOWER" || true
+    engram-sync --status --project "$APP_IDENTITY_LOWER" || true
+elif [ -f "$REPO_DIR/scripts/engram-sync" ]; then
+    bash "$REPO_DIR/scripts/engram-sync" --pull --project "$APP_IDENTITY_LOWER" || true
+    bash "$REPO_DIR/scripts/engram-sync" --status --project "$APP_IDENTITY_LOWER" || true
+fi
 
 # 2b. Aprovisionar catálogo soberano de skills desde GitHub (zerops-astro-skills)
 SKILLS_REPO_URL="https://github.com/baiosfera/zerops-astro-skills.git"
@@ -326,12 +337,16 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
     # Re-sincronizar identidad y Engram si TARGET_PROJECT fue resuelto dinámicamente
     if [ -n "$TARGET_PROJECT" ] && [ "$TARGET_PROJECT" != "$APP_IDENTITY" ]; then
         APP_IDENTITY="$TARGET_PROJECT"
+        APP_IDENTITY_LOWER="$(echo "$APP_IDENTITY" | tr '[:upper:]' '[:lower:]')"
         export PROJECT_NAME="$APP_IDENTITY"
-        export ENGRAM_PROJECT="$APP_IDENTITY"
+        export ENGRAM_PROJECT="$APP_IDENTITY_LOWER"
         [ -f "$PROJECT_ROOT/.env" ] && sed -i '/^ENGRAM_PROJECT=/d' "$PROJECT_ROOT/.env" 2>/dev/null || true
-        echo "ENGRAM_PROJECT=$APP_IDENTITY" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
+        echo "ENGRAM_PROJECT=$APP_IDENTITY_LOWER" >> "$PROJECT_ROOT/.env" 2>/dev/null || true
         mkdir -p "$PROJECT_ROOT/.engram"
-        echo "{\"project_name\": \"$APP_IDENTITY\"}" > "$PROJECT_ROOT/.engram/config.json"
+        echo "{\"project_name\": \"$APP_IDENTITY_LOWER\"}" > "$PROJECT_ROOT/.engram/config.json"
+        if command -v engram-sync >/dev/null 2>&1; then
+            engram-sync --pull --project "$APP_IDENTITY_LOWER" || true
+        fi
     fi
 
     bash "$SSOT_SCRIPTS/unisetup.sh" --all "${KEYS_FLAG[@]}" < /dev/null
