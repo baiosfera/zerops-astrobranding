@@ -21,7 +21,7 @@
         "dimension": 1,
         "ttl": 86400,
         "vector_store_namespace": "BifrostLocalCache",
-        "default_cache_key": "elplacerdc-production-cache",
+        "default_cache_key": "production-semantic-cache",
         "cache_by_model": true,
         "cache_by_provider": true
       }

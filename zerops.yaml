@@ -35,7 +35,7 @@ zerops:
         NATS_URL: ${nats_connectionString}
         BIFROST_GATEWAY_URL: "http://bifrost:8080/v1"
         EVOLUTION_GATEWAY_URL: "http://evolution:8085"
-        ASTRO_KEY: "c8e2b109e4d56f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a"
+        ASTRO_KEY: ${ASTRO_KEY}
         S3_ENDPOINT: ${objectstorage_apiUrl}
         S3_ACCESS_KEY: ${objectstorage_accessKeyId}
         S3_SECRET_KEY: ${objectstorage_secretAccessKey}
@@ -98,8 +98,8 @@ zerops:
         BIFROST_DB_TYPE: "postgres"
         BIFROST_DB_DSN: ${database_connectionString}
         FREELLMAPI_URL: "http://freellmapi:3001/v1"
-        FREELLMAPI_UNIFIED_KEY: "freellmapi-273e0696aa7e39dac2f950ced0b38e48afc4806f23b72786"
-        BIFROST_ENCRYPTION_KEY: "9d8352b055dfd87e5a973a96927ac82b41e6b537af22637485b46c4714153690"
+        FREELLMAPI_UNIFIED_KEY: ${FREELLMAPI_UNIFIED_KEY}
+        BIFROST_ENCRYPTION_KEY: ${BIFROST_ENCRYPTION_KEY}
         BIFROST_VIRTUAL_KEY: "vk-production-main"
 
   # 3. FreeLLMAPI Multi-Provider Free Inference Proxy (Node.js 24)
@@ -132,7 +132,7 @@ zerops:
         RESPONSE_CACHE_TTL_SECONDS: "86400"
         FREEAPI_DB_PATH: "/mnt/localstorage/freellmapi/freellmapi.db"
         FREEAPI_CONFIG_PATH: "/var/www/apps/freellmapi/config.json"
-        ENCRYPTION_KEY: "c8e2b109e4d56f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a"
+        ENCRYPTION_KEY: ${FREELLMAPI_ENCRYPTION_KEY}
       prepareCommands:
         - sudo mkdir -p /mnt/localstorage/freellmapi
         - sudo chown -R zerops:zerops /mnt/localstorage/freellmapi
@@ -168,11 +168,13 @@ zerops:
         - port: 8085
           httpSupport: true
       prepareCommands:
-        - sudo apk add --no-cache ca-certificates tzdata
+        - sudo apk add --no-cache ca-certificates tzdata postgresql-client
         - mkdir -p /var/www/manager && cp -rn /var/www/manager_dist /var/www/manager/dist 2>/dev/null || true
+      initCommands:
+        - zsc execOnce ${appVersionId} -- sh -c 'PGPASSWORD=${database_password} psql -h ${database_hostname} -U ${database_user} -d ${database_dbName} -f /var/www/apps/evolution/db_init.sql || true'
       envVariables:
         SERVER_PORT: "8085"
-        CLIENT_NAME: "astrobranding"
+        CLIENT_NAME: "${APP_IDENTITY:-app}"
         POSTGRES_AUTH_DB: "postgresql://${database_user}:${database_password}@database:${database_port}/evogo_auth?sslmode=disable"
         POSTGRES_USERS_DB: "postgresql://${database_user}:${database_password}@database:${database_port}/evogo_users?sslmode=disable"
         DATABASE_SAVE_MESSAGES: "true"
@@ -234,7 +236,7 @@ zerops:
       base: alpine/go@1.22
       prepareCommands:
         - sudo apk add --no-cache curl tar ca-certificates
-        - curl -sSL https://github.com/knadh/listmonk/releases/download/v5.1.0/listmonk_5.1.0_linux_amd64.tar.gz -o listmonk.tar.gz
+        - curl -sSL https://github.com/knadh/listmonk/releases/download/v6.2.0/listmonk_6.2.0_linux_amd64.tar.gz -o listmonk.tar.gz
         - tar -xzf listmonk.tar.gz
         - chmod +x listmonk
       deployFiles:
@@ -266,7 +268,7 @@ zerops:
         LISTMONK_db__user: ${database_user}
         LISTMONK_db__password: ${database_password}
         LISTMONK_db__database: ${database_dbName}
-        LISTMONK_db__params: "search_path=listmonk"
+        LISTMONK_db__params: "search_path=listmonk,public"
         LISTMONK_db__ssl_mode: "disable"
         LISTMONK_admin__username: "admin"
-        LISTMONK_admin__password: "adminpassword"
+        LISTMONK_admin__password: ${LISTMONK_ADMIN_PASSWORD}

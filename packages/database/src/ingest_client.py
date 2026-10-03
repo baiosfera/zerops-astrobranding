@@ -41,9 +41,9 @@ def main():
         dumps_15 = json.load(f)
 
     birth_meta = dumps_15.get("birth_metadata", {})
-    client_name = birth_meta.get("name", "Jonathan Alzate Quintero")
-    current_name = birth_meta.get("preferred_name", "JUAN DEN KREISS DAMAREN SANKANA")
-    email = "juan.damaren@glamur.ai"
+    client_name = birth_meta.get("name", "Client Name")
+    current_name = birth_meta.get("preferred_name", "Client Name")
+    email = birth_meta.get("email", "client@example.com")
     phone = "+573000000000"
     birth_date = f"{birth_meta.get('year', 1984):04d}-{int(birth_meta.get('month', 6)):02d}-{int(birth_meta.get('day', 9)):02d}"
     birth_time = f"{int(birth_meta.get('hour', 11)):02d}:{int(birth_meta.get('minute', 45)):02d}"

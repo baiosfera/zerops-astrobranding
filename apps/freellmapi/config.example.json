@@ -1,6 +1,6 @@
 {
   "admin": {
-    "email": "admin@elplacerdecompartir.com",
+    "email": "admin@example.com",
     "password": "<ADMIN_PASSWORD_MIN_8_CHARS>"
   },
   "keys": [

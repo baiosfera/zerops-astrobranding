@@ -14,8 +14,8 @@ log_warn() { echo -e "\033[1;33m[WARN]\033[0m $*"; }
 log_err()  { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; }
 
 KEYS_FILE="${1:-}"
-ADMIN_EMAIL="${FREELLMAPI_ADMIN_EMAIL:-admin@elplacerdecompartir.com}"
-ADMIN_PASSWORD="${FREELLMAPI_ADMIN_PASSWORD:-ElPlacerDC2026!*}"
+ADMIN_EMAIL="${FREELLMAPI_ADMIN_EMAIL:-admin@baiosfera.com}"
+ADMIN_PASSWORD="${FREELLMAPI_ADMIN_PASSWORD:-Baiosfera2026!*}"
 
 python3 - <<EOF
 import os, sys, re, json, subprocess
@@ -42,7 +42,7 @@ def parse_markdown(filepath):
 
 # Candidate locations for free LLM provider keys
 b_path = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/apis/baiosfera_freellm.md"
-d_path = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/apis/damaren_freellm.md"
+d_path = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/apis/freellm_keys.md"
 
 b_keys = parse_markdown(b_path)
 d_keys = parse_markdown(d_path)
@@ -59,11 +59,11 @@ if keys_file and os.path.exists(keys_file):
 keys_list = []
 for plat, key in b_keys.items():
     if plat != 'aisa' and key:
-        keys_list.append({"platform": plat, "key": key, "label": f"{plat}-baiosfera", "enabled": True})
+        keys_list.append({"platform": plat, "key": key, "label": f"{plat}-primary", "enabled": True})
 
 for plat, key in d_keys.items():
     if plat != 'aisa' and key:
-        keys_list.append({"platform": plat, "key": key, "label": f"{plat}-damaren", "enabled": True})
+        keys_list.append({"platform": plat, "key": key, "label": f"{plat}-secondary", "enabled": True})
 
 custom_providers = []
 aisa_key = b_keys.get('aisa') or d_keys.get('aisa')

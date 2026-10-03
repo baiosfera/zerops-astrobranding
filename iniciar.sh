@@ -264,7 +264,7 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}-keys.md" \
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}-key.md" \
             "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}.md" \
-            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/elplacerdc.md"; do
+            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/keys.md"; do
             if [ -f "$candidate" ]; then
                 RESOLVED_KEYS="$candidate"
                 break
@@ -375,7 +375,7 @@ if [ -f "$SSOT_SCRIPTS/unisetup.sh" ]; then
         echo ""
         echo "Solución para inicializar este ZCP:"
         echo "  1. Ejecuta indicando tu archivo de claves:"
-        echo "     curl -fsSL https://raw.githubusercontent.com/elplacerdc/zerops-astrobranding/main/iniciar.sh | bash -s -- --keys /ruta/a/keys.md"
+        echo "     curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash -s -- --keys /ruta/a/keys.md"
         echo "  2. O crea el archivo en la raíz del contenedor antes de ejecutar:"
         echo "     nano /var/www/keys.md && curl -fsSL ... | bash"
         echo "  3. O define las credenciales en /var/www/gdrive.env"

@@ -47,7 +47,7 @@
         "ttl": 86400,
         "threshold": 0.8,
         "vector_store_namespace": "BifrostLocalCache",
-        "default_cache_key": "elplacerdc-production-cache",
+        "default_cache_key": "production-semantic-cache",
         "cache_by_model": true,
         "cache_by_provider": true
       }
@@ -123,9 +123,9 @@
         ]
       },
       {
-        "id": "vk-astrobranding-prod",
-        "name": "AstroBranding Production",
-        "value": "env.BIFROST_VK_ASTROBRANDING",
+        "id": "vk-web-client",
+        "name": "Web Client Application",
+        "value": "env.BIFROST_VK_WEB",
         "is_active": true,
         "rate_limits": {
           "requests_per_minute": 120
