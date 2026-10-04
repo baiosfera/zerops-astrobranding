@@ -358,3 +358,33 @@ Para servicios prémium, ofertas B2B de alto valor o experiencias de capacidad l
    - Exponer rangos de inversión o criterios de acceso claros en la narrativa y landing page para alinear expectativas antes de la captura del lead. Esto actúa como un filtro natural de audiencia, mejorando el ratio de conversión y optimizando el tiempo del equipo comercial o de soporte.
 2. **Claridad de Roles y Expectativas:**
    - Definir con precisión el alcance del servicio y los puntos de contacto humano (soporte, ejecutivos de cuenta o equipo operativo) sin ambigüedades.
+
+---
+
+## 17. Invariante de Integración WhatsApp Engine (Evolution Go / whatsmeow)
+
+Al recibir webhooks de Evolution Go (motor en Go sobre whatsmeow), la estructura JSON difiere críticamente de librerías basadas en Node.js (Baileys):
+1. **Mapeo de Identidad y Teléfono:**
+   - Baileys utiliza `key.remoteJid` y `key.fromMe`.
+   - whatsmeow estructura los datos en `Info`: `data.Info.Chat`, `data.Info.Sender`, `data.Info.IsFromMe` y `data.Info.PushName`.
+   - El webhook receptor debe extraer en cascada: `Info.Chat || Info.Sender || data.Chat || data.Sender || key.remoteJid`.
+2. **Soporte para Identidades `@lid` (WhatsApp Linked Identity Device):**
+   - WhatsApp utiliza identificadores opacos `@lid` para privacidad. Evolution Go realiza swap automático hacia `@s.whatsapp.net` en `Info.Sender` e `Info.Chat`.
+   - El backend receptor nunca debe descartar un mensaje solo porque la clave Baileys `key` esté vacía, pues causaría falsos positivos de descarte (`ignored_self_or_group`).
+3. **Estructura del Mensaje:**
+   - whatsmeow serializa el struct Go `Message` con inicial mayúscula (`data.Message.conversation`, `data.Message.extendedTextMessage.text`).
+
+---
+
+## 18. Presupuesto de Tokens y Enrutamiento de LLM en Mensajería (Bifrost & FreeLLMAPI)
+
+Para bots y agentes conversacionales de atención en tiempo real (WhatsApp, Webchat):
+1. **Prioridad Zero-Cost y Ultra Baja Latencia (`model: "auto"`):**
+   - La atención conversacional por WhatsApp requiere respuestas inmediatas (<1 segundo) y directas.
+   - Utilizar `model: "auto"` a través de Bifrost para que resuelva contra el pool prioritario de **FreeLLMAPI** (Groq / Cerebras / Qwen).
+   - Latencia típica: 250–350 ms. Costo de inferencia: $0.
+2. **La Trampa de `reasoning_tokens` en Modelos Deep Reasoning:**
+   - Modelos de razonamiento (como DeepSeek Reasoner / `deepseek-v4-pro`) generan tokens internos de pensamiento (`reasoning_content`) que **se descuentan del cupo total de `max_tokens`**.
+   - Si se configura un `max_tokens` restrictivo (ej: 400–500 tokens) con un system prompt rico, el razonamiento interno agota la totalidad del cupo, provocando un corte abrupto (`stop_reason: "length"`) donde el asistente devuelve un `content` vacío (`""`).
+   - **Regla:** Reservar modelos de razonamiento profundo para análisis complejos, código o síntesis técnica con `max_tokens >= 1500`. En bots de mensajería, usar inferencia directa sin cadena de pensamiento extensa (`auto`) o configurar un fallback seguro a `reasoning_content` si `content` llega vacío.
+
