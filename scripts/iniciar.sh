@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.6)
+# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.7)
 # Repositorio: https://github.com/baiosfera/zerops-astrobranding
 # Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash
 # ==============================================================================
@@ -33,7 +33,7 @@ for var in $(env | grep -E '^core_' | sed 's/=.*//' || true); do
 done
 
 echo "============================================================"
-echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.6 - Storage Resilient)"
+echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.7 - Storage & Permission Resilient)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
@@ -67,11 +67,21 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
-# Cargar gdrive.env si existe en .rclone o en la raíz (compatibilidad)
+# Cargar gdrive.env si existe en .rclone o en la raíz (compatibilidad y auto-sanación de permisos)
 if [ -f "$PROJECT_ROOT/.rclone/gdrive.env" ]; then
-    set -a; source "$PROJECT_ROOT/.rclone/gdrive.env"; set +a
+    if [ ! -r "$PROJECT_ROOT/.rclone/gdrive.env" ] && command -v sudo >/dev/null 2>&1; then
+        sudo chown -R "$(id -un):$(id -gn)" "$PROJECT_ROOT/.rclone" 2>/dev/null || sudo chmod 644 "$PROJECT_ROOT/.rclone/gdrive.env" 2>/dev/null || true
+    fi
+    if [ -r "$PROJECT_ROOT/.rclone/gdrive.env" ]; then
+        set -a; source "$PROJECT_ROOT/.rclone/gdrive.env" 2>/dev/null || true; set +a
+    fi
 elif [ -f "$PROJECT_ROOT/gdrive.env" ]; then
-    set -a; source "$PROJECT_ROOT/gdrive.env"; set +a
+    if [ ! -r "$PROJECT_ROOT/gdrive.env" ] && command -v sudo >/dev/null 2>&1; then
+        sudo chown "$(id -un):$(id -gn)" "$PROJECT_ROOT/gdrive.env" 2>/dev/null || sudo chmod 644 "$PROJECT_ROOT/gdrive.env" 2>/dev/null || true
+    fi
+    if [ -r "$PROJECT_ROOT/gdrive.env" ]; then
+        set -a; source "$PROJECT_ROOT/gdrive.env" 2>/dev/null || true; set +a
+    fi
 fi
 
 # Determinar identidad agnóstica de proyecto (prioridad: CLI > gdrive.env / env > repo name)
@@ -496,6 +506,9 @@ echo "• [4b/4] Purgando archivos residuales de credenciales en /var/www/ para 
 if [ -f "$PROJECT_ROOT/gdrive.env" ]; then
     mkdir -p "$PROJECT_ROOT/.rclone" 2>/dev/null || sudo mkdir -p "$PROJECT_ROOT/.rclone"
     cp -f "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT/.rclone/gdrive.env" 2>/dev/null || sudo cp -f "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT/.rclone/gdrive.env"
+    if command -v sudo >/dev/null 2>&1; then
+        sudo chown -R "$(id -un):$(id -gn)" "$PROJECT_ROOT/.rclone" 2>/dev/null || true
+    fi
     chmod 600 "$PROJECT_ROOT/.rclone/gdrive.env" 2>/dev/null || sudo chmod 600 "$PROJECT_ROOT/.rclone/gdrive.env"
 fi
 rm -f "$PROJECT_ROOT/.env" "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT"/key*.md "$PROJECT_ROOT"/key*.env 2>/dev/null || true

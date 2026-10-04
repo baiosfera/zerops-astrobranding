@@ -60,6 +60,9 @@ if [ -f "/etc/environment" ]; then
     set +a
 fi
 if [ -f "/var/www/.rclone/gdrive.env" ]; then
+    if [ ! -r "/var/www/.rclone/gdrive.env" ] && command -v sudo >/dev/null 2>&1; then
+        sudo chown -R "$(id -un):$(id -gn)" "/var/www/.rclone" 2>/dev/null || true
+    fi
     set -a
     # shellcheck disable=SC1091
     source /var/www/.rclone/gdrive.env 2>/dev/null || true
@@ -72,6 +75,10 @@ if [ -f "/var/www/gdrive.env" ]; then
     set +a
     # Proteger credenciales respaldándolas en el core local oculto (.rclone)
     sudo cp -f "/var/www/gdrive.env" "$LOCAL_ROOT/gdrive.env" 2>/dev/null || true
+    if command -v sudo >/dev/null 2>&1; then
+        sudo chown -R "$(id -un):$(id -gn)" "$LOCAL_ROOT" 2>/dev/null || true
+    fi
+    sudo chmod 600 "$LOCAL_ROOT/gdrive.env" 2>/dev/null || true
 fi
 
 # Inyectar en /etc/environment para blindar persistencia nativa del contenedor tras stop/start
