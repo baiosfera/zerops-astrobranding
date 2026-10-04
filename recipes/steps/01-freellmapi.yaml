@@ -15,3 +15,6 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.25
       minFreeRamPercent: 10
+    envVariables:
+      FREELLM_ADMIN_EMAIL: "admin@baiosfera.com"
+      FREELLM_ADMIN_PASSWORD: "Baiosfera2026!*"

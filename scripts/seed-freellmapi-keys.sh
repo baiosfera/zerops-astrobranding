@@ -96,7 +96,7 @@ if [ -f "/tmp/freellmapi_generated_config.json" ]; then
     log_info "Transfiriendo configuración a volumen de almacenamiento freellmapi..."
     if ssh -o BatchMode=yes -o ConnectTimeout=5 freellmapi "test -d /mnt/localstorage/freellmapi" 2>/dev/null; then
         scp /tmp/freellmapi_generated_config.json freellmapi:/mnt/localstorage/freellmapi/config.json
-        ssh freellmapi "chmod 600 /mnt/localstorage/freellmapi/config.json && cp /mnt/localstorage/freellmapi/config.json /var/www/config.json"
+        ssh freellmapi "chmod 600 /mnt/localstorage/freellmapi/config.json && cp /mnt/localstorage/freellmapi/config.json /var/www/config.json && echo 'FREELLM_ADMIN_EMAIL=\"$ADMIN_EMAIL\"' | sudo tee -a /etc/environment >/dev/null && echo 'FREELLM_ADMIN_PASSWORD=\"$ADMIN_PASSWORD\"' | sudo tee -a /etc/environment >/dev/null"
         log_ok "Configuración inyectada con éxito en freellmapi."
     else
         log_warn "Servicio freellmapi no alcanzable vía SSH aún. Archivo temporal listo en /tmp/freellmapi_generated_config.json."
