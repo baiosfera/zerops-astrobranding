@@ -388,3 +388,29 @@ Para bots y agentes conversacionales de atención en tiempo real (WhatsApp, Webc
    - Si se configura un `max_tokens` restrictivo (ej: 400–500 tokens) con un system prompt rico, el razonamiento interno agota la totalidad del cupo, provocando un corte abrupto (`stop_reason: "length"`) donde el asistente devuelve un `content` vacío (`""`).
    - **Regla:** Reservar modelos de razonamiento profundo para análisis complejos, código o síntesis técnica con `max_tokens >= 1500`. En bots de mensajería, usar inferencia directa sin cadena de pensamiento extensa (`auto`) o configurar un fallback seguro a `reasoning_content` si `content` llega vacío.
 
+---
+
+## 19. Patrón de Memoria de Sesión Deslizante en Valkey para Agentes de Mensajería
+
+En arquitecturas desacopladas de mensajería (WhatsApp, Telegram, Webchat), los webhooks HTTP entrantes son nativamente *stateless* (sin estado). Sin un sustrato de memoria rápida:
+1. **Amnesia y Saludos Repetitivos:** El modelo de lenguaje procesa cada mensaje entrante como el turno cero de una conversación nueva, reiterando saludos (*"¡Hola!", "Bienvenido a..."*) en cada interacción y degradando la experiencia de usuario.
+2. **El Cuello de Botella de Enviar el Historial Completo:**
+   - Valkey almacena texto con costo computacional y de memoria marginal.
+   - Sin embargo, inyectar historiales acumulativos de decenas de mensajes al LLM degrada la latencia (de 1s a 6-8s), incrementa drásticamente los *prompt tokens* (activando 429 rate limits) e induce alucinaciones por pérdida de atención (*Lost in the Middle*).
+
+### Arquitectura de Ventana Deslizante Bounded (Sliding Window Memory)
+La solución canónica e industrial consiste en una memoria de trabajo volátil gestionada en **Valkey (Redis 7.2)**:
+* **Clave de Sesión:** `chat:sessions:<channel>:<user_identifier>` (ej. número E.164 limpio).
+* **Capacidad de Ventana (`SESSION_WINDOW_LIMIT`):** Fijar entre **8 y 12 mensajes** (4 a 6 turnos completos Usuario $\leftrightarrow$ Asistente). Esto preserva el hilo conversacional inmediato sin saturar la ventana de contexto del LLM.
+* **TTL Atómico (`SESSION_TTL_SECONDS`):** 86.400 segundos (24 horas) renovado en cada interacción. Si el usuario reanuda el contacto al cabo de días, la sesión se reinicia limpiamente.
+* **Operación Atómica en Valkey:** Utilizar un *pipeline* RESP:
+  1. `LPUSH chat:sessions:<id> <json_payload>`
+  2. `LTRIM chat:sessions:<id> 0 <LIMIT - 1>`
+  3. `EXPIRE chat:sessions:<id> <TTL>`
+* **Inyección Cronológica al LLM:**
+  - Leer la lista con `LRANGE 0 <LIMIT - 1>` y revertir el orden para construir el array `messages` en orden ascendente (más antiguo a más reciente).
+  - Estructura: `[{ role: "system", content: AGENT_SYSTEM_PROMPT }, ...history, { role: "user", content: current_message }]`.
+* **Invariante de Supresión de Saludos:**
+  - En el `AGENT_SYSTEM_PROMPT`, estipular formalmente: *"Si ya existen turnos previos en el historial de conversación, está estrictamente prohibido volver a saludar o dar bienvenidas; responda directamente a la consulta del usuario."*
+* **Degradación Graciosa:**
+  - Envolver la consulta a Valkey en un bloque `try/catch` con timeout acotado. Si Valkey no responde o sufre desconexión transitoria, el webhook degrada automáticamente a modo *stateless* sin bloquear la atención ni responder 500 al proveedor de mensajería.
