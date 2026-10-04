@@ -264,3 +264,100 @@ dLocal Go es la pasarela líder para cobros en moneda local en Latinoamérica (C
 En el desarrollo de marcas de estilo de vida, cultura y bienestar consciente, los agentes deben mantener un vocabulario sofisticado, riguroso y secular:
 - **Términos Prohibidos:** "sagrado", "sagrada", "sacrosanto", "místico", "templo sagrado" (evitar clichés de secta o espiritualidad New Age vacía).
 - **Términos Soberanos Recomendados:** "fundamental", "esencial", "soberano", "innegociable", "lúcido", "confortable", "consentimiento informado", "espacio cuidado", "pacto de respeto mutuo".
+
+---
+
+## 13. Normalización Telefónica E.164 con Auto-Deducción Colombia (+57)
+
+En despliegues para Colombia o con alta concentración de usuarios locales, la ausencia de código de país en formularios de contacto provoca que los enlaces `wa.me/` o el gateway EvolutionGo ruteen los números a los Países Bajos (+31, ej: `wa.me/3101234567`), provocando fallas críticas donde WhatsApp informa que el número no existe.
+
+### Regla Canónica de Normalización:
+1. **Detección Automática de Colombia (+57):**
+   - Si el número ingresado contiene 10 dígitos y empieza por `3` (ej: `3101234567`), se infiere automáticamente que es un móvil colombiano y se normaliza a `+573101234567`.
+2. **Preservación Internacional:**
+   - Si el número ya incluye indicativo con prefijo `+` (ej: `+1...`, `+34...`, `+52...`), se respeta el código internacional suministrado.
+3. **Generación de la Terna de Salida:**
+   - Todo servicio debe exportar la función canónica `normalizePhone(raw)` que retorne:
+     * `canonical`: Formato E.164 con signo más (ej: `+573101234567`) para almacenamiento e identificación.
+     * `whatsappDigits`: Cadena pura de dígitos sin signo ni espacios (ej: `573101234567`) para la API de EvolutionGo y enlaces `https://wa.me/573101234567`.
+     * `display`: Formato legible amigable para correos y UI (ej: `+57 310 123 4567`).
+
+```typescript
+export interface NormalizedPhone {
+  canonical: string;
+  whatsappDigits: string;
+  display: string;
+}
+
+export function normalizePhone(raw: string): NormalizedPhone {
+  const cleaned = raw.replace(/[^\d+]/g, '').trim();
+  if (!cleaned) return { canonical: '', whatsappDigits: '', display: '' };
+
+  let canonical = cleaned;
+  if (!canonical.startsWith('+')) {
+    const digitsOnly = canonical.replace(/\D/g, '');
+    if (digitsOnly.length === 10 && digitsOnly.startsWith('3')) {
+      canonical = `+57${digitsOnly}`;
+    } else if (digitsOnly.length === 12 && digitsOnly.startsWith('57')) {
+      canonical = `+${digitsOnly}`;
+    } else {
+      canonical = `+${digitsOnly}`;
+    }
+  }
+
+  const digits = canonical.replace(/\D/g, '');
+  let display = canonical;
+  if (canonical.startsWith('+57') && digits.length === 12) {
+    display = `+57 ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`;
+  }
+
+  return { canonical, whatsappDigits: digits, display };
+}
+```
+
+---
+
+## 14. Deduplicación Multi-Canal Relacional y Detección de Conflicto Cruzado (409)
+
+En ecosistemas con múltiples variantes de negocio (ej: Comunidad B2C, Alianzas B2B, Admisión VIP), un usuario puede interactuar con más de un canal a lo largo del tiempo.
+
+### Principios Innegociables de Persistencia:
+1. **Rastreo de Canales en Metadata (`registered_channels`):**
+   - El modelo de datos de leads debe almacenar en `metadata.registered_channels` un arreglo JSONB con los slugs de las variantes donde el contacto se ha registrado (ej: `['comunidad', 'alianzas', 'vip']`).
+2. **Supresión Idempotente de Notificaciones (`already_registered`):**
+   - Si un usuario ya existe en la base de datos y vuelve a enviar el formulario de un canal donde YA figuraba en `registered_channels`, la API debe:
+     * Retornar `{ success: true, already_registered: true, message: 'Ya estabas registrado en esta lista.' }`.
+     * **SUPRIMIR** el disparo de correos o mensajes de WhatsApp hacia ese canal para evitar saturación comunicativa.
+3. **Expansión Multi-Canal Transparente:**
+   - Si el usuario existe pero solicita un canal NUEVO (ej: estaba en `comunidad` y ahora postula a `vip`), el sistema actualiza `metadata.registered_channels` incorporando el nuevo canal y **SOLO** dispara la notificación de bienvenida correspondiente a esa nueva intención.
+4. **Detección Estricta de Conflicto Cruzado (HTTP 409 Conflict):**
+   - Si el email ingresado pertenece al contacto A, pero el teléfono ingresado pertenece al contacto B, el backend **JAMÁS** debe mutar silenciosamente los datos ni sobreescribir la identidad.
+   - Debe abortar inmediatamente con `HTTP 409 Conflict` y alertar: *"El correo electrónico o número de WhatsApp ingresado ya está asociado a otro contacto. Por favor verifica tus datos."*
+
+---
+
+## 15. Desacople Estratégico de Contenido Multi-Mensajería (WhatsApp vs Email)
+
+Cuando un evento o registro dispara tanto WhatsApp como correo electrónico, enviar mensajes idénticos palabra por palabra crea fatiga comunicativa y devalúa la experiencia del usuario.
+
+### Matriz de Roles y Responsabilidades:
+| Dimensión | Canal WhatsApp (EvolutionGo) | Canal Email (Listmonk / SMTP) |
+|---|---|---|
+| **Rol Estratégico** | Mayordomía ejecutiva, conserje ágil, canal conversacional. | Dossier institucional, manifiesto formal, respaldo legal. |
+| **Tono y Registro** | Cálido, personal, directo, 1-a-1, inmediato. | Soberano, detallado, documental, editorial. |
+| **Extensión** | 2 a 3 párrafos cortos (lectura en < 15 segundos). | Estructura completa (bienvenida, manifiesto, reglas, soporte). |
+| **Referencia Cruzada** | Cita breve: *"Te dejamos un dossier formal en tu correo."* | Cita formal: *"Activamos tu línea de atención en WhatsApp."* |
+| **Regla de No-Redundancia** | **Prohibido duplicar el cuerpo del texto.** Solo se repiten eslóganes, slogans y activos mnemotécnicos de marca. |
+
+---
+
+## 16. Posicionamiento de Ticket Alto y Filtro de Admisión
+
+Para productos, membresías o clubes de acceso restringido y alta gama:
+1. **Filtrado Natural por Narrativa y Pricing:**
+   - La comunicación y el copy deben transparentar explícitamente el carácter exclusivo y de costo elevado ("ticket alto", covers prémium, aforo ultra-limitado). Esto actúa como un filtro natural de admisión que desincentiva postulaciones fuera de perfil sin necesidad de rechazos manuales incómodos.
+2. **Purga Léxica Soberana & Anti-Slop:**
+   - Erradicar sistemáticamente términos ambiguos, corporativos pretenciosos o ajenos a la secularidad del proyecto:
+     * Reemplazar *"Curaduría"* por *"Dirección Artística"* o *"Producción Cultural"*.
+     * Reemplazar *"Anfitrión/a"* por *"Equipo Organizador"* o *"Personal de Sala"*.
+     * Evitar términos que sugieran personal comercial pago encubierto en eventos de membresía privada.

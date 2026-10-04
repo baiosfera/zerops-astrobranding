@@ -1,5 +1,6 @@
 import { defineAction, ActionError } from 'astro:actions';
 import { z } from 'astro/zod';
+import { normalizePhone } from './phone';
 
 export const contactFormAction = defineAction({
   accept: 'form',
@@ -12,7 +13,13 @@ export const contactFormAction = defineAction({
   }),
   handler: async (input) => {
     const timestamp = new Date().toISOString();
-    const payload = { ...input, timestamp };
+    const normalizedPhone = input.phone ? normalizePhone(input.phone) : null;
+    const payload = {
+      ...input,
+      phone: normalizedPhone ? normalizedPhone.canonical : input.phone,
+      phoneDigits: normalizedPhone ? normalizedPhone.whatsappDigits : undefined,
+      timestamp,
+    };
 
     let dispatched = false;
 
