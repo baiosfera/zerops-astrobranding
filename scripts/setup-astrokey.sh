@@ -40,6 +40,7 @@ echo "============================================================"
 # 0. Dependencias Base de SO y Runtimes (pip, jq, uv)
 if command -v apt-get &>/dev/null; then
     sudo apt-get update -qq && sudo apt-get install -y -qq python3-pip python3-venv jq curl unzip 2>/dev/null || true
+    pip3 install --break-system-packages mcp 2>/dev/null || pip install mcp 2>/dev/null || true
 fi
 
 if ! command -v uv &>/dev/null && ! command -v uvx &>/dev/null; then

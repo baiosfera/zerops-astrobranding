@@ -11,7 +11,7 @@ set -e
 
 VERSION="${GGA_VERSION:-dev}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_DIR="/home/zerops/.local/share/gga/lib"
+LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
 
 resolve_lib_dir() {
   local configured_lib_dir="$1"

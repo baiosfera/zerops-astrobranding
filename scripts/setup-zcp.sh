@@ -27,12 +27,21 @@ if [ -f "$SCRIPT_DIR/zcp-validate.sh" ]; then
     sudo ln -sf "$PERSISTENT_BIN/zcp-validate" /usr/local/bin/zcp-validate 2>/dev/null || true
 fi
 
+# 1.1 Despliegue de Herramienta Soberana Linear CLI (linear-cli)
+if [ -f "$SCRIPT_DIR/linear-cli" ]; then
+    cp -f "$SCRIPT_DIR/linear-cli" "$PERSISTENT_BIN/linear-cli"
+    chmod +x "$PERSISTENT_BIN/linear-cli"
+    cp "$PERSISTENT_BIN/linear-cli" "$HOME/.local/bin/linear-cli" 2>/dev/null || true
+    cp "$PERSISTENT_BIN/linear-cli" "/home/zerops/.local/bin/linear-cli" 2>/dev/null || true
+    sudo ln -sf "$PERSISTENT_BIN/linear-cli" /usr/local/bin/linear-cli 2>/dev/null || true
+fi
+
 # 2. Despliegue de Utilidad Soberana MCV Downloader (mcv-download)
 # Asegurar dependencias de sistema y navegador para MCV en ZCP limpio
 echo "• Asegurando dependencias de sistema para MCV (ffmpeg, unrar, 7z, megatools, gdown, agent-browser)..."
 sudo apt-get update -qq
 sudo apt-get install -y -qq ffmpeg p7zip-full unrar megatools python3-pip 2>/dev/null || true
-pip3 install requests beautifulsoup4 gdown --break-system-packages 2>/dev/null || pip install requests beautifulsoup4 gdown 2>/dev/null || true
+pip3 install requests beautifulsoup4 gdown mcp --break-system-packages 2>/dev/null || pip install requests beautifulsoup4 gdown mcp 2>/dev/null || true
 if ! command -v agent-browser >/dev/null 2>&1; then
     echo "  🌐 Instalando agent-browser para descargas Sync.com..."
     sudo npm install -g agent-browser 2>/dev/null || true

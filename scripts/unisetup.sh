@@ -352,10 +352,27 @@ EOF
         ln -sf "$PROJECT_ROOT/.agents/skills/seo-aeo-geo/scripts/seo-aeo-geo-validate.sh" "$PROJECT_ROOT/.bin/seo-aeo-geo-validate" 2>/dev/null || true
         sudo ln -sf "$PROJECT_ROOT/.agents/skills/seo-aeo-geo/scripts/seo-aeo-geo-validate.sh" /usr/local/bin/seo-aeo-geo-validate 2>/dev/null || true
     fi
-    # Asegurar dependencia httpx en ZCP para extractores Python
-    if ! python3 -c "import httpx" 2>/dev/null; then
-        echo "• Instalando dependencia Python httpx..."
-        pip3 install --break-system-packages httpx
+    # Asegurar dependencias httpx y mcp en ZCP para extractores Python
+    if ! python3 -c "import httpx, mcp" 2>/dev/null; then
+        echo "• Instalando dependencias Python httpx y mcp..."
+        pip3 install --break-system-packages httpx mcp
+    fi
+
+    # Mapeo de extractores de oraculo, freeastroapi, astroway, astrologyapi y vedastro en ZCP
+    if [ -f "$PROJECT_ROOT/.agents/skills/oraculo/scripts/omni_engine.py" ]; then
+        chmod +x "$PROJECT_ROOT/.agents/skills/oraculo/scripts/omni_engine.py" 2>/dev/null || true
+    fi
+    if [ -f "$PROJECT_ROOT/.agents/skills/freeastroapi/scripts/extract.py" ]; then
+        chmod +x "$PROJECT_ROOT/.agents/skills/freeastroapi/scripts/extract.py" 2>/dev/null || true
+    fi
+    if [ -f "$PROJECT_ROOT/.agents/skills/astroway/scripts/extract.py" ]; then
+        chmod +x "$PROJECT_ROOT/.agents/skills/astroway/scripts/extract.py" 2>/dev/null || true
+    fi
+    if [ -f "$PROJECT_ROOT/.agents/skills/astrologyapi/scripts/extract.py" ]; then
+        chmod +x "$PROJECT_ROOT/.agents/skills/astrologyapi/scripts/extract.py" 2>/dev/null || true
+    fi
+    if [ -f "$PROJECT_ROOT/.agents/skills/vedastro/scripts/extract.py" ]; then
+        chmod +x "$PROJECT_ROOT/.agents/skills/vedastro/scripts/extract.py" 2>/dev/null || true
     fi
 
     # Desplegar astrobranding-check incondicionalmente (Arnés Resiliente Anti-Fallo en ZCP limpio)
