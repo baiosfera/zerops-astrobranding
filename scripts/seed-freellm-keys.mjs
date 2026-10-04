@@ -57,9 +57,10 @@ if (fileCandidates.length === 0) {
     "/var/www/keys",
     "/var/www/keys.md",
     "/var/www/.env",
-    "/var/www/baiosfera/0ZEROPS-AGY/users-apis/ElPlacerDC/elplacerdc.md",
+    process.env.KEYS_PATH,
+    process.env.BRAND_KEYS_PATH,
     "/var/www/baiosfera/0ZEROPS-AGY/users-apis/api_keys_global",
-  ];
+  ].filter(Boolean);
   for (const loc of defaultLocations) {
     if (fs.existsSync(loc)) {
       const stat = fs.statSync(loc);

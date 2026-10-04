@@ -3,7 +3,7 @@
 This checklist acts as the durable record of requirements, decisions, and capabilities for the **Zerops AstroBranding Sovereign Platform**.
 
 ## 1. Project Identity & Scope
-- **Repository**: `elplacerdc/zerops-astrobranding`
+- **Repository**: `baiosfera/zerops-astrobranding`
 - **Platform**: Zerops Incus LXC Cloud Platform
 - **Audience**: Modern vibe-coders, AI agents, enterprise founders, and coaches deploying high-performance astrological, AI, and messaging solutions.
 - **Topology Model**: Sovereign 10-Service Mesh (5 runtimes + 5 stateful managed services).

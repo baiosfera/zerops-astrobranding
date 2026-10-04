@@ -28,7 +28,7 @@ Para garantizar que el Cockpit funcione tanto en `zcp` como en el futuro contene
 1. **`process.env`**: Variables inyectadas por la plataforma Zerops a nivel de runtime.
 2. **`/etc/environment`**: Variables globales del sistema operativo inyectadas durante el aprovisionamiento.
 3. **`/var/www/.env`**: Variables locales del repositorio.
-4. **`elplacerdc.md` / `keys.md`**: Respaldo en Google Drive SSoT solo si existe en entorno local.
+4. **`keys.md`**: Respaldo en Google Drive SSoT solo si existe en entorno local.
 
 ---
 
@@ -94,7 +94,7 @@ Inspección en vivo mediante consultas autenticadas y lectura de cabeceras ofici
 
 ### 💳 [6/6] Pasarelas de Pago, Logística & CRM E-Commerce
 - **Wompi Colombia**: Validación criptográfica SHA256 de webhooks, llaves pública/privada y secret de integridad (`ACTIVO`).
-- **Frappe Cloud / ERPNext**: Conexión con `elplacerdc.v.frappe.cloud`, API Key y facturación electrónica DIAN (`ACTIVO`).
+- **Frappe Cloud / ERPNext**: Conexión con `<client>.v.frappe.cloud`, API Key y facturación electrónica DIAN (`ACTIVO`).
 - **ePayco, Stripe, MercadoPago, dLocal Go, MiPaquete, Carriers**: Detectadas como `NO CONFIGURADA` hasta que se suministren credenciales reales en producción, sin badges verdes ficticios.
 
 ---

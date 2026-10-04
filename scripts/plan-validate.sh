@@ -149,7 +149,7 @@ else
 fi
 
 # 6.2 Prohibición Estricta de Backups Monolíticos de Repositorios (Universal)
-if grep -qiE '(cp\s+-[a-zA-Z]*r[a-zA-Z]*\s+[^[:space:]]*(\.git|/var/www/zerops-astrobranding|/var/www/elplacerdc)\s+.*bak|bak/(repos?|monorepos?)/|bak/[a-zA-Z0-9_-]+_repo)' "$PLAN_PATH"; then
+if grep -qiE '(cp\s+-[a-zA-Z]*r[a-zA-Z]*\s+[^[:space:]]*(\.git|/var/www/[a-zA-Z0-9_-]+)\s+.*bak|bak/(repos?|monorepos?)/|bak/[a-zA-Z0-9_-]+_repo)' "$PLAN_PATH"; then
     echo "❌ Violación de Soberanía Git: Prohibido respaldar repositorios enteros hacia carpetas .bak. El control de versiones y rollback de código es nativo de Git/GitHub."
     ERRORS=$((ERRORS + 1))
 else

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Sovereign Step-by-Step Deployment Orchestrator for Zerops (ElPlacerDC)
+# Sovereign Step-by-Step Deployment Orchestrator for Zerops (Universal Chasis)
 # Usage: ./scripts/deploy-step.sh <1-6|status|test> [step_number]
 # ==============================================================================
 set -euo pipefail

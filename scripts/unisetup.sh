@@ -195,7 +195,7 @@ if [ "$RUN_ALL" = true ]; then
             "$PROJECT_ROOT/.bin/engram" import "$ENGRAM_DUMP" 2>/dev/null || engram import "$ENGRAM_DUMP" 2>/dev/null || true
         fi
     else
-        # Proyecto Downstream / Cliente (ej: elplacerdc): Aislamiento absoluto anti-contaminación
+        # Proyecto Downstream / Cliente (ej: client_app): Aislamiento absoluto anti-contaminación
         CLIENT_DUMP="$ZCP_ROOT/../users-apis/${ACTIVE_PROJECT}/engram_${ACTIVE_PROJECT}.json"
         if [ -f "$CLIENT_DUMP" ]; then
             echo "• Sincronizando memoria LTM dedicada para cliente $ACTIVE_PROJECT..."

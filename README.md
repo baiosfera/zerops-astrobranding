@@ -87,7 +87,7 @@ graph TD
         ProjClient3["Project: Enterprise Client (Independent Card)"]
     end
     
-    Template["Repo Template: elplacerdc/zerops-astrobranding"] -->|gh repo create --template| RepoClient1["GitHub: client1-ecommerce"]
+    Template["Repo Template: baiosfera/zerops-astrobranding"] -->|gh repo create --template| RepoClient1["GitHub: client1-ecommerce"]
     Template -->|gh repo create --template| RepoClient2["GitHub: client2-landing"]
     Template -->|gh repo create --template| RepoClient3["GitHub: client3-enterprise"]
     
@@ -100,7 +100,7 @@ graph TD
 Each new application or client receives its own independent GitHub repository cloned from this template:
 ```bash
 # Create an independent client repository from the sovereign template
-gh repo create mycompany/client-store --template elplacerdc/zerops-astrobranding --private
+gh repo create mycompany/client-store --template baiosfera/zerops-astrobranding --private
 ```
 - **No Monorepo Entanglement**: Eliminates git conflicts, shared credentials, and monolithic deployment bloat.
 - **Independent CI/CD**: Each repo contains `.github/workflows/deploy.yaml` pushing changes directly to the respective Zerops project.
