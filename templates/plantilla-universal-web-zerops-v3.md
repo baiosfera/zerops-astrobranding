@@ -259,11 +259,11 @@ dLocal Go es la pasarela líder para cobros en moneda local en Latinoamérica (C
 
 ---
 
-## 12. Vocabulario Secular Soberano y Anti-Slop Dogmático
+## 12. Directrices de Copywriting Anti-Slop y Voz de Marca Agnóstica
 
-En el desarrollo de marcas de estilo de vida, cultura y bienestar consciente, los agentes deben mantener un vocabulario sofisticado, riguroso y secular:
-- **Términos Prohibidos:** "sagrado", "sagrada", "sacrosanto", "místico", "templo sagrado" (evitar clichés de secta o espiritualidad New Age vacía).
-- **Términos Soberanos Recomendados:** "fundamental", "esencial", "soberano", "innegociable", "lúcido", "confortable", "consentimiento informado", "espacio cuidado", "pacto de respeto mutuo".
+Todo despliegue debe adherirse a principios rigurosos de comunicación clara, sin importar el nicho de negocio:
+- **Erradicación de Clichés y Humo (Anti-Hype):** Prohibido el uso de adjetivos inflados genéricos ("revolucionario", "mágico", "único en su clase", "disruptivo"). La propuesta de valor se demuestra mediante hechos, especificaciones claras y beneficios comprobables.
+- **Claridad y Sobriedad:** Utilizar lenguaje directo, profesional y enfocado en resolver el problema del usuario sin sobrecargar con jerga técnica o corporativa innecesaria.
 
 ---
 
@@ -351,13 +351,10 @@ Cuando un evento o registro dispara tanto WhatsApp como correo electrónico, env
 
 ---
 
-## 16. Posicionamiento de Ticket Alto y Filtro de Admisión
+## 16. Calificación de Leads por Transparencia de Oferta
 
-Para productos, membresías o clubes de acceso restringido y alta gama:
-1. **Filtrado Natural por Narrativa y Pricing:**
-   - La comunicación y el copy deben transparentar explícitamente el carácter exclusivo y de costo elevado ("ticket alto", covers prémium, aforo ultra-limitado). Esto actúa como un filtro natural de admisión que desincentiva postulaciones fuera de perfil sin necesidad de rechazos manuales incómodos.
-2. **Purga Léxica Soberana & Anti-Slop:**
-   - Erradicar sistemáticamente términos ambiguos, corporativos pretenciosos o ajenos a la secularidad del proyecto:
-     * Reemplazar *"Curaduría"* por *"Dirección Artística"* o *"Producción Cultural"*.
-     * Reemplazar *"Anfitrión/a"* por *"Equipo Organizador"* o *"Personal de Sala"*.
-     * Evitar términos que sugieran personal comercial pago encubierto en eventos de membresía privada.
+Para servicios prémium, ofertas B2B de alto valor o experiencias de capacidad limitada en cualquier industria:
+1. **Calificación Natural por Transparencia:**
+   - Exponer rangos de inversión o criterios de acceso claros en la narrativa y landing page para alinear expectativas antes de la captura del lead. Esto actúa como un filtro natural de audiencia, mejorando el ratio de conversión y optimizando el tiempo del equipo comercial o de soporte.
+2. **Claridad de Roles y Expectativas:**
+   - Definir con precisión el alcance del servicio y los puntos de contacto humano (soporte, ejecutivos de cuenta o equipo operativo) sin ambigüedades.
