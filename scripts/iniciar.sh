@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.5)
+# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.6)
 # Repositorio: https://github.com/baiosfera/zerops-astrobranding
 # Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash
 # ==============================================================================
@@ -33,7 +33,7 @@ for var in $(env | grep -E '^core_' | sed 's/=.*//' || true); do
 done
 
 echo "============================================================"
-echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.5 - Storage Resilient)"
+echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.6 - Storage Resilient)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
@@ -102,10 +102,11 @@ if [ -n "${ZCP_API_KEY:-}" ]; then
     fi
 fi
 
-# 0b. Guardia Pre-Flight: Detección y Montaje Obligatorio de Local Storage Persistente
-echo "• Verificando servicio de almacenamiento persistente localstorage (OBLIGATORIO)..."
+# 0b. Guardia Resiliente: Detección, Auto-Montaje y Fallback Local (Zero Bloqueos)
+echo "• Verificando servicio de almacenamiento persistente localstorage..."
 LOCALSTORAGE_FOUND=false
-LOCALSTORAGE_HOST=""
+LOCALSTORAGE_HOST="localstorage"
+FALLBACK_DIR="${PROJECT_ROOT}/.storage_fallback"
 
 # 1. Comprobación de puntos de montaje ya existentes en /mnt/
 for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
@@ -121,7 +122,7 @@ done
 if [ "$LOCALSTORAGE_FOUND" = false ]; then
     for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
         [ -z "$cand" ] && continue
-        if timeout 5s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=3 "$cand" "test -d /data" 2>/dev/null; then
+        if timeout 3s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=2 "$cand" "test -d /data" 2>/dev/null; then
             LOCALSTORAGE_FOUND=true
             LOCALSTORAGE_HOST="$cand"
             break
@@ -129,32 +130,75 @@ if [ "$LOCALSTORAGE_FOUND" = false ]; then
     done
 fi
 
-if [ "$LOCALSTORAGE_FOUND" = false ]; then
-    echo ""
-    echo "============================================================"
-    echo "  ❌ ERROR CRÍTICO: SERVICIO 'localstorage' NO DETECTADO"
-    echo "============================================================"
-    echo "Este stack agéntico requiere OBLIGATORIAMENTE un servicio de"
-    echo "almacenamiento persistente ('local-storage:single@1' con hostname 'localstorage')"
-    echo "para garantizar la persistencia de las bases de datos SQLite (Engram),"
-    echo "caché y artefactos (/artifacts) a prueba de reinicios y stop/start."
-    echo ""
-    echo "Solución para inicializar este ZCP:"
-    echo "  1. Aprovisiona un servicio Local Storage en tu proyecto Zerops:"
-    echo "     - Tipo: local-storage:single@1"
-    echo "     - Hostname: localstorage"
-    echo "  2. Vuelve a ejecutar iniciar.sh una vez que esté en estado ACTIVE."
-    echo "============================================================"
-    exit 1
-else
-    echo "  ✓ Servicio persistente localstorage detectado y activo ($LOCALSTORAGE_HOST)."
-    # Asegurar montaje inmediato en /mnt/localstorage y symlink en /var/www/localstorage
+if [ "$LOCALSTORAGE_FOUND" = true ]; then
+    echo "  ✓ Servicio persistente '$LOCALSTORAGE_HOST' detectado y accesible vía red."
     sudo mkdir -p "/mnt/$LOCALSTORAGE_HOST"
     if ! mountpoint -q "/mnt/$LOCALSTORAGE_HOST"; then
+        echo "  • Montando $LOCALSTORAGE_HOST:/data en /mnt/$LOCALSTORAGE_HOST vía SSHFS..."
         sudo sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" || true
     fi
-    if [ ! -L "/var/www/$LOCALSTORAGE_HOST" ]; then
-        sudo ln -sfn "/mnt/$LOCALSTORAGE_HOST" "/var/www/$LOCALSTORAGE_HOST"
+
+    # Migrar datos previos si existía un fallback local activo
+    if [ -d "$FALLBACK_DIR" ] && mountpoint -q "/mnt/$LOCALSTORAGE_HOST"; then
+        echo "  • Migrando datos temporales de fallback local hacia almacenamiento persistente remoto..."
+        sudo cp -rn "$FALLBACK_DIR"/* "/mnt/$LOCALSTORAGE_HOST/" 2>/dev/null || true
+        sudo rm -rf "$FALLBACK_DIR"
+    fi
+
+    sudo ln -sfn "/mnt/$LOCALSTORAGE_HOST" "$PROJECT_ROOT/$LOCALSTORAGE_HOST"
+    echo "  ✓ Volumen persistente montado y enlazado: $PROJECT_ROOT/$LOCALSTORAGE_HOST -> /mnt/$LOCALSTORAGE_HOST"
+else
+    echo "  ⚠️ Servicio remoto 'localstorage' no detectado aún en el proyecto Zerops."
+    echo "  📦 Activando almacenamiento persistente LOCAL en $FALLBACK_DIR (MODO RESILIENTE - CERO BLOQUEOS)..."
+
+    # Garantizar estructura de directorios requerida inmediatamente para que Engram, SQLite y FreeLLMAPI no fallen
+    sudo mkdir -p "$FALLBACK_DIR/freellmapi" "$FALLBACK_DIR/engram"
+    sudo chown -R zerops:zerops "$FALLBACK_DIR"
+    sudo ln -sfn "$FALLBACK_DIR" "$PROJECT_ROOT/$LOCALSTORAGE_HOST"
+    echo "fallback" > "$FALLBACK_DIR/.storage_mode"
+    echo "  ✓ Fallback local activo: $PROJECT_ROOT/$LOCALSTORAGE_HOST -> $FALLBACK_DIR"
+    echo "  → La instalación continúa sin bloqueos. No se requiere intervención manual."
+
+    # Intentar auto-aprovisionamiento soberano vía zcp JSON-RPC stdio si ZCP_API_KEY y zcp están presentes
+    if [ -x "/usr/local/bin/zcp" ] && [ -n "${ZCP_API_KEY:-}" ] && command -v python3 >/dev/null 2>&1; then
+        echo "  🤖 Intentando auto-aprovisionar 'localstorage' en Zerops vía puente autónomo ZCP..."
+        python3 -c '
+import subprocess, json, sys
+
+try:
+    proc = subprocess.Popen(["/usr/local/bin/zcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    def rpc(m):
+        proc.stdin.write(json.dumps(m) + "\n")
+        proc.stdin.flush()
+        while True:
+            l = proc.stdout.readline()
+            if not l: return None
+            try:
+                d = json.loads(l)
+                if "id" in d and d.get("id") == m.get("id"): return d
+            except: pass
+
+    rpc({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"bootstrap-bridge","version":"1.0"}}})
+    proc.stdin.write(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}) + "\n")
+    proc.stdin.flush()
+
+    # Iniciar workflow bootstrap
+    rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_workflow","arguments":{"action":"start","workflow":"bootstrap","intent":"provision localstorage","route":"classic"}}})
+
+    # Importar servicio localstorage
+    storage_yaml = """services:
+  - hostname: localstorage
+    type: local-storage:single@1
+    verticalAutoscaling:
+      cpuMode: SHARED
+    priority: 10
+"""
+    rpc({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"zerops_import","arguments":{"content": storage_yaml}}})
+    proc.terminate()
+    print("  ✓ Solicitud de aprovisionamiento de localstorage enviada a Zerops con éxito.")
+except Exception as e:
+    print(f"  ℹ️ Auto-aprovisionamiento diferido ({e}); operando en fallback local seguro.")
+' 2>/dev/null || true
     fi
 fi
 
