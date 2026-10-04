@@ -259,6 +259,14 @@ if [ "$RUN_ALL" = true ]; then
         chmod +x "$PROJECT_ROOT/.bin/engram-sync"
         sudo ln -sf "$PROJECT_ROOT/.bin/engram-sync" /usr/local/bin/engram-sync 2>/dev/null || true
     fi
+    if [ -f "$SCRIPT_DIR/skills-sync.sh" ] || [ -f "$SCRIPT_DIR/skills-sync" ]; then
+        echo "• Desplegando sincronizador atómico de skills (skills-sync)..."
+        SRC_SYNC="$SCRIPT_DIR/skills-sync.sh"
+        [ ! -f "$SRC_SYNC" ] && SRC_SYNC="$SCRIPT_DIR/skills-sync"
+        cp -f "$SRC_SYNC" "$PROJECT_ROOT/.bin/skills-sync"
+        chmod +x "$PROJECT_ROOT/.bin/skills-sync"
+        sudo cp -f "$SRC_SYNC" /usr/local/bin/skills-sync 2>/dev/null || sudo ln -sf "$PROJECT_ROOT/.bin/skills-sync" /usr/local/bin/skills-sync 2>/dev/null || true
+    fi
     if [ -f "$SCRIPT_DIR/nlm_tutor.py" ]; then
         echo "• Desplegando orquestador de aprendizaje autónomo (nlm-tutor)..."
         cp -f "$SCRIPT_DIR/nlm_tutor.py" "$PROJECT_ROOT/.bin/nlm-tutor"
