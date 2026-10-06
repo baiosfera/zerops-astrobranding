@@ -253,6 +253,31 @@ if [ "$RUN_ALL" = true ]; then
         chmod +x "$PROJECT_ROOT/.bin/zcp-mail"
         sudo ln -sf "$PROJECT_ROOT/.bin/zcp-mail" /usr/local/bin/zcp-mail 2>/dev/null || true
     fi
+    if [ -f "$SCRIPT_DIR/linear-cli" ]; then
+        echo "• Desplegando Linear CLI (linear-cli)..."
+        cp -f "$SCRIPT_DIR/linear-cli" "$PROJECT_ROOT/.bin/linear-cli"
+        chmod +x "$PROJECT_ROOT/.bin/linear-cli"
+        sudo ln -sf "$PROJECT_ROOT/.bin/linear-cli" /usr/local/bin/linear-cli 2>/dev/null || true
+    fi
+    if [ -f "$SCRIPT_DIR/linear-scaffold.ts" ]; then
+        echo "• Desplegando orquestador de proyectos Linear (linear-scaffold)..."
+        cat << 'EOF' | sudo tee "$PROJECT_ROOT/.bin/linear-scaffold" >/dev/null
+#!/usr/bin/env bash
+SCAFFOLD_SCRIPT="/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/linear-scaffold.ts"
+[ ! -f "$SCAFFOLD_SCRIPT" ] && SCAFFOLD_SCRIPT="/var/www/zerops-astrobranding/scripts/linear-scaffold.ts"
+if [ ! -f "$SCAFFOLD_SCRIPT" ]; then
+    echo "❌ Error: linear-scaffold.ts no encontrado en SSoT ni en el repositorio."
+    exit 1
+fi
+if command -v bun >/dev/null 2>&1; then
+    exec bun "$SCAFFOLD_SCRIPT" "$@"
+else
+    exec node --no-warnings --experimental-strip-types "$SCAFFOLD_SCRIPT" "$@"
+fi
+EOF
+        sudo chmod +x "$PROJECT_ROOT/.bin/linear-scaffold" 2>/dev/null || true
+        sudo ln -sf "$PROJECT_ROOT/.bin/linear-scaffold" /usr/local/bin/linear-scaffold 2>/dev/null || true
+    fi
     if [ -f "$SCRIPT_DIR/engram-sync" ]; then
         echo "• Desplegando sincronizador híbrido de Engram (engram-sync)..."
         cp -f "$SCRIPT_DIR/engram-sync" "$PROJECT_ROOT/.bin/engram-sync"
