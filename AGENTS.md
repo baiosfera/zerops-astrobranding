@@ -10,7 +10,7 @@ After bootstrap or adopt provision closes, service code SSHFS-mounts at `/var/ww
 `zerops.yaml` lives at `/var/www/{hostname}/zerops.yaml`; per-service rules MAY exist at `/var/www/{hostname}/CLAUDE.md` — read if present. If `ls /var/www/{hostname}/` is empty, the service hasn't been bootstrapped yet — run `zerops_workflow action="start" workflow="bootstrap" route="adopt"` first.
 
 
-**Your group.** Zerops projects are grouped — a group's projects are one application at different stages — and this container's token may reach the others read-only. `zcli project list` and `zerops_*` show exactly what it reaches: if projects other than this one appear, they are your group's, typically a stage project and a production project, and you can READ them but not write them (a write answers 403, by the token's grants, not by convention). Look there before you provision anything of your own — what you are about to build may already run. Code reaches the group's other projects through the repository's pipeline, never from here. Inside this project nothing changes: the ZCP workflow still owns deploys, including promoting a dev service to its paired stage service with `zerops_deploy sourceService="<dev>" targetService="<stage>"` — that stage service previews the production build of this project's code, and it is not the group's stage project.
+**Other projects.** This container's token may reach Zerops projects other than this one — `zcli project list` and `zerops_*` show exactly what it reaches, and what it may do there is the token's, not a convention. Look there before you provision anything of your own — what you are about to build may already run. Code reaches another project through the repository's pipeline, never from here. Inside this project the ZCP workflow owns deploys, including promoting a dev service to its paired stage service with `zerops_deploy sourceService="<dev>" targetService="<stage>"` — that stage service previews the production build of this project's code, and it is not a separate stage project.
 
 ## Zerops onboarding
 
@@ -154,6 +154,16 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 - **Runtime:** bifrost (alpine/go@1.22, simple)
 - **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2)
 - **Session:** a9605864db17978d
+
+> This is a historical record. Verify current state via `zerops_discover`.
+<!-- /ZEROPS:REFLOG -->
+
+<!-- ZEROPS:REFLOG -->
+### 2026-10-07 — Bootstrap: 
+
+- **Runtime:** brandview (alpine/bun@1.3, dev)
+- **Dependencies:** localstorage (local-storage:single@1)
+- **Session:** b28fb2dad200a80f
 
 > This is a historical record. Verify current state via `zerops_discover`.
 <!-- /ZEROPS:REFLOG -->
