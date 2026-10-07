@@ -350,11 +350,19 @@ EOF
             cp -f "$ZCP_ROOT/.agents/hooks.json" "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
         fi
     fi
-    # Sincronización atómica pre-atestación de AGENTS.md y 00-SUPREME-DIRECTIVE.md desde Google Drive SSoT al contenedor
-    if [ -f "$ZCP_ROOT/AGENTS.md" ]; then
+    # Sincronización atómica pre-atestación: Prioridad absoluta a Google Drive SSoT si está montado
+    SSOT_DIR="/var/www/baiosfera/0ZEROPS-AGY/0zcp-123"
+    if [ -d "$SSOT_DIR" ] && [ -f "$SSOT_DIR/AGENTS.md" ]; then
+        cp -f "$SSOT_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null || true
+        [ -d "$ZCP_ROOT" ] && cp -f "$SSOT_DIR/AGENTS.md" "$ZCP_ROOT/AGENTS.md" 2>/dev/null || true
+    elif [ -f "$ZCP_ROOT/AGENTS.md" ]; then
         cp -f "$ZCP_ROOT/AGENTS.md" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null || true
     fi
-    if [ -f "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
+    if [ -d "$SSOT_DIR" ] && [ -f "$SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
+        mkdir -p "$PROJECT_ROOT/.agents/rules" 2>/dev/null || true
+        cp -f "$SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
+        [ -d "$ZCP_ROOT" ] && cp -f "$SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
+    elif [ -f "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
         mkdir -p "$PROJECT_ROOT/.agents/rules" 2>/dev/null || true
         cp -f "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
     fi
