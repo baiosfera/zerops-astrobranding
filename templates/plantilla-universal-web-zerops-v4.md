@@ -1,10 +1,54 @@
-# 🌐 PLANTILLA UNIVERSAL WEB ZEROPS (v3.0.0) — MASTER BLUEPRINT
+# 🌐 PLANTILLA UNIVERSAL WEB ZEROPS (v4.0.0) — MASTER BLUEPRINT
 
 > **Clasificación:** Blueprint Canónico Universal para Despliegues Web Soberanos en Zerops  
-> **Versión:** 3.0.0 (SemVer Canónico)  
-> **Gobernanza:** [`Supreme Directive`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) & [`Planner`](file:///var/www/.agents/skills/planner/SKILL.md)  
+> **Versión:** 4.0.0 (SemVer Canónico — Expansión SOTA Greenfield/Brownfield + Linear Automation)  
+> **Gobernanza:** [`Supreme Directive`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md), [`Planner`](file:///var/www/.agents/skills/planner/SKILL.md) & [`Skill-Improver`](file:///var/www/.agents/skills/skill-improver/SKILL.md)  
 > **Stack Base:** Astro 5 SSR (Bun 1.3.9+ / Tailwind CSS 4) + PostgreSQL 18 + Valkey 7.2 + NATS 2.12 + Object Storage S3 + Bifrost AI Gateway + EvolutionGo + Listmonk  
-> **Propósito:** Guía de ejecución autónoma para que cualquier agente AGY despliegue una aplicación web, e-commerce o landing para CUALQUIER marca, producto o tema sin ensayos, sin errores y sin acoplamientos residuales.
+> **Propósito:** Guía de ejecución autónoma para que cualquier agente AGY despliegue una aplicación web, e-commerce o landing para CUALQUIER marca, producto o tema tanto en proyectos nuevos desde cero (*Greenfield*) como en adopción de repositorios preexistentes (*Brownfield*), sin ensayos, sin errores y con dependencias bloqueantes en Linear.
+
+---
+
+## 0. Protocolo de Activación por Lenguaje Natural & Discriminación (Greenfield vs Brownfield)
+
+> [!IMPORTANT]
+> **Contrato Soberano de Lenguaje Natural (Cero Comandos para el Humano):**
+> El usuario NUNCA debe memorizar comandos de terminal, URLs de repositorios ni códigos de tarea (`BAI-*`). El usuario activa el flujo hablando en lenguaje natural (ej: *"AGY, despliega la web de [Marca] desde cero"* o *"AGY, adopta el repositorio existente en [Ruta] y rediséñalo"*).
+> **El agente AGY asume la ejecución autónoma de punta a punta:** crea el proyecto y las issues en Linear, ejecuta los scripts de scaffolding, compila los tokens y orquesta los despliegues sin fricción técnica.
+
+Antes de iniciar cualquier acción sobre el código o la infraestructura, el agente evalúa el estado para clasificar la ruta operativa de forma autónoma:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│             PUERTA DE ENLACE INICIAL: DISCOVERY & CLASIFICACIÓN        │
+├───────────────────────────────────┬────────────────────────────────────┤
+│ RUTA A: GREENFIELD (DESDE CERO)   │ RUTA B: BROWNFIELD (PREEXISTENTE)  │
+├───────────────────────────────────┼────────────────────────────────────┤
+│ 1. Clonar chasis upstream         │ 1. Auditoría visual: impeccable    │
+│    (zerops-astrobranding)         │ 2. Extracción de tokens: brandbook │
+│ 2. Desacoplar repo cliente        │ 3. Detección de fallos: rdd-*      │
+│ 3. Configurar remote upstream     │ 4. Adaptación a Bun 1.3 & Astro 5  │
+│ 4. Ingestión brandbook inicial    │ 5. Normalización zerops.yaml       │
+└───────────────────────────────────┴────────────────────────────────────┘
+```
+
+### Puerta Condicional A: Proyecto Greenfield (Desde Cero)
+1. **Adopción de Chasis Upstream:**
+   ```bash
+   git clone https://github.com/usuario/zerops-astrobranding.git /var/www/<hostname>
+   cd /var/www/<hostname>
+   git remote rename origin upstream
+   git remote add origin https://github.com/usuario/<repo-cliente>.git
+   ```
+2. **Ingestión de Identidad:** Cargar `brandbook.json` en estándar W3C DTCG v6.3.0 y compilar variables `@theme` en Tailwind CSS 4.
+3. **Aprovisionamiento Linear:** Ejecutar `node --experimental-strip-types scripts/linear-scaffold.ts <APP_IDENTITY> "<PROJECT_NAME>"`.
+
+### Puerta Condicional B: Proyecto Brownfield (Código Preexistente)
+1. **Auditoría de Interfaz (Anti-Slop):** Ejecutar `impeccable audit` o `taste-skill` para identificar anti-patrones, gradientes clichés o inconsistencias tipográficas.
+2. **Extracción y Normalización de Tokens:** Extraer paletas y tipografías existentes hacia `/brand/brandbook.json` mediante `impeccable extract`, convirtiendo colores hexadecimales al espacio `oklch()`.
+3. **Contención de Defectos Previos (`rdd-defect-workflow`):** Si el repositorio presenta bugs abiertos, exigir un recibo reproducible en `main` antes de cualquier refactor. Presupuesto estricto $\le 400$ líneas de cambio.
+4. **Armonización de Runtime Zerops:**
+   - Asegurar que `zerops.yaml` utilice el runtime nativo `ubuntu/bun@1.3.9` para prevenir incompatibilidades con bibliotecas nativas compiladas con musl libc.
+   - Configurar el remote upstream: `git remote add upstream https://github.com/usuario/zerops-astrobranding.git` para recibir mejoras del chasis central.
 
 ---
 
@@ -45,7 +89,7 @@ Cualquier AGY debe clasificar y persistir los datos estrictamente en su capa des
 ```
 
 1. **Google Drive SSoT (`/var/www/baiosfera/`):** Capa Fría indestructible. Espejo permanente de código fuente, configuraciones maestras y manifiestos de diseño.
-2. **`localstorage` (`/mnt/localstorage/`):** Capa Caliente POSIX con semántica nativa mononúcleo. Reservada para SQLite embebido (`engram`, `freellmapi`), sockets y archivos de configuración en caliente. Los activos multimedia pesados se canalizan a Object Storage.
+2. **`localstorage` (`/mnt/localstorage/`):** Capa Caliente POSIX con semántica nativa mononúcleo. Reservada para SQLite embebido (`engram`, `freellmapi`), sockets y archivos de configuración en caliente.
 3. **`objectstorage` (S3 MinIO):** Capa de Medios Públicos y Dinámicos. Toda imagen de catálogo, avatar de usuario o PDF generado en runtime reside aquí, configurado con `forcePathStyle: true` y expuesto vía Cloudflare CDN.
 4. **`postgresql` (PostgreSQL 18):** Capa Relacional Transaccional ACID. Tablas de negocio (`clients`, `orders`, `outbox`), esquemas aislados para Listmonk (`search_path=listmonk,public`) y EvolutionGo (`evogo_auth`, `evogo_users`).
 
@@ -70,72 +114,106 @@ Bifrost expone 5 Virtual Keys desacopladas de nombres de clientes:
 
 ---
 
-## 4. Anti-Slop Craft Obligatorio (Web, Email y WhatsApp)
+## 4. Gated Workflow de Skills & Anti-Slop Craft Obligatorio
 
-Todo producto construido bajo esta plantilla debe verse, sentirse y leerse como una obra diseñada y redactada por humanos de alto nivel, erradicando los clichés de IA:
+Todo producto construido bajo esta plantilla debe orquestar el ecosistema de 141 skills divididas en 4 dimensiones operativas:
 
-### A. Frontend Web (Astro 5 + Tailwind 4)
-- **Activación de Habilidades:** Mandatorio consultar [`taste-skill`](file:///var/www/.agents/skills/taste-skill/SKILL.md) e [`impeccable`](file:///var/www/.agents/skills/impeccable/SKILL.md).
-- **Calibración de los 3 Diales:**
-  * `DESIGN_VARIANCE: 8` — Asimetría intencional, grillas editoriales quebradas, composiciones tipográficas ricas.
-  * `MOTION_INTENSITY: 6` — Microinteracciones de entrada suaves y físicas, transiciones sutiles con aceleración natural.
-  * `VISUAL_DENSITY: 4` — Espaciado amplio y elegante, respiro visual de alta gama.
-- **Directivas de Estilo Humano:**
-  * Seleccionar paletas ricas en OKLCH derivadas de `brandbook.json` en sustitución de gradientes morados estándar.
-  * Diseñar bloques de contenido asimétricos con jerarquía dinámica en lugar de trípticos de tarjetas iguales.
-  * Emparejar fuentes display con tipografías grotesk contemporáneas en lugar de la combinación estándar Inter/Slate.
-  * Redactar copys persuasivos y específicos mediante neurocopywriting, reemplazando declaraciones corporativas vacías.
+### A. Arte, Vibe-Craft & Experiencia Sensorial
+- **`fontgen`**: Dirección tipográfica con jerarquías Display + Grotesk en 6 capas funcionales.
+- **`kinetic`**: Microinteracciones a 60fps con GSAP, curvas `cubic-bezier(0.16, 1, 0.3, 1)` y SFX procedurales.
+- **`chroma`**: Modelado matemático de paletas en **OKLCH**, contraste APCA Lc >= 82 y WCAG 2.2 AAA (>= 7:1).
+- **`taste-skill` e `impeccable`**: Calibración estricta de los 3 Diales:
+  * `DESIGN_VARIANCE: 8` — Asimetría intencional y grillas editoriales dinámicas.
+  * `MOTION_INTENSITY: 6` — Entradas físicas suaves con aceleración natural.
+  * `VISUAL_DENSITY: 4` — Espaciado amplio y respiro visual de alta gama.
 
-### B. Correo Transaccional (React Email 3.0 Compilador Único)
-- **Un Solo Diseñador:** React Email (`.tsx`) es la única fuente de verdad para correos.
-- **Inyección en Listmonk (`POST /api/templates`):** Para campañas o envíos vía `/api/tx`, los tags Sprig de Go se insertan en JSX (`{'{{ .Tx.Data.order_id }}'}`). React Email compila a HTML 100% inline (<85 KB anti-clipping de Gmail) y se registra en Listmonk automáticamente.
-- **Envío Directo Transaccional (ZeptoMail / SES v2):** La misma plantilla se evalúa en runtime en Bun con props de TypeScript (`renderAsync(<OrderEmail order={order} />)`), entregando en <80ms.
-- **Tokens de Marca:** Carga dinámica de colores y tipografías desde `brandbook.json` usando `loadEmailBrandTokens()`.
+### B. Frontend Reactivo & Arquitectura de Componentes
+- **`tailwind-4`**: Tokens transpilados directamente a `@theme` CSS-first sin sobrecarga de runtime.
+- **`react-19`**: Islas interactivas compiladas con el **React Compiler** nativo (cero `useMemo`/`useCallback` artesanales).
+- **`zustand-5`**: Estado global del cliente seguro con persistencia en `localStorage` e hidratación anti-flicker.
+- **`zod-4`**: Validación de esquemas estricta en las Astro Actions.
 
-### C. Canal WhatsApp (EvolutionGo + Bifrost)
-- **Tono Concierge Humano:** El bot actúa como un miembro calificado del equipo de atención de la marca.
-- **Voz Auténtica:** Abrir las conversaciones con cercanía, resolviendo la necesidad inmediata del usuario sin frases prefabricadas sobre inteligencia artificial.
-- **Neurocopywriting:** Respuestas directas, cálidas y concisas, orientadas a facilitar la decisión de compra o clarificar inquietudes al instante.
+### C. Conversión, Funnels & Transaccional
+- **`checkout-funnels`**: Funnels de alta conversión con 1-Click Upsells y Meta CAPI.
+- **`payment-gateways`**: Firmas SHA-256 e idempotencia en Valkey (60s lock).
+- **`growth-engine`**: Neurocopywriting basado en la Oferta Hormozi y StoryBrand.
+- **`email-marketing`**: React Email 3.0 compilado inline (<85KB) con entregabilidad DMARC/DKIM.
 
----
-
-## 5. Protocolo de Aislamiento Multi-Proyecto en Linear
-
-Para crear las tareas de una nueva marca sin contaminar proyectos existentes:
-
-1. **Inspección Previa vía GraphQL:**
-   ```bash
-   curl -s -H "Authorization: $LINEAR_API_KEY" -H "Content-Type: application/json" \
-     -d '{"query":"query { teams(first: 5) { nodes { id name key projects(first: 10) { nodes { id name state } } } } }"}' \
-     https://api.linear.app/graphql
-   ```
-2. **Creación del Proyecto Dedicado:**
-   Crear un `projectId` nuevo con el nombre de la marca (ej: `"[Acme] E-Commerce & Growth Engine"`).
-3. **Las 5 Issues Canónicas de Marca:**
-   - `[Brand] BAI-0: Infraestructura & AI Gateway (Bifrost + FreeLLMAPI)`
-   - `[Brand] BAI-1: Chasis Astro 5 SSR, Brandbook Tokens & GitOps CI/CD`
-   - `[Brand] BAI-2: Landings & Anti-Slop Craft con Taste-Skill`
-   - `[Brand] BAI-3: Persistencia PostgreSQL, React Email & WhatsApp Concierge`
-   - `[Brand] BAI-4: Funnels de Checkout, Pasarelas & Automatizaciones`
-4. **Ejecución Acotada:** El agente toma una issue a la vez ($\le 15.000$ tokens), valida físicamente con sensor en terminal (Exit Code 0) y marca `Done` antes de pasar a la siguiente.
+### D. Borde, Seguridad & Plataforma
+- **`cloudflare`**: Edge CDN, SSL Full Strict y Turnstile anti-bot sin captchas invasivos.
+- **`automation-engine`**: Colas de eventos desacopladas con BullMQ y NATS JetStream (:4222).
+- **`seo-aeo-geo`**: Schema.org JSON-LD (`Product`/`ProfessionalService`), `/llms.txt` y OpenGraph <300KB.
+- **`rdd-defect-workflow`**: Contención forense de bugs con prueba física en `main` ($\le 400$ líneas).
 
 ---
 
-## 6. GitOps Delivery Canónico (Opción B `ghcicd`)
+## 5. Protocolo de Linear Automatizado (`linear-scaffold.ts`) & Malla Lego Desacoplada
 
+La creación y seguimiento de tareas se rige por el estándar **Project-as-Code** mediante el manifiesto declarativo [`linear_template.json`](file:///var/www/artifacts/templates/linear_template.json) y el script ejecutable `linear-scaffold.ts`:
+
+```bash
+# Simulación determinista previa (sin mutar Linear)
+node --experimental-strip-types scripts/linear-scaffold.ts <APP_IDENTITY> "<PROJECT_NAME>" --dry-run --profile <minimal|content|ecommerce|full-mesh>
+
+# Aprovisionamiento real con gating de dependencias en Linear
+node --experimental-strip-types scripts/linear-scaffold.ts <APP_IDENTITY> "<PROJECT_NAME>" --profile <perfil>
+```
+
+### Taxonomía de los 7 Hitos Lego (`BAI-0` a `BAI-6`)
+
+Los hitos se clasifican estrictamente en **CORE** (invariantes arquitectónicos obligatorios) y **OPT-IN** (módulos activados exclusivamente según la necesidad del proyecto):
+
+| Hito | Tipo | Nombre / Alcance | Bloqueado Por | Salida / DoD |
+|---|---|---|---|---|
+| **`BAI-0`** | `[CORE]` | **Scope, Topología Lego & Clasificación** | *(Ninguno)* | Greenfield vs Brownfield resuelto, perfil Lego seleccionado, servicios base activos en Zerops. |
+| **`BAI-1`** | `[CORE]` | **Chasis Astro 5 SSR, Tokens & GitOps** | `BAI-0` | Repositorio downstream enlazado a upstream, tokens W3C DTCG transpilados a Tailwind 4 `@theme`, build limpio en Bun 1.3. |
+| **`BAI-2`** | `[OPT-IN]` | **Contratos de Datos, Persistencia PostgreSQL 18 & Mesh API** | `BAI-1` | Modelado relacional en PostgreSQL 18, upsert defensivo anti-500, normalización E.164, endpoints `/api/*` probados con Zod. Cero mocks antes de UI. |
+| **`BAI-3`** | `[CORE]` | **Landings de Alto Impacto, Server Islands & Anti-Slop** | `BAI-2` *(o `BAI-1` en minimal)* | Server Islands (`server:defer`), diales calibrados (Variance 8, Motion 6, Density 4), microinteracciones GSAP 60fps, CLS = 0. |
+| **`BAI-4`** | `[OPT-IN]` | **Motor Transaccional, Checkout Funnels & Pasarelas** | `BAI-3` | Funnels con debounce anti-doble clic, firmas criptográficas SHA-256 (Wompi/ePayco/Stripe), idempotencia en Valkey (60s lock). |
+| **`BAI-5`** | `[OPT-IN]` | **Automatización Omnicanal & Asistentes de IA** | `BAI-3` | WhatsApp ágil con EvolutionGo (:8085), Email documental Listmonk (<85KB), Virtual Keys en Bifrost AI Gateway (:8080). |
+| **`BAI-6`** | `[CORE]` | **Atestación Física Multi-Superficie, SEO-AEO-GEO & Go-Live** | `BAI-3` / `BAI-4` / `BAI-5` | Playwright E2E exit code 0, Schema.org JSON-LD, OpenGraph <300KB, SSL Full Strict en Cloudflare, promoción inmutable en Zerops. |
+
+### Matriz de Perfiles de Despliegue (`--profile`)
+
+Para evitar arquitecturas carcelarias o forzar servicios innecesarios en proyectos sencillos, el scaffolder soporta 4 perfiles modulares:
+
+1. **`minimal` (Landing Estática / Portfolio / Presencia Básica):**
+   - Hitos seleccionados: `BAI-0` $\to$ `BAI-1` $\to$ `BAI-3` $\to$ `BAI-6`.
+   - Infraestructura: Solo Astro 5 SSR en Bun (cero PostgreSQL, Valkey, NATS o IA satélite ociosos).
+2. **`content` (Portal de Contenidos / Blog / Captura de Leads / Reservas):**
+   - Hitos seleccionados: `BAI-0` $\to$ `BAI-1` $\to$ `BAI-2` $\to$ `BAI-3` $\to$ `BAI-6`.
+   - Infraestructura: Astro 5 SSR + PostgreSQL 18 + S3 Object Storage. Persistencia antes de UI.
+3. **`ecommerce` (Tienda Online / Checkout / Venta de Entradas):**
+   - Hitos seleccionados: `BAI-0` $\to$ `BAI-1` $\to$ `BAI-2` $\to$ `BAI-3` $\to$ `BAI-4` $\to$ `BAI-6`.
+   - Infraestructura: Astro 5 SSR + PostgreSQL 18 + Valkey 7.2 (idempotencia y locks) + S3 Object Storage.
+4. **`full-mesh` (Ecosistema Omnicanal Completo con IA y Mensajería):**
+   - Hitos seleccionados: Todos (`BAI-0` a `BAI-6`).
+   - Infraestructura: Astro 5 SSR + PostgreSQL 18 + Valkey 7.2 + NATS 2.12 + S3 + Bifrost Gateway (:8080) + EvolutionGo (:8085) + Listmonk (:9000).
+
+### Invariante de Persistencia Previa (`BAI-2` antes de `BAI-3`)
+En proyectos que requieren persistencia relacional, los contratos de datos (`BAI-2`) **preceden obligatoriamente** a la construcción de las interfaces de usuario (`BAI-3`). Esto erradica el desarrollo contra mocks volátiles y asegura que cada componente visual se conecte desde el primer día a esquemas tipados y APIs vivas.
+
+### Extensibilidad Soberana para Nuevos Runtimes
+Si un proyecto requiere runtimes especializados (ej: microservicios Python con FastAPI, búsqueda vectorial con Qdrant, o CMS con Directus), estos se agregan como recetas complementarias en `recipes/steps/` sin romper el linaje de los hitos web. El agente opera con service discovery dinámico en Zerops (`zerops_discover`), cableando únicamente los servicios presentes.
+
+---
+
+## 6. GitOps Delivery Canónico & Linaje Upstream GitOps
+
+- **Linaje Upstream Soberano:** El proyecto del cliente mantiene `upstream` hacia `zerops-astrobranding` para recibir actualizaciones de chasis, plantillas y tooling.
 - **Desarrollo en Zerops:** Todo el trabajo iterativo ocurre en el contenedor efímero `webdev` de Zerops (`/var/www/{hostname}` con hot-reload y subdominios).
 - **Producción Inmutable:** Los despliegues a producción se realizan exclusivamente a través de GitHub Actions (`zeropsio/actions@v1.0.2`) al hacer push a la rama `main`, conectado a Cloudflare con SSL Full Strict.
 - **Staging Desacoplado y Opcional:** La receta base `06-astro-web.yaml` despliega únicamente el servicio de producción. El entorno staging (`06b-astro-web-staging.yaml`) es estrictamente opt-in para proyectos con QA formal.
-- **Cero Costo en Reposo:** Cuando el desarrollo activo concluye, el contenedor de desarrollo puede eliminarse o detenerse; la verdad indestructible reside en el repositorio GitHub (`main`) y en Google Drive SSoT.
 
 ---
 
 ## 7. Verificación Física & Sensores de Calidad (Exit Code 0)
 
 Antes de dar por entregado cualquier despliegue bajo esta plantilla, el agente debe ejecutar físicamente y comprobar el código de salida 0 de:
-1. `skills-suite-validate` — Certificación del catálogo completo de skills.
-2. `ssot-parity-check` — Atestación de paridad sin drift entre el contenedor ZCP y Google Drive SSoT.
-3. `/health` HTTP 200 — Comprobación física de conectividad de cada servicio desplegado.
+1. `astro-web-validate.sh` — Verificación de AST, Server Islands y tokens de diseño.
+2. `skills-suite-validate` — Certificación del catálogo completo de skills.
+3. `ssot-parity-check` — Atestación de paridad sin drift entre el contenedor ZCP y Google Drive SSoT.
+4. `/health` HTTP 200 — Comprobación física de conectividad de cada servicio desplegado.
 
 ---
 
@@ -198,15 +276,13 @@ Todo ecosistema web debe separar con absoluta nitidez sus formularios según el 
 1. **Formulario de Comunidad B2C (`LeadForm.astro`):**
    - Propósito: Registro en lista de novedades y eventos comunitarios.
    - Campos: Nombre o alias, WhatsApp, Email, Modalidad comunitaria (`pareja`, `mujer_sola`, `hombre_solo`), Ciudad.
-   - Mensajería: Correo y WhatsApp con voz cálida y bienvenida a la comunidad.
 2. **Formulario de Alianzas y Contratación B2B (`AllianceForm.astro`):**
    - Propósito: Co-producción, alquiler de locación privada o talleres de facilitadores.
-   - Campos: Nombre/Organización, WhatsApp, Email, Selector de Tipo de Alianza (Organizador de Eventos, Tallerista, Producción, Alquiler Privado), Textarea amplio para detallar la propuesta, Ciudad.
+   - Campos: Nombre/Organización, WhatsApp, Email, Selector de Tipo de Alianza, Textarea amplio para detallar la propuesta, Ciudad.
    - **Invariante:** CERO preguntas de modalidad íntima (`pareja` o `single`).
-   - Mensajería: Confirmación de recepción curatorial y notificación prioritaria a la dirección de la marca.
 3. **Formulario de Checkout & Admisión VIP (`CheckoutForm.astro`):**
    - Propósito: Adquisición de entradas, pases o separación de cupos.
-   - Campos: Selector de pases, modalidad de pago (Total o Separación de Cupo), datos de contacto, pasarela de pago segura.
+   - Campos: Selector de pases, modalidad de pago, datos de contacto, pasarela de pago segura.
 
 ---
 
@@ -358,59 +434,3 @@ Para servicios prémium, ofertas B2B de alto valor o experiencias de capacidad l
    - Exponer rangos de inversión o criterios de acceso claros en la narrativa y landing page para alinear expectativas antes de la captura del lead. Esto actúa como un filtro natural de audiencia, mejorando el ratio de conversión y optimizando el tiempo del equipo comercial o de soporte.
 2. **Claridad de Roles y Expectativas:**
    - Definir con precisión el alcance del servicio y los puntos de contacto humano (soporte, ejecutivos de cuenta o equipo operativo) sin ambigüedades.
-
----
-
-## 17. Invariante de Integración WhatsApp Engine (Evolution Go / whatsmeow)
-
-Al recibir webhooks de Evolution Go (motor en Go sobre whatsmeow), la estructura JSON difiere críticamente de librerías basadas en Node.js (Baileys):
-1. **Mapeo de Identidad y Teléfono:**
-   - Baileys utiliza `key.remoteJid` y `key.fromMe`.
-   - whatsmeow estructura los datos en `Info`: `data.Info.Chat`, `data.Info.Sender`, `data.Info.IsFromMe` y `data.Info.PushName`.
-   - El webhook receptor debe extraer en cascada: `Info.Chat || Info.Sender || data.Chat || data.Sender || key.remoteJid`.
-2. **Soporte para Identidades `@lid` (WhatsApp Linked Identity Device):**
-   - WhatsApp utiliza identificadores opacos `@lid` para privacidad. Evolution Go realiza swap automático hacia `@s.whatsapp.net` en `Info.Sender` e `Info.Chat`.
-   - El backend receptor nunca debe descartar un mensaje solo porque la clave Baileys `key` esté vacía, pues causaría falsos positivos de descarte (`ignored_self_or_group`).
-3. **Estructura del Mensaje:**
-   - whatsmeow serializa el struct Go `Message` con inicial mayúscula (`data.Message.conversation`, `data.Message.extendedTextMessage.text`).
-
----
-
-## 18. Presupuesto de Tokens y Enrutamiento de LLM en Mensajería (Bifrost & FreeLLMAPI)
-
-Para bots y agentes conversacionales de atención en tiempo real (WhatsApp, Webchat):
-1. **Prioridad Zero-Cost y Ultra Baja Latencia (`model: "auto"`):**
-   - La atención conversacional por WhatsApp requiere respuestas inmediatas (<1 segundo) y directas.
-   - Utilizar `model: "auto"` a través de Bifrost para que resuelva contra el pool prioritario de **FreeLLMAPI** (Groq / Cerebras / Qwen).
-   - Latencia típica: 250–350 ms. Costo de inferencia: $0.
-2. **La Trampa de `reasoning_tokens` en Modelos Deep Reasoning:**
-   - Modelos de razonamiento (como DeepSeek Reasoner / `deepseek-v4-pro`) generan tokens internos de pensamiento (`reasoning_content`) que **se descuentan del cupo total de `max_tokens`**.
-   - Si se configura un `max_tokens` restrictivo (ej: 400–500 tokens) con un system prompt rico, el razonamiento interno agota la totalidad del cupo, provocando un corte abrupto (`stop_reason: "length"`) donde el asistente devuelve un `content` vacío (`""`).
-   - **Regla:** Reservar modelos de razonamiento profundo para análisis complejos, código o síntesis técnica con `max_tokens >= 1500`. En bots de mensajería, usar inferencia directa sin cadena de pensamiento extensa (`auto`) o configurar un fallback seguro a `reasoning_content` si `content` llega vacío.
-
----
-
-## 19. Patrón de Memoria de Sesión Deslizante en Valkey para Agentes de Mensajería
-
-En arquitecturas desacopladas de mensajería (WhatsApp, Telegram, Webchat), los webhooks HTTP entrantes son nativamente *stateless* (sin estado). Sin un sustrato de memoria rápida:
-1. **Amnesia y Saludos Repetitivos:** El modelo de lenguaje procesa cada mensaje entrante como el turno cero de una conversación nueva, reiterando saludos (*"¡Hola!", "Bienvenido a..."*) en cada interacción y degradando la experiencia de usuario.
-2. **El Cuello de Botella de Enviar el Historial Completo:**
-   - Valkey almacena texto con costo computacional y de memoria marginal.
-   - Sin embargo, inyectar historiales acumulativos de decenas de mensajes al LLM degrada la latencia (de 1s a 6-8s), incrementa drásticamente los *prompt tokens* (activando 429 rate limits) e induce alucinaciones por pérdida de atención (*Lost in the Middle*).
-
-### Arquitectura de Ventana Deslizante Bounded (Sliding Window Memory)
-La solución canónica e industrial consiste en una memoria de trabajo volátil gestionada en **Valkey (Redis 7.2)**:
-* **Clave de Sesión:** `chat:sessions:<channel>:<user_identifier>` (ej. número E.164 limpio).
-* **Capacidad de Ventana (`SESSION_WINDOW_LIMIT`):** Fijar entre **8 y 12 mensajes** (4 a 6 turnos completos Usuario $\leftrightarrow$ Asistente). Esto preserva el hilo conversacional inmediato sin saturar la ventana de contexto del LLM.
-* **TTL Atómico (`SESSION_TTL_SECONDS`):** 86.400 segundos (24 horas) renovado en cada interacción. Si el usuario reanuda el contacto al cabo de días, la sesión se reinicia limpiamente.
-* **Operación Atómica en Valkey:** Utilizar un *pipeline* RESP:
-  1. `LPUSH chat:sessions:<id> <json_payload>`
-  2. `LTRIM chat:sessions:<id> 0 <LIMIT - 1>`
-  3. `EXPIRE chat:sessions:<id> <TTL>`
-* **Inyección Cronológica al LLM:**
-  - Leer la lista con `LRANGE 0 <LIMIT - 1>` y revertir el orden para construir el array `messages` en orden ascendente (más antiguo a más reciente).
-  - Estructura: `[{ role: "system", content: AGENT_SYSTEM_PROMPT }, ...history, { role: "user", content: current_message }]`.
-* **Invariante de Supresión de Saludos:**
-  - En el `AGENT_SYSTEM_PROMPT`, estipular formalmente: *"Si ya existen turnos previos en el historial de conversación, está estrictamente prohibido volver a saludar o dar bienvenidas; responda directamente a la consulta del usuario."*
-* **Degradación Graciosa:**
-  - Envolver la consulta a Valkey en un bloque `try/catch` con timeout acotado. Si Valkey no responde o sufre desconexión transitoria, el webhook degrada automáticamente a modo *stateless* sin bloquear la atención ni responder 500 al proveedor de mensajería.

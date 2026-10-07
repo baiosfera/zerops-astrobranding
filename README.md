@@ -79,7 +79,7 @@ Zerops architecture provides strict boundaries for managing multiple clients and
 ```mermaid
 graph TD
     subgraph Org1["Zerops Organization A (Internal Agency / Core)"]
-        ProjCore["Project: Core Platform (Glamur)"]
+        ProjCore["Project: Core Platform (Hub)"]
         ProjClient1["Project: Client 1 Ecommerce"]
         ProjClient2["Project: Client 2 Event Landing"]
     end

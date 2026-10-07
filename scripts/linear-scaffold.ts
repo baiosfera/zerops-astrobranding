@@ -60,18 +60,26 @@ async function runGraphQL(apiKey: string, query: string, variables: Record<strin
 
 async function main() {
   const args = process.argv.slice(2);
-  const isDryRun = args.includes('--dry-run');
+  const isDryRun = args.includes('--dry-run') || args.includes('-d');
   const cleanArgs = args.filter(a => a !== '--dry-run' && a !== '-d');
+
+  let profile = 'full-mesh';
+  const profileIdx = cleanArgs.findIndex(a => a === '--profile' || a === '-p');
+  if (profileIdx !== -1 && cleanArgs[profileIdx + 1]) {
+    profile = cleanArgs[profileIdx + 1].toLowerCase();
+    cleanArgs.splice(profileIdx, 2);
+  }
 
   if (cleanArgs.includes('--help') || cleanArgs.includes('-h') || (cleanArgs.length === 0 && !isDryRun)) {
     console.log(`
 Uso: node --experimental-strip-types linear-scaffold.ts <APP_IDENTITY> "<PROJECT_NAME>" [opciones]
 
 Argumentos:
-  APP_IDENTITY   Slug en minúsculas de la marca (ej: glamur, lumina)
-  PROJECT_NAME   Nombre humano de la marca (ej: "Glamur AI")
+  APP_IDENTITY   Slug en minúsculas de la marca (ej: acme, lumina)
+  PROJECT_NAME   Nombre humano de la marca (ej: "Acme Platform")
 
 Opciones:
+  --profile, -p  Perfil Lego: minimal | content | ecommerce | full-mesh (default: full-mesh)
   --dry-run, -d  Simula la ejecución completa sin mutar Linear
   --help, -h     Muestra este mensaje de ayuda
 `);
@@ -82,16 +90,46 @@ Opciones:
   const projectName = cleanArgs[1] || `${appIdentity.toUpperCase()} Web Platform`;
 
   // 1. Carga del Manifiesto Declarativo
-  const templatePath = resolve('/var/www/artifacts/templates/linear_template.json');
+  const localTemplatePath = resolve(dirname(fileURLToPath(import.meta.url)), '../templates/linear_template.json');
+  const artifactsTemplatePath = resolve('/var/www/artifacts/templates/linear_template.json');
+  const templatePath = existsSync(localTemplatePath) ? localTemplatePath : artifactsTemplatePath;
   if (!existsSync(templatePath)) {
-    console.error(`❌ Error: Manifiesto no encontrado en ${templatePath}`);
+    console.error(`❌ Error: Manifiesto no encontrado en ${localTemplatePath} ni ${artifactsTemplatePath}`);
     process.exit(1);
   }
 
   const manifest = JSON.parse(readFileSync(templatePath, 'utf-8')) as TemplateManifest;
+
+  // Filtrado de Issues según Perfil Modular Lego
+  let selectedIssues = manifest.issues;
+  if (profile === 'minimal') {
+    selectedIssues = manifest.issues.filter(i => ['BAI-0', 'BAI-1', 'BAI-3', 'BAI-6'].includes(i.key)).map(i => {
+      const copy = { ...i, blockedBy: [...i.blockedBy] };
+      if (copy.key === 'BAI-3') copy.blockedBy = ['BAI-1'];
+      if (copy.key === 'BAI-6') copy.blockedBy = ['BAI-3'];
+      return copy;
+    });
+  } else if (profile === 'content') {
+    selectedIssues = manifest.issues.filter(i => ['BAI-0', 'BAI-1', 'BAI-2', 'BAI-3', 'BAI-6'].includes(i.key)).map(i => {
+      const copy = { ...i, blockedBy: [...i.blockedBy] };
+      if (copy.key === 'BAI-3') copy.blockedBy = ['BAI-2'];
+      if (copy.key === 'BAI-6') copy.blockedBy = ['BAI-3'];
+      return copy;
+    });
+  } else if (profile === 'ecommerce') {
+    selectedIssues = manifest.issues.filter(i => ['BAI-0', 'BAI-1', 'BAI-2', 'BAI-3', 'BAI-4', 'BAI-6'].includes(i.key)).map(i => {
+      const copy = { ...i, blockedBy: [...i.blockedBy] };
+      if (copy.key === 'BAI-3') copy.blockedBy = ['BAI-2'];
+      if (copy.key === 'BAI-4') copy.blockedBy = ['BAI-3'];
+      if (copy.key === 'BAI-6') copy.blockedBy = ['BAI-4'];
+      return copy;
+    });
+  }
+
   console.log('============================================================');
   console.log(`🚀 Linear Universal Scaffolder v${manifest.version}`);
   console.log(`📦 Proyecto: [${appIdentity}] ${projectName}`);
+  console.log(`🧩 Perfil Lego: ${profile.toUpperCase()}`);
   console.log(`🏷️ Team Key: ${manifest.teamKey}`);
   console.log(`🛡️ Modo: ${isDryRun ? 'DRY-RUN (Simulación Determinista)' : 'LIVE EXECUTION'}`);
   console.log('============================================================');
@@ -105,8 +143,8 @@ Opciones:
     console.log('\n[2/4] Simulación de Creación de Proyecto:');
     console.log(`  ✓ Proyecto: "[${appIdentity.toUpperCase()}] ${projectName}"`);
 
-    console.log('\n[3/4] Simulación de Issues Canónicas & Dependencias:');
-    for (const issue of manifest.issues) {
+    console.log(`\n[3/4] Simulación de Issues Canónicas & Dependencias (Perfil: ${profile}):`);
+    for (const issue of selectedIssues) {
       const title = issue.title.replace('[Brand]', `[${appIdentity.toUpperCase()}]`);
       const blockedStr = issue.blockedBy.length > 0 ? ` (Bloqueado por: ${issue.blockedBy.join(', ')})` : ' (Listo para Iniciar)';
       console.log(`  🔹 ${issue.key}: ${title}${blockedStr}`);
@@ -210,10 +248,10 @@ Opciones:
   }
 
   // Crear Issues
-  console.log('📝 Creando las 5 Issues Canónicas...');
+  console.log(`📝 Creando las ${selectedIssues.length} Issues Modulares (Perfil: ${profile})...`);
   const createdIssuesMap = new Map<string, { id: string; identifier: string }>();
 
-  for (const issue of manifest.issues) {
+  for (const issue of selectedIssues) {
     const formattedTitle = issue.title.replace('[Brand]', `[${appIdentity.toUpperCase()}]`);
     const labelIds = issue.labels.map(name => labelMap.get(name)).filter(Boolean);
 
@@ -223,7 +261,7 @@ Opciones:
 ${issue.definitionOfDone.map(d => `- [ ] ${d}`).join('\n')}
 
 ---
-*Gobernanza: Plantilla Universal Web Zerops v4.0.0 (CoHaLo Track A)*`;
+*Gobernanza: Plantilla Universal Web Zerops v4.1.0 (CoHaLo Track B)*`;
 
     const res = await runGraphQL(apiKey, `
       mutation($teamId: String!, $projectId: String!, $title: String!, $description: String!, $labelIds: [String!]) {
@@ -252,7 +290,7 @@ ${issue.definitionOfDone.map(d => `- [ ] ${d}`).join('\n')}
 
   // Enlazar Dependencias (blockedBy)
   console.log('🔒 Configurando relaciones y dependencias bloqueantes...');
-  for (const issue of manifest.issues) {
+  for (const issue of selectedIssues) {
     if (issue.blockedBy.length > 0) {
       const target = createdIssuesMap.get(issue.key);
       if (!target) continue;

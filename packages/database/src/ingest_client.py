@@ -32,9 +32,10 @@ def main():
         print("❌ Error: DATABASE_URL o db_connectionString no encontrada en variables de Zerops ni /etc/environment", file=sys.stderr)
         sys.exit(1)
 
-    dumps_json_path = Path("/var/www/baiosfera/ASTROLOGÍA/DIAG/JUAN_DAMAREN_AGY/raw/json/dumps/client_dumps_15_shards.json")
+    dumps_arg = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("CLIENT_DUMP_PATH", "/brand/client_dumps_15_shards.json")
+    dumps_json_path = Path(dumps_arg)
     if not dumps_json_path.exists():
-        print(f"❌ Error: {dumps_json_path} no existe", file=sys.stderr)
+        print(f"❌ Error: Archivo de dump '{dumps_json_path}' no encontrado. Pase la ruta como argumento o defina CLIENT_DUMP_PATH.", file=sys.stderr)
         sys.exit(1)
 
     with open(dumps_json_path, "r", encoding="utf-8") as f:
@@ -116,8 +117,8 @@ def main():
 
     print("✅ 15 Shards JSONB ingestados con éxito en client_dumps!")
 
-    # 3. Ingest feeds into client_feeds
-    feeds_dir = Path("/var/www/baiosfera/ASTROLOGÍA/DIAG/JUAN_DAMAREN_AGY/raw/feeds")
+    feeds_arg = sys.argv[2] if len(sys.argv) > 2 else os.environ.get("CLIENT_FEEDS_PATH", str(dumps_json_path.parent.parent / "feeds"))
+    feeds_dir = Path(feeds_arg)
     if feeds_dir.exists():
         subprocess.run(["psql", db_url, "-c", f"DELETE FROM client_feeds WHERE client_id = '{client_id}';"], check=True)
         count_feeds = 0

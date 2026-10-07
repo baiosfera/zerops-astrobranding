@@ -1,5 +1,109 @@
 zerops:
-  # 1. Main Monorepo Service: Bun 1.4 + Astro 5 + Hono
+  # 1. Main Sovereign Web Service: Bun 1.3.9 + Astro 5 SSR (Agnostic 'web', 'webstage' & legacy 'astrobranding')
+  - setup: web
+    build:
+      base: ubuntu/bun@1.3.9
+      envVariables:
+        BUN_INSTALL: ./.bun
+      buildCommands:
+        - bun install
+        - bun run build
+      deployFiles:
+        - apps
+        - packages
+        - node_modules
+        - package.json
+        - bunfig.toml
+      cache:
+        - node_modules
+        - .bun/install/cache
+    deploy:
+      readinessCheck:
+        httpGet:
+          port: 3000
+          path: /health
+    run:
+      base: ubuntu/bun@1.3.9
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        PORT: 3000
+        NODE_ENV: production
+        DATABASE_URL: ${database_connectionString}
+        VALKEY_URL: ${valkey_connectionString}
+        NATS_URL: ${nats_connectionString}
+        BIFROST_GATEWAY_URL: "http://bifrost:8080/v1"
+        EVOLUTION_URL: "http://evolution:8085"
+        EVOLUTION_API_URL: "http://evolution:8085"
+        EVOLUTION_GATEWAY_URL: "http://evolution:8085"
+        ASTRO_KEY: ${ASTRO_KEY}
+        S3_ENDPOINT: ${objectstorage_apiUrl}
+        S3_ACCESS_KEY: ${objectstorage_accessKeyId}
+        S3_SECRET_KEY: ${objectstorage_secretAccessKey}
+        S3_BUCKET: ${objectstorage_bucketName}
+        S3_REGION: "us-east-1"
+        AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      initCommands:
+        - case "$DATABASE_URL" in \${*|"") echo "ℹ️ DB no aprovisionada, omitiendo migración" ;; *) bun run db:migrate || true ;; esac
+      start: sh -c "if [ -f apps/web/dist/server/entry.mjs ]; then exec bun run apps/web/dist/server/entry.mjs; else exec bun run apps/astrobranding/dist/server/entry.mjs; fi"
+      healthCheck:
+        httpGet:
+          port: 3000
+          path: /health
+
+  - setup: webstage
+    build:
+      base: ubuntu/bun@1.3.9
+      envVariables:
+        BUN_INSTALL: ./.bun
+      buildCommands:
+        - bun install
+        - bun run build
+      deployFiles:
+        - apps
+        - packages
+        - node_modules
+        - package.json
+        - bunfig.toml
+      cache:
+        - node_modules
+        - .bun/install/cache
+    deploy:
+      readinessCheck:
+        httpGet:
+          port: 3000
+          path: /health
+    run:
+      base: ubuntu/bun@1.3.9
+      ports:
+        - port: 3000
+          httpSupport: true
+      envVariables:
+        PORT: 3000
+        NODE_ENV: staging
+        DATABASE_URL: ${database_connectionString}
+        VALKEY_URL: ${valkey_connectionString}
+        NATS_URL: ${nats_connectionString}
+        BIFROST_GATEWAY_URL: "http://bifrost:8080/v1"
+        EVOLUTION_URL: "http://evolution:8085"
+        EVOLUTION_API_URL: "http://evolution:8085"
+        EVOLUTION_GATEWAY_URL: "http://evolution:8085"
+        ASTRO_KEY: ${ASTRO_KEY}
+        S3_ENDPOINT: ${objectstorage_apiUrl}
+        S3_ACCESS_KEY: ${objectstorage_accessKeyId}
+        S3_SECRET_KEY: ${objectstorage_secretAccessKey}
+        S3_BUCKET: ${objectstorage_bucketName}
+        S3_REGION: "us-east-1"
+        AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      initCommands:
+        - case "$DATABASE_URL" in \${*|"") echo "ℹ️ DB no aprovisionada, omitiendo migración" ;; *) bun run db:migrate || true ;; esac
+      start: sh -c "if [ -f apps/web/dist/server/entry.mjs ]; then exec bun run apps/web/dist/server/entry.mjs; else exec bun run apps/astrobranding/dist/server/entry.mjs; fi"
+      healthCheck:
+        httpGet:
+          port: 3000
+          path: /health
+
   - setup: astrobranding
     build:
       base: ubuntu/bun@1.3.9
@@ -45,8 +149,8 @@ zerops:
         S3_REGION: "us-east-1"
         AWS_USE_PATH_STYLE_ENDPOINT: "true"
       initCommands:
-        - test -n "$DATABASE_URL" && bun run db:migrate || true
-      start: bun run apps/astrobranding/dist/server/entry.mjs
+        - case "$DATABASE_URL" in \${*|"") echo "ℹ️ DB no aprovisionada, omitiendo migración" ;; *) bun run db:migrate || true ;; esac
+      start: sh -c "if [ -f apps/web/dist/server/entry.mjs ]; then exec bun run apps/web/dist/server/entry.mjs; else exec bun run apps/astrobranding/dist/server/entry.mjs; fi"
       healthCheck:
         httpGet:
           port: 3000

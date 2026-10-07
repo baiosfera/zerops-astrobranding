@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "4.1.0",
+  "name": "Linear Universal Web Blueprint (Zerops-First Decoupled Lego)",
+  "description": "Plantilla declarativa canónica para aprovisionamiento de proyectos web en Linear con gating estricto de dependencias y perfiles Lego desacoplados",
+  "teamKey": "BAI",
+  "labels": [
+    {
+      "name": "type:core",
+      "color": "#2563eb",
+      "description": "Hito arquitectónico invariante obligatorio"
+    },
+    {
+      "name": "type:opt-in",
+      "color": "#0d9488",
+      "description": "Extensión modular condicional activada por caso de uso"
+    },
+    {
+      "name": "spec:sdd",
+      "color": "#8b5cf6",
+      "description": "Especificación funcional previa al código obligatorio (sdd-*)"
+    },
+    {
+      "name": "defect:rdd",
+      "color": "#ef4444",
+      "description": "Defectos y bugs con recibo reproducible en main (rdd-*)"
+    },
+    {
+      "name": "craft:taste",
+      "color": "#ec4899",
+      "description": "Anti-slop design system y calibración de 3 diales (taste-skill)"
+    },
+    {
+      "name": "craft:impeccable",
+      "color": "#d946ef",
+      "description": "Dirección de arte visual y excelencia de UI (impeccable)"
+    },
+    {
+      "name": "craft:kinetic",
+      "color": "#f43f5e",
+      "description": "Microinteracciones y transiciones GSAP 60fps (kinetic)"
+    },
+    {
+      "name": "craft:fontgen",
+      "color": "#fb923c",
+      "description": "Dirección tipográfica de 6 capas funcionales (fontgen)"
+    },
+    {
+      "name": "craft:chroma",
+      "color": "#f59e0b",
+      "description": "Paleta matemática OKLCH, APCA y WCAG AAA (chroma)"
+    },
+    {
+      "name": "frontend:tailwind4",
+      "color": "#06b6d4",
+      "description": "Tokens de diseño transpilados a Tailwind 4 @theme (tailwind-4)"
+    },
+    {
+      "name": "frontend:react19",
+      "color": "#3b82f6",
+      "description": "Islas interactivas con React Compiler (react-19)"
+    },
+    {
+      "name": "frontend:zustand",
+      "color": "#14b8a6",
+      "description": "Estado global seguro e hidratación cliente (zustand-5)"
+    },
+    {
+      "name": "frontend:zod",
+      "color": "#10b981",
+      "description": "Contratos estrictos y esquemas en Astro Actions (zod-4)"
+    },
+    {
+      "name": "growth:copy",
+      "color": "#84cc16",
+      "description": "Neurocopywriting, Oferta Hormozi y StoryBrand (growth-engine)"
+    },
+    {
+      "name": "transac:checkout",
+      "color": "#eab308",
+      "description": "Funnels de checkout, 1-Click Upsells y Meta CAPI (checkout-funnels)"
+    },
+    {
+      "name": "transac:payments",
+      "color": "#22c55e",
+      "description": "Webhooks criptográficos SHA-256 e idempotencia en Valkey (payment-gateways)"
+    },
+    {
+      "name": "transac:email",
+      "color": "#6366f1",
+      "description": "Plantillas React Email 3.0 compiladas <85KB (email-marketing)"
+    },
+    {
+      "name": "seo:aeo",
+      "color": "#a855f7",
+      "description": "Schema.org JSON-LD, /llms.txt y OpenGraph <300KB (seo-aeo-geo)"
+    },
+    {
+      "name": "edge:cloudflare",
+      "color": "#f97316",
+      "description": "Edge CDN, SSL Full Strict y Turnstile anti-bot (cloudflare)"
+    },
+    {
+      "name": "infra:zerops",
+      "color": "#64748b",
+      "description": "Infraestructura gestionada y orquestación de runtimes en Zerops (zcp)"
+    },
+    {
+      "name": "infra:automation",
+      "color": "#475569",
+      "description": "Workers desacoplados con NATS JetStream y BullMQ (automation-engine)"
+    },
+    {
+      "name": "gate:blocked",
+      "color": "#94a3b8",
+      "description": "Tarea bloqueada por dependencias aguas arriba"
+    }
+  ],
+  "milestones": [
+    {
+      "name": "Fase 0: Fundación, Scope & Chasis",
+      "description": "Aprovisionamiento Lego, ingestión de identidad y cableado GitOps"
+    },
+    {
+      "name": "Fase 1: Contratos & Persistencia",
+      "description": "Esquemas de datos, endpoints vivos y validación relacional"
+    },
+    {
+      "name": "Fase 2: Arte, Frontend & Anti-Slop",
+      "description": "Desarrollo de interfaz de usuario de alta fidelidad y reactividad"
+    },
+    {
+      "name": "Fase 3: Transaccional, Mensajería & IA",
+      "description": "Pasarelas de cobro, automatizaciones y copilotos agénticos"
+    },
+    {
+      "name": "Fase 4: Certificación, Edge Delivery & Producción",
+      "description": "Entrega en producción inmutable, CDN de borde y SEO/AEO"
+    }
+  ],
+  "issues": [
+    {
+      "order": 0,
+      "key": "BAI-0",
+      "title": "[Brand] Scope, Topología Lego & Greenfield/Brownfield Classification",
+      "milestone": "Fase 0: Fundación, Scope & Chasis",
+      "labels": ["infra:zerops", "spec:sdd", "type:core"],
+      "blockedBy": [],
+      "description": "Análisis del brief de lenguaje natural, clasificación en Greenfield (chasis zerops-astrobranding) vs Brownfield (adopción con taste/impeccable), y selección del perfil modular Lego (minimal, content, ecommerce, full-mesh). Aprovisionamiento de infraestructura inicial en Zerops sin sobre-aprovisionar servicios ociosos.",
+      "definitionOfDone": [
+        "Clasificación Greenfield/Brownfield resuelta en logs",
+        "Perfil Lego seleccionado (minimal, content, ecommerce o full-mesh)",
+        "Servicios base Zerops aprovisionados con status ACTIVE",
+        "zerops_discover exit code 0"
+      ]
+    },
+    {
+      "order": 1,
+      "key": "BAI-1",
+      "title": "[Brand] Chasis Astro 5 SSR, Brandbook Tokens & Downstream GitOps",
+      "milestone": "Fase 0: Fundación, Scope & Chasis",
+      "labels": ["infra:zerops", "frontend:tailwind4", "craft:chroma", "craft:fontgen", "type:core"],
+      "blockedBy": ["BAI-0"],
+      "description": "Configuración del repositorio downstream del cliente vinculado al upstream zerops-astrobranding. Ingestión de tokens W3C DTCG desde brandbook.json/md hacia Tailwind CSS 4 (@theme). Runtime en Bun 1.3 sobre Ubuntu para prevenir errores de musl. Pureza agnóstica estricta sin filtración de marcas en el chasis.",
+      "definitionOfDone": [
+        "Tokens DTCG transpilados a Tailwind 4 @theme (colores OKLCH y tipografías)",
+        "Pipeline de GitHub Actions configurado con zeropsio/actions@v1.0.2",
+        "Compilación local y en contenedor limpia: bun run build (Exit Code 0)"
+      ]
+    },
+    {
+      "order": 2,
+      "key": "BAI-2",
+      "title": "[Brand] Contratos de Datos, Persistencia PostgreSQL 18 & Mesh API",
+      "milestone": "Fase 1: Contratos & Persistencia",
+      "labels": ["infra:zerops", "frontend:zod", "type:opt-in"],
+      "blockedBy": ["BAI-1"],
+      "description": "[Opt-in / Perfil Content/Ecommerce/Full-Mesh]: Modelado de persistencia relacional en PostgreSQL 18 y endpoints /api/*. Upsert defensivo anti-500, normalización telefónica E.164, deduplicación de leads (HTTP 409) y migraciones. Erradica mocks antes de construir la interfaz de usuario.",
+      "definitionOfDone": [
+        "Esquema de leads/órdenes migrado exitosamente en PostgreSQL 18",
+        "Endpoints /api/* respondiendo HTTP 200 / 409 con validación Zod",
+        "Normalización telefónica E.164 y detección de colisión cruzada probadas",
+        "Cero mocks en frontend: contratos vivos comprobados con bun test (Exit Code 0)"
+      ]
+    },
+    {
+      "order": 3,
+      "key": "BAI-3",
+      "title": "[Brand] Landings de Alto Impacto, Server Islands & Anti-Slop Craft",
+      "milestone": "Fase 2: Arte, Frontend & Anti-Slop",
+      "labels": ["craft:taste", "craft:impeccable", "craft:kinetic", "frontend:react19", "frontend:zustand", "type:core"],
+      "blockedBy": ["BAI-2"],
+      "description": "Construcción de la experiencia visual con Astro 5 Server Islands (server:defer) conectadas a los contratos de datos vivos (o estáticos en minimal). Calibración de los 3 Diales (Variance 8, Motion 6, Density 4). Integración de microinteracciones GSAP 60fps con kinetic y diseño anti-plantilla.",
+      "definitionOfDone": [
+        "Pre-flight check de taste-skill e impeccable aprobado sin slop visual",
+        "Animaciones fluidas con cubic-bezier Swift Precision a 0.8s",
+        "Zero Layout Shift (CLS = 0) en todas las islas de Astro",
+        "Formularios enchufados a endpoints reales con feedback instantáneo"
+      ]
+    },
+    {
+      "order": 4,
+      "key": "BAI-4",
+      "title": "[Brand] Motor Transaccional, Checkout Funnels & Pasarelas Criptográficas",
+      "milestone": "Fase 3: Transaccional, Mensajería & IA",
+      "labels": ["transac:checkout", "transac:payments", "growth:copy", "type:opt-in"],
+      "blockedBy": ["BAI-3"],
+      "description": "[Opt-in / Perfil Ecommerce/Full-Mesh]: Integración de funnels de checkout con pasarelas locales e internacionales (Wompi, ePayco, Stripe, COD OTP). Validación criptográfica de firmas SHA-256 e idempotencia en Valkey (60s lock). Neurocopywriting con StoryBrand y oferta Hormozi.",
+      "definitionOfDone": [
+        "Botones de checkout con debounce y prevención de multi-click",
+        "Webhooks criptográficos SHA-256 validados con idempotencia en Valkey",
+        "Despacho transaccional validado end-to-end con códigos QR",
+        "Turnstile anti-bot activo en checkout"
+      ]
+    },
+    {
+      "order": 5,
+      "key": "BAI-5",
+      "title": "[Brand] Automatización Omnicanal & Asistentes de IA (WhatsApp, Listmonk, Bifrost)",
+      "milestone": "Fase 3: Transaccional, Mensajería & IA",
+      "labels": ["transac:email", "infra:automation", "type:opt-in"],
+      "blockedBy": ["BAI-3"],
+      "description": "[Opt-in / Perfil Full-Mesh]: Desacople estricto de contenido multi-mensajería: WhatsApp ágil con EvolutionGo (:8085) vs Email documental con Listmonk / ZeptoMail / SES v2. Ruteo de inferencia con Maxim AI Bifrost Gateway (:8080) con virtual keys y control presupuestario.",
+      "definitionOfDone": [
+        "Desacople de roles: WhatsApp <15s vs Email dossier institucional",
+        "Plantillas React Email 3.0 compiladas <85KB",
+        "Virtual Keys activas en Bifrost con cuotas de gasto",
+        "Health check HTTP 200 en http://evolution:8085/health y http://bifrost:8080/health"
+      ]
+    },
+    {
+      "order": 6,
+      "key": "BAI-6",
+      "title": "[Brand] Atestación Física Multi-Superficie, SEO-AEO-GEO & Launch-Production Gate",
+      "milestone": "Fase 4: Certificación, Edge Delivery & Producción",
+      "labels": ["seo:aeo", "edge:cloudflare", "defect:rdd", "type:core"],
+      "blockedBy": ["BAI-3"],
+      "description": "Auditoría E2E con Playwright, auditoría SEO/AEO/GEO (Knowledge Graph JSON-LD, /llms.txt, OpenGraph WhatsApp budget <300KB), Cloudflare Edge CDN (SSL Full Strict) y promoción formal inmutable a producción vía zerops_workflow launch-production.",
+      "definitionOfDone": [
+        "Suite Playwright E2E ejecutada con exit code 0",
+        "Validación de Schema.org JSON-LD y metadata OpenGraph <300KB",
+        "Cloudflare Turnstile y SSL Full Strict activos",
+        "Atestación ssot-parity-check y zerops_workflow launch-production exit code 0"
+      ]
+    }
+  ]
+}
