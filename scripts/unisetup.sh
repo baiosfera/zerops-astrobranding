@@ -257,6 +257,8 @@ if [ "$RUN_ALL" = true ]; then
         echo "• Desplegando Linear CLI (linear-cli)..."
         cp -f "$SCRIPT_DIR/linear-cli" "$PROJECT_ROOT/.bin/linear-cli"
         chmod +x "$PROJECT_ROOT/.bin/linear-cli"
+        cp "$PROJECT_ROOT/.bin/linear-cli" "$HOME/.local/bin/linear-cli" 2>/dev/null || true
+        cp "$PROJECT_ROOT/.bin/linear-cli" "/home/zerops/.local/bin/linear-cli" 2>/dev/null || true
         sudo ln -sf "$PROJECT_ROOT/.bin/linear-cli" /usr/local/bin/linear-cli 2>/dev/null || true
     fi
     if [ -f "$SCRIPT_DIR/linear-scaffold.ts" ]; then

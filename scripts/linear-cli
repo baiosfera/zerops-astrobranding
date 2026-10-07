@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 /**
  * Linear CLI Sovereign Tool for ZCP & Baiosfera
+ * Version: 2.0.0 (Direct GraphQL API, Zero Stdio MCP Dependencies)
+ *
  * Usage:
  *   linear-cli search <query>
- *   linear-cli issue <id>
+ *   linear-cli issue <id|identifier>
  *   linear-cli comment <issueId> <commentText>
- *   linear-cli create <teamId> <title> [description]
+ *   linear-cli create "<title>" "[description]" [--team <teamId>] [--project <projectId>] [--priority <1-4>]
+ *   linear-cli update-status <issueId> "<statusName>"
+ *   linear-cli teams
+ *   linear-cli projects
+ *   linear-cli states [teamId]
  */
 
 const https = require("https");
@@ -15,6 +21,9 @@ if (!LINEAR_API_KEY) {
   console.error("Error: LINEAR_API_KEY environment variable is required.");
   process.exit(1);
 }
+
+const DEFAULT_TEAM_ID = "4b8ebc9c-ef67-4812-8699-a90dad6343ac"; // Baiosfera (BAI)
+const DEFAULT_PROJECT_ID = null; // Optional project ID
 
 function queryGraphQL(query, variables = {}) {
   return new Promise((resolve, reject) => {
@@ -26,8 +35,9 @@ function queryGraphQL(query, variables = {}) {
         headers: {
           "Content-Type": "application/json",
           "Authorization": LINEAR_API_KEY,
-          "User-Agent": "ZCP-Linear-CLI/1.0"
-        }
+          "User-Agent": "ZCP-Linear-CLI/2.0"
+        },
+        timeout: 10000
       },
       (res) => {
         let data = "";
@@ -35,21 +45,35 @@ function queryGraphQL(query, variables = {}) {
         res.on("end", () => {
           try {
             const parsed = JSON.parse(data);
-            if (parsed.errors) {
+            if (parsed.errors && parsed.errors.length > 0) {
               reject(new Error(JSON.stringify(parsed.errors)));
             } else {
               resolve(parsed.data);
             }
           } catch (e) {
-            reject(e);
+            reject(new Error(`Failed to parse response: ${e.message}`));
           }
         });
       }
     );
     req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Request timed out after 10000ms"));
+    });
     req.write(postData);
     req.end();
   });
+}
+
+async function resolveIssueId(identifierOrId) {
+  if (!identifierOrId) return null;
+  if (!identifierOrId.includes("-") || identifierOrId.startsWith("BAI-")) {
+    const q = `query GetIssueId($id: String!) { issue(id: $id) { id team { id } } }`;
+    const res = await queryGraphQL(q, { id: identifierOrId });
+    if (res?.issue?.id) return { id: res.issue.id, teamId: res.issue.team?.id };
+  }
+  return { id: identifierOrId, teamId: DEFAULT_TEAM_ID };
 }
 
 async function main() {
@@ -57,7 +81,7 @@ async function main() {
   const cmd = args[0] || "search";
 
   if (cmd === "search") {
-    const term = args.slice(1).join(" ") || "Oraculo";
+    const term = args.slice(1).join(" ") || "";
     const q = `
       query SearchIssues($term: String!) {
         issues(filter: { or: [{ title: { containsIgnoreCase: $term } }, { description: { containsIgnoreCase: $term } }] }, first: 10) {
@@ -95,6 +119,8 @@ async function main() {
           priority
           url
           state { name }
+          project { id name }
+          team { id name key }
         }
       }
     `;
@@ -104,7 +130,8 @@ async function main() {
       console.log(`Issue ${id} not found`);
     } else {
       console.log(`[${issue.identifier}] ${issue.title}`);
-      console.log(`Status: ${issue.state?.name || "None"}`);
+      console.log(`Status: ${issue.state?.name || "None"} | Priority: ${issue.priority}`);
+      console.log(`Team: ${issue.team?.name} (${issue.team?.key}) | Project: ${issue.project?.name || "None"}`);
       console.log(`URL: ${issue.url}`);
       console.log(`Description:\n${issue.description || "(No description)"}`);
     }
@@ -115,12 +142,10 @@ async function main() {
       console.error("Usage: linear-cli comment <issueId> <comment body>");
       process.exit(1);
     }
-    // First resolve issue internal ID if identifier passed
-    let targetId = issueId;
-    if (!issueId.includes("-") || issueId.startsWith("BAI-")) {
-      const qCheck = `query GetIssue($id: String!) { issue(id: $id) { id } }`;
-      const resCheck = await queryGraphQL(qCheck, { id: issueId });
-      if (resCheck?.issue?.id) targetId = resCheck.issue.id;
+    const resolved = await resolveIssueId(issueId);
+    if (!resolved?.id) {
+      console.error(`Issue ${issueId} not found`);
+      process.exit(1);
     }
     const q = `
       mutation CreateComment($issueId: String!, $body: String!) {
@@ -130,14 +155,189 @@ async function main() {
         }
       }
     `;
-    const data = await queryGraphQL(q, { issueId: targetId, body });
+    const data = await queryGraphQL(q, { issueId: resolved.id, body });
     if (data?.commentCreate?.success) {
       console.log(`✅ Comment added: ${data.commentCreate.comment?.url}`);
     } else {
       console.log("❌ Failed to create comment");
     }
+  } else if (cmd === "create") {
+    let title = "";
+    let description = "";
+    let teamId = DEFAULT_TEAM_ID;
+    let projectId = DEFAULT_PROJECT_ID;
+    let priority = 2; // High / Normal
+
+    let i = 1;
+    while (i < args.length) {
+      if (args[i] === "--team" && args[i + 1]) {
+        teamId = args[i + 1];
+        i += 2;
+      } else if (args[i] === "--project" && args[i + 1]) {
+        projectId = args[i + 1];
+        i += 2;
+      } else if (args[i] === "--priority" && args[i + 1]) {
+        priority = parseInt(args[i + 1], 10) || 2;
+        i += 2;
+      } else if (!title) {
+        title = args[i];
+        i++;
+      } else if (!description) {
+        description = args[i];
+        i++;
+      } else {
+        i++;
+      }
+    }
+
+    if (!title) {
+      console.error('Usage: linear-cli create "<title>" "[description]" [--team <id>] [--project <id>] [--priority <1-4>]');
+      process.exit(1);
+    }
+
+    const q = `
+      mutation CreateIssue($input: IssueCreateInput!) {
+        issueCreate(input: $input) {
+          success
+          issue {
+            id
+            identifier
+            title
+            url
+            state { name }
+          }
+        }
+      }
+    `;
+    const input = {
+      teamId,
+      title,
+      description: description || undefined,
+      projectId: projectId || undefined,
+      priority: priority || undefined
+    };
+
+    const data = await queryGraphQL(q, { input });
+    const created = data?.issueCreate?.issue;
+    if (data?.issueCreate?.success && created) {
+      console.log(`✅ Issue created: [${created.identifier}] ${created.title}`);
+      console.log(`  Status: ${created.state?.name || "Todo"} | URL: ${created.url}`);
+    } else {
+      console.error("❌ Failed to create issue");
+      process.exit(1);
+    }
+  } else if (cmd === "update-status") {
+    const issueId = args[1];
+    const targetStatus = args[2];
+    if (!issueId || !targetStatus) {
+      console.error("Usage: linear-cli update-status <issueId> \"<statusName>\"");
+      process.exit(1);
+    }
+
+    const resolved = await resolveIssueId(issueId);
+    if (!resolved?.id) {
+      console.error(`Issue ${issueId} not found`);
+      process.exit(1);
+    }
+
+    // Get states for team
+    const qStates = `
+      query GetTeamStates($teamId: String!) {
+        team(id: $teamId) {
+          states {
+            nodes {
+              id
+              name
+              type
+            }
+          }
+        }
+      }
+    `;
+    const statesData = await queryGraphQL(qStates, { teamId: resolved.teamId || DEFAULT_TEAM_ID });
+    const states = statesData?.team?.states?.nodes || [];
+    const matchedState = states.find(
+      (s) => s.name.toLowerCase() === targetStatus.toLowerCase() ||
+             (targetStatus.toLowerCase() === "in progress" && s.type === "started") ||
+             (targetStatus.toLowerCase() === "done" && s.type === "completed") ||
+             (targetStatus.toLowerCase() === "backlog" && s.type === "backlog")
+    );
+
+    if (!matchedState) {
+      console.error(`❌ Status "${targetStatus}" not found. Available states: ${states.map(s => s.name).join(", ")}`);
+      process.exit(1);
+    }
+
+    const qUpdate = `
+      mutation UpdateIssueState($id: String!, $stateId: String!) {
+        issueUpdate(id: $id, input: { stateId: $stateId }) {
+          success
+          issue {
+            id
+            identifier
+            title
+            state { name }
+            url
+          }
+        }
+      }
+    `;
+    const updateRes = await queryGraphQL(qUpdate, { id: resolved.id, stateId: matchedState.id });
+    const updated = updateRes?.issueUpdate?.issue;
+    if (updateRes?.issueUpdate?.success && updated) {
+      console.log(`✅ Issue [${updated.identifier}] status updated to: "${updated.state?.name}"`);
+    } else {
+      console.error("❌ Failed to update issue status");
+      process.exit(1);
+    }
+  } else if (cmd === "teams") {
+    const q = `query GetTeams { teams { nodes { id name key } } }`;
+    const data = await queryGraphQL(q);
+    const teams = data?.teams?.nodes || [];
+    console.log("Teams:");
+    for (const t of teams) {
+      console.log(`- ${t.key}: ${t.name} (ID: ${t.id})`);
+    }
+  } else if (cmd === "projects") {
+    const q = `query GetProjects { projects(first: 20) { nodes { id name state progress } } }`;
+    const data = await queryGraphQL(q);
+    const projects = data?.projects?.nodes || [];
+    console.log("Projects:");
+    for (const p of projects) {
+      console.log(`- ${p.name} [State: ${p.state}] (ID: ${p.id})`);
+    }
+  } else if (cmd === "states") {
+    const tId = args[1] || DEFAULT_TEAM_ID;
+    const q = `
+      query GetTeamStates($teamId: String!) {
+        team(id: $teamId) {
+          name
+          states {
+            nodes {
+              id
+              name
+              type
+            }
+          }
+        }
+      }
+    `;
+    const data = await queryGraphQL(q, { teamId: tId });
+    const states = data?.team?.states?.nodes || [];
+    console.log(`States for team ${data?.team?.name || tId}:`);
+    for (const s of states) {
+      console.log(`- ${s.name} (type: ${s.type}, id: ${s.id})`);
+    }
   } else {
-    console.log("Available commands: search <query>, issue <id>, comment <issueId> <body>");
+    console.log("Linear CLI Commands:");
+    console.log("  search <query>                       Search issues");
+    console.log("  issue <id>                           Get issue details");
+    console.log("  comment <id> <text>                  Add comment to issue");
+    console.log('  create "<title>" "[desc]" [opts]     Create new issue');
+    console.log('  update-status <id> "<status>"        Update issue workflow status');
+    console.log("  teams                                List teams");
+    console.log("  projects                             List projects");
+    console.log("  states [teamId]                      List workflow states");
   }
 }
 

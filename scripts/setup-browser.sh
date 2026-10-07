@@ -91,14 +91,6 @@ cat > "$PERSISTENT_GEMINI/config/mcp_config.json" << EOF
       "command": "zcp",
       "description": "Zerops platform MCP server",
       "trust": true
-    },
-    "linear": {
-      "command": "npx",
-      "args": ["-y", "linear-mcp-server"],
-      "env": {
-        "LINEAR_API_KEY": "${LINEAR_API_KEY:-}"
-      },
-      "disabled": false
     }
   }
 }
