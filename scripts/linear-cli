@@ -220,6 +220,11 @@ async function main() {
     const data = await queryGraphQL(q, { input });
     const created = data?.issueCreate?.issue;
     if (data?.issueCreate?.success && created) {
+      const fs = require("fs");
+      const path = require("path");
+      const activeFile = "/var/www/artifacts/linear_active.json";
+      fs.mkdirSync(path.dirname(activeFile), { recursive: true });
+      fs.writeFileSync(activeFile, JSON.stringify({ issueId: created.identifier, timestamp: Date.now() }));
       console.log(`✅ Issue created: [${created.identifier}] ${created.title}`);
       console.log(`  Status: ${created.state?.name || "Todo"} | URL: ${created.url}`);
     } else {
@@ -268,6 +273,40 @@ async function main() {
       process.exit(1);
     }
 
+    if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
+      const { execSync } = require("child_process");
+      console.log("🛡️ [F5 Gate] Validating SSoT Parity & Git Push before closing issue...");
+      try {
+        execSync("/var/www/.bin/ssot-parity-check", { stdio: "inherit" });
+        const fs = require("fs");
+        const bakDir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak";
+        // Check if there are recent backups
+        if (!fs.existsSync(bakDir)) {
+            console.error("❌ F5 GOBERNANZA FÍSICA: No backup directory found. You must create a backup (iniciar.sh-first rule).");
+            process.exit(1);
+        }
+        console.log("🛡️ [F5 Gate] Enforcing Git Push for SSoT...");
+        let pending = false;
+        try {
+          if (fs.existsSync("/var/www/zerops-astro-skills")) {
+             const stat1 = execSync("git status --porcelain", { cwd: "/var/www/zerops-astro-skills" }).toString();
+             if (stat1.trim() !== "") pending = true;
+          }
+          if (fs.existsSync("/var/www/zerops-astrobranding")) {
+             const stat2 = execSync("git status --porcelain", { cwd: "/var/www/zerops-astrobranding" }).toString();
+             if (stat2.trim() !== "") pending = true;
+          }
+        } catch(e) {}
+        if (pending) {
+            console.error("❌ F5 GOBERNANZA FÍSICA: Uncommitted or unpushed changes in sovereign repos (zerops-astro-skills / zerops-astrobranding). Please commit and push before marking issue as Done.");
+            process.exit(1);
+        }
+      } catch (err) {
+        console.error("❌ F5 GOBERNANZA FÍSICA: Validation failed. Fix the physical errors before marking issue as Done.");
+        process.exit(1);
+      }
+    }
+
     const qUpdate = `
       mutation UpdateIssueState($id: String!, $stateId: String!) {
         issueUpdate(id: $id, input: { stateId: $stateId }) {
@@ -285,6 +324,12 @@ async function main() {
     const updateRes = await queryGraphQL(qUpdate, { id: resolved.id, stateId: matchedState.id });
     const updated = updateRes?.issueUpdate?.issue;
     if (updateRes?.issueUpdate?.success && updated) {
+      if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
+         const fs = require("fs");
+         if (fs.existsSync("/var/www/artifacts/linear_active.json")) {
+             fs.unlinkSync("/var/www/artifacts/linear_active.json");
+         }
+      }
       console.log(`✅ Issue [${updated.identifier}] status updated to: "${updated.state?.name}"`);
     } else {
       console.error("❌ Failed to update issue status");
