@@ -81,12 +81,6 @@ CORE_SYNC_PAIRS = [
         "/var/www/.agents/hooks.json"
     ),
     (
-        "/var/www/.bin/plan-validate"
-    ),
-    (
-        "/var/www/.bin/plan-archive"
-    ),
-    (
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/skills-suite-validate.sh",
         "/var/www/.bin/skills-suite-validate"
     ),
