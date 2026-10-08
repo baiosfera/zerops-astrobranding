@@ -494,10 +494,10 @@ fi
 
 # 4. Certificación final determinista
 echo "• [4/4] Verificando paridad SSoT..."
-if command -v ssot-parity-check >/dev/null 2>&1; then
-    ssot-parity-check
-elif [ -f "$SSOT_SCRIPTS/ssot-parity-check.sh" ]; then
-    bash "$SSOT_SCRIPTS/ssot-parity-check.sh"
+if command -v ssot-parity-check || exit 1 >/dev/null 2>&1; then
+    ssot-parity-check || exit 1
+elif [ -f "$SSOT_SCRIPTS/ssot-parity-check || exit 1.sh" ]; then
+    bash "$SSOT_SCRIPTS/ssot-parity-check || exit 1.sh"
 fi
 
 # 4b. Purga obligatoria de archivos de entorno efímeros y residuales en raíz
