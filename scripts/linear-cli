@@ -224,14 +224,72 @@ async function main() {
       const path = require("path");
       const activeFile = "/var/www/artifacts/linear_active.json";
       fs.mkdirSync(path.dirname(activeFile), { recursive: true });
-      fs.writeFileSync(activeFile, JSON.stringify({ issueId: created.identifier, timestamp: Date.now() }));
+      
+      let activeLocks = [];
+      if (fs.existsSync(activeFile)) {
+        try {
+          const content = fs.readFileSync(activeFile, 'utf8');
+          activeLocks = JSON.parse(content);
+          if (!Array.isArray(activeLocks)) activeLocks = [activeLocks];
+        } catch(e) {}
+      }
+      activeLocks.push({ issueId: created.identifier, timestamp: Date.now() });
+      fs.writeFileSync(activeFile, JSON.stringify(activeLocks, null, 2));
+
       console.log(`✅ Issue created: [${created.identifier}] ${created.title}`);
       console.log(`  Status: ${created.state?.name || "Todo"} | URL: ${created.url}`);
     } else {
       console.error("❌ Failed to create issue");
       process.exit(1);
     }
-  } else if (cmd === "update-status") {
+  
+  } else if (cmd === "create-project") {
+    let name = "";
+    let description = "";
+    let teamId = DEFAULT_TEAM_ID;
+    for (let i = 1; i < args.length; ) {
+      if (args[i] === "--team" && args[i + 1]) {
+        teamId = args[i + 1];
+        i += 2;
+      } else if (!name) {
+        name = args[i];
+        i++;
+      } else if (!description) {
+        description = args[i];
+        i++;
+      } else {
+        i++;
+      }
+    }
+    if (!name) {
+      console.error('Usage: linear-cli create-project "<name>" "[description]" [--team <id>]');
+      process.exit(1);
+    }
+    const q = `
+      mutation ProjectCreate($input: ProjectCreateInput!) {
+        projectCreate(input: $input) {
+          success
+          project {
+            id
+            name
+            url
+            state
+          }
+        }
+      }
+    `;
+    const input = { name, description: description || undefined, teamIds: [teamId] };
+    const data = await queryGraphQL(q, { input });
+    const created = data?.projectCreate?.project;
+    if (data?.projectCreate?.success && created) {
+      console.log(`✅ Project created: ${created.name}`);
+      console.log(`  State: ${created.state} | URL: ${created.url}`);
+      console.log(`  ID: ${created.id}`);
+    } else {
+      console.error("❌ Failed to create project");
+      process.exit(1);
+    }
+} else if (cmd === "update-status") {
     const issueId = args[1];
     const targetStatus = args[2];
     if (!issueId || !targetStatus) {

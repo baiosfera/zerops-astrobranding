@@ -558,6 +558,46 @@ def evaluate_hook(payload: dict) -> dict:
                 )
             }
 
+        # A4.1 Epistemic Grounding Gate (Multi-Engine Research Obligatorio)
+        has_multi_engine = False
+        has_linear_comment = False
+        if transcript_path and os.path.exists(transcript_path):
+            try:
+                with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        if "research" in line or "call_mcp_tool" in line:
+                            lower_line = line.lower()
+                            if any(eng in lower_line for eng in ["exa", "context7", "jina", "firecrawl"]):
+                                has_multi_engine = True
+                        if "linear-cli comment" in line:
+                            has_linear_comment = True
+            except Exception:
+                has_multi_engine = True
+                has_linear_comment = True
+        else:
+            has_multi_engine = True
+            has_linear_comment = True
+
+        if not has_multi_engine and not is_plan_draft:
+            return {
+                "decision": "deny",
+                "reason": (
+                    "VIOLACIÓN EPISTÉMICA (F0): Prohibido mutar archivos sin haber "
+                    "ejecutado 'research' (vía call_mcp_tool o subagente) con triangulación multi-motor "
+                    "(Exa, Context7, Jina, Firecrawl). La caja negra no es SSoT."
+                )
+            }
+
+        # A4.2 Accumulative Versioning Hook (Linear Comment Obligatorio)
+        if not has_linear_comment and not is_plan_draft:
+            return {
+                "decision": "deny",
+                "reason": (
+                    "VIOLACIÓN DE VERSIONAMIENTO ACUMULATIVO: No podés mutar código sin haber registrado "
+                    "tus descubrimientos en el issue usando 'linear-cli comment'. Prohibido el Checklist Theater."
+                )
+            }
+
         # A4.2 Plan-First Gate & F4 Halt Guard (Anti-Desbocado Invariant)
         # Skills (whether in .agents/skills/ or elsewhere) require Plan-First Gate and user Go!
         is_governance_asset = (
