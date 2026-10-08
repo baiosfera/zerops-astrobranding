@@ -81,11 +81,9 @@ CORE_SYNC_PAIRS = [
         "/var/www/.agents/hooks.json"
     ),
     (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/plan-validate.sh",
         "/var/www/.bin/plan-validate"
     ),
     (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/plan-archive.sh",
         "/var/www/.bin/plan-archive"
     ),
     (
@@ -117,14 +115,14 @@ CORE_SYNC_PAIRS = [
 def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
     """
     Lifecycle Purge Protocol (Supreme Directive v8.3 & Planner v8.6):
-    1. Scans /var/www/artifacts/ and /var/www/artifacts/archive/.
+    1. Scans /var/www/artifacts/ and /var/www/artifacts/.
     2. Identifies executed plans (files ending with '.executed.md' or '_vN.executed.md').
     3. For any executed plan stem or active plan stem, purges previous '.superseded.md' files.
     4. If purge_executed is True (session-end protocol), purges all '*.executed.md' from archive/.
     5. Handover assets matching HANDOVER_PATTERN are permanent and strictly skipped.
     """
     artifacts_dir = "/var/www/artifacts"
-    archive_dir = "/var/www/artifacts/archive"
+    archive_dir = "/var/www/artifacts"
     purged_superseded = []
     purged_executed = []
 
