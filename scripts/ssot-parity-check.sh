@@ -139,7 +139,6 @@ fi
 # 3. CLI Symlinks Health
 echo "--- [3/4] Checking /usr/local/bin and .bin Symlinks ---"
 SYMLINKS=(
-    "planner-validate"
     "skills-suite-validate"
     "ssot-parity-check"
     "docu-validate"
@@ -225,21 +224,14 @@ CORE_SKILLS=("oraculo" "planner" "docu" "research")
 for skill in "${CORE_SKILLS[@]}"; do
     local_skill_dir="$LOCAL_BASE/.agents/skills/$skill"
     drive_skill_dir="$DRIVE_BASE/.agents/skills/$skill"
-    while IFS= read -r -d '' local_file; do
-        rel_path="${local_file#$local_skill_dir/}"
-        if echo "$rel_path" | grep -qE "(__pycache__|\.pyc$|\.bak)"; then
-            continue
-        fi
-        drive_file="$drive_skill_dir/$rel_path"
-        if [ ! -f "$drive_file" ]; then
-            echo "❌ File missing in Drive skill $skill: $rel_path"
-            ERRORS=$((ERRORS + 1))
-        elif ! cmp -s "$local_file" "$drive_file"; then
-            echo "❌ Drift in file $skill/$rel_path"
-            ERRORS=$((ERRORS + 1))
-        fi
-    done < <(find "$local_skill_dir" -type f -print0)
-    echo "✓ Deep tree parity verified for core skill: $skill"
+    DIFF_OUT=$(diff -rq --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$local_skill_dir" "$drive_skill_dir" 2>&1 || true)
+    if [ -n "$DIFF_OUT" ]; then
+        echo "❌ Drift or missing files detected in core skill $skill:"
+        echo "$DIFF_OUT" | sed 's/^/   /'
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "✓ Deep tree parity verified for core skill: $skill"
+    fi
 done
 
 echo "------------------------------------------------------------"

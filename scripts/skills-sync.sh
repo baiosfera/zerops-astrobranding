@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# skills-sync — SSoT Atomic Skills Synchronization Engine (v1.1)
-# Zero LLM Tokens | Bounded Execution < 10s | 100% Deterministic
+# skills-sync — SSoT Atomic Skills Synchronization Engine (v1.2)
+# Zero LLM Tokens | Bounded Execution < 10s | 100% Deterministic | rsync --delete
 # ==============================================================================
 set -euo pipefail
 
@@ -25,7 +25,7 @@ if [ ! -d "$DRIVE_SKILLS" ]; then
 fi
 
 echo "============================================================"
-echo "  🔄 SKILLS SSoT ATOMIC SYNCHRONIZER (skills-sync v1.1)"
+echo "  🔄 SKILLS SSoT ATOMIC SYNCHRONIZER (skills-sync v1.2)"
 echo "============================================================"
 
 SYNCED=0
@@ -49,32 +49,29 @@ for s_path in "$DRIVE_SKILLS"/*; do
 done
 
 for skill in "${!SOVEREIGN_SET[@]}"; do
-    local_md="$LOCAL_SKILLS/$skill/SKILL.md"
-    if [ ! -f "$local_md" ]; then
-        if [ -f "$SOVEREIGN_REPO/$skill/SKILL.md" ]; then
-            local_md="$SOVEREIGN_REPO/$skill/SKILL.md"
+    source_dir="$LOCAL_SKILLS/$skill"
+    if [ ! -d "$source_dir" ]; then
+        if [ -d "$SOVEREIGN_REPO/$skill" ]; then
+            source_dir="$SOVEREIGN_REPO/$skill"
         else
             continue
         fi
     fi
 
     drive_skill_dir="$DRIVE_SKILLS/$skill"
-    drive_md="$drive_skill_dir/SKILL.md"
 
-    if [ ! -f "$drive_md" ] || ! cmp -s "$local_md" "$drive_md"; then
+    # Deep tree check using rsync --dry-run
+    # Si rsync detecta algún cambio (archivos nuevos, modificados, o eliminados), stdout no estará vacío (descontando headers)
+    DRIFT_OUTPUT=$(rsync -avnc --delete "$source_dir/" "$drive_skill_dir/" | grep -vE "^building file list|^created directory|^sent|^total size|^$")
+
+    if [ -n "$DRIFT_OUTPUT" ]; then
         DRIFT_COUNT=$((DRIFT_COUNT + 1))
         if [ "$CHECK_ONLY" = true ]; then
             echo "  ⚠️ Drift detectado en: $skill"
         else
             mkdir -p "$drive_skill_dir"
-            cp -f "$local_md" "$drive_md"
-            source_dir="$(dirname "$local_md")"
-            for sub in references scripts assets resources; do
-                if [ -d "$source_dir/$sub" ]; then
-                    mkdir -p "$drive_skill_dir/$sub"
-                    cp -rf "$source_dir/$sub"/* "$drive_skill_dir/$sub/" 2>/dev/null || true
-                fi
-            done
+            # Sincronización exacta, borrando zombies en el destino
+            rsync -a --delete "$source_dir/" "$drive_skill_dir/"
             echo "  ✓ Sincronizada a SSoT: $skill"
             SYNCED=$((SYNCED + 1))
         fi
