@@ -79,8 +79,6 @@ CORE_SCRIPTS=(
     "zcp-validate.sh"
     "astrobranding-check.sh"
     "skills-suite-validate.sh"
-    "plan-validate.sh"
-    "plan-archive.sh"
     "ssot-parity-check.sh"
     "engram-sync"
 )
@@ -141,8 +139,6 @@ fi
 # 3. CLI Symlinks Health
 echo "--- [3/4] Checking /usr/local/bin and .bin Symlinks ---"
 SYMLINKS=(
-    "plan-validate"
-    "plan-archive"
     "planner-validate"
     "skills-suite-validate"
     "ssot-parity-check"

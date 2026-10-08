@@ -588,7 +588,7 @@ def evaluate_hook(payload: dict) -> dict:
             if "BAI-FAST" in payload.get("userPrompt", ""):
                 is_fast_bypass = True
             elif tool_name in ["write_to_file", "replace_file_content"]:
-                lines_changed = len(content_to_check.splitlines()) if content_to_check else 0
+                c2c = args.get('CodeContent', '') or args.get('ReplacementContent', ''); lines_changed = len(c2c.splitlines()) if c2c else 0
                 if lines_changed < 10 and not has_active_plan:
                     is_fast_bypass = True
                     
@@ -1219,7 +1219,7 @@ def run_tests():
     print("✓ Test 31 Passed: Handover Immunity protects _roadmap from writes and deletion")
 
     # Test 32: Artifacts Lifecycle cleanup purges superseded and session executed files
-    test_archive = "/var/www/artifacts/archive"
+    test_archive = "/var/www/artifacts"
     os.makedirs(test_archive, exist_ok=True)
     sup_file = os.path.join(test_archive, "test_lifecycle_plan_v1.superseded.md")
     exec_file = os.path.join(test_archive, "test_lifecycle_plan_v2.executed.md")

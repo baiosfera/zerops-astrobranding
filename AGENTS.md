@@ -117,7 +117,7 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 ## 📦 Catálogo y Herramientas Soberanas
 - **Catálogo Oficial (141 skills)**: [`.atl/skill-registry.md`](file:///var/www/.atl/skill-registry.md).
 - **Bootstrapper Universal**: [`iniciar.sh`](file:///var/www/zerops-astrobranding/iniciar.sh) (raíz frío) y [`unisetup.sh`](file:///var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh) aprovisionan dependencias, herramientas y sincronizan SSoT sin drift.
-- **Herramientas Globales en PATH**: `docu-validate`, `research-validate`, `astrobranding-check`, `ssot-parity-check`, `skills-suite-validate`, `plan-validate`, `bifrost-cli`, `zcp-preflight-gate`, `zcp-wa`, `zcp-mail`.
+- **Herramientas Globales en PATH**: `docu-validate`, `research-validate`, `astrobranding-check`, `ssot-parity-check`, `skills-suite-validate`, `bifrost-cli`, `zcp-preflight-gate`, `zcp-wa`, `zcp-mail`.
 
 <!-- CUSTOM:END -->
 

@@ -149,7 +149,7 @@ Todo producto construido bajo esta plantilla debe orquestar el ecosistema de 141
 
 ## 5. Protocolo de Linear Automatizado (`linear-scaffold.ts`) & Malla Lego Desacoplada
 
-La creación y seguimiento de tareas se rige por el estándar **Project-as-Code** mediante el manifiesto declarativo [`linear_template.json`](file:///var/www/artifacts/templates/linear_template.json) y el script ejecutable `linear-scaffold.ts`:
+La creación y seguimiento de tareas se rige por el estándar **Project-as-Code** mediante el manifiesto declarativo [`linear_template.json`](file:///var/www/artifacts/templates/linear_template.json) y el cliente `linear-cli`:
 
 ```bash
 # Simulación determinista previa (sin mutar Linear)

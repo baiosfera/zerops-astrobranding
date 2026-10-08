@@ -211,18 +211,6 @@ if [ "$RUN_ALL" = true ]; then
         gentle-ai skill-registry refresh --force 2>/dev/null || true
     fi
     mkdir -p "$PROJECT_ROOT/.bin" 2>/dev/null || true
-    if [ -f "$SCRIPT_DIR/plan-validate.sh" ]; then
-        echo "• Desplegando sensor de planes (plan-validate)..."
-        cp -f "$SCRIPT_DIR/plan-validate.sh" "$PROJECT_ROOT/.bin/plan-validate"
-        chmod +x "$PROJECT_ROOT/.bin/plan-validate"
-        sudo ln -sf "$PROJECT_ROOT/.bin/plan-validate" /usr/local/bin/plan-validate 2>/dev/null || true
-    fi
-    if [ -f "$SCRIPT_DIR/plan-archive.sh" ]; then
-        echo "• Desplegando utilidad de higiene de planes (plan-archive)..."
-        cp -f "$SCRIPT_DIR/plan-archive.sh" "$PROJECT_ROOT/.bin/plan-archive"
-        chmod +x "$PROJECT_ROOT/.bin/plan-archive"
-        sudo ln -sf "$PROJECT_ROOT/.bin/plan-archive" /usr/local/bin/plan-archive 2>/dev/null || true
-    fi
     if [ -f "$SCRIPT_DIR/ssot-parity-check.sh" ]; then
         echo "• Desplegando sensor de paridad SSoT (ssot-parity-check)..."
         cp -f "$SCRIPT_DIR/ssot-parity-check.sh" "$PROJECT_ROOT/.bin/ssot-parity-check"
@@ -261,21 +249,6 @@ if [ "$RUN_ALL" = true ]; then
         cp "$PROJECT_ROOT/.bin/linear-cli" "/home/zerops/.local/bin/linear-cli" 2>/dev/null || true
         sudo ln -sf "$PROJECT_ROOT/.bin/linear-cli" /usr/local/bin/linear-cli 2>/dev/null || true
     fi
-    if [ -f "$SCRIPT_DIR/linear-scaffold.ts" ]; then
-        echo "• Desplegando orquestador de proyectos Linear (linear-scaffold)..."
-        cat << 'EOF' | sudo tee "$PROJECT_ROOT/.bin/linear-scaffold" >/dev/null
-#!/usr/bin/env bash
-SCAFFOLD_SCRIPT="/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/linear-scaffold.ts"
-[ ! -f "$SCAFFOLD_SCRIPT" ] && SCAFFOLD_SCRIPT="/var/www/zerops-astrobranding/scripts/linear-scaffold.ts"
-if [ ! -f "$SCAFFOLD_SCRIPT" ]; then
-    echo "❌ Error: linear-scaffold.ts no encontrado en SSoT ni en el repositorio."
-    exit 1
-fi
-if command -v bun >/dev/null 2>&1; then
-    exec bun "$SCAFFOLD_SCRIPT" "$@"
-else
-    exec node --no-warnings --experimental-strip-types "$SCAFFOLD_SCRIPT" "$@"
-fi
 EOF
         sudo chmod +x "$PROJECT_ROOT/.bin/linear-scaffold" 2>/dev/null || true
         sudo ln -sf "$PROJECT_ROOT/.bin/linear-scaffold" /usr/local/bin/linear-scaffold 2>/dev/null || true
