@@ -280,6 +280,12 @@ EOF
         sudo chmod +x "$PROJECT_ROOT/.bin/linear-scaffold" 2>/dev/null || true
         sudo ln -sf "$PROJECT_ROOT/.bin/linear-scaffold" /usr/local/bin/linear-scaffold 2>/dev/null || true
     fi
+    if [ -f "$SCRIPT_DIR/sync-project" ]; then
+        echo "• Desplegando sincronizador manual de proyectos (sync-project)..."
+        cp -f "$SCRIPT_DIR/sync-project" "$PROJECT_ROOT/.bin/sync-project"
+        chmod +x "$PROJECT_ROOT/.bin/sync-project"
+        sudo ln -sf "$PROJECT_ROOT/.bin/sync-project" /usr/local/bin/sync-project 2>/dev/null || true
+    fi
     if [ -f "$SCRIPT_DIR/engram-sync" ]; then
         echo "• Desplegando sincronizador híbrido de Engram (engram-sync)..."
         cp -f "$SCRIPT_DIR/engram-sync" "$PROJECT_ROOT/.bin/engram-sync"

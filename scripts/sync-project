@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT="${1:-${PROJECT_NAME:-ELPLACERDC}}"
+SRC="/var/www/baiosfera/PROYECTOS/${PROJECT}"
+DEST="/var/www/localstorage/proyectos/${PROJECT}"
+
+if [ ! -d "$SRC" ]; then
+    echo "❌ Error: Directorio origen no encontrado en $SRC"
+    exit 1
+fi
+
+echo "🔄 Sincronizando $SRC -> $DEST..."
+mkdir -p "$DEST"
+rsync -avu --update "$SRC/" "$DEST/"
+echo "✓ Sincronización completada exitosamente en $DEST."

@@ -159,6 +159,14 @@ node --experimental-strip-types scripts/linear-scaffold.ts <APP_IDENTITY> "<PROJ
 node --experimental-strip-types scripts/linear-scaffold.ts <APP_IDENTITY> "<PROJECT_NAME>" --profile <perfil>
 ```
 
+> [!IMPORTANT]
+> **Mandato de Trazabilidad Viva en Linear (Anti-Checklist Theater & Blindaje de Contexto):**
+> Las issues creadas en Linear (`BAI-*`) NO son un registro pasivo post-facto; son el **motor de ejecución y guía obligatoria del agente**:
+> 1. **Inicio de Hito:** Transicionar el estado inmediatamente vía `linear-cli update-status <ID> "In Progress"`.
+> 2. **Ejecución y DoD:** Toda acción de código se guía por los criterios de la Definition of Done de la issue en Linear para no perder contexto ni mutilar funcionalidades.
+> 3. **Cierre con Sensor Físico:** Al terminar, es OBLIGATORIO registrar comentario con la prueba física (`linear-cli comment <ID> "✅ Atestación física exit 0: [detalles]"`) y transicionar a `linear-cli update-status <ID> "Done"`.
+> 4. **Respeto a Bloqueos:** Prohibido tocar o dar por iniciada una tarea bloqueada (`gate:blocked`) hasta que su dependencia directa esté en `Done`.
+
 ### Taxonomía de los 7 Hitos Lego (`BAI-0` a `BAI-6`)
 
 Los hitos se clasifican estrictamente en **CORE** (invariantes arquitectónicos obligatorios) y **OPT-IN** (módulos activados exclusivamente según la necesidad del proyecto):
@@ -171,7 +179,7 @@ Los hitos se clasifican estrictamente en **CORE** (invariantes arquitectónicos 
 | **`BAI-3`** | `[CORE]` | **Landings de Alto Impacto, Server Islands & Anti-Slop** | `BAI-2` *(o `BAI-1` en minimal)* | Server Islands (`server:defer`), diales calibrados (Variance 8, Motion 6, Density 4), microinteracciones GSAP 60fps, CLS = 0. |
 | **`BAI-4`** | `[OPT-IN]` | **Motor Transaccional, Checkout Funnels & Pasarelas** | `BAI-3` | Funnels con debounce anti-doble clic, firmas criptográficas SHA-256 (Wompi/ePayco/Stripe), idempotencia en Valkey (60s lock). |
 | **`BAI-5`** | `[OPT-IN]` | **Automatización Omnicanal & Asistentes de IA** | `BAI-3` | WhatsApp ágil con EvolutionGo (:8085), Email documental Listmonk (<85KB), Virtual Keys en Bifrost AI Gateway (:8080). |
-| **`BAI-6`** | `[CORE]` | **Atestación Física Multi-Superficie, SEO-AEO-GEO & Go-Live** | `BAI-3` / `BAI-4` / `BAI-5` | Playwright E2E exit code 0, Schema.org JSON-LD, OpenGraph <300KB, SSL Full Strict en Cloudflare, promoción inmutable en Zerops. |
+| **`BAI-6`** | `[CORE]` | **Atestación Física Multi-Superficie, SEO-AEO-GEO & Go-Live** | `BAI-3` / `BAI-4` / `BAI-5` | Habilitar Ingress (`zerops_subdomain action="enable"`), Atestación Pública (HTTP 200 en URL externa), Playwright E2E exit code 0, Schema.org, OpenGraph <300KB. |
 
 ### Matriz de Perfiles de Despliegue (`--profile`)
 
@@ -209,11 +217,14 @@ Si un proyecto requiere runtimes especializados (ej: microservicios Python con F
 
 ## 7. Verificación Física & Sensores de Calidad (Exit Code 0)
 
+> [!CAUTION]
+> **Miopía de Orquestador (Checklist Theater):** Hacer `curl http://nombre-servicio:3000` desde el contenedor ZCP NO prueba que la app sea accesible por el usuario. Es obligatorio probar el *Ingress Público*.
+
 Antes de dar por entregado cualquier despliegue bajo esta plantilla, el agente debe ejecutar físicamente y comprobar el código de salida 0 de:
 1. `astro-web-validate.sh` — Verificación de AST, Server Islands y tokens de diseño.
 2. `skills-suite-validate` — Certificación del catálogo completo de skills.
 3. `ssot-parity-check` — Atestación de paridad sin drift entre el contenedor ZCP y Google Drive SSoT.
-4. `/health` HTTP 200 — Comprobación física de conectividad de cada servicio desplegado.
+4. **Verificación de Ingress Público:** Habilitar el subdominio (`zerops_subdomain action="enable"`) y realizar `curl -s -o /dev/null -w "%{http_code}" https://<subdominio-publico>` verificando un HTTP 200 OK desde el exterior. El ping interno al puerto (ej: `:3000`) es insuficiente.
 
 ---
 
