@@ -1,7 +1,7 @@
-# 🌐 PLANTILLA UNIVERSAL WEB ZEROPS (v4.1.0) — MASTER BLUEPRINT
+# 🌐 PLANTILLA UNIVERSAL WEB ZEROPS (v4.2.0) — MASTER BLUEPRINT
 
 > **Clasificación:** Blueprint Canónico Universal para Despliegues Web Soberanos en Zerops  
-> **Versión:** 4.1.0 (SemVer Canónico — Hardening Audiovisual, Dual-Testing, FUSE Hygiene & Batch Linear)  
+> **Versión:** 4.2.0 (SemVer Canónico — Zero-Wait CEL Bifrost, 2h Human Takeover, Dynamic Temporal Agenda & 5-Tier Data Mesh)  
 > **Gobernanza:** [`Supreme Directive`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md), [`Planner`](file:///var/www/.agents/skills/planner/SKILL.md) & [`Skill-Improver`](file:///var/www/.agents/skills/skill-improver/SKILL.md)  
 > **Stack Base:** Astro 5 SSR (Bun 1.3.9+ / Tailwind CSS 4) + PostgreSQL 18 + Valkey 7.2 + NATS 2.12 + Object Storage S3 + Bifrost AI Gateway + EvolutionGo + Listmonk  
 > **Propósito:** Guía de ejecución autónoma para que cualquier agente AGY despliegue una aplicación web, e-commerce o landing para CUALQUIER marca, producto o tema tanto en proyectos nuevos desde cero (*Greenfield*) como en adopción de repositorios preexistentes (*Brownfield*), sin ensayos, sin errores y con dependencias bloqueantes en Linear.
@@ -113,10 +113,16 @@ Bifrost expone 5 Virtual Keys desacopladas de nombres de clientes:
 4. `vk-admin-operator`: Autenticación para el operador en ZCP / AGY / CLI.
 5. `vk-system-core`: Autenticación para workers en segundo plano y outbox drain.
 
-### Características de Operación:
+> [!IMPORTANT]
+> **Autenticación Obligatoria:** Toda llamada a `http://bifrost:8080/v1` DEBE incluir la cabecera `Authorization: Bearer <vk>` (o `x-bf-vk`). Llamadas sin Virtual Key son rechazadas.
+
+### Características de Operación & Enrutamiento Híbrido CEL:
 - **Endpoint Drop-In:** `http://bifrost:8080/v1` (compatible 100% con SDK de OpenAI).
-- **Semantic Cache:** Caché vectorial en memoria; consultas repetidas responden en **<2ms con costo $0**. Key dinámica: `${APP_IDENTITY}-cache`.
-- **Failover Inteligente:** Si el proveedor principal arroja `429 Too Many Requests`, Bifrost conmuta en sub-milisegundos hacia FreeLLMAPI (:3001) o modelos secundarios sin interrumpir la experiencia de usuario.
+- **Zero-Wait 429 & Dual-Tier Enrutamiento Predictivo:**
+  * **Free Tier (`freellmapi:3001` / Qwen 2.5 72B / Llama 3.3 70B):** Atiende consultas fácticas, FAQs, horarios, dirección de sedes, eventos vigentes y conversación general (<1s latencia, $0 costo).
+  * **Pro Tier (DeepSeek V3 / R1):** Activado directamente (sin esperar timeouts 429) cuando la intención es transaccional (generar enlaces de pago dLocal Go/Wompi, comisiones de afiliados o reclamos graves). Se invoca mediante `x-routing-tier: pro` o `model: "deepseek/deepseek-chat"`.
+- **Semantic Cache:** Caché vectorial en memoria; consultas repetidas responden en **<2ms con costo $0**. Key dinámica: `${APP_IDENTITY}-cache`. Motor de vector store obligatorio: `chromem` (Go puro embebido).
+- **Persistencia SSoT:** Bifrost almacena su configuración y logs en PostgreSQL 18 (`config_store` y `logs_store` tipo `postgres`). Prohibido usar SQLite o Valkey para el vector store (Valkey carece de `RediSearch FT.*`).
 
 ---
 
@@ -304,7 +310,7 @@ Todo ecosistema web debe separar con absoluta nitidez sus formularios según el 
 
 ---
 
-## 10. Contrato Canónico de Evolution Go en Zerops (:8085)
+## 10. Contrato Canónico de Evolution Go & Bot Inteligente en Zerops (:8085)
 
 Evolution Go es un motor ultra-frugal compilado en Go (`whatsmeow`) que consume apenas ~25-45 MB de RAM.
 
@@ -329,6 +335,25 @@ Evolution Go es un motor ultra-frugal compilado en Go (`whatsmeow`) que consume 
      }'
    ```
    *Nota:* El número debe enviarse sin signos `+`, normalizado con código de país (ej. `573...` para Colombia).
+
+### Invariantes del Bot Inteligente & Webhook Omnicanal:
+1. **Cero Prompts Hardcodeados (`bot-knowledge.ts`):**
+   - El bot NUNCA debe hardcodear fechas de eventos en piedra en el código.
+   - Debe implementar un servicio dinámico `bot-knowledge.ts` que calcule la fecha actual en tiempo presente continuo (`America/Bogota` UTC-5), filtre automáticamente eventos caducados (`event.date >= currentIsoDate`) e inyecte la sede física permanente y las pasarelas activas descubiertas dinámicamente vía `process.env`.
+2. **Ventana Deslizante de Intervención Humana (Human Takeover):**
+   - Cuando el dueño o un operador responde manualmente desde el celular (`fromMe: true`), el webhook intercepta el mensaje y silencia el bot automáticamente en Valkey (`wa:human_takeover:${phone}`) por **2 horas (7200s)**. Cada mensaje manual renueva la ventana de 2 horas.
+   - **Comandos de Escape del Operador:**
+     * `#bot`: Cancela inmediatamente el takeover humano y reactiva el bot para ese contacto.
+     * `#mute`: Silencia el bot por 24 horas (86400s) para casos donde el cliente requiere atención humana extendida.
+3. **Tuteo Mandatario ("TÚ"):**
+   - La voz de marca del bot debe dirigirse SIEMPRE al usuario usando el pronombre "tú" ('¿cómo estás?', 'te esperamos', 'cuéntame'). Está estrictamente prohibido el uso de "usted" o tratamientos fríos y distantes.
+4. **Programa de Embajadores (Afiliados) & Frequency Capping:**
+   - Mecánica de crecimiento viral: *"Invita a 3 amigos con tu enlace personalizado de embajador y gana tu entrada gratis. A partir de la 4ta entrada vendida con tu enlace, recibes comisión directa en efectivo."*
+   - **Directiva Anti-Spam (Valkey):** Una vez sugerido el enlace de embajador, se registra `wa:affiliate_pitched:${phone}` con TTL de 7 días (604800s). El bot TIENE PROHIBIDO volver a mencionarlo durante esa semana para no fatigar al usuario.
+5. **Simulación Realista de Presencia:**
+   - Antes de enviar la respuesta generada por Bifrost, el webhook debe aplicar una pausa de lectura y simulación de digitación proporcional al largo del texto (entre 3.5s y 8s) para garantizar un ritmo conversacional humano.
+6. **Desacople Asíncrono con NATS JetStream:**
+   - El webhook de WhatsApp responde HTTP `200 OK` en `<10ms` inyectando `Nats-Msg-Id` en el stream `events.whatsapp.incoming` para deduplicación atómica a nivel de hardware, delegando la inferencia y el despacho a workers sin bloquear las conexiones HTTP de entrada.
 
 ---
 
