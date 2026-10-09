@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# ZCP Universal Project Storage Synchronizer (zcp-sync v1.0)
+# Bi-directional Safe Synchronization between Google Drive SSoT and Zerops Local Storage
+# SSoT Canonical Path: /var/www/baiosfera/PROYECTOS/<PROJECT>
+# Local Storage Path:  /var/www/localstorage/<PROJECT>
+# ==============================================================================
+set -euo pipefail
+
+DRIVE_BASE="/var/www/baiosfera/PROYECTOS"
+STORAGE_BASE="/var/www/localstorage"
+
+check_mounts() {
+    if ! mountpoint -q /var/www/baiosfera 2>/dev/null; then
+        echo "❌ Error: Google Drive no está montado en /var/www/baiosfera (rclone)."
+        exit 1
+    fi
+    if ! mountpoint -q /var/www/localstorage 2>/dev/null && ! mountpoint -q /mnt/localstorage 2>/dev/null; then
+        echo "❌ Error: Zerops Local Storage no está montado en /var/www/localstorage."
+        exit 1
+    fi
+    if [ ! -d "$DRIVE_BASE" ]; then
+        echo "❌ Error: No existe el directorio de proyectos en Drive ($DRIVE_BASE)."
+        exit 1
+    fi
+    if [ ! -d "$STORAGE_BASE" ]; then
+        echo "❌ Error: No existe el directorio de almacenamiento local ($STORAGE_BASE)."
+        exit 1
+    fi
+}
+
+list_projects() {
+    check_mounts
+    echo "============================================================"
+    echo "  📦 Proyectos detectados en Google Drive y Local Storage"
+    echo "============================================================"
+    echo "• Google Drive ($DRIVE_BASE):"
+    for d in "$DRIVE_BASE"/*; do
+        [ -d "$d" ] && echo "  - $(basename "$d")"
+    done
+    echo ""
+    echo "• Local Storage ($STORAGE_BASE):"
+    for d in "$STORAGE_BASE"/*; do
+        [ -d "$d" ] && echo "  - $(basename "$d")"
+    done
+}
+
+sync_project() {
+    local proj="$1"
+    local drive_dir="$DRIVE_BASE/$proj"
+    local storage_dir="$STORAGE_BASE/$proj"
+
+    # Resolver coincidencia insensible a mayúsculas si no coincide exacto
+    if [ ! -d "$drive_dir" ]; then
+        for d in "$DRIVE_BASE"/*; do
+            if [ -d "$d" ] && [ "$(basename "$d" | tr '[:lower:]' '[:upper:]')" = "$(echo "$proj" | tr '[:lower:]' '[:upper:]')" ]; then
+                drive_dir="$d"
+                proj="$(basename "$d")"
+                storage_dir="$STORAGE_BASE/$proj"
+                break
+            fi
+        done
+    fi
+
+    echo "------------------------------------------------------------"
+    echo "  🔄 Sincronizando proyecto: [$proj]"
+    echo "  📁 Drive:   $drive_dir"
+    echo "  💾 Storage: $storage_dir"
+    echo "------------------------------------------------------------"
+
+    mkdir -p "$drive_dir" "$storage_dir"
+
+    # 1. Drive -> Local Storage (traer novedades de Drive)
+    echo "• [1/2] Trayendo cambios desde Google Drive hacia Local Storage..."
+    rsync -au "$drive_dir/" "$storage_dir/"
+
+    # 2. Local Storage -> Drive (empujar novedades locales a Drive)
+    echo "• [2/2] Respaldando cambios de Local Storage hacia Google Drive..."
+    rsync -au "$storage_dir/" "$drive_dir/"
+
+    echo "✅ Proyecto [$proj] sincronizado exitosamente en ambas direcciones."
+}
+
+sync_all() {
+    check_mounts
+    local projects=()
+    for d in "$DRIVE_BASE"/*; do
+        [ -d "$d" ] && projects+=("$(basename "$d")")
+    done
+    for d in "$STORAGE_BASE"/*; do
+        if [ -d "$d" ]; then
+            local name="$(basename "$d")"
+            [[ "$name" =~ ^(bifrost|freellmapi|engram|lost\+found)$ ]] && continue
+            local found=false
+            for p in "${projects[@]}"; do
+                [ "$p" = "$name" ] && found=true && break
+            done
+            [ "$found" = false ] && projects+=("$name")
+        fi
+    done
+
+    echo "🔄 Sincronizando todos los proyectos detectados (${#projects[@]}): ${projects[*]}"
+    for p in "${projects[@]}"; do
+        sync_project "$p"
+    done
+    echo "✅ Sincronización masiva de todos los proyectos completada."
+}
+
+check_mounts
+
+case "${1:-}" in
+    --list|-l|list)
+        list_projects
+        ;;
+    --all|-a|all)
+        sync_all
+        ;;
+    --help|-h|help)
+        echo "Uso: zcp-sync [PROYECTO|--all|--list]"
+        echo "Ejemplos:"
+        echo "  zcp-sync              # Sincroniza el proyecto activo (\$PROJECT_NAME)"
+        echo "  zcp-sync ELPLACERDC   # Sincroniza el proyecto ELPLACERDC"
+        echo "  zcp-sync --list       # Lista todos los proyectos disponibles"
+        echo "  zcp-sync --all        # Sincroniza todos los proyectos"
+        ;;
+    *)
+        TARGET="${1:-}"
+        if [ -z "$TARGET" ]; then
+            TARGET="${PROJECT_NAME:-${CLIENT_NAME:-${ENGRAM_PROJECT:-}}}"
+        fi
+        if [ -z "$TARGET" ]; then
+            echo "ℹ️ No se especificó proyecto ni existe \$PROJECT_NAME en el entorno."
+            echo "   Proyectos disponibles:"
+            list_projects
+            exit 1
+        fi
+        sync_project "$TARGET"
+        ;;
+esac

@@ -36,6 +36,15 @@ if [ -f "$SCRIPT_DIR/linear-cli" ]; then
     sudo ln -sf "$PERSISTENT_BIN/linear-cli" /usr/local/bin/linear-cli 2>/dev/null || true
 fi
 
+# 1.2 Despliegue de Utilidad Universal de Sincronización (zcp-sync)
+if [ -f "$SCRIPT_DIR/zcp-sync" ]; then
+    cp -f "$SCRIPT_DIR/zcp-sync" "$PERSISTENT_BIN/zcp-sync"
+    chmod +x "$PERSISTENT_BIN/zcp-sync"
+    cp "$PERSISTENT_BIN/zcp-sync" "$HOME/.local/bin/zcp-sync" 2>/dev/null || true
+    cp "$PERSISTENT_BIN/zcp-sync" "/home/zerops/.local/bin/zcp-sync" 2>/dev/null || true
+    sudo ln -sf "$PERSISTENT_BIN/zcp-sync" /usr/local/bin/zcp-sync 2>/dev/null || true
+fi
+
 # 2. Despliegue de Utilidad Soberana MCV Downloader (mcv-download)
 # Asegurar dependencias de sistema y navegador para MCV en ZCP limpio
 echo "• Asegurando dependencias de sistema para MCV (ffmpeg, unrar, 7z, megatools, gdown, agent-browser)..."

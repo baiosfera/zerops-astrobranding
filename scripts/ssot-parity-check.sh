@@ -144,6 +144,7 @@ SYMLINKS=(
     "docu-validate"
     "research-validate"
     "astrobranding-check"
+    "zcp-sync"
 )
 
 for symlink in "${SYMLINKS[@]}"; do
