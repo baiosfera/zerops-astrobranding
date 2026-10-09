@@ -249,14 +249,14 @@ discover_tripartite_storage() {
         return 0
     done
 
-    # 6. Probe for existing mounts in /mnt/
-    local mnt_cand
-    mnt_cand=$(ls -1 /mnt/ 2>/dev/null | grep -v 'lost+found' | head -n 1 || true)
-    if [ -n "$mnt_cand" ]; then
-        DISCOVERED_TARGET="$mnt_cand"
-        STORAGE_TYPE="local-storage"
-        return 0
-    fi
+    # 6. Probe for existing verified mounts in /mnt/ (must be a valid mountpoint AND in known candidates)
+    for cand in "${CANDIDATES[@]}"; do
+        if mountpoint -q "/mnt/$cand" 2>/dev/null; then
+            DISCOVERED_TARGET="$cand"
+            STORAGE_TYPE="local-storage"
+            return 0
+        fi
+    done
 
     return 1
 }
