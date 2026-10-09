@@ -1,7 +1,7 @@
-# 🌐 PLANTILLA UNIVERSAL WEB ZEROPS (v4.0.0) — MASTER BLUEPRINT
+# 🌐 PLANTILLA UNIVERSAL WEB ZEROPS (v4.1.0) — MASTER BLUEPRINT
 
 > **Clasificación:** Blueprint Canónico Universal para Despliegues Web Soberanos en Zerops  
-> **Versión:** 4.0.0 (SemVer Canónico — Expansión SOTA Greenfield/Brownfield + Linear Automation)  
+> **Versión:** 4.1.0 (SemVer Canónico — Hardening Audiovisual, Dual-Testing, FUSE Hygiene & Batch Linear)  
 > **Gobernanza:** [`Supreme Directive`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md), [`Planner`](file:///var/www/.agents/skills/planner/SKILL.md) & [`Skill-Improver`](file:///var/www/.agents/skills/skill-improver/SKILL.md)  
 > **Stack Base:** Astro 5 SSR (Bun 1.3.9+ / Tailwind CSS 4) + PostgreSQL 18 + Valkey 7.2 + NATS 2.12 + Object Storage S3 + Bifrost AI Gateway + EvolutionGo + Listmonk  
 > **Propósito:** Guía de ejecución autónoma para que cualquier agente AGY despliegue una aplicación web, e-commerce o landing para CUALQUIER marca, producto o tema tanto en proyectos nuevos desde cero (*Greenfield*) como en adopción de repositorios preexistentes (*Brownfield*), sin ensayos, sin errores y con dependencias bloqueantes en Linear.
@@ -41,6 +41,11 @@ Antes de iniciar cualquier acción sobre el código o la infraestructura, el age
    ```
 2. **Ingestión de Identidad:** Cargar `brandbook.json` en estándar W3C DTCG v6.3.0 y compilar variables `@theme` en Tailwind CSS 4.
 3. **Aprovisionamiento Linear:** Ejecutar `node --experimental-strip-types scripts/linear-scaffold.ts <APP_IDENTITY> "<PROJECT_NAME>"`.
+
+
+### 4. Erradicación de Errores Sistémicos (Lecciones Aprendidas SSoT)
+- **Secuestro del Puerto 3000 (Astro/Vite):** Nunca confíes ciegamente en `bun run dev`. Procesos zombies de NodeJS (`entry.mjs`) suelen secuestrar el puerto 3000, forzando a Astro a levantar en el 3001 y rompiendo el proxy inverso de Zerops (`webdev-278-3000`). **Regla obligatoria:** Antes de iniciar el dev server, ejecuta `fuser -k 3000/tcp || pkill node` y levanta con `bun run dev --host 0.0.0.0 --port 3000`.
+- **Tailwind 4 + Astro 5:** Para que los estilos se generen correctamente en SSR, es obligatorio usar el plugin de Vite en `astro.config.mjs` (`import tailwindcss from "@tailwindcss/vite"; vite: { plugins: [tailwindcss()] }`) y cargar `@import "tailwindcss";` en el archivo CSS global importado por `Layout.astro`.
 
 ### Puerta Condicional B: Proyecto Brownfield (Código Preexistente)
 1. **Auditoría de Interfaz (Anti-Slop):** Ejecutar `impeccable audit` o `taste-skill` para identificar anti-patrones, gradientes clichés o inconsistencias tipográficas.
@@ -90,6 +95,7 @@ Cualquier AGY debe clasificar y persistir los datos estrictamente en su capa des
 
 1. **Google Drive SSoT (`/var/www/baiosfera/`):** Capa Fría indestructible. Espejo permanente de código fuente, configuraciones maestras y manifiestos de diseño.
 2. **`localstorage` (`/mnt/localstorage/`):** Capa Caliente POSIX con semántica nativa mononúcleo. Reservada para SQLite embebido (`engram`, `freellmapi`), sockets y archivos de configuración en caliente.
+   > **Regla de Gobernanza:** Un proyecto en Zerops representa una única marca. Está prohibido subdividir el almacenamiento creando carpetas intermedias (ej: `/proyectos/`). Los directorios de la marca se alojan directamente en la raíz (ej: `/var/www/localstorage/<APP_IDENTITY>`).
 3. **`objectstorage` (S3 MinIO):** Capa de Medios Públicos y Dinámicos. Toda imagen de catálogo, avatar de usuario o PDF generado en runtime reside aquí, configurado con `forcePathStyle: true` y expuesto vía Cloudflare CDN.
 4. **`postgresql` (PostgreSQL 18):** Capa Relacional Transaccional ACID. Tablas de negocio (`clients`, `orders`, `outbox`), esquemas aislados para Listmonk (`search_path=listmonk,public`) y EvolutionGo (`evogo_auth`, `evogo_users`).
 
@@ -149,7 +155,7 @@ Todo producto construido bajo esta plantilla debe orquestar el ecosistema de 141
 
 ## 5. Protocolo de Linear Automatizado (`linear-scaffold.ts`) & Malla Lego Desacoplada
 
-La creación y seguimiento de tareas se rige por el estándar **Project-as-Code** mediante el manifiesto declarativo [`linear_template.json`](file:///var/www/artifacts/templates/linear_template.json) y el cliente `linear-cli`:
+La creación y seguimiento de tareas se rige por el estándar **Project-as-Code** mediante el manifiesto declarativo [`linear_template.json`](file:///var/www/artifacts/templates/linear_template.json) y el script ejecutable `linear-scaffold.ts`:
 
 ```bash
 # Simulación determinista previa (sin mutar Linear)
@@ -166,6 +172,7 @@ node --experimental-strip-types scripts/linear-scaffold.ts <APP_IDENTITY> "<PROJ
 > 2. **Ejecución y DoD:** Toda acción de código se guía por los criterios de la Definition of Done de la issue en Linear para no perder contexto ni mutilar funcionalidades.
 > 3. **Cierre con Sensor Físico:** Al terminar, es OBLIGATORIO registrar comentario con la prueba física (`linear-cli comment <ID> "✅ Atestación física exit 0: [detalles]"`) y transicionar a `linear-cli update-status <ID> "Done"`.
 > 4. **Respeto a Bloqueos:** Prohibido tocar o dar por iniciada una tarea bloqueada (`gate:blocked`) hasta que su dependencia directa esté en `Done`.
+> 5. **Soberanía de Linear-CLI y Direct GraphQL API:** Linear opera exclusivamente mediante el binario físico `/usr/local/bin/linear-cli` o consumo directo de la API GraphQL (`https://api.linear.app/graphql`), garantizando respuestas deterministas en <200ms con cero latencia y preservación absoluta de tokens de contexto.
 
 ### Taxonomía de los 7 Hitos Lego (`BAI-0` a `BAI-6`)
 
@@ -445,3 +452,128 @@ Para servicios prémium, ofertas B2B de alto valor o experiencias de capacidad l
    - Exponer rangos de inversión o criterios de acceso claros en la narrativa y landing page para alinear expectativas antes de la captura del lead. Esto actúa como un filtro natural de audiencia, mejorando el ratio de conversión y optimizando el tiempo del equipo comercial o de soporte.
 2. **Claridad de Roles y Expectativas:**
    - Definir con precisión el alcance del servicio y los puntos de contacto humano (soporte, ejecutivos de cuenta o equipo operativo) sin ambigüedades.
+
+---
+
+## 17. Pipeline Canónico de Medios Audiovisuales & Streaming Web (`faststart` + Local NVMe I/O)
+
+La entrega de video en entornos web modernos exige latencia mínima en el primer fotograma y economía estricta de ancho de banda. Los videos capturados desde dispositivos móviles (Android/iOS) suelen codificarse a tasas elevadas (12 a 25 Mbps) y ubican el metadato estructural (`moov` atom) al final del archivo (`mdat` primero), requiriendo reorganización para permitir la reproducción inmediata en el navegador.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│              PIPELINE CANÓNICO DE STREAMING AUDIOVISUAL                │
+├────────────────────────────────────────────────────────────────────────┤
+│ 1. ORIGEN: Dispositivo Móvil / S3 / Almacenamiento Local (moov final)  │
+│                                   │                                    │
+│ 2. TRANSCODIFICACIÓN AISLADA: Ejecución en NVMe Local (/tmp)            │
+│    setsid ffmpeg -nostdin -i raw.mp4 -c:v libx264 -crf 28              │
+│           -preset veryfast -movflags +faststart -c:a aac /tmp/opt.mp4 │
+│                                   │                                    │
+│ 3. POSTER GENERATION: Extracción de fotograma clave en t=1s (WebP/JPG) │
+│                                   │                                    │
+│ 4. TRANSFERENCIA ATÓMICA: Copia directa al volumen público montado     │
+│    cp /tmp/opt.mp4 ./public/media/... && cp /tmp/opt.webp ...          │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### Invariantes Técnicos de Transcodificación:
+1. **Aislamiento de E/S en Disco Local (NVMe `/tmp`):**
+   - Transcodificar exclusivamente hacia y desde almacenamiento local efímero (`/tmp`). Las operaciones de codificación masiva requieren acceso a disco local de alta velocidad para evitar demoras en buffers de red.
+2. **Desacople de Proceso en Fondo (`setsid` & `-nostdin`):**
+   - Al ejecutar optimizaciones de video en segundo plano dentro de entornos de agentes o contenedores, invocar `setsid` y la bandera `-nostdin`. Esto garantiza la persistencia del proceso de transcodificación de forma autónoma e independiente de la sesión de terminal activa.
+3. **Invariante `moov` al Inicio (`-movflags +faststart`):**
+   - Todo archivo `.mp4` para entrega web debe reorganizar su índice de cuadros al principio del archivo mediante `-movflags +faststart`, habilitando buffering progresivo instantáneo (<100ms) desde el primer paquete recibido.
+4. **Optimización de Tasa y Perfil Web:**
+   - Video: Códec `libx264`, perfil High, `preset veryfast`, factor de tasa constante `crf 26-28` (reducción de tamaño superior al 85% preservando nitidez visual).
+   - Audio: Códec `aac`, tasa de 128 kbps stereo.
+   - En componentes visuales, acompañar todo elemento `<video>` con su respectivo `poster="..."` y la directiva `preload="none"`.
+
+---
+
+## 18. Arquitectura de Testing Dual Desacoplada (Bun Test Invariants vs Playwright E2E)
+
+Para mantener la velocidad de compilación y la robustez del testing sin colisiones de herramientas, los proyectos bajo esta plantilla separan de manera estricta los tests unitarios de dominio de los tests de integración en navegador real.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   MATRIZ DE TESTING DUAL DESACOPLADA                   │
+├───────────────────────────────────┬────────────────────────────────────┤
+│ CAPA 1: INVARIANTES DE DOMINIO    │ CAPA 2: E2E INTERACTIVO EN VIVO    │
+│ Runner: Bun Test (bun:test)       │ Runner: Playwright (@playwright)   │
+│ Directorio: tests/unit/           │ Directorio: tests/playwright/      │
+│ Extensión: *.test.ts              │ Extensión: *.spec.ts               │
+│ Enfoque: Schemas, Regex, AST,     │ Enfoque: DOM real, clics, flujos   │
+│          Matemáticas de precios,  │          OTP, validación de QR,    │
+│          Consistencia de Layout.  │          Seguridad de /adminn.     │
+│ Velocidad: < 100 ms (en memoria)  │ Velocidad: ~ 10-20 s (Chromium)    │
+└───────────────────────────────────┴────────────────────────────────────┘
+```
+
+### Reglas de Configuración en `package.json`:
+1. **Prevención de Colisión de Discovery:**
+   - Delimitar de forma explícita las rutas de ejecución en los scripts de `package.json` para que cada ejecutor procese únicamente los archivos compatibles con su arnés:
+     ```json
+     {
+       "scripts": {
+         "test": "bun test tests/unit",
+         "test:unit": "bun test tests/unit",
+         "test:e2e": "playwright test",
+         "test:all": "bun test tests/unit && playwright test"
+       }
+     }
+     ```
+2. **Aprovisionamiento de Navegadores y Librerías del Sistema en LXC:**
+   - En contenedores Linux Ubuntu (base Zerops), Playwright requiere tanto el binario del navegador como sus bibliotecas compartidas del sistema operativo (`libnspr4`, `libnss3`, `libgbm1`, `fontconfig`).
+   - El script de aprovisionamiento o `prepareCommands` debe contemplar:
+     ```bash
+     npx playwright install chromium
+     sudo npx playwright install-deps
+     ```
+
+---
+
+## 19. Higiene Operativa ZCP: Blindaje FUSE / Google Drive SSoT y Cierre por Lotes en Linear
+
+El contenedor de plano de control `zcp` opera con una jerarquía de almacenamiento híbrida: código local activo en `/var/www/{hostname}` y réplica permanente en Google Drive SSoT (`/var/www/baiosfera/` montado vía FUSE).
+
+### Invariantes de Rendimiento de E/S:
+1. **Aislamiento de Alcance en Comandos de Sistema:**
+   - Acotar comandos exploratorios (`find`, `which`, `grep`) a la carpeta de trabajo local (`Cwd`), podando explícitamente (`-path /var/www/baiosfera -prune`) el árbol de Google Drive para garantizar respuestas inmediatas y preservar el presupuesto de E/S.
+2. **Cierre de Hitos por Lotes en Linear (`update-status-batch`):**
+   - La regla F5 de la Supreme Directive exige certificar la paridad física (`ssot-parity-check`) antes de marcar una tarea como completada (`Done`).
+   - Al procesar múltiples tareas en lote (ej: 10 o 25 issues atómicas), estructurar el cierre en tres fases deterministas:
+     * Fase 1: Ejecutar `ssot-parity-check` una sola vez para atestiguar la integridad global del hito (código de salida 0).
+     * Fase 2: Invocar la actualización masiva de estados hacia la API GraphQL de Linear mediante script directo o comando batch.
+     * Fase 3: Purgar el archivo de bloqueo físico `/var/www/artifacts/linear_active.json`.
+
+---
+
+## 20. Fortaleza Administrativa Agnóstica: Ofuscación de Rutas, Anti-Indexación y Trazabilidad Transaccional
+
+Para aplicaciones que integran paneles de control sin depender de un CMS monolítico:
+
+### 1. Ofuscación de Rutas y Hard-404:
+- Definir la ruta del panel administrativo mediante variable de entorno o convención ofuscada (ej: `/adminn`, `/manage`, o `${ADMIN_PATH}`).
+- En `src/middleware.ts`, retornar `HTTP 404 Not Found` en las rutas genéricas `/admin` y `/admin/`, canalizando el tráfico exclusivamente a la ruta designada.
+
+### 2. Blindaje Anti-Indexación y Caché Cero:
+- En toda respuesta bajo la ruta administrativa, suministrar cabeceras HTTP de protección:
+  ```http
+  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  ```
+- Declarar reglas explícitas en `public/robots.txt`:
+  ```txt
+  User-agent: *
+  Disallow: /admin/
+  Disallow: /adminn/
+  Disallow: /api/admin/
+  ```
+
+### 3. Directorio Unificado de Usuarios (Registro = Lead = Embajador/Cliente):
+- Consolidar la gestión de contactos en una sola entidad relacional integral, simplificando consultas y permitiendo eliminación en cascada transaccional limpia.
+
+### 4. Categorización Transaccional Estricta (Pago Real vs Cortesía Manual):
+- Al emitir pases o accesos desde el panel administrativo, clasificar las operaciones según su naturaleza financiera:
+  * **Pago Real en Sitio / Efectivo:** Registrar monto y método de pago, habilitando la acreditación correspondiente a afiliados.
+  * **Cortesía Manual ($0):** Registrar el pase con monto cero y trazabilidad administrativa, preservando el cálculo de comisiones intacto.
