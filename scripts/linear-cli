@@ -393,6 +393,108 @@ async function main() {
       console.error("❌ Failed to update issue status");
       process.exit(1);
     }
+  } else if (cmd === "update-status-batch") {
+    const targetStatus = args[1];
+    const issueIds = args.slice(2);
+    if (!targetStatus || issueIds.length === 0) {
+      console.error('Usage: linear-cli update-status-batch "<statusName>" <issueId1> <issueId2> ...');
+      process.exit(1);
+    }
+
+    if (targetStatus.toLowerCase() === "done" || targetStatus.toLowerCase() === "completed") {
+      const { execSync } = require("child_process");
+      console.log("🛡️ [F5 Gate Batch] Validating SSoT Parity & Git Push once for batch...");
+      try {
+        execSync("/var/www/.bin/ssot-parity-check", { stdio: "inherit" });
+        const fs = require("fs");
+        const bakDir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak";
+        if (!fs.existsSync(bakDir)) {
+          console.error("❌ F5 GOBERNANZA FÍSICA: No backup directory found.");
+          process.exit(1);
+        }
+        let pending = false;
+        try {
+          if (fs.existsSync("/var/www/zerops-astro-skills")) {
+            const stat1 = execSync("git status --porcelain", { cwd: "/var/www/zerops-astro-skills" }).toString();
+            if (stat1.trim() !== "") pending = true;
+          }
+          if (fs.existsSync("/var/www/zerops-astrobranding")) {
+            const stat2 = execSync("git status --porcelain", { cwd: "/var/www/zerops-astrobranding" }).toString();
+            if (stat2.trim() !== "") pending = true;
+          }
+        } catch(e) {}
+        if (pending) {
+          console.error("❌ F5 GOBERNANZA FÍSICA: Uncommitted changes in sovereign repos.");
+          process.exit(1);
+        }
+      } catch (err) {
+        console.error("❌ F5 GOBERNANZA FÍSICA: Parity validation failed.");
+        process.exit(1);
+      }
+    }
+
+    const qStates = `
+      query GetTeamStates($teamId: String!) {
+        team(id: $teamId) {
+          states {
+            nodes {
+              id
+              name
+              type
+            }
+          }
+        }
+      }
+    `;
+    const statesData = await queryGraphQL(qStates, { teamId: DEFAULT_TEAM_ID });
+    const states = statesData?.team?.states?.nodes || [];
+    const matchedState = states.find(
+      (s) => s.name.toLowerCase() === targetStatus.toLowerCase() ||
+             (targetStatus.toLowerCase() === "in progress" && s.type === "started") ||
+             (targetStatus.toLowerCase() === "done" && s.type === "completed") ||
+             (targetStatus.toLowerCase() === "backlog" && s.type === "backlog")
+    );
+
+    if (!matchedState) {
+      console.error(`❌ Status "${targetStatus}" not found. Available: ${states.map(s => s.name).join(", ")}`);
+      process.exit(1);
+    }
+
+    const qUpdate = `
+      mutation UpdateIssueState($id: String!, $stateId: String!) {
+        issueUpdate(id: $id, input: { stateId: $stateId }) {
+          success
+          issue { id identifier title state { name } }
+        }
+      }
+    `;
+
+    for (const rawId of issueIds) {
+      try {
+        const resolved = await resolveIssueId(rawId);
+        if (!resolved?.id) {
+          console.error(`⚠️ Issue ${rawId} not found, skipping.`);
+          continue;
+        }
+        const updateRes = await queryGraphQL(qUpdate, { id: resolved.id, stateId: matchedState.id });
+        const updated = updateRes?.issueUpdate?.issue;
+        if (updateRes?.issueUpdate?.success && updated) {
+          console.log(`✅ [${updated.identifier}] -> "${updated.state?.name}"`);
+        } else {
+          console.error(`❌ Failed to update ${rawId}`);
+        }
+      } catch (e) {
+        console.error(`❌ Error updating ${rawId}:`, e.message);
+      }
+    }
+
+    if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
+      const fs = require("fs");
+      if (fs.existsSync("/var/www/artifacts/linear_active.json")) {
+        fs.unlinkSync("/var/www/artifacts/linear_active.json");
+        console.log("✓ Unlinked /var/www/artifacts/linear_active.json");
+      }
+    }
   } else if (cmd === "teams") {
     const q = `query GetTeams { teams { nodes { id name key } } }`;
     const data = await queryGraphQL(q);
@@ -438,6 +540,7 @@ async function main() {
     console.log("  comment <id> <text>                  Add comment to issue");
     console.log('  create "<title>" "[desc]" [opts]     Create new issue');
     console.log('  update-status <id> "<status>"        Update issue workflow status');
+    console.log('  update-status-batch "<status>" <ids> Update multiple issues in batch');
     console.log("  teams                                List teams");
     console.log("  projects                             List projects");
     console.log("  states [teamId]                      List workflow states");
