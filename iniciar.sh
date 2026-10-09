@@ -140,6 +140,31 @@ if [ "$LOCALSTORAGE_FOUND" = false ]; then
     done
 fi
 
+# Helper resiliente para enlazar almacenamiento persistente en PROJECT_ROOT sin colisiones de montaje o directorios
+ensure_storage_symlink() {
+    local target_src="$1"
+    local link_dst="$2"
+
+    # 1. Si existe un montaje FUSE/SSHFS residual previo en link_dst (por ej. montado por otro usuario o sin allow_other), desmontar
+    if grep -q " ${link_dst} " /proc/mounts 2>/dev/null || mountpoint -q "$link_dst" 2>/dev/null; then
+        echo "  • Limpiando montaje FUSE previo en $link_dst..."
+        fusermount3 -uz "$link_dst" 2>/dev/null || sudo fusermount3 -uz "$link_dst" 2>/dev/null || sudo umount -l "$link_dst" 2>/dev/null || true
+    fi
+
+    # 2. Si link_dst es un directorio físico (no un symlink), verificar si está vacío o respaldarlo
+    if [ -d "$link_dst" ] && [ ! -L "$link_dst" ]; then
+        if [ -z "$(ls -A "$link_dst" 2>/dev/null || true)" ]; then
+            sudo rmdir "$link_dst" 2>/dev/null || true
+        else
+            echo "  ⚠️ Directorio existente en $link_dst; preservando respaldo..."
+            sudo mv "$link_dst" "${link_dst}_bak_$(date +%s)" 2>/dev/null || true
+        fi
+    fi
+
+    # 3. Crear enlace simbólico atómico garantizando permisos
+    sudo ln -sfn "$target_src" "$link_dst" 2>/dev/null || ln -sfn "$target_src" "$link_dst"
+}
+
 if [ "$LOCALSTORAGE_FOUND" = true ]; then
     echo "  ✓ Servicio persistente '$LOCALSTORAGE_HOST' detectado y accesible vía red."
     sudo mkdir -p "/mnt/$LOCALSTORAGE_HOST"
@@ -155,7 +180,7 @@ if [ "$LOCALSTORAGE_FOUND" = true ]; then
         sudo rm -rf "$FALLBACK_DIR"
     fi
 
-    sudo ln -sfn "/mnt/$LOCALSTORAGE_HOST" "$PROJECT_ROOT/$LOCALSTORAGE_HOST"
+    ensure_storage_symlink "/mnt/$LOCALSTORAGE_HOST" "$PROJECT_ROOT/$LOCALSTORAGE_HOST"
     echo "  ✓ Volumen persistente montado y enlazado: $PROJECT_ROOT/$LOCALSTORAGE_HOST -> /mnt/$LOCALSTORAGE_HOST"
 else
     echo "  ⚠️ Servicio remoto 'localstorage' no detectado aún en el proyecto Zerops."
@@ -164,7 +189,7 @@ else
     # Garantizar estructura de directorios requerida inmediatamente para que Engram, SQLite y FreeLLMAPI no fallen
     sudo mkdir -p "$FALLBACK_DIR/freellmapi" "$FALLBACK_DIR/engram"
     sudo chown -R zerops:zerops "$FALLBACK_DIR"
-    sudo ln -sfn "$FALLBACK_DIR" "$PROJECT_ROOT/$LOCALSTORAGE_HOST"
+    ensure_storage_symlink "$FALLBACK_DIR" "$PROJECT_ROOT/$LOCALSTORAGE_HOST"
     echo "fallback" > "$FALLBACK_DIR/.storage_mode"
     echo "  ✓ Fallback local activo: $PROJECT_ROOT/$LOCALSTORAGE_HOST -> $FALLBACK_DIR"
     echo "  → La instalación continúa sin bloqueos. No se requiere intervención manual."

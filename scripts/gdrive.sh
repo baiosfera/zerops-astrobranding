@@ -296,7 +296,7 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/bin/mkdir -p $STORAGE_DIR
-ExecStart=/bin/bash -c 'if ! mountpoint -q $STORAGE_DIR; then /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 ${DISCOVERED_TARGET}:/data $STORAGE_DIR; fi; ln -sfn $STORAGE_DIR /var/www/${DISCOVERED_TARGET}'
+ExecStart=/bin/bash -c 'if ! mountpoint -q $STORAGE_DIR; then /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 ${DISCOVERED_TARGET}:/data $STORAGE_DIR; fi; if grep -q " /var/www/${DISCOVERED_TARGET} " /proc/mounts 2>/dev/null || mountpoint -q /var/www/${DISCOVERED_TARGET} 2>/dev/null; then /usr/bin/fusermount3 -uz /var/www/${DISCOVERED_TARGET} 2>/dev/null || true; fi; if [ -d /var/www/${DISCOVERED_TARGET} ] && [ ! -L /var/www/${DISCOVERED_TARGET} ]; then rmdir /var/www/${DISCOVERED_TARGET} 2>/dev/null || true; fi; ln -sfn $STORAGE_DIR /var/www/${DISCOVERED_TARGET}'
 ExecStop=/bin/bash -c 'if mountpoint -q $STORAGE_DIR; then /usr/bin/fusermount3 -uz $STORAGE_DIR || true; fi'
 TimeoutStartSec=30
 TimeoutStopSec=15
@@ -366,7 +366,17 @@ S3EOF
     # Desacople total: Local Storage permanece limpio exclusivamente para SQLite (Engram/FreeLLMAPI) y cachés.
     # Expose Storage directly in /var/www/ for convenient access alongside codebases
     if [ -d "$STORAGE_DIR" ]; then
-        sudo ln -sfn "$STORAGE_DIR" "/var/www/$DISCOVERED_TARGET"
+        if grep -q " /var/www/$DISCOVERED_TARGET " /proc/mounts 2>/dev/null || mountpoint -q "/var/www/$DISCOVERED_TARGET" 2>/dev/null; then
+            fusermount3 -uz "/var/www/$DISCOVERED_TARGET" 2>/dev/null || sudo fusermount3 -uz "/var/www/$DISCOVERED_TARGET" 2>/dev/null || true
+        fi
+        if [ -d "/var/www/$DISCOVERED_TARGET" ] && [ ! -L "/var/www/$DISCOVERED_TARGET" ]; then
+            if [ -z "$(ls -A "/var/www/$DISCOVERED_TARGET" 2>/dev/null || true)" ]; then
+                sudo rmdir "/var/www/$DISCOVERED_TARGET" 2>/dev/null || true
+            else
+                sudo mv "/var/www/$DISCOVERED_TARGET" "/var/www/${DISCOVERED_TARGET}_bak_$(date +%s)" 2>/dev/null || true
+            fi
+        fi
+        sudo ln -sfn "$STORAGE_DIR" "/var/www/$DISCOVERED_TARGET" 2>/dev/null || ln -sfn "$STORAGE_DIR" "/var/www/$DISCOVERED_TARGET"
         echo "[ZCP-BOOT] Symlinked $STORAGE_TYPE ($STORAGE_DIR) to /var/www/$DISCOVERED_TARGET"
     fi
 else
