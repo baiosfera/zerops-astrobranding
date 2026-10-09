@@ -8,6 +8,61 @@
 
 ---
 
+## 0.0 Protocolo Maestro de Orquestación de Infraestructura Zerops-First (Lego Desacoplado & Matriz de Skills)
+
+> [!IMPORTANT]
+> **El Plano de Control `zcp` es el Arquitecto de Plataforma:**
+> Este contenedor `zcp` no compila ni ejecuta aplicaciones localmente: su misión exclusiva es **orquestar la plataforma Zerops** vía las herramientas MCP (`zerops_*`) y gobernar los contenedores LXC dedicados.
+> Todo nuevo despliegue comienza obligatoriamente con el **Discovery Floor** (`zerops_discover`) para conocer el estado físico del clúster antes de proponer o mutar código.
+
+### 1. Las Dos Rutas de Infraestructura (Adopción vs Greenfield)
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│             ORQUESTACIÓN DE INFRAESTRUCTURA ZEROPS-FIRST               │
+├───────────────────────────────────┬────────────────────────────────────┤
+│ RUTA A: ADOPCIÓN (SERVICIOS LIVE) │ RUTA B: GREENFIELD / MODULAR       │
+├───────────────────────────────────┼────────────────────────────────────┤
+│ Si `zerops_discover` detecta      │ Si el proyecto está limpio o se    │
+│ servicios `adoptable`:            │ solicita aprovisionamiento:        │
+│ • Ejecutar inmediatamente:        │ • Ecosistema completo: importar    │
+│   zerops_workflow action="start"  │   `import.yaml` (prioridades 10-2) │
+│   workflow="bootstrap"            │ • Módulo específico: importar      │
+│   route="adopt"                   │   receta atómica en recipes/steps/ │
+│ • Vincula servicios existentes    │ • Orquestar vía zerops_import o    │
+│   sin recreación destructiva.     │   zerops_workflow route="classic"  │
+└───────────────────────────────────┴────────────────────────────────────┘
+```
+
+### 2. Matriz Canónica de Orquestación: Servicio $\leftrightarrow$ Receta $\leftrightarrow$ Skill en `zerops-astro-skills`
+
+Para que cualquier agente AGY despliegue el stack sin ensayos ni errores, cada componente de Zerops cuenta con una receta YAML canónica y una skill rectora en `zerops-astro-skills`:
+
+| Servicio Zerops | Tipo de Servicio | Prioridad | Receta Canónica en `recipes/` | Skill Rectora en `zerops-astro-skills` |
+|---|---|---|---|---|
+| **`database`** | `postgresql:single@18` (profile: `oltp-hobby`) | 10 | `services/01-database.yaml` | [`postgresql`](file:///var/www/.agents/skills/postgresql/SKILL.md) (ACID, pgvector HNSW, JSON_TABLE, uuidv7) |
+| **`valkey`** | `valkey:single@7.2` (profile: `hobby`) | 10 | `services/02-valkey.yaml` | [`valkey`](file:///var/www/.agents/skills/valkey/SKILL.md) (Locks atómicos, sliding rate limit, caché) |
+| **`nats`** | `nats:single@2.12` | 10 | `services/03-nats.yaml` | [`nats`](file:///var/www/.agents/skills/nats/SKILL.md) (JetStream, RPC <0.3ms, Nats-Msg-Id) |
+| **`localstorage`** | `local-storage:single@1` | 10 | `services/06-localstorage.yaml` | [`local-storage`](file:///var/www/.agents/skills/local-storage/SKILL.md) (POSIX kernel, run.volume, SQLite WAL) |
+| **`objectstorage`** | `object-storage` (S3 MinIO) | 10 | `services/04-objectstorage.yaml` | [`object-storage`](file:///var/www/.agents/skills/object-storage/SKILL.md) (Assets >500KB, Pre-Signed URLs) |
+| **`freellmapi`** | `ubuntu/nodejs@24` | 8 | `steps/01-freellmapi.yaml` | [`freellmapi`](file:///var/www/.agents/skills/freellmapi/SKILL.md) (Free proxy multi-provider, port 3001) |
+| **`bifrost`** | `alpine/go@1.22` | 6 | `steps/02-bifrost-postgres.yaml` | [`bifrost`](file:///var/www/.agents/skills/bifrost/SKILL.md) (AI Gateway, Virtual Keys, CEL routing, port 8080) |
+| **`evolution`** | `alpine/go@1.22` | 6 | `steps/04-evolution.yaml` | [`whatsapp-engine`](file:///var/www/.agents/skills/whatsapp-engine/SKILL.md) (whatsmeow Go, port 8085, takeover 2h) |
+| **`listmonk`** | `alpine/go@1.22` | 5 | `steps/05-listmonk.yaml` | [`listmonk`](file:///var/www/.agents/skills/listmonk/SKILL.md) / [`email-marketing`](file:///var/www/.agents/skills/email-marketing/SKILL.md) (Newsletter, port 9000) |
+| **`hermes`** | `ubuntu/python@3.12` | 4 | `services/10-hermes.yaml` | [`hermes-agent`](file:///var/www/.agents/skills/hermes-agent/SKILL.md) (Nous Hermes Co-Pilot, Telegram Gateway) |
+| **`webdev / webprod`**| `ubuntu/bun@1.3` | 2 | `steps/06-astro-web.yaml` | [`astro-web`](file:///var/www/.agents/skills/astro-web/SKILL.md) / [`bun`](file:///var/www/.agents/skills/bun/SKILL.md) / [`frnt`](file:///var/www/.agents/skills/frnt/SKILL.md) (SSR, port 3000) |
+| **Meta-Orquestador** | `zcp@1` | 1 | Chasis raíz | [`zcp`](file:///var/www/.agents/skills/zcp/SKILL.md) / [`bknd`](file:///var/www/.agents/skills/bknd/SKILL.md) (Control plane, 22 MCP tools) |
+
+### 3. Arquitectura Lego Desacoplada (Zero-Hardcoding de Dependencias)
+- **Aprovisionamiento Frugal y Modular:** Los servicios son 100% independientes y aditivos. Si el usuario solicita *"despliega una landing o e-commerce"*, el agente aprovisiona únicamente `database`, `valkey`, `localstorage` y `webdev/webprod`, sin obligar a levantar el stack de IA (`bifrost`/`hermes`) si la marca no lo requiere.
+- **Service Discovery Dinámico:** Los microservicios se comunican en caliente a través de la red privada VXLAN de Zerops por DNS interno (`http://bifrost:8080`, `http://evolution:8085`, `http://freellmapi:3001`, `http://listmonk:9000`). El agente inspecciona el entorno en vivo y solo cablea lo existente.
+- **Invariantes de Autoescalado Elástico:**
+  * Modo de CPU: `cpuMode: SHARED` obligatorio en todos los manifiestos de arranque (cero `DEDICATED` innecesario).
+  * Colchón Dual Dinámico: `minFreeRamGB: 0.25` y `minFreeRamPercent: 10` para prevenir OOM sin inflar costos.
+  * Omitir techos fijos (`maxCpu`, `maxRam`) en manifiestos salvo circuit breakers específicos.
+
+---
+
 ## 0. Protocolo de Activación por Lenguaje Natural & Discriminación (Greenfield vs Brownfield)
 
 > [!IMPORTANT]
