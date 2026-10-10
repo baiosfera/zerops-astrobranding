@@ -117,53 +117,7 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 ## 📦 Catálogo y Herramientas Soberanas
 - **Catálogo Oficial (141 skills)**: [`.atl/skill-registry.md`](file:///var/www/.atl/skill-registry.md).
 - **Bootstrapper Universal**: [`iniciar.sh`](file:///var/www/zerops-astrobranding/iniciar.sh) (raíz frío) y [`unisetup.sh`](file:///var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh) aprovisionan dependencias, herramientas y sincronizan SSoT sin drift.
-- **Herramientas Globales en PATH**: `docu-validate`, `research-validate`, `astrobranding-check`, `ssot-parity-check`, `skills-suite-validate`, `bifrost-cli`, `zcp-preflight-gate`, `zcp-wa`, `zcp-mail`.
+- **Herramientas Globales en PATH**: `ssot-parity-check`, `skills-suite-validate`, `bifrost-cli`, `zcp-preflight-gate`, `zcp-wa`, `zcp-mail`.
 
 <!-- CUSTOM:END -->
 
-
-<!-- ZEROPS:REFLOG -->
-### 2026-09-30 — Bootstrap: Aprovisionar infraestructura gestionada y runtime hermes
-
-- **Runtime:** hermes (ubuntu/python@3.12, simple)
-- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2), nats (nats:single@2.12), objectstorage (object-storage), localstorage (local-storage:single@1)
-- **Session:** 1df42c53b6e76bc8
-
-> This is a historical record. Verify current state via `zerops_discover`.
-<!-- /ZEROPS:REFLOG -->
-
-<!-- ZEROPS:REFLOG -->
-### 2026-10-01 — Bootstrap: provision elplacerdc core data mesh, evolution, listmonk, web-dev
-
-- **Runtime:** webdev (ubuntu/bun@1.3, simple)
-- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2), nats (nats:single@2.12), objectstorage (object-storage), localstorage (local-storage:single@1)
-- **Runtime:** evolution (alpine/go@1.22, simple)
-- **Dependencies:** database (postgresql:single@18), nats (nats:single@2.12)
-- **Runtime:** listmonk (alpine/go@1.22, simple)
-- **Dependencies:** database (postgresql:single@18)
-- **Session:** 7975ecd8ff7a9b20
-
-> This is a historical record. Verify current state via `zerops_discover`.
-<!-- /ZEROPS:REFLOG -->
-
-<!-- ZEROPS:REFLOG -->
-### 2026-10-02 — Bootstrap: 
-
-- **Runtime:** freellmapi (ubuntu/nodejs@24, simple)
-- **Dependencies:** localstorage (local-storage:single@1)
-- **Runtime:** bifrost (alpine/go@1.22, simple)
-- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2)
-- **Session:** a9605864db17978d
-
-> This is a historical record. Verify current state via `zerops_discover`.
-<!-- /ZEROPS:REFLOG -->
-
-<!-- ZEROPS:REFLOG -->
-### 2026-10-07 — Bootstrap: 
-
-- **Runtime:** brandview (alpine/bun@1.3, dev)
-- **Dependencies:** localstorage (local-storage:single@1)
-- **Session:** b28fb2dad200a80f
-
-> This is a historical record. Verify current state via `zerops_discover`.
-<!-- /ZEROPS:REFLOG -->
