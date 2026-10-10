@@ -45,13 +45,13 @@ function getMetrics() {
     const scriptPath = fs.existsSync("/var/www/zerops-astrobranding/scripts/cockpit-status.ts")
       ? "/var/www/zerops-astrobranding/scripts/cockpit-status.ts"
       : "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/cockpit-status.ts";
-    const runner = typeof (globalThis as any).Bun !== "undefined" ? "bun" : "node --no-warnings --experimental-strip-types";
+    const runner = typeof globalThis.Bun !== "undefined" ? "bun" : "node --no-warnings --experimental-strip-types";
     const raw = execSync(`${runner} "${scriptPath}" --json`, {
       encoding: "utf-8",
       timeout: 6000,
     });
     return JSON.parse(raw);
-  } catch (err: any) {
+  } catch (err) {
     return { error: err.message };
   }
 }
