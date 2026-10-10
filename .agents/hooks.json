@@ -1,0 +1,28 @@
+{
+  "proactive-tool-guard": {
+    "PreToolUse": [
+      {
+        "matcher": "search_web|write_to_file|replace_file_content|run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B /var/www/.bin/hooks/tool-guard.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B /var/www/.bin/hooks/tool-guard.py --post-tool",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
