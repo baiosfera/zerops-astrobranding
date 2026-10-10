@@ -1256,6 +1256,32 @@ def run_tests():
     assert tenant_res.get("decision") == "deny" and "ARNÉS MULTI-TENANT" in tenant_res.get("reason", ""), f"Expected deny on tenant file inside chassis, got {tenant_res}"
     print("✓ Test 34 Passed: Multi-Tenant Upstream Shield blocks client data leak into 0zcp-123")
 
+    # Test 35: Anti-Perros Guardianes blocks write_to_file on synthetic validator
+    res_val_write = evaluate_hook({
+        "transcriptPath": "/nonexistent",
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {
+                "TargetFile": "/var/www/.agents/skills/cohalo/scripts/cohalo-validate.sh",
+                "CodeContent": "#!/usr/bin/env bash\necho passed"
+            }
+        }
+    })
+    assert res_val_write.get("decision") == "deny" and "Soberanía del Sensor Universal" in res_val_write.get("reason", ""), f"Expected deny on individual validate.sh, got {res_val_write}"
+    print("✓ Test 35 Passed: Anti-Perros Guardianes blocks write_to_file on synthetic *-validate.sh")
+
+    # Test 36: Anti-Perros Guardianes blocks run_command invoking synthetic validator
+    res_val_cmd = evaluate_hook({
+        "toolCall": {
+            "name": "run_command",
+            "args": {
+                "CommandLine": "bash /var/www/.agents/skills/cohalo/scripts/cohalo-validate.sh"
+            }
+        }
+    })
+    assert res_val_cmd.get("decision") == "deny" and "Soberanía del Sensor Universal" in res_val_cmd.get("reason", ""), f"Expected deny on running individual validate.sh, got {res_val_cmd}"
+    print("✓ Test 36 Passed: Anti-Perros Guardianes blocks run_command on synthetic *-validate.sh")
+
     print("============================================================")
     print("✅ ALL TOOL-GUARD UNIT TESTS PASSED DETERMINISTICALLY (exit 0)")
     print("============================================================")
