@@ -74,6 +74,10 @@ CORE_SYNC_PAIRS = [
         "/var/www/AGENTS.md"
     ),
     (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/AGENTS.md",
+        "/var/www/zerops-astrobranding/AGENTS.md"
+    ),
+    (
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/rules/00-SUPREME-DIRECTIVE.md",
         "/var/www/.agents/rules/00-SUPREME-DIRECTIVE.md"
     ),
