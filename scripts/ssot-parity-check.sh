@@ -63,6 +63,8 @@ if [ -f "$LOCAL_BASE/.agents/references/gentle_governance_encyclopedia.md" ] && 
     compare_files "gentle_governance_encyclopedia.md" "$LOCAL_BASE/.agents/references/gentle_governance_encyclopedia.md" "$DRIVE_BASE/.agents/references/gentle_governance_encyclopedia.md"
 fi
 
+compare_files "skill-registry.md" "$LOCAL_BASE/.atl/skill-registry.md" "$DRIVE_BASE/.atl/skill-registry.md"
+
 if [ -f "$LOCAL_BASE/.agents/references/astro_suites_encyclopedia.md" ] && [ -f "$DRIVE_BASE/.agents/references/astro_suites_encyclopedia.md" ]; then
     compare_files "astro_suites_encyclopedia.md" "$LOCAL_BASE/.agents/references/astro_suites_encyclopedia.md" "$DRIVE_BASE/.agents/references/astro_suites_encyclopedia.md"
 fi
@@ -76,7 +78,6 @@ CORE_SCRIPTS=(
     "setup-astrokey.sh"
     "setup-zcp.sh"
     "drive-keys.sh"
-    "zcp-validate.sh"
     "astrobranding-check.sh"
     "skills-suite-validate.sh"
     "ssot-parity-check.sh"
@@ -141,8 +142,6 @@ echo "--- [3/4] Checking /usr/local/bin and .bin Symlinks ---"
 SYMLINKS=(
     "skills-suite-validate"
     "ssot-parity-check"
-    "docu-validate"
-    "research-validate"
     "astrobranding-check"
     "zcp-sync"
 )

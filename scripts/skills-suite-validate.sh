@@ -22,22 +22,14 @@ echo "============================================================"
 # SSoT-First: Si el repositorio soberano en Drive existe, iterar estrictamente
 # sobre el conjunto canónico de custom skills, ignorando cualquier artefacto upstream.
 TARGET_SKILLS=()
-if [ -d "$SSOT_DIR" ]; then
-    for s in "$SSOT_DIR"/*; do
-        if [ -d "$s" ]; then
-            TARGET_SKILLS+=("$(basename "$s")")
+for s in "$SKILLS_DIR"/*; do
+    if [ -d "$s" ]; then
+        s_name="$(basename "$s")"
+        if ! echo "$s_name" | grep -qE "$EXCLUDED_REGEX"; then
+            TARGET_SKILLS+=("$s_name")
         fi
-    done
-else
-    for s in "$SKILLS_DIR"/*; do
-        if [ -d "$s" ]; then
-            s_name="$(basename "$s")"
-            if ! echo "$s_name" | grep -qE "$EXCLUDED_REGEX"; then
-                TARGET_SKILLS+=("$s_name")
-            fi
-        fi
-    done
-fi
+    fi
+done
 
 for skill_name in "${TARGET_SKILLS[@]}"; do
     skill_path="$SKILLS_DIR/$skill_name"
@@ -92,7 +84,7 @@ for skill_name in "${TARGET_SKILLS[@]}"; do
         fi
 
         # 2. Validar frontmatter mínimo (name:)
-        if [ "$UNI_FAIL" -eq 0 ] && ! grep -qE '^name:\s*[a-zA-Z0-9_\.\-]+' "$skill_path/SKILL.md"; then
+        if [ "$UNI_FAIL" -eq 0 ] && ! grep -qE '^name:[[:space:]]*["'\'']?[a-zA-Z0-9_\.\-]+' "$skill_path/SKILL.md"; then
             echo "❌ [$skill_name]: Universal Sensor Failed - Invalid or missing frontmatter name in SKILL.md"
             UNI_FAIL=1
         fi

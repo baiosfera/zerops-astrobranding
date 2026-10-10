@@ -102,10 +102,6 @@ CORE_SYNC_PAIRS = [
         "/var/www/.agents/references/astro_suites_encyclopedia.md"
     ),
     (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.engram/config.json",
-        "/var/www/.engram/config.json"
-    ),
-    (
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.atl/skill-registry.md",
         "/var/www/.atl/skill-registry.md"
     ),
@@ -178,12 +174,15 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
 
     return {"purged_superseded": purged_superseded, "purged_executed": purged_executed}
 
-def auto_sync_governance():
+def auto_sync_governance(target_file: str = ""):
     """
-    Autonomous Parity Reactor: Keeps SSoT and local runtime in bidirectional
-    real-time synchronization. Propagates the newest file state deterministically.
+    Autonomous Parity & Mirror Reactor: Keeps SSoT (Google Drive), Git Repositories,
+    and local runtime in real-time bidirectional lockstep.
+    Silently and deterministically propagates changes and pushes to GitHub without friction.
     """
-    import shutil
+    import shutil, subprocess
+    
+    # 1. Core governance sync pairs (Drive SSoT <-> Local runtime)
     for ssot_path, runtime_path in CORE_SYNC_PAIRS:
         try:
             ssot_exists = os.path.exists(ssot_path)
@@ -216,11 +215,74 @@ def auto_sync_governance():
         except Exception:
             pass
 
+    # 2. Real-time Mirror Sync for Skills
+    if target_file and "/.agents/skills/" in target_file:
+        try:
+            parts = target_file.split("/.agents/skills/")
+            if len(parts) > 1:
+                rel = parts[1]
+                skill_name = rel.split("/")[0]
+                git_dest = os.path.join("/var/www/zerops-astro-skills", rel)
+                drive_dest = os.path.join("/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills", rel)
+                
+                if os.path.exists(target_file):
+                    os.makedirs(os.path.dirname(git_dest), exist_ok=True)
+                    shutil.copy2(target_file, git_dest)
+                    if not UPSTREAM_SKILLS_PATTERN.match(skill_name):
+                        os.makedirs(os.path.dirname(drive_dest), exist_ok=True)
+                        shutil.copy2(target_file, drive_dest)
+        except Exception:
+            pass
+
+    # 3. Real-time Mirror Sync for Deployment Scripts
+    if target_file and ("/scripts/" in target_file or "/.bin/" in target_file):
+        try:
+            base_script = os.path.basename(target_file)
+            repo_script = os.path.join("/var/www/zerops-astrobranding/scripts", base_script)
+            drive_script = os.path.join("/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts", base_script)
+            bin_script = os.path.join("/var/www/.bin", base_script)
+            
+            if os.path.exists(target_file):
+                for dest in [repo_script, drive_script, bin_script]:
+                    if os.path.exists(os.path.dirname(dest)):
+                        shutil.copy2(target_file, dest)
+                        if dest == bin_script or base_script.endswith(".sh"):
+                            try:
+                                os.chmod(dest, 0o755)
+                            except Exception:
+                                pass
+        except Exception:
+            pass
+
+    # 4. Autonomous Git Mirror Synchronization (Auto-Commit & Auto-Push)
+    # 4a. Check zerops-astro-skills
+    try:
+        skills_git = "/var/www/zerops-astro-skills"
+        if os.path.exists(os.path.join(skills_git, ".git")):
+            st = subprocess.run(["git", "status", "--porcelain"], cwd=skills_git, capture_output=True, text=True, timeout=3)
+            if st.returncode == 0 and st.stdout.strip():
+                subprocess.run(["git", "add", "-A"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+                subprocess.run(["git", "commit", "-m", "chore(skills): auto-sync mirror mode"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                subprocess.run(["git", "push", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+    except Exception:
+        pass
+
+    # 4b. Check zerops-astrobranding
+    try:
+        repo_git = "/var/www/zerops-astrobranding"
+        if os.path.exists(os.path.join(repo_git, ".git")):
+            st = subprocess.run(["git", "status", "--porcelain"], cwd=repo_git, capture_output=True, text=True, timeout=3)
+            if st.returncode == 0 and st.stdout.strip():
+                subprocess.run(["git", "add", "-A"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+                subprocess.run(["git", "commit", "-m", "chore(repo): auto-sync mirror mode"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                subprocess.run(["git", "push", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+    except Exception:
+        pass
+
     # Purge bytecode residue deterministically (Invariant 6)
     hooks_pycache = "/var/www/.bin/hooks/__pycache__"
     if os.path.exists(hooks_pycache):
         try:
-            import shutil
             shutil.rmtree(hooks_pycache, ignore_errors=True)
         except Exception:
             pass
@@ -414,7 +476,7 @@ def evaluate_hook(payload: dict) -> dict:
             if has_question or not has_go:
                 halt_alert = "\n⏸️ F4 HALT GATE ACTIVO: Ticket en progreso."
 
-        governance_msg = "🏛️ ARNES FÍSICO ZCP (v3.0): Plan-First Gate Obligatorio. Contrato Anti-Redundancia en Chat. Reality Over Checklist Theater."
+        governance_msg = "🏛️ ARNÉS FÍSICO ZCP (v3.1): Contrato Plan-First Gate. Contrato Anti-Redundancia en Chat. F0 Grounding Epistémico (Anti-AMN con Context7/Exa/Jina). Reality Over Checklist Theater."
         return {
             "injectSteps": [
                 {
@@ -428,18 +490,18 @@ def evaluate_hook(payload: dict) -> dict:
     tool_name = tool_call.get("name", "")
     args = tool_call.get("args", {})
 
-    # 0. Anti-AMN & F0 Epistemic Inflow: Bloqueo determinista de search_web nativo
+    # 0. Anti-AMN & F0 Epistemic Inflow: Enrutamiento afirmativo hacia skill research
     if tool_name == "search_web":
         return {
             "decision": "deny",
             "reason": (
-                "INTERCEPCIÓN DETERMINISTA F0 (Anti-AMN): La herramienta nativa 'search_web' está deprecada y bloqueada en este entorno. "
-                "Para investigación y grounding en vivo, ejecutá exclusivamente la skill 'research' mediante 'call_mcp_tool' "
-                "(servidores: tavily, exa, brave) o mediante subagente 'invoke_subagent' (typeName: 'research')."
+                "Contrato Epistémico F0 (Anti-AMN): Para investigación y grounding en vivo, ejecutá "
+                "exclusivamente la skill 'research' mediante 'call_mcp_tool' "
+                "(servidores: context7, exa, brave, tavily, firecrawl) o mediante subagente 'invoke_subagent' (typeName: 'research')."
             )
         }
 
-    # 0.1 Intercepción Determinista de Servidor MCP Local de Linear (Anti-Hang & Zero Token Waste)
+    # 0.1 Enrutamiento de Servidor MCP Local de Linear (Anti-Hang & Zero Token Waste)
     if tool_name == "call_mcp_tool" and args.get("ServerName") == "linear":
         return {
             "decision": "deny",
@@ -470,7 +532,7 @@ def evaluate_hook(payload: dict) -> dict:
             return {
                 "decision": "deny",
                 "reason": (
-                    "ARNÉS SSoT (Ruta Canónica Obligatoria): Usá exclusivamente la ruta absoluta canónica "
+                    "Contrato SSoT (Ruta Canónica): Usá exclusivamente la ruta absoluta canónica "
                     "'/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/' o remota 'baiosfera:0ZEROPS-AGY/0zcp-123/'."
                 )
             }
@@ -533,8 +595,8 @@ def evaluate_hook(payload: dict) -> dict:
                 return {
                     "decision": "deny",
                     "reason": (
-                        f"ARNÉS COHALO (Positive Guidance Obligatorio): Detectado token negativo ('{negative_match.group(0)}'). "
-                        "Expresá las restricciones mediante directivas puramente afirmativas y arneses físicos ejecutables."
+                        f"Contrato CoHaLo (Positive Guidance): Detectada formulación prohibitiva ('{negative_match.group(0)}'). "
+                        "Definí el comportamiento mediante directivas afirmativas ('Instead, do X') y arneses físicos ejecutables."
                     )
                 }
 
@@ -545,7 +607,7 @@ def evaluate_hook(payload: dict) -> dict:
                 return {
                     "decision": "deny",
                     "reason": (
-                        f"VIOLACIÓN DE COHALO LEVEL 2 (Router Bloat): SKILL.md tiene {word_count} palabras "
+                        f"Contrato CoHaLo Level 2 (Router Token Budget): SKILL.md tiene {word_count} palabras "
                         "(límite: 480 palabras / ~550 tokens). Desacoplá especificaciones técnicas hacia "
                         "'references/usage.md' o 'references/infra.md' respetando la revelación progresiva."
                     )
@@ -560,9 +622,9 @@ def evaluate_hook(payload: dict) -> dict:
                         return {
                             "decision": "deny",
                             "reason": (
-                                f"VIOLACIÓN DE MACRO-VISIÓN 360 (Dependencia Rota): 'unisetup.sh' invoca "
-                                f"[{referenced_script}] pero dicho script no existe en '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/'. "
-                                "Creá o alineá el script aguas abajo antes de incorporarlo al bootstrapper."
+                                f"Contrato MACRO-VISIÓN 360 (Alineación de Dependencias): 'unisetup.sh' invoca "
+                                f"[{referenced_script}], el cual debe residir en '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/'. "
+                                "Alineá o creá el script aguas abajo antes de incorporarlo al bootstrapper."
                             )
                         }
 
@@ -591,8 +653,8 @@ def evaluate_hook(payload: dict) -> dict:
                             return {
                                 "decision": "deny",
                                 "reason": (
-                                    f"VIOLACIÓN DE PRESERVACIÓN DE SÍMBOLOS AST: Se eliminaron funciones críticas {missing_funcs} "
-                                    f"en [{os.path.basename(target_file)}]. En scripts de plataforma no podés amputar lógica existente sin desacople."
+                                    f"Contrato de Preservación de Código AST: Conservá las funciones existentes {missing_funcs} "
+                                    f"en [{os.path.basename(target_file)}]. En scripts de plataforma realizá extensiones o desacoples aditivos."
                                 )
                             }
                         old_classes = {n.name for n in ast.walk(old_ast) if isinstance(n, ast.ClassDef)}
@@ -602,7 +664,7 @@ def evaluate_hook(payload: dict) -> dict:
                             return {
                                 "decision": "deny",
                                 "reason": (
-                                    f"VIOLACIÓN DE PRESERVACIÓN DE SÍMBOLOS AST: Se eliminaron clases críticas {missing_classes} "
+                                    f"Contrato de Preservación de Código AST: Conservá las clases existentes {missing_classes} "
                                     f"en [{os.path.basename(target_file)}]."
                                 )
                             }
@@ -619,7 +681,7 @@ def evaluate_hook(payload: dict) -> dict:
                         return {
                             "decision": "deny",
                             "reason": (
-                                f"VIOLACIÓN DE SEGURIDAD OPERATIVA: Se eliminó el flag de seguridad 'set -e' / 'set -euo pipefail' "
+                                f"Contrato de Seguridad Operativa: Conservá el flag de seguridad 'set -e' / 'set -euo pipefail' "
                                 f"en [{os.path.basename(target_file)}]."
                             )
                         }
@@ -633,7 +695,7 @@ def evaluate_hook(payload: dict) -> dict:
                         return {
                             "decision": "deny",
                             "reason": (
-                                f"VIOLACIÓN DE PRESERVACIÓN DE FUNCIONES: Se eliminaron funciones críticas {missing_fns} "
+                                f"Contrato de Preservación de Funciones: Conservá las funciones existentes {missing_fns} "
                                 f"en [{os.path.basename(target_file)}]."
                             )
                         }
@@ -645,8 +707,8 @@ def evaluate_hook(payload: dict) -> dict:
                     return {
                         "decision": "deny",
                         "reason": (
-                            f"VIOLACIÓN DE PRESERVACIÓN DE LÍNEAS (Poda no autorizada): El archivo pasa de {old_lines} a {new_lines} líneas "
-                            f"(reducción >30%). Si requerís refactorizar, usá replace_file_content quirúrgico o desacoplá en módulos."
+                            f"Contrato de Preservación de Líneas: El archivo pasa de {old_lines} a {new_lines} líneas "
+                            f"(reducción >30%). Aplicá ediciones quirúrgicas con replace_file_content o desacoplá en módulos independientes."
                         )
                     }
             except Exception:
@@ -674,7 +736,7 @@ def evaluate_hook(payload: dict) -> dict:
                     return {
                         "decision": "deny",
                         "reason": (
-                            f"VIOLACIÓN DE SINTAXIS REAL (Python SyntaxError): {target_file}:{e.lineno}: {e.msg}\n"
+                            f"Contrato de Integridad Sintáctica (Python SyntaxError): {target_file}:{e.lineno}: {e.msg}\n"
                             f"Fragmento: {e.text.strip() if e.text else ''}"
                         )
                     }
@@ -695,7 +757,7 @@ def evaluate_hook(payload: dict) -> dict:
                         return {
                             "decision": "deny",
                             "reason": (
-                                f"VIOLACIÓN DE SINTAXIS REAL (Bash Syntax Error): {target_file}\n"
+                                f"Contrato de Integridad Sintáctica (Bash Syntax Error): {target_file}\n"
                                 f"{err_msg}"
                             )
                         }
@@ -723,7 +785,7 @@ def evaluate_hook(payload: dict) -> dict:
             return {
                 "decision": "deny",
                 "reason": (
-                    "ARNÉS SSoT (Ruta Canónica Obligatoria): Usá exclusivamente la ruta absoluta canónica "
+                    "Contrato SSoT (Ruta Canónica): Usá exclusivamente la ruta absoluta canónica "
                     "'/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/' o remota 'baiosfera:0ZEROPS-AGY/0zcp-123/'."
                 )
             }
@@ -993,8 +1055,8 @@ def run_tests():
             }
         }
     })
-    assert res.get("decision") == "deny" and ("PRESERVACIÓN" in res.get("reason", "") or "SEGURIDAD" in res.get("reason", "")), f"Expected deny on script mutilation, got {res}"
-    print("✓ Test 19 Passed: Platform script mutilation & function deletion blocked (AST & Line Floor)")
+    assert res.get("decision") == "deny" and ("preservación" in res.get("reason", "").lower() or "seguridad" in res.get("reason", "").lower()), f"Expected deny on script mutilation, got {res}"
+    print("✓ Test 19 Passed: Platform script mutilation & function deletion caught (AST & Line Floor)")
 
     # Test 20: Deny set -e removal in bash scripts
     res = evaluate_hook({
@@ -1040,14 +1102,14 @@ def run_tests():
             }
         }
     })
-    assert res.get("decision") == "deny" and "VIOLACIÓN DE MACRO-VISIÓN 360" in res.get("reason", ""), f"Expected deny on broken dependency in unisetup.sh, got {res}"
-    print("✓ Test 23 Passed: Broken downstream script dependencies in unisetup.sh blocked (Macro-Visión 360 Radar)")
+    assert res.get("decision") == "deny" and "MACRO-VISIÓN 360" in res.get("reason", ""), f"Expected deny on broken dependency in unisetup.sh, got {res}"
+    print("✓ Test 23 Passed: Broken downstream script dependencies in unisetup.sh caught (Macro-Visión 360 Radar)")
 
     # Test 24: Epistemic Inflow Mandate - Plan-First Gate & Subordinated Execution Closure verified
     pi_res = evaluate_hook({"invocationNum": 1})
     steps = pi_res.get("injectSteps", [])
-    assert len(steps) > 0 and "Plan-First Gate Obligatorio" in steps[0].get("ephemeralMessage", ""), f"Expected Plan-First Gate notice in PreInvocation, got {pi_res}"
-    print("✓ Test 24 Passed: Plan-First Gate Obligatorio & Subordinated Execution Closure verified (Epistemic Inflow Mandate)")
+    assert len(steps) > 0 and "Plan-First Gate" in steps[0].get("ephemeralMessage", ""), f"Expected Plan-First Gate notice in PreInvocation, got {pi_res}"
+    print("✓ Test 24 Passed: Contrato Plan-First Gate & Subordinated Execution Closure verified (Epistemic Inflow)")
 
     # Test 25: Universal Physical Sensor Integration (Standard v3.3)
     skills_val = subprocess.run(["/var/www/.bin/skills-suite-validate"], capture_output=True, text=True)
@@ -1187,27 +1249,23 @@ def main():
         print(json.dumps(res))
         sys.exit(0)
 
-    if "--post-tool" in sys.argv:
-        auto_sync_governance()
+    raw_input = ""
+    payload = {}
+    try:
+        raw_input = sys.stdin.read()
+        if raw_input.strip():
+            payload = json.loads(raw_input)
+    except Exception:
+        pass
+
+    is_post_tool = "--post-tool" in sys.argv or ("stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload))
+    if is_post_tool:
+        target_file = payload.get("toolCall", {}).get("args", {}).get("TargetFile", "")
+        auto_sync_governance(target_file)
         print(json.dumps({}))
         sys.exit(0)
 
-
-    try:
-        raw_input = sys.stdin.read()
-        if not raw_input.strip():
-            print(json.dumps({}))
-            sys.exit(0)
-        payload = json.loads(raw_input)
-        
-        # Determine event type
-        is_post_tool = "--post-tool" in sys.argv or ("stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload))
-        if is_post_tool:
-            auto_sync_governance()
-            print(json.dumps({}))
-            sys.exit(0)
-            
-    except Exception as e:
+    if not payload:
         print(json.dumps({}))
         sys.exit(0)
 

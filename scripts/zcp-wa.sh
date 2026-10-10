@@ -84,7 +84,7 @@ case "$CMD" in
     if [ -n "$QR_BASE64" ]; then
       echo "✅ Código QR generado exitosamente."
       echo "👉 Podés escanearlo visualmente en el panel web:"
-      echo "   https://evolution-278-8085.ny1.zerops.app/manager"
+      echo "   ${EVOLUTION_MANAGER_URL:-${EVOLUTION_URL}/manager}"
       echo ""
       echo "O inspeccionar el payload base64:"
       echo "${QR_BASE64:0:80}..."
