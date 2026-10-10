@@ -575,6 +575,19 @@ def evaluate_hook(payload: dict) -> dict:
         # A4. Epistemic Guidance & Reality: Governed by physical compiler sensors and contracts.
         # Eradicated artificial transcript keyword grepping and synthetic linear_active gates.
 
+        # A4.1 Anti-Perros Guardianes (Eradicates Synthetic Individual Validator Scripts)
+        base_target = os.path.basename(target_file)
+        if base_target.endswith("-validate.sh") and base_target != "skills-suite-validate.sh":
+            return {
+                "decision": "deny",
+                "reason": (
+                    f"Soberanía del Sensor Universal: La validación de capacidades reside exclusivamente "
+                    f"en 'skills-suite-validate'. En vez de crear o editar validadores individuales como [{base_target}], "
+                    "verificá que los scripts compilen con 'bash -n' y que las pruebas residan en la suite física "
+                    "de la aplicación (bun test / pytest) o en el Sensor Universal."
+                )
+            }
+
         # A5. CoHaLo & Skill-Improver Quality Gate
         content_to_check = args.get("CodeContent", "") or args.get("ReplacementContent", "")
 
