@@ -654,9 +654,9 @@ def evaluate_hook(payload: dict) -> dict:
                 return {
                     "decision": "deny",
                     "reason": (
-                        f"VIOLACIÓN DE REALIDAD DE SOFTWARE (Anti-Checklist Theater): "
-                        f"Prohibido silenciar errores con '>/dev/null 2>&1' en sensores o validadores [{os.path.basename(target_file)}]. "
-                        "Los sensores deben capturar stderr y transparentar cualquier fallo físico real."
+                        f"ARNÉS REALIDAD DE SOFTWARE (Anti-Checklist Theater): "
+                        f"Mantené la captura transparente de stderr sin silenciar errores en sensores o validadores [{os.path.basename(target_file)}]. "
+                        "Los sensores deben registrar stderr y transparentar cualquier fallo físico real."
                     )
                 }
 
@@ -708,19 +708,19 @@ def evaluate_hook(payload: dict) -> dict:
             return {
                 "decision": "deny",
                 "reason": (
-                    f"VIOLACIÓN DE SOBERANÍA SSoT: Prohibido copiar o sincronizar la skill upstream [{polluted_skill}] "
-                    "hacia '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills/'. "
-                    "Esa carpeta en Google Drive SSoT es EXCLUSIVA para tus 65 custom skills."
+                    f"ARNÉS SSoT (Soberanía de Skills): La skill [{polluted_skill}] es upstream. "
+                    "Aloja exclusivamente custom skills soberanas en '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills/'."
                 )
             }
 
         # B1. SSoT Relative Path Guard
-        if contains_relative_0zcp_leak(cmd):
+        is_search_cmd = bool(re.match(r'^[ \t]*(grep|egrep|fgrep|rg|git\s+(log|diff|grep))\b', cmd))
+        if not is_search_cmd and contains_relative_0zcp_leak(cmd):
             return {
                 "decision": "deny",
                 "reason": (
-                    "VIOLACIÓN DE RUTA SSoT: Prohibido usar la ruta relativa '0zcp-123/'. "
-                    "La ruta canónica y absoluta hacia Google Drive SSoT es '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/'."
+                    "ARNÉS SSoT (Ruta Canónica Obligatoria): Usá exclusivamente la ruta absoluta canónica "
+                    "'/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/' o remota 'baiosfera:0ZEROPS-AGY/0zcp-123/'."
                 )
             }
 
@@ -729,8 +729,8 @@ def evaluate_hook(payload: dict) -> dict:
             return {
                 "decision": "deny",
                 "reason": (
-                    "VIOLACIÓN DE HANDOVER IMMUNITY: Prohibido ejecutar comandos destructivos o comodines (*) "
-                    "que puedan destruir artefactos de relevo inter-sesión en /var/www/artifacts/."
+                    "ARNÉS HANDOVER IMMUNITY: Mantené intactos los artefactos de relevo inter-sesión "
+                    "en /var/www/artifacts/ sin invocar comandos destructivos masivos."
                 )
             }
 

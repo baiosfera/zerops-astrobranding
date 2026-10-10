@@ -335,37 +335,34 @@ if [ -f "$REPO_DIR/scripts/unisetup.sh" ] || [ -f "$SSOT_SCRIPTS/unisetup.sh" ];
     elif [ -f "$PROJECT_ROOT/keys.env" ]; then
         RESOLVED_KEYS="$PROJECT_ROOT/keys.env"
     elif [ -n "$TARGET_PROJECT" ]; then
-        # Búsqueda específica en SSoT según el proyecto/cliente configurado
-        for candidate in \
-            "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/${TARGET_PROJECT}-keys.md" \
-            "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/${TARGET_PROJECT}-key.md" \
-            "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/${TARGET_PROJECT}.md" \
-            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}-keys.md" \
-            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}-key.md" \
-            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/${TARGET_PROJECT}.md" \
-            "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/${TARGET_PROJECT}/keys.md"; do
-            if [ -f "$candidate" ]; then
-                RESOLVED_KEYS="$candidate"
-                break
+        # Búsqueda específica en users-apis con soporte case-insensitive
+        TARGET_LOWER=$(echo "$TARGET_PROJECT" | tr '[:upper:]' '[:lower:]')
+        for d in "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/"*; do
+            [ -d "$d" ] || continue
+            d_lower=$(basename "$d" | tr '[:upper:]' '[:lower:]')
+            if [ "$d_lower" = "$TARGET_LOWER" ]; then
+                for candidate in \
+                    "$d/${TARGET_PROJECT}-keys.md" \
+                    "$d/${TARGET_LOWER}-keys.md" \
+                    "$d/$(basename "$d")-keys.md" \
+                    "$d/keys.md" \
+                    "$d/${TARGET_PROJECT}.md" \
+                    "$d/${TARGET_LOWER}.md" \
+                    "$d"/*keys*.md "$d"/*.md; do
+                    if [ -f "$candidate" ]; then
+                        f_base=$(basename "$candidate")
+                        [[ "$f_base" =~ ^(directus|prompt-maestro) ]] && continue
+                        RESOLVED_KEYS="$candidate"
+                        break 2
+                    fi
+                done
             fi
         done
     else
-        # Descubrimiento dinámico cuando no se especifica --project ni --keys
+        # Descubrimiento dinámico soberano desde users-apis
         DETECTED_PROFILES=()
         DETECTED_PATHS=()
         
-        # 1. En apis de SSoT
-        for f in "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/apis/"*-keys.md; do
-            if [ -f "$f" ]; then
-                b=$(basename "$f")
-                p="${b%-keys.md}"
-                [[ "$p" =~ ^(astro_api|browser_api|keys) ]] && continue
-                DETECTED_PROFILES+=("$p")
-                DETECTED_PATHS+=("$f")
-            fi
-        done
-        
-        # 2. En users-apis
         for d in "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/"*; do
             if [ -d "$d" ]; then
                 d_name=$(basename "$d")
