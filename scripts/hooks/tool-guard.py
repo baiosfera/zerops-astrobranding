@@ -74,6 +74,10 @@ CORE_SYNC_PAIRS = [
         "/var/www/AGENTS.md"
     ),
     (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/AGENTS.md",
+        "/var/www/zerops-astrobranding/AGENTS.md"
+    ),
+    (
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/rules/00-SUPREME-DIRECTIVE.md",
         "/var/www/.agents/rules/00-SUPREME-DIRECTIVE.md"
     ),
@@ -350,7 +354,6 @@ def has_recent_backup(target_file: str) -> bool:
     # Auto-snapshot before mutation: silent physical safety with standard naming & rotation
     if latest_bak_mtime < (target_mtime - 1.0):
         try:
-            target_bak_dir = bak_dirs[0] if is_skill else (bak_dirs[2] if is_rule else bak_dirs[1])
             os.makedirs(target_bak_dir, exist_ok=True)
             import shutil, time
             ts = int(time.time())
@@ -574,6 +577,19 @@ def evaluate_hook(payload: dict) -> dict:
 
         # A4. Epistemic Guidance & Reality: Governed by physical compiler sensors and contracts.
         # Eradicated artificial transcript keyword grepping and synthetic linear_active gates.
+
+        # A4.1 Anti-Perros Guardianes (Eradicates Synthetic Individual Validator Scripts)
+        base_target = os.path.basename(target_file)
+        if base_target.endswith("-validate.sh") and base_target != "skills-suite-validate.sh":
+            return {
+                "decision": "deny",
+                "reason": (
+                    f"Soberanía del Sensor Universal: La validación de capacidades reside exclusivamente "
+                    f"en 'skills-suite-validate'. En vez de crear o editar validadores individuales como [{base_target}], "
+                    "verificá que los scripts compilen con 'bash -n' y que las pruebas residan en la suite física "
+                    "de la aplicación (bun test / pytest) o en el Sensor Universal."
+                )
+            }
 
         # A5. CoHaLo & Skill-Improver Quality Gate
         content_to_check = args.get("CodeContent", "") or args.get("ReplacementContent", "")
@@ -799,6 +815,22 @@ def evaluate_hook(payload: dict) -> dict:
                     "en /var/www/artifacts/ sin invocar comandos destructivos masivos."
                 )
             }
+
+        # B2.6 Anti-Perros Guardianes (Eradicates Synthetic Individual Validator Scripts)
+        val_sh_match = re.search(r'(?:^|[/\s;&|])([a-zA-Z0-9_-]+-validate\.sh)\b', cmd)
+        if val_sh_match:
+            script_name = val_sh_match.group(1)
+            if script_name != "skills-suite-validate.sh":
+                is_delete_or_inspect = bool(re.match(r'^[ \t]*(rm|unlink|ls|file|stat)\b', cmd))
+                if not is_delete_or_inspect:
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            f"Soberanía del Sensor Universal: La validación de capacidades reside exclusivamente "
+                            f"en 'skills-suite-validate'. En vez de invocar o crear scripts individuales como [{script_name}], "
+                            "ejecutá el Sensor Universal 'skills-suite-validate' o los tests de comportamiento de la aplicación."
+                        )
+                    }
 
         # B3. Dangerous RM
         if DANGEROUS_RM_PATTERN.search(cmd):
@@ -1078,7 +1110,7 @@ def run_tests():
         "toolCall": {
             "name": "write_to_file",
             "args": {
-                "TargetFile": "/var/www/scratch/custom-validate.sh",
+                "TargetFile": "/var/www/scratch/custom-check.sh",
                 "CodeContent": "#!/usr/bin/env bash\nrun_check >/dev/null 2>&1\necho passed"
             }
         }
@@ -1229,6 +1261,32 @@ def run_tests():
     })
     assert tenant_res.get("decision") == "deny" and "ARNÉS MULTI-TENANT" in tenant_res.get("reason", ""), f"Expected deny on tenant file inside chassis, got {tenant_res}"
     print("✓ Test 34 Passed: Multi-Tenant Upstream Shield blocks client data leak into 0zcp-123")
+
+    # Test 35: Anti-Perros Guardianes blocks write_to_file on synthetic validator
+    res_val_write = evaluate_hook({
+        "transcriptPath": "/nonexistent",
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {
+                "TargetFile": "/var/www/.agents/skills/cohalo/scripts/cohalo-validate.sh",
+                "CodeContent": "#!/usr/bin/env bash\necho passed"
+            }
+        }
+    })
+    assert res_val_write.get("decision") == "deny" and "Soberanía del Sensor Universal" in res_val_write.get("reason", ""), f"Expected deny on individual validate.sh, got {res_val_write}"
+    print("✓ Test 35 Passed: Anti-Perros Guardianes blocks write_to_file on synthetic *-validate.sh")
+
+    # Test 36: Anti-Perros Guardianes blocks run_command invoking synthetic validator
+    res_val_cmd = evaluate_hook({
+        "toolCall": {
+            "name": "run_command",
+            "args": {
+                "CommandLine": "bash /var/www/.agents/skills/cohalo/scripts/cohalo-validate.sh"
+            }
+        }
+    })
+    assert res_val_cmd.get("decision") == "deny" and "Soberanía del Sensor Universal" in res_val_cmd.get("reason", ""), f"Expected deny on running individual validate.sh, got {res_val_cmd}"
+    print("✓ Test 36 Passed: Anti-Perros Guardianes blocks run_command on synthetic *-validate.sh")
 
     print("============================================================")
     print("✅ ALL TOOL-GUARD UNIT TESTS PASSED DETERMINISTICALLY (exit 0)")
