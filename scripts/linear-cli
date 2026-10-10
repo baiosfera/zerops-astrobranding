@@ -331,8 +331,50 @@ async function main() {
       process.exit(1);
     }
 
+function validateApplicationTests() {
+  const fs = require("fs");
+  const { execSync } = require("child_process");
+
+  console.log("🛡️ [F5 Reality Gate] Verificando tests físicos de la aplicación en runtime...");
+  const candidates = ["webdev", "webprod", "backend", "api", "app", "hermes", "bifrost"];
+  let executedCount = 0;
+
+  for (const svc of candidates) {
+    const svcPath = `/var/www/${svc}`;
+    if (fs.existsSync(svcPath)) {
+      const hasNodeTests = fs.existsSync(`${svcPath}/tests`) || fs.existsSync(`${svcPath}/test`);
+      const pkgPath = `${svcPath}/package.json`;
+      let hasPkgTest = false;
+      try {
+        if (fs.existsSync(pkgPath)) {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+          hasPkgTest = Boolean(pkg.scripts && pkg.scripts.test);
+        }
+      } catch (e) {}
+
+      if (hasNodeTests || hasPkgTest) {
+        console.log(`🧪 [F5 Reality Gate] Ejecutando suite de pruebas en '${svc}'...`);
+        try {
+          execSync(`ssh ${svc} "cd /var/www && (bun test 2>/dev/null || npm test 2>/dev/null || pytest 2>/dev/null)"`, { stdio: "inherit" });
+          executedCount++;
+          console.log(`✅ [F5 Reality Gate] Tests en '${svc}' validados con éxito (exit code 0).`);
+        } catch (testErr) {
+          console.error(`❌ F5 REALITY GATE RECHAZADO: Fallaron los tests en '${svc}'.`);
+          console.error("Prohibido marcar Done en Linear mientras la suite de pruebas físicas esté fallando.");
+          process.exit(1);
+        }
+      }
+    }
+  }
+
+  if (executedCount === 0) {
+    console.log("ℹ️ [F5 Reality Gate] No se detectaron suites de pruebas activas en servicios candidatos.");
+  }
+}
+
     if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
       const { execSync } = require("child_process");
+      validateApplicationTests();
       console.log("🛡️ [F5 Gate] Validating SSoT Parity & Git Push before closing issue...");
       try {
         execSync("/var/www/.bin/ssot-parity-check", { stdio: "inherit" });
@@ -403,6 +445,7 @@ async function main() {
 
     if (targetStatus.toLowerCase() === "done" || targetStatus.toLowerCase() === "completed") {
       const { execSync } = require("child_process");
+      validateApplicationTests();
       console.log("🛡️ [F5 Gate Batch] Validating SSoT Parity & Git Push once for batch...");
       try {
         execSync("/var/www/.bin/ssot-parity-check", { stdio: "inherit" });
