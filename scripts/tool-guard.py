@@ -821,14 +821,16 @@ def evaluate_hook(payload: dict) -> dict:
         if val_sh_match:
             script_name = val_sh_match.group(1)
             if script_name != "skills-suite-validate.sh":
-                return {
-                    "decision": "deny",
-                    "reason": (
-                        f"Soberanía del Sensor Universal: La validación de capacidades reside exclusivamente "
-                        f"en 'skills-suite-validate'. En vez de invocar o crear scripts individuales como [{script_name}], "
-                        "ejecutá el Sensor Universal 'skills-suite-validate' o los tests de comportamiento de la aplicación."
-                    )
-                }
+                is_delete_or_inspect = bool(re.match(r'^[ \t]*(rm|unlink|ls|file|stat)\b', cmd))
+                if not is_delete_or_inspect:
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            f"Soberanía del Sensor Universal: La validación de capacidades reside exclusivamente "
+                            f"en 'skills-suite-validate'. En vez de invocar o crear scripts individuales como [{script_name}], "
+                            "ejecutá el Sensor Universal 'skills-suite-validate' o los tests de comportamiento de la aplicación."
+                        )
+                    }
 
         # B3. Dangerous RM
         if DANGEROUS_RM_PATTERN.search(cmd):
