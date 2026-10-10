@@ -209,6 +209,10 @@ def process_excel(input_path: str):
 
         email_clean = f"{local_p}@{domain_p}".lower()
 
+        # Descarte de desuscripciones previas (Supresión Permanente)
+        if email_clean in SUPPRESSED_EMAILS:
+            continue
+
         # Validación regex RFC 5322
         if not EMAIL_REGEX.match(email_clean):
             stats['syntax_errors'] += 1
