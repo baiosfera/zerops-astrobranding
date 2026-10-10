@@ -359,6 +359,24 @@ def has_recent_backup(target_file: str) -> bool:
             ts = int(time.time())
             if is_skill and skill_name:
                 snapshot_name = f"{skill_name}_{base_name}_{ts}.bak"
+                skill_dir = target_file[:target_file.find(skill_name) + len(skill_name)]
+                if os.path.isdir(skill_dir):
+                    skill_md = os.path.join(skill_dir, "SKILL.md")
+                    ver = "latest"
+                    if os.path.exists(skill_md):
+                        try:
+                            with open(skill_md, "r", encoding="utf-8") as f:
+                                for line in f:
+                                    m_ver = re.search(r'version:\s*["\']?([^"\'\n]+)', line)
+                                    if m_ver:
+                                        ver = m_ver.group(1).strip()
+                                        break
+                        except Exception:
+                            pass
+                    dt_str = time.strftime("%Y%m%d_%H%M%S")
+                    dir_bak = os.path.join(target_bak_dir, f"{skill_name}_v{ver}_{dt_str}.bak")
+                    if not os.path.exists(dir_bak):
+                        shutil.copytree(skill_dir, dir_bak)
             else:
                 snapshot_name = f"{name_stem}_{base_name}_{ts}.bak" if name_stem != base_name else f"{base_name}_{ts}.bak"
             snapshot_path = os.path.join(target_bak_dir, snapshot_name)
@@ -374,6 +392,14 @@ def has_recent_backup(target_file: str) -> bool:
                         os.remove(old_f)
                     except Exception:
                         pass
+
+            if is_skill and skill_name:
+                dir_prefix = f"{skill_name}_v"
+                existing_dirs = [os.path.join(target_bak_dir, d) for d in os.listdir(target_bak_dir) if d.startswith(dir_prefix) and d.endswith(".bak") and os.path.isdir(os.path.join(target_bak_dir, d))]
+                if len(existing_dirs) > 5:
+                    existing_dirs.sort(key=os.path.getmtime)
+                    for old_d in existing_dirs[:-5]:
+                        shutil.rmtree(old_d, ignore_errors=True)
         except Exception:
             pass
     return True
@@ -444,12 +470,8 @@ def evaluate_hook(payload: dict) -> dict:
     if "stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload):
         return {}
 
-    # 2. PreInvocation Handling (Silent in production - Zero Token Bloat & Zero Context Disruption)
+    # 2. PreInvocation Handling (Dynamic Epistemic Radar & Gentle-AI Orchestrator)
     if "invocationNum" in payload or "initialNumSteps" in payload:
-        if "--test" not in sys.argv:
-            return {}
-
-        # The following runs ONLY during deterministic local unit test execution (--test)
         inv_num = payload.get("invocationNum", 0)
         now_ts = time.time()
         state_file = "/tmp/.tool_guard_pi_state.json"
@@ -479,14 +501,42 @@ def evaluate_hook(payload: dict) -> dict:
             if has_question or not has_go:
                 halt_alert = "\n⏸️ F4 HALT GATE ACTIVO: Ticket en progreso."
 
-        governance_msg = "🏛️ ARNÉS FÍSICO ZCP (v3.1): Contrato Plan-First Gate. Contrato Anti-Redundancia en Chat. F0 Grounding Epistémico (Anti-AMN con Context7/Exa/Jina). Reality Over Checklist Theater."
-        return {
-            "injectSteps": [
-                {
-                    "ephemeralMessage": f"{governance_msg}{halt_alert}".strip()
-                }
-            ]
-        }
+        ephemeral_msgs = []
+        if "--test" in sys.argv:
+            governance_msg = "🏛️ ARNÉS FÍSICO ZCP (v3.1): Contrato Plan-First Gate. Contrato Anti-Redundancia en Chat. F0 Grounding Epistémico (Anti-AMN con Context7/Exa/Jina). Reality Over Checklist Theater."
+            ephemeral_msgs.append(f"{governance_msg}{halt_alert}".strip())
+        else:
+            prompt_lower = user_prompt.lower()
+            matched_skills = [m[0] for m in detect_skills_in_prompt(user_prompt)]
+
+            # 1. Epistemic Grounding Radar (F0 Positive Guidance)
+            is_eval = any(k in prompt_lower for k in ["mejor forma", "investigar", "investiga", "benchmark", "sota", "comparar", "cual es mejor"])
+            if "research" in matched_skills or is_eval:
+                ephemeral_msgs.append(
+                    "F0 Epistemic Grounding: Ante consultas de arquitectura, SOTA o benchmark, "
+                    "contrastá fuentes primarias ejecutando la skill 'research' (Exa/Context7/Tavily) antes de concluir en prosa."
+                )
+
+            # 2. Gentle-AI Subagent Orchestrator Gate
+            is_heavy = any(k in prompt_lower for k in ["flujo", "refactor", "implementa", "arregla", "construye", "despliega", "crea"])
+            if is_heavy and len(prompt_lower) > 40:
+                ephemeral_msgs.append(
+                    "Gentle-AI Orchestrator: Mantené el hilo padre delgado. Para tareas sustanciales o de múltiples archivos, "
+                    "delegá la ejecución a subagentes acotados (invoke_subagent con 'research' o define_subagent) y sintetizá resultados."
+                )
+
+            if halt_alert:
+                ephemeral_msgs.append(halt_alert.strip())
+
+        if ephemeral_msgs:
+            return {
+                "injectSteps": [
+                    {
+                        "ephemeralMessage": "\n\n".join(ephemeral_msgs)
+                    }
+                ]
+            }
+        return {}
 
     # 2. PreToolUse Handling
     tool_call = payload.get("toolCall", {})
