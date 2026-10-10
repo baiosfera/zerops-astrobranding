@@ -41,11 +41,20 @@ def parse_markdown(filepath):
     return keys
 
 # Candidate locations for free LLM provider keys
-b_path = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/apis/baiosfera_freellm.md"
-d_path = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/apis/freellm_keys.md"
+b_path_candidates = [
+    "/var/www/baiosfera/0ZEROPS-AGY/users-apis/Baiosfera/baiosfera_freellm.md",
+    "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/apis/baiosfera_freellm.md",
+]
+d_path_candidates = [
+    "/var/www/baiosfera/0ZEROPS-AGY/users-apis/Damaren/damaren_freellm.md",
+    "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/apis/freellm_keys.md",
+]
 
-b_keys = parse_markdown(b_path)
-d_keys = parse_markdown(d_path)
+b_path = next((p for p in b_path_candidates if os.path.exists(p)), "")
+d_path = next((p for p in d_path_candidates if os.path.exists(p)), "")
+
+b_keys = parse_markdown(b_path) if b_path else {}
+d_keys = parse_markdown(d_path) if d_path else {}
 
 # Also inspect optional keys_file passed as argument
 if keys_file and os.path.exists(keys_file):

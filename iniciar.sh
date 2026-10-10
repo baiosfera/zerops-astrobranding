@@ -342,16 +342,17 @@ if [ -f "$REPO_DIR/scripts/unisetup.sh" ] || [ -f "$SSOT_SCRIPTS/unisetup.sh" ];
             d_lower=$(basename "$d" | tr '[:upper:]' '[:lower:]')
             if [ "$d_lower" = "$TARGET_LOWER" ]; then
                 for candidate in \
+                    "$d/${TARGET_PROJECT}.md" \
+                    "$d/${TARGET_LOWER}.md" \
+                    "$d/$(basename "$d").md" \
                     "$d/${TARGET_PROJECT}-keys.md" \
                     "$d/${TARGET_LOWER}-keys.md" \
                     "$d/$(basename "$d")-keys.md" \
                     "$d/keys.md" \
-                    "$d/${TARGET_PROJECT}.md" \
-                    "$d/${TARGET_LOWER}.md" \
-                    "$d"/*keys*.md "$d"/*.md; do
+                    "$d"/*.md; do
                     if [ -f "$candidate" ]; then
                         f_base=$(basename "$candidate")
-                        [[ "$f_base" =~ ^(directus|prompt-maestro) ]] && continue
+                        [[ "$f_base" =~ (directus|prompt-maestro|freellm|crawl4ai) ]] && continue
                         RESOLVED_KEYS="$candidate"
                         break 2
                     fi
@@ -366,10 +367,11 @@ if [ -f "$REPO_DIR/scripts/unisetup.sh" ] || [ -f "$SSOT_SCRIPTS/unisetup.sh" ];
         for d in "$DRIVE_MOUNT/0ZEROPS-AGY/users-apis/"*; do
             if [ -d "$d" ]; then
                 d_name=$(basename "$d")
-                for f in "$d"/*keys*.md "$d"/*.md; do
+                d_lower=$(echo "$d_name" | tr '[:upper:]' '[:lower:]')
+                for f in "$d/${d_name}.md" "$d/${d_lower}.md" "$d/${d_name}-keys.md" "$d/${d_lower}-keys.md" "$d"/*keys*.md "$d"/*.md; do
                     if [ -f "$f" ]; then
                         f_base=$(basename "$f")
-                        [[ "$f_base" =~ ^(directus|prompt-maestro) ]] && continue
+                        [[ "$f_base" =~ (directus|prompt-maestro|freellm|crawl4ai) ]] && continue
                         DETECTED_PROFILES+=("$d_name")
                         DETECTED_PATHS+=("$f")
                         break
