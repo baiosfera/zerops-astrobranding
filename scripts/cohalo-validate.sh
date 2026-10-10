@@ -6,6 +6,9 @@
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ ! -f "$SKILL_DIR/SKILL.md" ]; then
+    SKILL_DIR="/var/www/.agents/skills/cohalo"
+fi
 SKILL_FILE="$SKILL_DIR/SKILL.md"
 
 echo "============================================================"
