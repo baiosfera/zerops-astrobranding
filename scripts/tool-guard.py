@@ -350,7 +350,6 @@ def has_recent_backup(target_file: str) -> bool:
     # Auto-snapshot before mutation: silent physical safety with standard naming & rotation
     if latest_bak_mtime < (target_mtime - 1.0):
         try:
-            target_bak_dir = bak_dirs[0] if is_skill else (bak_dirs[2] if is_rule else bak_dirs[1])
             os.makedirs(target_bak_dir, exist_ok=True)
             import shutil, time
             ts = int(time.time())
