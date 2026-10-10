@@ -196,10 +196,24 @@ if [ "$RUN_ALL" = true ]; then
         fi
     else
         # Proyecto Downstream / Cliente (ej: client_app): Aislamiento absoluto anti-contaminación
-        CLIENT_DUMP="$ZCP_ROOT/../users-apis/${ACTIVE_PROJECT}/engram_${ACTIVE_PROJECT}.json"
-        if [ -f "$CLIENT_DUMP" ]; then
-            echo "• Sincronizando memoria LTM dedicada para cliente $ACTIVE_PROJECT..."
+        ACTIVE_LOWER="$(echo "$ACTIVE_PROJECT" | tr '[:upper:]' '[:lower:]')"
+        CLIENT_DUMP=""
+        for candidate in \
+            "$ZCP_ROOT/../${ACTIVE_LOWER}/engram/engram_ssot.json" \
+            "$ZCP_ROOT/../${ACTIVE_PROJECT}/engram/engram_ssot.json" \
+            "$ZCP_ROOT/../${ACTIVE_LOWER}/engram/engram_${ACTIVE_LOWER}.json" \
+            "$ZCP_ROOT/../users-apis/${ACTIVE_PROJECT}/engram_${ACTIVE_PROJECT}.json"; do
+            if [ -f "$candidate" ]; then
+                CLIENT_DUMP="$candidate"
+                break
+            fi
+        done
+        if [ -n "$CLIENT_DUMP" ]; then
+            echo "• Sincronizando memoria LTM dedicada para cliente $ACTIVE_PROJECT desde SSoT ($CLIENT_DUMP)..."
             "$PROJECT_ROOT/.bin/engram" import "$CLIENT_DUMP" 2>/dev/null || engram import "$CLIENT_DUMP" 2>/dev/null || true
+        elif [ -f "$SCRIPT_DIR/engram-sync" ]; then
+            echo "• Intentando hidratación Tiered Cold->Hot para $ACTIVE_PROJECT..."
+            bash "$SCRIPT_DIR/engram-sync" --pull --project "$ACTIVE_PROJECT" 2>/dev/null || true
         else
             echo "• Inicializando espacio de nombres LTM limpio y aislado para $ACTIVE_PROJECT..."
             engram save "Init: Bootstrap Soberano de $ACTIVE_PROJECT" "What: Inicializado espacio de nombres aislado para $ACTIVE_PROJECT.\nWhy: Adopcion limpia sin contaminacion de memoria upstream.\nWhere: /var/www\nLearned: Espacio de nombres LTM aislado y blindado contra cross-contamination." --project "$ACTIVE_PROJECT" --scope project 2>/dev/null || true
