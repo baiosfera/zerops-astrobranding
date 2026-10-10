@@ -726,19 +726,21 @@ def evaluate_hook(payload: dict) -> dict:
 
             if target_repo:
                 try:
+                    env_parity = dict(os.environ)
+                    env_parity["SKIP_UNPUSHED"] = "1"
                     parity_proc = subprocess.run(
-                        ["/usr/local/bin/ssot-parity-check"],
+                        ["/usr/local/bin/ssot-parity-check", "--allow-unpushed"],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
-                        timeout=15
+                        env=env_parity,
+                        timeout=20
                     )
                     if parity_proc.returncode != 0:
                         return {
                             "decision": "deny",
                             "reason": (
-                                "VIOLACIÓN DE PARIDAD SSoT (CANDADO PRE-PUSH): Prohibido ejecutar 'git push' en repositorios "
-                                "de infraestructura o skills mientras exista drift contra Google Drive SSoT. "
+                                "Paridad SSoT pre-push: Existe drift contra Google Drive SSoT o archivos locales sin commit. "
                                 "El sensor 'ssot-parity-check' detectó discrepancias. Ejecutá 'skills-sync' primero "
                                 "para restituir la paridad absoluta antes de empujar cambios al remoto."
                             )

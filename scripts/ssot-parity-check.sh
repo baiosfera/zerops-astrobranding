@@ -263,10 +263,14 @@ check_git_sovereign_repo() {
     local unpushed
     unpushed=$(git -C "$repo_dir" cherry -v origin/main 2>/dev/null || true)
     if [ -n "$unpushed" ]; then
-        echo "❌ Unpushed commits detected in sovereign repo: $repo_name (iniciar.sh cold boot will drift!)"
-        echo "$unpushed" | sed 's/^/   /'
-        echo "   👉 Acción requerida: cd $repo_dir && git push origin main"
-        ERRORS=$((ERRORS + 1))
+        if [ "${SKIP_UNPUSHED:-0}" = "1" ] || [ "${1:-}" = "--allow-unpushed" ] || [ "${ALLOW_UNPUSHED:-0}" = "1" ]; then
+            echo "ℹ️ Commits pendientes por empujar (permitido en contexto pre-push): $repo_name"
+        else
+            echo "❌ Unpushed commits detected in sovereign repo: $repo_name (iniciar.sh cold boot will drift!)"
+            echo "$unpushed" | sed 's/^/   /'
+            echo "   👉 Acción requerida: cd $repo_dir && git push origin main"
+            ERRORS=$((ERRORS + 1))
+        fi
     else
         echo "✓ Git push parity verified (up to date with origin/main): $repo_name"
     fi
