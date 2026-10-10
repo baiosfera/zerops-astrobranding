@@ -676,6 +676,6 @@ Para cualquier proyecto o marca desplegada bajo esta plantilla, la integridad de
 - **Cero Lógica Dispersa en Vistas y Endpoints:** Los controladores API (`/api/leads/register`) y paneles administrativos (`/adminn`) consumen exclusivamente las funciones de mutación y consulta de la capa de dominio, erradicando queries SQL manuales con condiciones `OR` fragmentadas.
 
 ### 2. Sensor Físico F5 en Linear y CI/CD (Reality Over Checklist Theater):
-- **Cierre Subordinado a la Suite de Pruebas:** El script soberano `linear-cli update-status <ID> "Done"` ejecuta obligatoriamente la suite de pruebas físicas en el runtime activo (`ssh <service> "cd /var/www && bun test"`).
-- **Prohibición de Falsos Dones:** La paridad de archivos en Google Drive o el estado limpio de Git son condiciones necesarias pero jamás suficientes. Si un solo test de integración o de regresión falla, la transición a `Done` es rechazada físicamente con código de salida 1.
+- **Cierre Subordinado a la Suite de Pruebas:** El script soberano `linear-cli update-status <ID> "Done"` ejecuta obligatoriamente la suite de pruebas físicas en el runtime activo (`ssh <service> "cd /var/www && (npm test || bun test)"`).
+- **Atestación Física de Calidad:** La paridad de archivos en Google Drive o el estado limpio de Git son condiciones necesarias pero jamás suficientes. El cierre a 'Done' se consuma exclusivamente cuando la suite completa de pruebas físicas de aplicación finaliza con código de salida 0.
 
