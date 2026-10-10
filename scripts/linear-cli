@@ -353,11 +353,12 @@ function validateApplicationTests() {
       } catch (e) {}
 
       if (hasNodeTests || hasPkgTest) {
-        console.log(`🧪 [F5 Reality Gate] Ejecutando suite de pruebas en '${svc}'...`);
+        const testCmd = hasPkgTest ? "npm test" : (hasNodeTests ? "bun test" : "pytest");
+        console.log(`🧪 [F5 Reality Gate] Ejecutando suite de pruebas en '${svc}' (${testCmd})...`);
         try {
-          execSync(`ssh ${svc} "cd /var/www && (bun test || npm test || pytest)"`, { stdio: "inherit" });
+          execSync(`ssh ${svc} "cd /var/www && ${testCmd}"`, { stdio: "inherit" });
           executedCount++;
-          console.log(`✅ [F5 Reality Gate] Tests en '${svc}' validados con éxito (exit code 0).`);
+          console.log(`✅ [F5 Reality Gate] Tests en '${svc}' validados con éxito (${testCmd} exit code 0).`);
         } catch (testErr) {
           console.error(`❌ F5 REALITY GATE RECHAZADO: Fallaron los tests en '${svc}'.`);
           console.error("Prohibido marcar Done en Linear mientras la suite de pruebas físicas esté fallando.");
