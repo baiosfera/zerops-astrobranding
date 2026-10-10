@@ -261,9 +261,9 @@ def auto_sync_governance(target_file: str = ""):
         if os.path.exists(os.path.join(skills_git, ".git")):
             st = subprocess.run(["git", "status", "--porcelain"], cwd=skills_git, capture_output=True, text=True, timeout=3)
             if st.returncode == 0 and st.stdout.strip():
-                subprocess.run(["git", "add", "-A"], cwd=skills_git, timeout=3)
-                subprocess.run(["git", "commit", "-m", "chore(skills): auto-sync mirror mode"], cwd=skills_git, timeout=8)
-                subprocess.run(["git", "push", "origin", "main"], cwd=skills_git, timeout=8)
+                subprocess.run(["git", "add", "-A"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+                subprocess.run(["git", "commit", "-m", "chore(skills): auto-sync mirror mode"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                subprocess.run(["git", "push", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
     except Exception:
         pass
 
@@ -273,9 +273,9 @@ def auto_sync_governance(target_file: str = ""):
         if os.path.exists(os.path.join(repo_git, ".git")):
             st = subprocess.run(["git", "status", "--porcelain"], cwd=repo_git, capture_output=True, text=True, timeout=3)
             if st.returncode == 0 and st.stdout.strip():
-                subprocess.run(["git", "add", "-A"], cwd=repo_git, timeout=3)
-                subprocess.run(["git", "commit", "-m", "chore(repo): auto-sync mirror mode"], cwd=repo_git, timeout=8)
-                subprocess.run(["git", "push", "origin", "main"], cwd=repo_git, timeout=8)
+                subprocess.run(["git", "add", "-A"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+                subprocess.run(["git", "commit", "-m", "chore(repo): auto-sync mirror mode"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                subprocess.run(["git", "push", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
     except Exception:
         pass
 
