@@ -578,8 +578,8 @@ function renderHtml(data: any): string {
 }
 
 // Universal HTTP Server (Bun.serve or Node.js http)
-if (typeof (globalThis as any).Bun !== "undefined") {
-  (globalThis as any).Bun.serve({
+if (typeof globalThis.Bun !== "undefined") {
+  globalThis.Bun.serve({
     port: PORT,
     async fetch(req: Request) {
       const url = new URL(req.url);
