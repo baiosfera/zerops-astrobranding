@@ -812,6 +812,20 @@ def evaluate_hook(payload: dict) -> dict:
                 )
             }
 
+        # B2.6 Anti-Perros Guardianes (Eradicates Synthetic Individual Validator Scripts)
+        val_sh_match = re.search(r'(?:^|[/\s;&|])([a-zA-Z0-9_-]+-validate\.sh)\b', cmd)
+        if val_sh_match:
+            script_name = val_sh_match.group(1)
+            if script_name != "skills-suite-validate.sh":
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        f"Soberanía del Sensor Universal: La validación de capacidades reside exclusivamente "
+                        f"en 'skills-suite-validate'. En vez de invocar o crear scripts individuales como [{script_name}], "
+                        "ejecutá el Sensor Universal 'skills-suite-validate' o los tests de comportamiento de la aplicación."
+                    )
+                }
+
         # B3. Dangerous RM
         if DANGEROUS_RM_PATTERN.search(cmd):
             return {
