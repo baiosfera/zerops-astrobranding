@@ -23,6 +23,13 @@
           }
         ]
       }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python3 -B /var/www/.bin/hooks/tool-guard.py",
+        "timeout": 10
+      }
     ]
   }
 }
