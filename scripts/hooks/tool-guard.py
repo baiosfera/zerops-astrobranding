@@ -32,14 +32,15 @@ DANGEROUS_RM_PATTERN = re.compile(r'rm\s+(-[a-zA-Z]*r[a-zA-Z]*f?|-f?[a-zA-Z]*r[a
 SWEEPING_ARTIFACTS_RM = re.compile(r'rm\s+.*artifacts/(\*|\.\*)', re.IGNORECASE)
 
 def contains_relative_0zcp_leak(text: str) -> bool:
-    """Detects occurrences of '0zcp-123' not preceded by the canonical Drive prefix."""
-    prefix = "/var/www/baiosfera/0ZEROPS-AGY/"
+    """Detects occurrences of '0zcp-123' not preceded by the canonical Drive prefix or rclone remote prefix."""
+    prefixes = ["/var/www/baiosfera/0ZEROPS-AGY/", "baiosfera:0ZEROPS-AGY/"]
     idx = 0
     while True:
         pos = text.find("0zcp-123", idx)
         if pos == -1:
             break
-        if pos < len(prefix) or text[pos - len(prefix):pos] != prefix:
+        valid = any(pos >= len(p) and text[pos - len(p):pos] == p for p in prefixes)
+        if not valid:
             return True
         idx = pos + len("0zcp-123")
     return False
@@ -244,12 +245,12 @@ def has_recent_backup(target_file: str) -> bool:
         return True  # New file being created
 
     target_mtime = os.path.getmtime(target_file)
-    bak_dirs = [
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills",
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/scripts",
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/rules",
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak"
-    ]
+    if is_skill:
+        target_bak_dir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills"
+    elif is_rule:
+        target_bak_dir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/rules"
+    else:
+        target_bak_dir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/scripts"
 
     base_name = os.path.basename(target_file)
     name_stem = os.path.splitext(base_name)[0]
@@ -260,11 +261,9 @@ def has_recent_backup(target_file: str) -> bool:
         skill_name = parts[1].split("/")[0] if len(parts) > 1 else ""
 
     latest_bak_mtime = 0.0
-    for bdir in bak_dirs:
-        if not os.path.exists(bdir):
-            continue
+    if os.path.exists(target_bak_dir):
         try:
-            for fname in os.listdir(bdir):
+            for fname in os.listdir(target_bak_dir):
                 match = False
                 if skill_name and skill_name in fname:
                     match = True
@@ -274,7 +273,7 @@ def has_recent_backup(target_file: str) -> bool:
                     match = True
                 
                 if match:
-                    fpath = os.path.join(bdir, fname)
+                    fpath = os.path.join(target_bak_dir, fname)
                     if os.path.isfile(fpath) and os.path.getsize(fpath) > 0:
                         mtime = os.path.getmtime(fpath)
                         if mtime > latest_bak_mtime:
@@ -282,14 +281,30 @@ def has_recent_backup(target_file: str) -> bool:
         except Exception:
             pass
 
-    # Auto-snapshot before mutation: silent physical safety without throwing friction
+    # Auto-snapshot before mutation: silent physical safety with standard naming & rotation
     if latest_bak_mtime < (target_mtime - 1.0):
         try:
             target_bak_dir = bak_dirs[0] if is_skill else (bak_dirs[2] if is_rule else bak_dirs[1])
             os.makedirs(target_bak_dir, exist_ok=True)
             import shutil, time
-            snapshot_path = os.path.join(target_bak_dir, f"{base_name}.{int(time.time())}.bak")
+            ts = int(time.time())
+            if is_skill and skill_name:
+                snapshot_name = f"{skill_name}_{base_name}_{ts}.bak"
+            else:
+                snapshot_name = f"{name_stem}_{base_name}_{ts}.bak" if name_stem != base_name else f"{base_name}_{ts}.bak"
+            snapshot_path = os.path.join(target_bak_dir, snapshot_name)
             shutil.copy2(target_file, snapshot_path)
+
+            # Auto-rotate: keep max 5 most recent snapshots for this specific target
+            prefix_match = f"{skill_name}_{base_name}_" if (is_skill and skill_name) else f"{name_stem}_"
+            existing = [os.path.join(target_bak_dir, f) for f in os.listdir(target_bak_dir) if f.startswith(prefix_match) and f.endswith(".bak")]
+            if len(existing) > 5:
+                existing.sort(key=os.path.getmtime)
+                for old_f in existing[:-5]:
+                    try:
+                        os.remove(old_f)
+                    except Exception:
+                        pass
         except Exception:
             pass
     return True
@@ -440,10 +455,9 @@ def evaluate_hook(payload: dict) -> dict:
             return {
                 "decision": "deny",
                 "reason": (
-                    f"VIOLACIÓN DE SOBERANÍA SSoT: Prohibido escribir la skill upstream [{polluted_skill}] "
-                    "en '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills/'. "
-                    "Esa carpeta en Google Drive SSoT es EXCLUSIVA para tus 65 custom skills. "
-                    "Las skills upstream de gentle-ai y pocock se ejecutan en caliente en ZCP."
+                    f"ARNÉS SSoT (Soberanía de Skills): La skill [{polluted_skill}] es upstream. "
+                    "La carpeta '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills/' en Google Drive SSoT "
+                    "aloja exclusivamente las custom skills soberanas."
                 )
             }
 
@@ -452,30 +466,43 @@ def evaluate_hook(payload: dict) -> dict:
             return {
                 "decision": "deny",
                 "reason": (
-                    "VIOLACIÓN DE RUTA SSoT: Prohibido usar la ruta relativa '0zcp-123/'. "
-                    "La ruta canónica y absoluta hacia Google Drive SSoT es '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/'."
+                    "ARNÉS SSoT (Ruta Canónica Obligatoria): Usá exclusivamente la ruta absoluta canónica "
+                    "'/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/' o remota 'baiosfera:0ZEROPS-AGY/0zcp-123/'."
                 )
             }
+
+        # A1.1 Multi-Tenant Upstream Chassis Shield
+        chassis_prefix = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/"
+        if target_file.startswith(chassis_prefix):
+            rel_to_chassis = target_file[len(chassis_prefix):]
+            tenant_match = re.search(r'\b(elplacerdc|glamur|damaren)\b', rel_to_chassis, re.IGNORECASE)
+            if tenant_match and any(rel_to_chassis.endswith(ext) for ext in [".db", ".sqlite", "-keys.md", "_keys.md", ".json", ".env"]):
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        f"ARNÉS MULTI-TENANT (Aislamiento Upstream): El chasis '0zcp-123/' es neutral y universal. "
+                        f"Mantené los datos del tenant [{tenant_match.group(0)}] exclusivamente en "
+                        "'/var/www/baiosfera/0ZEROPS-AGY/users-apis/' o en su propio namespace."
+                    )
+                }
 
         # A2. Handover Immunity
         if HANDOVER_PATTERN.search(target_file):
             return {
                 "decision": "deny",
                 "reason": (
-                    f"VIOLACIÓN DE HANDOVER IMMUNITY: El archivo [{os.path.basename(target_file)}] "
+                    f"ARNÉS HANDOVER IMMUNITY: El archivo [{os.path.basename(target_file)}] "
                     "es un activo de relevo inter-sesión protegido contra modificación o sobreescritura."
                 )
             }
-
-
 
         # A3. Skill Pre-Mutation Backup Gate
         if not has_recent_backup(target_file):
             return {
                 "decision": "deny",
                 "reason": (
-                    f"VIOLACIÓN DE ARNÉS FÍSICO N1 (Pre-Mutation Backup): No podés modificar [{os.path.basename(target_file)}] "
-                    "sin haber generado previamente un snapshot versionado en '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills/' o '.../bak/'."
+                    f"ARNÉS FÍSICO N1 (Pre-Mutation Backup): Para modificar [{os.path.basename(target_file)}], "
+                    "generá previamente un snapshot en '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills/' o '.../bak/'."
                 )
             }
 
@@ -485,15 +512,25 @@ def evaluate_hook(payload: dict) -> dict:
         # A5. CoHaLo & Skill-Improver Quality Gate
         content_to_check = args.get("CodeContent", "") or args.get("ReplacementContent", "")
 
-        # A5.1 Positive Guidance Guard (Blocks obsolete negative prompt dogma)
-        if target_file.endswith(".md") and content_to_check:
-            legacy_match = re.search(r'\b(Queda terminantemente prohibido|Do NOT activate under any circumstances|Está terminantemente prohibido)\b', content_to_check, re.IGNORECASE)
-            if legacy_match:
+        # A5.1 Positive Guidance Guard (Blocks negative prompt dogma in governance and skills)
+        is_governance = (
+            target_file.endswith("AGENTS.md") or
+            "/.agents/rules/" in target_file or
+            target_file.endswith("00-SUPREME-DIRECTIVE.md") or
+            (target_file.endswith("SKILL.md") and "/.agents/skills/" in target_file)
+        )
+        if (target_file.endswith(".md") or is_governance) and content_to_check:
+            negative_match = re.search(
+                r'\b(Queda terminantemente prohibido|Do NOT activate under any circumstances|Está terminantemente prohibido|terminantemente prohibido|queda prohibido|está prohibido|strictly forbidden)\b',
+                content_to_check,
+                re.IGNORECASE
+            )
+            if negative_match:
                 return {
                     "decision": "deny",
                     "reason": (
-                        f"VIOLACIÓN DE COHALO / POSITIVE GUIDANCE: Detectado prompt engineering negativo obsoleto ('{legacy_match.group(0)}'). "
-                        "Reemplazalo por directivas positivas y arneses físicos ejecutables."
+                        f"ARNÉS COHALO (Positive Guidance Obligatorio): Detectado token negativo ('{negative_match.group(0)}'). "
+                        "Expresá las restricciones mediante directivas puramente afirmativas y arneses físicos ejecutables."
                     )
                 }
 
@@ -1010,11 +1047,11 @@ def run_tests():
     assert len(steps) > 0 and "Plan-First Gate Obligatorio" in steps[0].get("ephemeralMessage", ""), f"Expected Plan-First Gate notice in PreInvocation, got {pi_res}"
     print("✓ Test 24 Passed: Plan-First Gate Obligatorio & Subordinated Execution Closure verified (Epistemic Inflow Mandate)")
 
-    # Test 25: Zero-Local Isolation & Mandatory Web Grounding Invariant (Physical Research Sensor)
-    research_val = subprocess.run(["bash", "/var/www/.agents/skills/research/scripts/research-validate.sh"], capture_output=True, text=True)
-    assert research_val.returncode == 0, f"Expected research-validate.sh exit 0, got {research_val.returncode}: {research_val.stderr}\n{research_val.stdout}"
-    assert "Rule 9 y Zero-Local Isolation Invariant validados físicamente" in research_val.stdout, f"Missing Zero-Local Isolation confirmation in research-validate output: {research_val.stdout}"
-    print("✓ Test 25 Passed: Zero-Local Isolation & Mandatory Web Grounding verified (Physical Research Sensor)")
+    # Test 25: Universal Physical Sensor Integration (Standard v3.3)
+    skills_val = subprocess.run(["/var/www/.bin/skills-suite-validate"], capture_output=True, text=True)
+    assert skills_val.returncode == 0, f"Expected skills-suite-validate exit 0, got {skills_val.returncode}: {skills_val.stderr}\n{skills_val.stdout}"
+    assert "100% of custom skills passed" in skills_val.stdout, f"Unexpected skills-suite-validate output: {skills_val.stdout}"
+    print("✓ Test 25 Passed: Universal Physical Sensor verified (skills-suite-validate exit 0)")
 
     # Test 26: Skill Trigger Radar & Contextual Detection verified
     test_skills = detect_skills_in_prompt("vamos a configurar ghcicd y hacer git push")
@@ -1115,7 +1152,19 @@ def run_tests():
     pi_res_red = evaluate_hook({"invocationNum": 1})
     steps_red = pi_res_red.get("injectSteps", [])
     assert len(steps_red) > 0 and "Contrato Anti-Redundancia en Chat" in steps_red[0].get("ephemeralMessage", ""), f"Expected Anti-Redundancy notice in PreInvocation, got {pi_res_red}"
-    print("✓ Test 33 Passed: Anti-Redundancy Chat Contract & Zero Token Bloat physically verified in PreInvocation")
+    # Test 34: Multi-Tenant Upstream Shield blocks client data leak into 0zcp-123
+    tenant_res = evaluate_hook({
+        "transcriptPath": "/nonexistent",
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {
+                "TargetFile": "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/elplacerdc.db",
+                "CodeContent": "dummy sqlite content"
+            }
+        }
+    })
+    assert tenant_res.get("decision") == "deny" and "ARNÉS MULTI-TENANT" in tenant_res.get("reason", ""), f"Expected deny on tenant file inside chassis, got {tenant_res}"
+    print("✓ Test 34 Passed: Multi-Tenant Upstream Shield blocks client data leak into 0zcp-123")
 
     print("============================================================")
     print("✅ ALL TOOL-GUARD UNIT TESTS PASSED DETERMINISTICALLY (exit 0)")
