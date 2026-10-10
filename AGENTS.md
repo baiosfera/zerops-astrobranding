@@ -77,7 +77,7 @@ Shape: `{code, error, suggestion?, apiCode?, diagnostic?, apiMeta?, checks?, rec
 <!-- CUSTOM:BEGIN -->
 
 ## 🏛️ Gobernanza Soberana & Marco Normativo (v8.4)
-Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) (Fases F0–F5, 6 Invariantes Soberanos, CoHaLo Positivo, Reality Over Checklist Theater y Grounding Epistémico Continuo). Referencia enciclopédica: [`.agents/references/supreme_directive_encyclopedia.md`](file:///var/www/.agents/references/supreme_directive_encyclopedia.md).
+Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) (Fases F0–F5, 7 Invariantes Soberanos, Invariante de Doble Dominio Software vs Prompts, CoHaLo Positivo, Reality Over Checklist Theater y Grounding Epistémico Continuo). Referencia enciclopédica: [`.agents/references/supreme_directive_encyclopedia.md`](file:///var/www/.agents/references/supreme_directive_encyclopedia.md).
 
 ## 🧭 PROTOCOLO DE DESPLIEGUE MODULAR POR LENGUAJE NATURAL (INVARIANTE ABSOLUTO)
 1. **Frontera Sagrada del Plano de Control (`zcp`)**:
