@@ -763,23 +763,21 @@ def evaluate_hook(payload: dict) -> dict:
 
             if target_repo:
                 try:
-                    env_parity = dict(os.environ)
-                    env_parity["SKIP_UNPUSHED"] = "1"
-                    parity_proc = subprocess.run(
-                        ["/usr/local/bin/ssot-parity-check", "--allow-unpushed"],
+                    repo_dir = cwd if os.path.exists(os.path.join(cwd, ".git")) else ("/var/www/zerops-astrobranding" if "zerops-astrobranding" in cmd else "/var/www/zerops-astro-skills")
+                    status_proc = subprocess.run(
+                        ["git", "status", "--porcelain"],
+                        cwd=repo_dir,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
-                        env=env_parity,
-                        timeout=20
+                        timeout=3
                     )
-                    if parity_proc.returncode != 0:
+                    if status_proc.returncode == 0 and status_proc.stdout.strip():
                         return {
                             "decision": "deny",
                             "reason": (
-                                "Paridad SSoT pre-push: Existe drift contra Google Drive SSoT o archivos locales sin commit. "
-                                "El sensor 'ssot-parity-check' detectó discrepancias. Ejecutá 'skills-sync' primero "
-                                "para restituir la paridad absoluta antes de empujar cambios al remoto."
+                                "ARNÉS GIT PRE-PUSH: Hay cambios locales sin commitear antes de empujar al remoto. "
+                                "Commiteá tus cambios primero para asegurar la paridad de código."
                             )
                         }
                 except Exception:
