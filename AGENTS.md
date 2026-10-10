@@ -113,6 +113,9 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 4. **Higiene de Procesos**: Comandos con `timeout 10s` y `WaitMsBeforeAsync: 10000`. Servidores continuos vía `zerops_dev_server`.
 5. **Grounding Epistémico Fuera de Caja Negra**: Contrasta código y arquitectura contra fuentes primarias en tiempo presente mediante triangulación multi-motor en `research` (Exa para conceptos/código, Context7 para APIs oficiales, Jina Reader para extracción verbatim y Firecrawl para scraping/skills).
 6. **Claridad Arquitectónica & Continuidad de Contexto**: Comunicación concisa, sin burocracia superficial ni checklist theater. En F4, el mensaje presenta el plan con criterios de aceptación claros en chat o Linear y solicita Go. En F5, el mensaje valida la entrega con sensores físicos (exit 0) e informa explícitamente qué quedó desplegado y probado en vivo con los siguientes pasos lógicos.
+7. **Invariante de Doble Dominio (Software vs Prompts)**:
+   - **Scripts y Código (Python/Bash/TS)**: Rige CoHaLo Engineering (contexto acotado sin variables globales mutables, harness con validación de sintaxis física `python3 -m py_compile`/`bash -n` y pruebas exit code 0 `bun test`/`pytest`, loops deterministas sin silenciar errores) y Skill-Improver (preservación invariable de AST de funciones y clases, cero mutilación, módulos profundos). NUNCA limitar código de software por presupuesto de palabras o tokens.
+   - **Prompts & Skills (Markdown/Instrucciones)**: Rige CoHaLo Prompting (Positive Guidance afirmativo, directivas de dominio cerrado) y Skill-Improver (revelación progresiva Dual-RAG, router `SKILL.md` $\le$ 480 palabras / ~550 tokens, especificaciones desacopladas en `references/`).
 
 ## 📦 Catálogo y Herramientas Soberanas
 - **Catálogo Oficial (141 skills)**: [`.atl/skill-registry.md`](file:///var/www/.atl/skill-registry.md).
