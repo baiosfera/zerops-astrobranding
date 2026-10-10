@@ -470,12 +470,8 @@ def evaluate_hook(payload: dict) -> dict:
     if "stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload):
         return {}
 
-    # 2. PreInvocation Handling (Silent in production - Zero Token Bloat & Zero Context Disruption)
+    # 2. PreInvocation Handling (Dynamic Epistemic Radar & Gentle-AI Orchestrator)
     if "invocationNum" in payload or "initialNumSteps" in payload:
-        if "--test" not in sys.argv:
-            return {}
-
-        # The following runs ONLY during deterministic local unit test execution (--test)
         inv_num = payload.get("invocationNum", 0)
         now_ts = time.time()
         state_file = "/tmp/.tool_guard_pi_state.json"
@@ -505,14 +501,42 @@ def evaluate_hook(payload: dict) -> dict:
             if has_question or not has_go:
                 halt_alert = "\n⏸️ F4 HALT GATE ACTIVO: Ticket en progreso."
 
-        governance_msg = "🏛️ ARNÉS FÍSICO ZCP (v3.1): Contrato Plan-First Gate. Contrato Anti-Redundancia en Chat. F0 Grounding Epistémico (Anti-AMN con Context7/Exa/Jina). Reality Over Checklist Theater."
-        return {
-            "injectSteps": [
-                {
-                    "ephemeralMessage": f"{governance_msg}{halt_alert}".strip()
-                }
-            ]
-        }
+        ephemeral_msgs = []
+        if "--test" in sys.argv:
+            governance_msg = "🏛️ ARNÉS FÍSICO ZCP (v3.1): Contrato Plan-First Gate. Contrato Anti-Redundancia en Chat. F0 Grounding Epistémico (Anti-AMN con Context7/Exa/Jina). Reality Over Checklist Theater."
+            ephemeral_msgs.append(f"{governance_msg}{halt_alert}".strip())
+        else:
+            prompt_lower = user_prompt.lower()
+            matched_skills = [m[0] for m in detect_skills_in_prompt(user_prompt)]
+
+            # 1. Epistemic Grounding Radar (F0 Positive Guidance)
+            is_eval = any(k in prompt_lower for k in ["mejor forma", "investigar", "investiga", "benchmark", "sota", "comparar", "cual es mejor"])
+            if "research" in matched_skills or is_eval:
+                ephemeral_msgs.append(
+                    "F0 Epistemic Grounding: Ante consultas de arquitectura, SOTA o benchmark, "
+                    "contrastá fuentes primarias ejecutando la skill 'research' (Exa/Context7/Tavily) antes de concluir en prosa."
+                )
+
+            # 2. Gentle-AI Subagent Orchestrator Gate
+            is_heavy = any(k in prompt_lower for k in ["flujo", "refactor", "implementa", "arregla", "construye", "despliega", "crea"])
+            if is_heavy and len(prompt_lower) > 40:
+                ephemeral_msgs.append(
+                    "Gentle-AI Orchestrator: Mantené el hilo padre delgado. Para tareas sustanciales o de múltiples archivos, "
+                    "delegá la ejecución a subagentes acotados (invoke_subagent con 'research' o define_subagent) y sintetizá resultados."
+                )
+
+            if halt_alert:
+                ephemeral_msgs.append(halt_alert.strip())
+
+        if ephemeral_msgs:
+            return {
+                "injectSteps": [
+                    {
+                        "ephemeralMessage": "\n\n".join(ephemeral_msgs)
+                    }
+                ]
+            }
+        return {}
 
     # 2. PreToolUse Handling
     tool_call = payload.get("toolCall", {})
