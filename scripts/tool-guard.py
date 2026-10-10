@@ -1104,7 +1104,7 @@ def run_tests():
         "toolCall": {
             "name": "write_to_file",
             "args": {
-                "TargetFile": "/var/www/scratch/custom-validate.sh",
+                "TargetFile": "/var/www/scratch/custom-check.sh",
                 "CodeContent": "#!/usr/bin/env bash\nrun_check >/dev/null 2>&1\necho passed"
             }
         }
