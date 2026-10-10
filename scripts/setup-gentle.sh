@@ -126,7 +126,7 @@ TMP_SKILLS_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t 'gentle_skills.XXXXXX')"
 # 1. SDD Suite & Canonical ATL Skills (Upstream Oficial)
 if timeout 15s git clone --depth 1 https://github.com/Gentleman-Programming/agent-teams-lite.git "$TMP_SKILLS_DIR/atl" >/dev/null 2>&1; then
     echo "  ✓ Upstream ATL/SDD skills descargadas con éxito."
-    [ -d "$TMP_SKILLS_DIR/atl/skills" ] && cp -R "$TMP_SKILLS_DIR/atl/skills/"* "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
+    [ -d "$TMP_SKILLS_DIR/atl/skills" ] && cp -rn "$TMP_SKILLS_DIR/atl/skills/"* "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
 else
     echo "  ⚠️ No se pudo clonar agent-teams-lite (usando SSoT local)."
 fi
@@ -135,13 +135,13 @@ fi
 if timeout 15s git clone --depth 1 https://github.com/Gentleman-Programming/gentle-ai.git "$TMP_SKILLS_DIR/gentle-ai" >/dev/null 2>&1; then
     echo "  ✓ Upstream Gentle-AI Core skills descargadas con éxito."
     if [ -d "$TMP_SKILLS_DIR/gentle-ai/internal/assets/skills" ]; then
-        cp -R "$TMP_SKILLS_DIR/gentle-ai/internal/assets/skills/"* "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
+        cp -rn "$TMP_SKILLS_DIR/gentle-ai/internal/assets/skills/"* "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
         # Aislamiento por Agente: Antigravity opera con invoke_subagent, no delegate_task (exclusivo de Hermes)
         if [ "$TARGET_AGENT" = "antigravity" ]; then
             rm -rf "$PROJECT_ROOT/.agents/skills/hermes-ephemeral-delegation" 2>/dev/null || true
         fi
     fi
-    [ -d "$TMP_SKILLS_DIR/gentle-ai/skills" ] && cp -R "$TMP_SKILLS_DIR/gentle-ai/skills/"* "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
+    [ -d "$TMP_SKILLS_DIR/gentle-ai/skills" ] && cp -rn "$TMP_SKILLS_DIR/gentle-ai/skills/"* "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
 else
     echo "  ⚠️ No se pudo clonar gentle-ai (usando SSoT local)."
 fi
@@ -149,7 +149,7 @@ fi
 # 3. Gentleman-Skills Curated (Upstream Oficial - Ecosistema Curado)
 if timeout 15s git clone --depth 1 https://github.com/Gentleman-Programming/Gentleman-Skills.git "$TMP_SKILLS_DIR/skills" >/dev/null 2>&1; then
     echo "  ✓ Upstream Gentleman-Skills (Curated) descargadas con éxito."
-    [ -d "$TMP_SKILLS_DIR/skills/curated" ] && cp -R "$TMP_SKILLS_DIR/skills/curated/"* "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
+    [ -d "$TMP_SKILLS_DIR/skills/curated" ] && cp -rn "$TMP_SKILLS_DIR/skills/curated/"* "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
     # Omitimos community/ para evitar inyectar skills experimentales o ajenas al stack (ej: hexagonal-java, elixir)
 else
     echo "  ⚠️ No se pudo clonar Gentleman-Skills (usando SSoT local)."
@@ -166,7 +166,7 @@ if timeout 15s git clone --depth 1 https://github.com/mattpocock/skills.git "$TM
                 if [ -d "$sk" ] && [ -f "$sk/SKILL.md" ]; then
                     sk_name=$(basename "$sk")
                     if [ "$sk_name" != "research" ]; then
-                        cp -R "$sk" "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
+                        cp -rn "$sk" "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
                     fi
                 fi
             done
