@@ -182,43 +182,50 @@ fi
 
 # 5. Custom Skills Parity (SSoT Scope)
 echo "--- [5/5] Checking Custom Skills Parity across all Sovereign Skills ---"
-SKILL_COUNT=0
-EXCLUDED_REGEX="^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*)$"
-
-for drive_skill_dir in "$DRIVE_BASE/.agents/skills"/*; do
-    if [ ! -d "$drive_skill_dir" ]; then
-        continue
-    fi
-    skill="$(basename "$drive_skill_dir")"
-
-    # Anti-Pollution Shield: Ensure no upstream/framework skills were mistakenly copied into SSoT
-    if echo "$skill" | grep -qE "$EXCLUDED_REGEX"; then
-        echo "❌ SSoT Pollution detected! Upstream skill '$skill' found in Drive SSoT custom skills directory!"
-        ERRORS=$((ERRORS + 1))
-        continue
-    fi
-
-    SKILL_COUNT=$((SKILL_COUNT + 1))
-    local_skill_dir="$LOCAL_BASE/.agents/skills/$skill"
-
-    if [ ! -d "$local_skill_dir" ]; then
-        echo "❌ Local custom skill directory missing: $local_skill_dir"
-        ERRORS=$((ERRORS + 1))
-        continue
-    fi
-
-    if [ ! -f "$local_skill_dir/SKILL.md" ] || [ ! -f "$drive_skill_dir/SKILL.md" ]; then
-        echo "❌ Missing SKILL.md for skill: $skill"
-        ERRORS=$((ERRORS + 1))
-        continue
-    fi
-
-    if ! cmp -s "$local_skill_dir/SKILL.md" "$drive_skill_dir/SKILL.md"; then
-        echo "❌ Drift in SKILL.md for custom skill: $skill"
+FAST_PARITY_SCRIPT="$LOCAL_BASE/zerops-astrobranding/scripts/lib/fast-parity.py"
+if [ -f "$FAST_PARITY_SCRIPT" ]; then
+    if ! python3 "$FAST_PARITY_SCRIPT" "$DRIVE_BASE" "$LOCAL_BASE"; then
         ERRORS=$((ERRORS + 1))
     fi
-done
-echo "✓ Verified SKILL.md parity across all $SKILL_COUNT custom skills in SSoT"
+else
+    SKILL_COUNT=0
+    EXCLUDED_REGEX="^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*)$"
+
+    for drive_skill_dir in "$DRIVE_BASE/.agents/skills"/*; do
+        if [ ! -d "$drive_skill_dir" ]; then
+            continue
+        fi
+        skill="$(basename "$drive_skill_dir")"
+
+        # Anti-Pollution Shield: Ensure no upstream/framework skills were mistakenly copied into SSoT
+        if echo "$skill" | grep -qE "$EXCLUDED_REGEX"; then
+            echo "❌ SSoT Pollution detected! Upstream skill '$skill' found in Drive SSoT custom skills directory!"
+            ERRORS=$((ERRORS + 1))
+            continue
+        fi
+
+        SKILL_COUNT=$((SKILL_COUNT + 1))
+        local_skill_dir="$LOCAL_BASE/.agents/skills/$skill"
+
+        if [ ! -d "$local_skill_dir" ]; then
+            echo "❌ Local custom skill directory missing: $local_skill_dir"
+            ERRORS=$((ERRORS + 1))
+            continue
+        fi
+
+        if [ ! -f "$local_skill_dir/SKILL.md" ] || [ ! -f "$drive_skill_dir/SKILL.md" ]; then
+            echo "❌ Missing SKILL.md for skill: $skill"
+            ERRORS=$((ERRORS + 1))
+            continue
+        fi
+
+        if ! cmp -s "$local_skill_dir/SKILL.md" "$drive_skill_dir/SKILL.md"; then
+            echo "❌ Drift in SKILL.md for custom skill: $skill"
+            ERRORS=$((ERRORS + 1))
+        fi
+    done
+    echo "✓ Verified SKILL.md parity across all $SKILL_COUNT custom skills in SSoT"
+fi
 
 # Deep tree parity for core orchestration skills
 CORE_SKILLS=("oraculo" "planner" "docu" "research")

@@ -109,9 +109,11 @@ done
 # Aprovisionar librerías de GGA en ubicaciones canónicas
 if [ -d "$SCRIPT_DIR/lib/gga" ]; then
     mkdir -p "$PROJECT_ROOT/.bin/lib/gga" "/home/zerops/.local/share/gga/lib" "$HOME/.local/share/gga/lib" 2>/dev/null || true
+    sudo mkdir -p /usr/local/lib 2>/dev/null || true
     cp -r "$SCRIPT_DIR/lib/gga/"*.sh "$PROJECT_ROOT/.bin/lib/gga/" 2>/dev/null || true
     cp -r "$SCRIPT_DIR/lib/gga/"*.sh "/home/zerops/.local/share/gga/lib/" 2>/dev/null || true
     cp -r "$SCRIPT_DIR/lib/gga/"*.sh "$HOME/.local/share/gga/lib/" 2>/dev/null || true
+    sudo cp -r "$SCRIPT_DIR/lib/gga/"*.sh /usr/local/lib/ 2>/dev/null || true
     chmod +x "$PROJECT_ROOT/.bin/lib/gga/"*.sh "/home/zerops/.local/share/gga/lib/"*.sh "$HOME/.local/share/gga/lib/"*.sh 2>/dev/null || true
 fi
 

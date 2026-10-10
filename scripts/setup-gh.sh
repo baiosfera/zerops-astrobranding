@@ -28,10 +28,14 @@ if [ -z "$RESOLVED_GH_TOKEN" ]; then
 fi
 
 # 2. Autenticación desatendida headless mediante token
-echo "• Autenticando GitHub CLI desatendidamente..."
-if ! printf "%s" "$RESOLVED_GH_TOKEN" | gh auth login --with-token 2>/dev/null; then
-    echo "⚠️ Token de GitHub provisto rechazado por la API. Verifique validez o scopes. Omitiendo."
-    exit 0
+if gh auth status >/dev/null 2>&1; then
+    echo "• GitHub CLI ya autenticado activamente."
+else
+    echo "• Autenticando GitHub CLI desatendidamente..."
+    if ! printf "%s" "$RESOLVED_GH_TOKEN" | gh auth login --with-token 2>/dev/null; then
+        echo "⚠️ Token de GitHub provisto rechazado por la API. Verifique validez o scopes. Omitiendo."
+        exit 0
+    fi
 fi
 
 # 3. Detección dinámica de identidad (Zero Hardcoding)
