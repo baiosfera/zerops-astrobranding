@@ -45,6 +45,16 @@ DEAD_DOMAINS = {
     'em2.com.co', 'latinmail.com'
 }
 
+# Correos dados de baja en campañas previas (Supresión Permanente)
+SUPPRESSED_EMAILS = {
+    'federico951123@gmail.com',
+    'bettobassdc@gmail.com',
+    'juanm.narvaezv@gmail.com',
+    'jbeltranpinto@gmail.com',
+    'fnietoelgazi@gmail.com',
+    'pachosva@gmail.com'
+}
+
 EMAIL_REGEX = re.compile(
     r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$"
 )
