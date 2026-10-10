@@ -105,6 +105,10 @@ CORE_SYNC_PAIRS = [
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.engram/config.json",
         "/var/www/.engram/config.json"
     ),
+    (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.atl/skill-registry.md",
+        "/var/www/.atl/skill-registry.md"
+    ),
 ]
 
 def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
