@@ -664,3 +664,18 @@ Para aplicaciones que integran paneles de control sin depender de un CMS monolí
 - Al emitir pases o accesos desde el panel administrativo, clasificar las operaciones según su naturaleza financiera:
   * **Pago Real en Sitio / Efectivo:** Registrar monto y método de pago, habilitando la acreditación correspondiente a afiliados.
   * **Cortesía Manual ($0):** Registrar el pase con monto cero y trazabilidad administrativa, preservando el cálculo de comisiones intacto.
+
+---
+
+## 21. Contrato de Dominio Inmutable & F5 Reality Gate (Anti-Checklist Theater Universal)
+
+Para cualquier proyecto o marca desplegada bajo esta plantilla, la integridad del software se rige por contratos de dominio deterministas y verificación física en tiempo de ejecución:
+
+### 1. Capa de Dominio Centralizada (`src/domain/`):
+- **Set Aditivo Monótono de Etiquetas (Tags):** Las etiquetas de clasificación y canales de un contacto (`metadata.tags`, `registered_channels`) son conjuntos aditivos estrictos. Ninguna mutación o actualización de perfil puede sobrescribir, truncar o descartar etiquetas previamente adquiridas por el usuario.
+- **Cero Lógica Dispersa en Vistas y Endpoints:** Los controladores API (`/api/leads/register`) y paneles administrativos (`/adminn`) consumen exclusivamente las funciones de mutación y consulta de la capa de dominio, erradicando queries SQL manuales con condiciones `OR` fragmentadas.
+
+### 2. Sensor Físico F5 en Linear y CI/CD (Reality Over Checklist Theater):
+- **Cierre Subordinado a la Suite de Pruebas:** El script soberano `linear-cli update-status <ID> "Done"` ejecuta obligatoriamente la suite de pruebas físicas en el runtime activo (`ssh <service> "cd /var/www && bun test"`).
+- **Prohibición de Falsos Dones:** La paridad de archivos en Google Drive o el estado limpio de Git son condiciones necesarias pero jamás suficientes. Si un solo test de integración o de regresión falla, la transición a `Done` es rechazada físicamente con código de salida 1.
+
