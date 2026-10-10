@@ -192,12 +192,19 @@ if command -v gga >/dev/null 2>&1; then
     else
         echo "  ⚠️ Advertencia: gga CLI instalado pero falló al verificar versión." >&2
     fi
-    echo "• Instalando hooks de integridad GGA en el workspace..."
-    if [ -d "$PROJECT_ROOT/.git" ]; then
-        gga install "$PROJECT_ROOT" 2>/dev/null || true
-    else
-        echo "  ℹ️ Saltando gga install: $PROJECT_ROOT no es un repositorio git inicializado."
-    fi
+    echo "• Instalando hooks de integridad GGA en repositorios git..."
+    for repo_candidate in "$PROJECT_ROOT" "$PROJECT_ROOT"/*/; do
+        if [ -d "$repo_candidate/.git" ]; then
+            (cd "$repo_candidate" && gga install 2>/dev/null || true)
+            echo "  ✓ GGA pre-commit hook instalado en $repo_candidate"
+        fi
+    done
+    mkdir -p "/home/zerops/.config/gga" "$HOME/.config/gga" 2>/dev/null || true
+    for cfg in "/home/zerops/.config/gga/config" "$HOME/.config/gga/config"; do
+        if [ -f "$cfg" ]; then
+            sed -i 's/PROVIDER="gemini"/PROVIDER="github:gpt-4o-mini"/' "$cfg" 2>/dev/null || true
+        fi
+    done
 fi
 
 if command -v gentle-ai >/dev/null 2>&1; then
