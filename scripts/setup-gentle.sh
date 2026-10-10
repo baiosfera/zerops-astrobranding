@@ -378,16 +378,11 @@ if [ -f "$ZCP_ROOT/.agents/hooks.json" ]; then
     cp -f "$ZCP_ROOT/.agents/hooks.json" "$PROJECT_ROOT/.agents/hooks.json"
 fi
 
-# Desplegar meta-sensores globales y guardianes de arquitectura
-if [ -f "$PROJECT_ROOT/.agents/skills/docu/scripts/docu-validate.sh" ]; then
-    chmod +x "$PROJECT_ROOT/.agents/skills/docu/scripts/docu-validate.sh"
-    ln -sf "$PROJECT_ROOT/.agents/skills/docu/scripts/docu-validate.sh" "$PROJECT_ROOT/.bin/docu-validate" 2>/dev/null || true
-    sudo ln -sf "$PROJECT_ROOT/.agents/skills/docu/scripts/docu-validate.sh" /usr/local/bin/docu-validate 2>/dev/null || true
-fi
-if [ -f "$PROJECT_ROOT/.agents/skills/research/scripts/research-validate.sh" ]; then
-    chmod +x "$PROJECT_ROOT/.agents/skills/research/scripts/research-validate.sh"
-    ln -sf "$PROJECT_ROOT/.agents/skills/research/scripts/research-validate.sh" "$PROJECT_ROOT/.bin/research-validate" 2>/dev/null || true
-    sudo ln -sf "$PROJECT_ROOT/.agents/skills/research/scripts/research-validate.sh" /usr/local/bin/research-validate 2>/dev/null || true
+# Desplegar Sensor Universal de Capacidades (Standard v3.3)
+if [ -f "$SCRIPT_DIR/skills-suite-validate.sh" ]; then
+    cp -f "$SCRIPT_DIR/skills-suite-validate.sh" "$PROJECT_ROOT/.bin/skills-suite-validate"
+    chmod +x "$PROJECT_ROOT/.bin/skills-suite-validate" 2>/dev/null || true
+    sudo ln -sf "$PROJECT_ROOT/.bin/skills-suite-validate" /usr/local/bin/skills-suite-validate 2>/dev/null || true
 fi
 # Desplegar astrobranding-check incondicionalmente (Arnés Resiliente Anti-Fallo en ZCP limpio)
 if [ -f "$SCRIPT_DIR/astrobranding-check.sh" ]; then
@@ -396,5 +391,5 @@ if [ -f "$SCRIPT_DIR/astrobranding-check.sh" ]; then
     sudo ln -sf "$PROJECT_ROOT/.bin/astrobranding-check" /usr/local/bin/astrobranding-check 2>/dev/null || true
 fi
 
-echo "  ✅ Despliegue de Gentle AI, Engram & Supreme Directive v7.9 completado con éxito."
+echo "  ✅ Despliegue de Gentle AI, Engram & Supreme Directive v8.4 completado con éxito."
 chmod +x "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
