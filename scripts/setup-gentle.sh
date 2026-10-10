@@ -59,8 +59,8 @@ fi
 # 2c. Descarga y aprovisionamiento autónomo de Gentle-AI CLI si no existe localmente
 GAI_ARCH="linux_amd64"
 [ "$(uname -m)" = "aarch64" ] && GAI_ARCH="linux_arm64"
-GAI_LATEST=$(curl -sSL "https://api.github.com/repos/Gentleman-Programming/gentle-ai/releases/latest" 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || echo "v2.7.0")
-[ -z "$GAI_LATEST" ] && GAI_LATEST="v2.7.0"
+GAI_LATEST=$(curl -sSL "https://api.github.com/repos/Gentleman-Programming/gentle-ai/releases/latest" 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || echo "v4.0.0")
+[ -z "$GAI_LATEST" ] && GAI_LATEST="v4.0.0"
 GAI_VER="${GAI_LATEST#v}"
 
 NEED_GAI_DL=false
