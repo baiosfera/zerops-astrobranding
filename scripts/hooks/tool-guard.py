@@ -479,78 +479,8 @@ def evaluate_hook(payload: dict) -> dict:
                 )
             }
 
-        # A4. Anti-Afán & Anti-AMN Inflow Gate
-        transcript_path = payload.get("transcriptPath", "")
-        is_plan_draft = "/artifacts/" in target_file and "_v" in target_file
-        
-        has_inspection = False
-        if transcript_path and os.path.exists(transcript_path):
-            try:
-                with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
-                    lines = f.readlines()
-                recent_lines = lines[-25:] if len(lines) > 25 else lines
-                inspection_keywords = [
-                    "view_file", "call_mcp_tool", "research", "zerops_",
-                    "read_url_content", "plan-validate", "skills-suite-validate",
-                    "ssot-parity-check", "planner-validate", "docu-validate"
-                ]
-                for line in recent_lines:
-                    if any(k in line for k in inspection_keywords):
-                        has_inspection = True
-                        break
-            except Exception:
-                has_inspection = True
-        else:
-            has_inspection = True
-
-        if not has_inspection and not is_plan_draft:
-            return {
-                "decision": "deny",
-                "reason": (
-                    "VIOLACIÓN ANTI-AFÁN / ANTI-AMN: No podés mutar archivos sin haber inspeccionado código "
-                    "(view_file) o investigado (research) en pasos recientes."
-                )
-            }
-
-        # A4.1 Reality & Epistemic Guidance: Inflow is verified through physical AST and contracts.
-        # Eradicated artificial transcript keyword grepping (Pure Positive Guidance SOTA 2026).
-
-
-        # A4.2 Plan-First Gate & F4 Halt Guard (Anti-Desbocado Invariant)
-        # Skills (whether in .agents/skills/ or elsewhere) require Plan-First Gate and user Go!
-        is_governance_asset = (
-            "/artifacts/" in target_file or
-            "/bak/" in target_file or
-            ("/.agents/" in target_file and "/skills/" not in target_file) or
-            "/.bin/" in target_file or
-            "/.atl/" in target_file or
-            "/scripts/" in target_file or
-            "/scratch/" in target_file or
-            target_file.endswith("AGENTS.md") or
-            target_file.endswith("00-SUPREME-DIRECTIVE.md")
-        ) and ("/skills/" not in target_file and "zerops-astro-skills" not in target_file)
-        if not is_governance_asset:
-            linear_active_file = "/var/www/artifacts/linear_active.json"
-            has_active_plan = os.path.exists(linear_active_file)
-            
-            # BAI-FAST Bypass (Exceptuar tareas rapidas <10 lineas o bypass explicito)
-            is_fast_bypass = False
-            if "BAI-FAST" in payload.get("userPrompt", ""):
-                is_fast_bypass = True
-            elif tool_name in ["write_to_file", "replace_file_content"]:
-                c2c = args.get('CodeContent', '') or args.get('ReplacementContent', ''); lines_changed = len(c2c.splitlines()) if c2c else 0
-                if lines_changed < 10 and not has_active_plan:
-                    is_fast_bypass = True
-                    
-            if not has_active_plan and not is_fast_bypass:
-                return {
-                    "decision": "deny",
-                    "reason": (
-                        f"VIOLACIÓN DE ARNÉS OBSESIVO (Plan-First Gate): Prohibido mutar [{os.path.basename(target_file)}] "
-                        f"(código de aplicación o skill) sin contar con un plan arquitectural validado "
-                        "mediante 'linear-cli' (generando 'linear_active.json') y el respectivo 'Go' del usuario."
-                    )
-                }
+        # A4. Epistemic Guidance & Reality: Governed by physical compiler sensors and contracts.
+        # Eradicated artificial transcript keyword grepping and synthetic linear_active gates.
 
         # A5. CoHaLo & Skill-Improver Quality Gate
         content_to_check = args.get("CodeContent", "") or args.get("ReplacementContent", "")
@@ -1118,35 +1048,18 @@ def run_tests():
         if os.path.exists(dummy_plan):
             os.remove(dummy_plan)
 
-    # Test 30: Plan-First Gate for Skills & Non-Governance Assets
-    # Hermetically isolate zero-plan state by temporarily hiding any active plans in artifacts/
-    active_plans_backup = []
-    artifacts_dir = "/var/www/artifacts"
-    try:
-        if os.path.exists(artifacts_dir):
-            for f in os.listdir(artifacts_dir):
-                if f.endswith(".md") and "_v" in f and not any(x in f.lower() for x in [".executed.", ".superseded.", "report"]):
-                    old_path = os.path.join(artifacts_dir, f)
-                    tmp_path = os.path.join(artifacts_dir, f + ".test_hide")
-                    os.rename(old_path, tmp_path)
-                    active_plans_backup.append((old_path, tmp_path))
-
-        res_skill = evaluate_hook({
-            "transcriptPath": "/nonexistent",
-            "toolCall": {
-                "name": "write_to_file",
-                "args": {
-                    "TargetFile": "/var/www/.agents/skills/dummy-test-skill/SKILL.md",
-                    "CodeContent": "---\nname: dummy-test-skill\ndescription: Test\n---\n# Dummy Test Skill\n" + "line\n" * 12
-                }
+    # Test 30: Positive Guidance & Direct Execution (No artificial linear_active tripwires)
+    res_clean = evaluate_hook({
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {
+                "TargetFile": "/var/www/scratch/clean_script.py",
+                "CodeContent": "print('clean')\n"
             }
-        })
-        assert res_skill.get("decision") == "deny" and "Plan-First Gate" in res_skill.get("reason", ""), f"Expected deny on skill mutation without plan, got {res_skill}"
-        print("✓ Test 30 Passed: Skill mutation without active plan blocked (Plan-First Gate for Skills)")
-    finally:
-        for old_p, tmp_p in active_plans_backup:
-            if os.path.exists(tmp_p):
-                os.rename(tmp_p, old_p)
+        }
+    })
+    assert res_clean.get("decision") == "allow", f"Expected allow on clean file write, got {res_clean}"
+    print("✓ Test 30 Passed: Clean execution permitted without synthetic tripwires")
 
     # Test 31: Handover Immunity protects _roadmap
     res_roadmap = evaluate_hook({

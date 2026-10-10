@@ -77,6 +77,7 @@ for skill in "${!SOVEREIGN_SET[@]}"; do
         DRIFT_COUNT=$((DRIFT_COUNT + 1))
         if [ "$CHECK_ONLY" = true ]; then
             echo "  ⚠️ Drift detectado en: $skill"
+        else
             mkdir -p "$drive_skill_dir"
             # Sincronización exacta, borrando zombies en el destino
             rsync -a --delete "$source_dir/" "$drive_skill_dir/"

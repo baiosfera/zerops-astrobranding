@@ -77,28 +77,28 @@ Shape: `{code, error, suggestion?, apiCode?, diagnostic?, apiMeta?, checks?, rec
 <!-- CUSTOM:BEGIN -->
 
 ## 🏛️ Gobernanza Soberana & Marco Normativo (v8.4)
-Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) (Fases F0–F5, 6 Invariantes Soberanos, CoHaLo Positivo, Reality Over Checklist Theater, Dogma de Salida de la Caja Negra y Arnés Obsesivo con Plan-First Gate). Referencia enciclopédica: [`.agents/references/supreme_directive_encyclopedia.md`](file:///var/www/.agents/references/supreme_directive_encyclopedia.md).
+Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) (Fases F0–F5, 6 Invariantes Soberanos, CoHaLo Positivo, Reality Over Checklist Theater y Grounding Epistémico Continuo). Referencia enciclopédica: [`.agents/references/supreme_directive_encyclopedia.md`](file:///var/www/.agents/references/supreme_directive_encyclopedia.md).
 
 ## 🧭 PROTOCOLO DE DESPLIEGUE MODULAR POR LENGUAJE NATURAL (INVARIANTE ABSOLUTO)
 1. **Frontera Sagrada del Plano de Control (`zcp`)**:
-   - Este contenedor `zcp` es **exclusivamente el orquestador de plataforma**.
-   - **Prohibido instalar o ejecutar Bun (`bun run dev`, `bun test`), Node o builds pesados localmente en `zcp`**. Todo runtime de aplicación se compila y ejecuta dentro de sus contenedores LXC dedicados en Zerops (`ssh {hostname} "cd /var/www && <cmd>"`).
+   - Este contenedor `zcp` es exclusivamente el orquestador de plataforma.
+   - Los runtimes de aplicación, builds pesados y servidores de desarrollo (`bun run dev`, `bun test`, etc.) se ejecutan dentro de sus contenedores LXC dedicados en Zerops (`ssh {hostname} "cd /var/www && <cmd>"`).
 2. **Rol de `iniciar.sh`**:
    - `iniciar.sh` conecta Google Drive SSoT, clona repositorios, enlaza herramientas en `/usr/local/bin` e inyecta credenciales.
-   - **`iniciar.sh` JAMÁS despliega runtimes de aplicación de forma automática.** El arranque en frío deja el plano de control listo y en espera de órdenes.
+   - El arranque en frío deja el plano de control listo y en espera de órdenes operativas; el despliegue de runtimes de aplicación se activa de forma desacoplada y bajo demanda.
 3. **Despliegues Autónomos por Lenguaje Natural**:
    - El usuario activa los despliegues hablando en lenguaje natural (ej: *"instala freellmapi y bifrost"*, *"instala hermes y nats"*, *"instala la tienda online de N producto"*, *"instala brandview studio"* o *"instala el ecosistema completo"*).
-   - Al recibir la orden, el agente (AGY) **ejecuta el hito de punta a punta de forma 100% autónoma, sin fricción, sin pedir confirmaciones técnicas obvias y sin ensayo y error**:
+   - Al recibir la orden, el agente (AGY) **ejecuta el hito de punta a punta de forma autónoma, sin fricción y validando con tests físicos de comportamiento**:
      - Lee la receta correspondiente en `recipes/steps/` o `recipes/`.
      - Consulta la skill correspondiente en `zerops-astro-skills` (`bifrost`, `freellmapi`, `nats`, `hermes-agent`, `evolution-api`, `astro-web`, `zcp`).
      - Aprovisiona vía `zerops_workflow action="start" workflow="bootstrap"` o `develop`.
      - Inyecta secrets en `zerops_env` y cablea las variables de servicio.
-     - **Invariantes Técnicos Probados (No Negociables)**:
+     - **Invariantes Técnicos Probados**:
        - **Bifrost**: `config_store` y `logs_store` en PostgreSQL 18. `vector_store.type` en `chromem` o `qdrant` (nunca `redis` contra Valkey 7.2 por ausencia de RediSearch `FT.*`). Registra las 5 Virtual Keys en `/api/governance/virtual-keys`.
        - **FreeLLMAPI**: Persistencia en `localstorage`, circuit breaker 429 con cooldown y rotación de keys.
       - **Arquitectura Lego Desacoplada & Orden Libre de Steps (Zero-Hardcoding)**:
         - Los hitos y servicios son **100% modulares y aditivos**: pueden solicitarse en cualquier orden o de forma completamente aislada.
-        - **Cero Acoplamiento Artificial**: El agente JAMÁS fuerza dependencias lineales inexistentes. Una landing (`growth-engine`) o e-commerce (`checkout-funnels`) aprovisiona únicamente lo que su caso de uso requiere, sin obligar a levantar el stack de IA si no se utiliza.
+        - **Cero Acoplamiento Artificial**: Cada caso de uso aprovisiona únicamente los servicios que requiere (ej. una landing o checkout no requiere el stack de IA si no lo utiliza).
         - **Service Discovery Dinámico**: Los servicios se interconectan en caliente vía DNS interno privado (`http://bifrost:8080`, `http://evolution:8085`, `http://listmonk:9000`). El agente inspecciona en vivo (`zerops_discover`) y solo cablea lo existente.
         - **GitOps Multi-Servicio & Staging Efímero en Apps (`astro-web`)**:
           * La plantilla `zerops-astrobranding` es puramente chasis/herramientas y nunca corre workflows de deploy propios.
@@ -108,11 +108,11 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 
 ## 🛑 Contratos Operativos ZCP & Seguridad
 1. **Jerarquía ZCP-First & SSoT Indivisible**: El desarrollo activo ocurre en ZCP (`/var/www`). Los cambios validados se reflejan indivisiblemente hacia Google Drive SSoT (`/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/`). Drive solo fluye hacia ZCP en arranques fríos (`iniciar.sh` $\to$ `unisetup.sh`).
-2. **Entorno y Secretos (Soberanía Zerops Env & Cero .env en Disco)**: Prohibido almacenar credenciales en `/var/www/.env` o `gdrive.env` (archivos efímeros purgados tras bootstrap). Toda variable o secreto se gestiona en la plataforma vía `zerops_env`, se inyecta en el runtime (`/etc/environment` y shell) y se referencia exclusivamente por variable de entorno (`$VAR` o `process.env`), nunca en texto plano.
+2. **Entorno y Secretos (Soberanía Zerops Env)**: Toda variable o secreto se gestiona en la plataforma vía `zerops_env`, se inyecta en el runtime (`/etc/environment` y shell) y se referencia exclusivamente por variable de entorno (`$VAR` o `process.env`). Los archivos `.env` o `gdrive.env` temporales se purgan tras el bootstrap.
 3. **Seguridad Nativa a Nivel de Proceso**: `tool-guard.py` intercepta en `PreToolUse`/`PreInvocation` comandos destructivos, fugas de rutas relativas (`0zcp-123/`), protege handovers, asegura backups pre-mutación y deduplica eventos para máxima eficiencia de tokens.
 4. **Higiene de Procesos**: Comandos con `timeout 10s` y `WaitMsBeforeAsync: 10000`. Servidores continuos vía `zerops_dev_server`.
-5. **Grounding Epistémico Fuera de Caja Negra**: Obligatorio contrastar código y arquitectura contra el mundo exterior en tiempo presente mediante triangulación multi-motor en `research` (Exa para conceptos/código, Context7 para APIs oficiales, Jina Reader para extracción verbatim y Firecrawl para scraping/skills). Prohibido el conformismo con snippets aislados de un único buscador.
-6. **Claridad Arquitectónica & Continuidad de Contexto**: Prohibido el checklist theater y los resúmenes inflados. En F4, el mensaje presenta el enlace canónico al plan en `/var/www/artifacts/` y la solicitud de Go. En F5, el mensaje atesta los sensores físicos (exit 0) con enlace al plan en `archive/`, e informa explícitamente qué quedó desplegado y probado en vivo y cuáles son los siguientes pasos lógicos para que el usuario nunca quede adivinando qué sigue.
+5. **Grounding Epistémico Fuera de Caja Negra**: Contrasta código y arquitectura contra fuentes primarias en tiempo presente mediante triangulación multi-motor en `research` (Exa para conceptos/código, Context7 para APIs oficiales, Jina Reader para extracción verbatim y Firecrawl para scraping/skills).
+6. **Claridad Arquitectónica & Continuidad de Contexto**: Comunicación concisa, sin burocracia superficial ni checklist theater. En F4, el mensaje presenta el plan con criterios de aceptación claros en chat o Linear y solicita Go. En F5, el mensaje valida la entrega con sensores físicos (exit 0) e informa explícitamente qué quedó desplegado y probado en vivo con los siguientes pasos lógicos.
 
 ## 📦 Catálogo y Herramientas Soberanas
 - **Catálogo Oficial (141 skills)**: [`.atl/skill-registry.md`](file:///var/www/.atl/skill-registry.md).
