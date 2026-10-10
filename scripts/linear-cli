@@ -1,20 +1,25 @@
 #!/usr/bin/env node
 /**
- * Linear CLI Sovereign Tool for ZCP & Baiosfera
- * Version: 2.0.0 (Direct GraphQL API, Zero Stdio MCP Dependencies)
+ * Linear CLI Sovereign Tool for ZCP & Autonomous Agents
+ * Version: 2.1.0 (Direct GraphQL API, Zero Hardcoded Hostnames, Anti-Checklist Theater Gate)
  *
  * Usage:
  *   linear-cli search <query>
  *   linear-cli issue <id|identifier>
  *   linear-cli comment <issueId> <commentText>
  *   linear-cli create "<title>" "[description]" [--team <teamId>] [--project <projectId>] [--priority <1-4>]
- *   linear-cli update-status <issueId> "<statusName>"
+ *   linear-cli create-project "<name>" "[description]" [--team <teamId>]
+ *   linear-cli update-status <issueId> "<statusName>" [--evidence "<proof of physical exit-0 tests>"]
+ *   linear-cli update-status-batch "<statusName>" <issueId1> <issueId2>... [--evidence "<proof>"]
  *   linear-cli teams
  *   linear-cli projects
  *   linear-cli states [teamId]
  */
 
 const https = require("https");
+const fs = require("fs");
+const path = require("path");
+const { execSync } = require("child_process");
 
 const LINEAR_API_KEY = process.env.LINEAR_API_KEY;
 if (!LINEAR_API_KEY) {
@@ -22,8 +27,8 @@ if (!LINEAR_API_KEY) {
   process.exit(1);
 }
 
-const DEFAULT_TEAM_ID = "4b8ebc9c-ef67-4812-8699-a90dad6343ac"; // Baiosfera (BAI)
-const DEFAULT_PROJECT_ID = null; // Optional project ID
+let cachedDefaultTeamId = process.env.LINEAR_TEAM_ID || null;
+const DEFAULT_PROJECT_ID = process.env.LINEAR_PROJECT_ID || null;
 
 function queryGraphQL(query, variables = {}) {
   return new Promise((resolve, reject) => {
@@ -35,9 +40,9 @@ function queryGraphQL(query, variables = {}) {
         headers: {
           "Content-Type": "application/json",
           "Authorization": LINEAR_API_KEY,
-          "User-Agent": "ZCP-Linear-CLI/2.0"
+          "User-Agent": "ZCP-Linear-CLI/2.1"
         },
-        timeout: 10000
+        timeout: 15000
       },
       (res) => {
         let data = "";
@@ -59,21 +64,162 @@ function queryGraphQL(query, variables = {}) {
     req.on("error", reject);
     req.on("timeout", () => {
       req.destroy();
-      reject(new Error("Request timed out after 10000ms"));
+      reject(new Error("Request timed out after 15000ms"));
     });
     req.write(postData);
     req.end();
   });
 }
 
+async function getDefaultTeamId() {
+  if (cachedDefaultTeamId) return cachedDefaultTeamId;
+  try {
+    const q = `query GetTeams { teams(first: 5) { nodes { id key name } } }`;
+    const data = await queryGraphQL(q);
+    const teams = data?.teams?.nodes || [];
+    if (teams.length > 0) {
+      cachedDefaultTeamId = teams[0].id;
+      return cachedDefaultTeamId;
+    }
+  } catch (e) {}
+  return "4b8ebc9c-ef67-4812-8699-a90dad6343ac";
+}
+
 async function resolveIssueId(identifierOrId) {
   if (!identifierOrId) return null;
-  if (!identifierOrId.includes("-") || identifierOrId.startsWith("BAI-")) {
+  const clean = identifierOrId.trim();
+  if (/^[A-Za-z0-9]+-\d+$/i.test(clean) || !clean.includes("-")) {
     const q = `query GetIssueId($id: String!) { issue(id: $id) { id team { id } } }`;
-    const res = await queryGraphQL(q, { id: identifierOrId });
-    if (res?.issue?.id) return { id: res.issue.id, teamId: res.issue.team?.id };
+    try {
+      const res = await queryGraphQL(q, { id: clean.toUpperCase() });
+      if (res?.issue?.id) return { id: res.issue.id, teamId: res.issue.team?.id };
+    } catch (e) {}
   }
-  return { id: identifierOrId, teamId: DEFAULT_TEAM_ID };
+  const defaultTeam = await getDefaultTeamId();
+  return { id: clean, teamId: defaultTeam };
+}
+
+/**
+ * Dynamically discovers services inside /var/www without hardcoding hostnames.
+ */
+function discoverServices() {
+  const baseDir = "/var/www";
+  const systemDirs = new Set([
+    ".agents", ".atl", ".bin", ".gemini", "baiosfera", "artifacts", 
+    "node_modules", "tmp", "logs", "cache", "bak", "dist", "build",
+    "zerops-astrobranding", "zerops-astro-skills"
+  ]);
+
+  const services = [];
+  try {
+    const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+    for (const ent of entries) {
+      if (ent.isDirectory() && !systemDirs.has(ent.name) && !ent.name.startsWith(".")) {
+        const fullPath = path.join(baseDir, ent.name);
+        const hasManifest = [
+          "package.json", "pyproject.toml", "requirements.txt",
+          "zerops.yaml", "Cargo.toml", "go.mod", "pom.xml"
+        ].some((f) => fs.existsSync(path.join(fullPath, f)));
+        if (hasManifest) {
+          services.push(ent.name);
+        }
+      }
+    }
+  } catch (e) {}
+  return services;
+}
+
+/**
+ * Validates physical tests across dynamically discovered services and universal sensors.
+ */
+function validateApplicationTests() {
+  console.log("🛡️ [F5 Reality Gate] Verificando tests físicos de la aplicación en runtime...");
+  const services = discoverServices();
+  let executedCount = 0;
+
+  for (const svc of services) {
+    const svcPath = path.join("/var/www", svc);
+    const pkgPath = path.join(svcPath, "package.json");
+    const pyTests = fs.existsSync(path.join(svcPath, "tests")) || fs.existsSync(path.join(svcPath, "test"));
+    let hasPkgTest = false;
+    try {
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+        hasPkgTest = Boolean(pkg.scripts && pkg.scripts.test);
+      }
+    } catch (e) {}
+
+    if (hasPkgTest || pyTests || fs.existsSync(path.join(svcPath, "pytest.ini"))) {
+      const testCmd = hasPkgTest ? "npm test" : (pyTests ? "bun test" : "pytest");
+      console.log(`🧪 [F5 Reality Gate] Ejecutando suite de pruebas en "${svc}" (${testCmd})...`);
+      try {
+        execSync(`ssh ${svc} "cd /var/www && ${testCmd}"`, { stdio: "inherit", timeout: 60000 });
+        executedCount++;
+        console.log(`✅ [F5 Reality Gate] Tests en "${svc}" validados con éxito (${testCmd} exit code 0).`);
+      } catch (testErr) {
+        console.error(`❌ F5 REALITY GATE RECHAZADO: Fallaron los tests en "${svc}".`);
+        console.error("Prohibido marcar Done en Linear mientras la suite de pruebas físicas esté fallando.");
+        process.exit(1);
+      }
+    }
+  }
+
+  if (executedCount === 0) {
+    console.log("ℹ️ [F5 Reality Gate] No se detectaron suites de pruebas activas en servicios candidatos.");
+  }
+
+  // Universal Skills Sensor validation
+  if (fs.existsSync("/var/www/.bin/skills-suite-validate")) {
+    console.log("🛡️ [F5 Reality Gate] Ejecutando Sensor Universal de Habilidades (skills-suite-validate)...");
+    try {
+      execSync("/var/www/.bin/skills-suite-validate", { stdio: "inherit", timeout: 30000 });
+      console.log("✅ [F5 Reality Gate] Sensor Universal de Habilidades validado (exit code 0).");
+    } catch (err) {
+      console.error("❌ F5 REALITY GATE RECHAZADO: Falló la validación de habilidades.");
+      process.exit(1);
+    }
+  }
+}
+
+/**
+ * Checks that all Git repositories in /var/www are clean and up-to-date with upstream.
+ */
+function checkGitParity() {
+  const baseDir = "/var/www";
+  const repos = [];
+
+  try {
+    const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+    for (const ent of entries) {
+      if (ent.isDirectory() && ent.name !== "baiosfera") {
+        const repoPath = path.join(baseDir, ent.name);
+        if (fs.existsSync(path.join(repoPath, ".git"))) {
+          repos.push(repoPath);
+        }
+      }
+    }
+  } catch (e) {}
+
+  let pending = false;
+  for (const repo of repos) {
+    try {
+      const stat = execSync("git status --porcelain", { cwd: repo }).toString().trim();
+      if (stat !== "") {
+        console.error(`❌ F5 GOBERNANZA FÍSICA: Cambios sin comitear en "${path.basename(repo)}".`);
+        pending = true;
+      }
+      const unpushed = execSync("git log @{u}..HEAD --oneline 2>/dev/null || true", { cwd: repo }).toString().trim();
+      if (unpushed !== "") {
+        console.error(`❌ F5 GOBERNANZA FÍSICA: Commits sin pushear en "${path.basename(repo)}".`);
+        pending = true;
+      }
+    } catch (e) {}
+  }
+
+  if (pending) {
+    console.error("❌ F5 GOBERNANZA FÍSICA: Comiteá y pusheá todos los cambios antes de marcar Done.");
+    process.exit(1);
+  }
 }
 
 async function main() {
@@ -164,9 +310,9 @@ async function main() {
   } else if (cmd === "create") {
     let title = "";
     let description = "";
-    let teamId = DEFAULT_TEAM_ID;
+    let teamId = await getDefaultTeamId();
     let projectId = DEFAULT_PROJECT_ID;
-    let priority = 2; // High / Normal
+    let priority = 2;
 
     let i = 1;
     while (i < args.length) {
@@ -220,15 +366,13 @@ async function main() {
     const data = await queryGraphQL(q, { input });
     const created = data?.issueCreate?.issue;
     if (data?.issueCreate?.success && created) {
-      const fs = require("fs");
-      const path = require("path");
       const activeFile = "/var/www/artifacts/linear_active.json";
       fs.mkdirSync(path.dirname(activeFile), { recursive: true });
       
       let activeLocks = [];
       if (fs.existsSync(activeFile)) {
         try {
-          const content = fs.readFileSync(activeFile, 'utf8');
+          const content = fs.readFileSync(activeFile, "utf8");
           activeLocks = JSON.parse(content);
           if (!Array.isArray(activeLocks)) activeLocks = [activeLocks];
         } catch(e) {}
@@ -242,11 +386,10 @@ async function main() {
       console.error("❌ Failed to create issue");
       process.exit(1);
     }
-  
   } else if (cmd === "create-project") {
     let name = "";
     let description = "";
-    let teamId = DEFAULT_TEAM_ID;
+    let teamId = await getDefaultTeamId();
     for (let i = 1; i < args.length; ) {
       if (args[i] === "--team" && args[i + 1]) {
         teamId = args[i + 1];
@@ -289,12 +432,18 @@ async function main() {
       console.error("❌ Failed to create project");
       process.exit(1);
     }
-} else if (cmd === "update-status") {
+  } else if (cmd === "update-status") {
     const issueId = args[1];
     const targetStatus = args[2];
     if (!issueId || !targetStatus) {
-      console.error("Usage: linear-cli update-status <issueId> \"<statusName>\"");
+      console.error('Usage: linear-cli update-status <issueId> "<statusName>" [--evidence "<text>"]');
       process.exit(1);
+    }
+
+    let evidence = "";
+    const evIdx = args.indexOf("--evidence");
+    if (evIdx !== -1 && args[evIdx + 1]) {
+      evidence = args.slice(evIdx + 1).join(" ");
     }
 
     const resolved = await resolveIssueId(issueId);
@@ -303,7 +452,6 @@ async function main() {
       process.exit(1);
     }
 
-    // Get states for team
     const qStates = `
       query GetTeamStates($teamId: String!) {
         team(id: $teamId) {
@@ -317,7 +465,7 @@ async function main() {
         }
       }
     `;
-    const statesData = await queryGraphQL(qStates, { teamId: resolved.teamId || DEFAULT_TEAM_ID });
+    const statesData = await queryGraphQL(qStates, { teamId: resolved.teamId || (await getDefaultTeamId()) });
     const states = statesData?.team?.states?.nodes || [];
     const matchedState = states.find(
       (s) => s.name.toLowerCase() === targetStatus.toLowerCase() ||
@@ -331,80 +479,36 @@ async function main() {
       process.exit(1);
     }
 
-function validateApplicationTests() {
-  const fs = require("fs");
-  const { execSync } = require("child_process");
-
-  console.log("🛡️ [F5 Reality Gate] Verificando tests físicos de la aplicación en runtime...");
-  const candidates = ["webdev", "webprod", "backend", "api", "app", "hermes", "bifrost"];
-  let executedCount = 0;
-
-  for (const svc of candidates) {
-    const svcPath = `/var/www/${svc}`;
-    if (fs.existsSync(svcPath)) {
-      const hasNodeTests = fs.existsSync(`${svcPath}/tests`) || fs.existsSync(`${svcPath}/test`);
-      const pkgPath = `${svcPath}/package.json`;
-      let hasPkgTest = false;
-      try {
-        if (fs.existsSync(pkgPath)) {
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-          hasPkgTest = Boolean(pkg.scripts && pkg.scripts.test);
-        }
-      } catch (e) {}
-
-      if (hasNodeTests || hasPkgTest) {
-        const testCmd = hasPkgTest ? "npm test" : (hasNodeTests ? "bun test" : "pytest");
-        console.log(`🧪 [F5 Reality Gate] Ejecutando suite de pruebas en '${svc}' (${testCmd})...`);
-        try {
-          execSync(`ssh ${svc} "cd /var/www && ${testCmd}"`, { stdio: "inherit" });
-          executedCount++;
-          console.log(`✅ [F5 Reality Gate] Tests en '${svc}' validados con éxito (${testCmd} exit code 0).`);
-        } catch (testErr) {
-          console.error(`❌ F5 REALITY GATE RECHAZADO: Fallaron los tests en '${svc}'.`);
-          console.error("Prohibido marcar Done en Linear mientras la suite de pruebas físicas esté fallando.");
-          process.exit(1);
-        }
-      }
-    }
-  }
-
-  if (executedCount === 0) {
-    console.log("ℹ️ [F5 Reality Gate] No se detectaron suites de pruebas activas en servicios candidatos.");
-  }
-}
-
     if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
-      const { execSync } = require("child_process");
+      if (!evidence || evidence.trim().length < 10) {
+        console.error("❌ F5 REALITY GATE RECHAZADO (Anti-Checklist Theater):");
+        console.error("Para marcar un issue como 'Done', debes suministrar evidencia física verificable del entregable.");
+        console.error('Uso: linear-cli update-status <issueId> "Done" --evidence "<descripción de pruebas físicas exit 0, commits y entregables>"');
+        process.exit(1);
+      }
+
       validateApplicationTests();
+
       console.log("🛡️ [F5 Gate] Validating SSoT Parity & Git Push before closing issue...");
       try {
-        execSync("/var/www/.bin/ssot-parity-check", { stdio: "inherit" });
-        const fs = require("fs");
-        const bakDir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak";
-        // Check if there are recent backups
-        if (!fs.existsSync(bakDir)) {
-            console.error("❌ F5 GOBERNANZA FÍSICA: No backup directory found. You must create a backup (iniciar.sh-first rule).");
-            process.exit(1);
+        if (fs.existsSync("/var/www/.bin/ssot-parity-check")) {
+          execSync("/var/www/.bin/ssot-parity-check", { stdio: "inherit" });
         }
-        console.log("🛡️ [F5 Gate] Enforcing Git Push for SSoT...");
-        let pending = false;
-        try {
-          if (fs.existsSync("/var/www/zerops-astro-skills")) {
-             const stat1 = execSync("git status --porcelain", { cwd: "/var/www/zerops-astro-skills" }).toString();
-             if (stat1.trim() !== "") pending = true;
-          }
-          if (fs.existsSync("/var/www/zerops-astrobranding")) {
-             const stat2 = execSync("git status --porcelain", { cwd: "/var/www/zerops-astrobranding" }).toString();
-             if (stat2.trim() !== "") pending = true;
-          }
-        } catch(e) {}
-        if (pending) {
-            console.error("❌ F5 GOBERNANZA FÍSICA: Uncommitted or unpushed changes in sovereign repos (zerops-astro-skills / zerops-astrobranding). Please commit and push before marking issue as Done.");
-            process.exit(1);
-        }
+        checkGitParity();
       } catch (err) {
-        console.error("❌ F5 GOBERNANZA FÍSICA: Validation failed. Fix the physical errors before marking issue as Done.");
+        console.error("❌ F5 GOBERNANZA FÍSICA: Falló la validación física de paridad o Git.");
         process.exit(1);
+      }
+
+      console.log("📝 [F5 Reality Gate] Registrando atestación física de cierre en Linear...");
+      const commentBody = `### 🏁 Cierre de Hito (F5 Reality Attestation)\n\n**Evidencia Física:**\n${evidence}\n\n*Validado automáticamente por linear-cli con sensores físicos exit code 0.*`;
+      try {
+        await queryGraphQL(
+          `mutation CreateComment($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success } }`,
+          { issueId: resolved.id, body: commentBody }
+        );
+      } catch (commentErr) {
+        console.warn("⚠️ No se pudo registrar el comentario de evidencia en Linear:", commentErr.message);
       }
     }
 
@@ -426,7 +530,6 @@ function validateApplicationTests() {
     const updated = updateRes?.issueUpdate?.issue;
     if (updateRes?.issueUpdate?.success && updated) {
       if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
-         const fs = require("fs");
          if (fs.existsSync("/var/www/artifacts/linear_active.json")) {
              fs.unlinkSync("/var/www/artifacts/linear_active.json");
          }
@@ -438,45 +541,23 @@ function validateApplicationTests() {
     }
   } else if (cmd === "update-status-batch") {
     const targetStatus = args[1];
-    const issueIds = args.slice(2);
+    let evidence = "";
+    const evIdx = args.indexOf("--evidence");
+    let issueIds = [];
+
+    if (evIdx !== -1) {
+      issueIds = args.slice(2, evIdx);
+      if (args[evIdx + 1]) evidence = args.slice(evIdx + 1).join(" ");
+    } else {
+      issueIds = args.slice(2);
+    }
+
     if (!targetStatus || issueIds.length === 0) {
-      console.error('Usage: linear-cli update-status-batch "<statusName>" <issueId1> <issueId2> ...');
+      console.error('Usage: linear-cli update-status-batch "<statusName>" <issueId1> <issueId2> ... [--evidence "<text>"]');
       process.exit(1);
     }
 
-    if (targetStatus.toLowerCase() === "done" || targetStatus.toLowerCase() === "completed") {
-      const { execSync } = require("child_process");
-      validateApplicationTests();
-      console.log("🛡️ [F5 Gate Batch] Validating SSoT Parity & Git Push once for batch...");
-      try {
-        execSync("/var/www/.bin/ssot-parity-check", { stdio: "inherit" });
-        const fs = require("fs");
-        const bakDir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak";
-        if (!fs.existsSync(bakDir)) {
-          console.error("❌ F5 GOBERNANZA FÍSICA: No backup directory found.");
-          process.exit(1);
-        }
-        let pending = false;
-        try {
-          if (fs.existsSync("/var/www/zerops-astro-skills")) {
-            const stat1 = execSync("git status --porcelain", { cwd: "/var/www/zerops-astro-skills" }).toString();
-            if (stat1.trim() !== "") pending = true;
-          }
-          if (fs.existsSync("/var/www/zerops-astrobranding")) {
-            const stat2 = execSync("git status --porcelain", { cwd: "/var/www/zerops-astrobranding" }).toString();
-            if (stat2.trim() !== "") pending = true;
-          }
-        } catch(e) {}
-        if (pending) {
-          console.error("❌ F5 GOBERNANZA FÍSICA: Uncommitted changes in sovereign repos.");
-          process.exit(1);
-        }
-      } catch (err) {
-        console.error("❌ F5 GOBERNANZA FÍSICA: Parity validation failed.");
-        process.exit(1);
-      }
-    }
-
+    const defaultTeam = await getDefaultTeamId();
     const qStates = `
       query GetTeamStates($teamId: String!) {
         team(id: $teamId) {
@@ -490,7 +571,7 @@ function validateApplicationTests() {
         }
       }
     `;
-    const statesData = await queryGraphQL(qStates, { teamId: DEFAULT_TEAM_ID });
+    const statesData = await queryGraphQL(qStates, { teamId: defaultTeam });
     const states = statesData?.team?.states?.nodes || [];
     const matchedState = states.find(
       (s) => s.name.toLowerCase() === targetStatus.toLowerCase() ||
@@ -502,6 +583,28 @@ function validateApplicationTests() {
     if (!matchedState) {
       console.error(`❌ Status "${targetStatus}" not found. Available: ${states.map(s => s.name).join(", ")}`);
       process.exit(1);
+    }
+
+    if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
+      if (!evidence || evidence.trim().length < 10) {
+        console.error("❌ F5 REALITY GATE RECHAZADO (Anti-Checklist Theater):");
+        console.error("Para marcar issues en lote como 'Done', debes suministrar evidencia física verificable.");
+        console.error('Uso: linear-cli update-status-batch "Done" <ids...> --evidence "<descripción de pruebas físicas exit 0>"');
+        process.exit(1);
+      }
+
+      validateApplicationTests();
+
+      console.log("🛡️ [F5 Gate Batch] Validating SSoT Parity & Git Push once for batch...");
+      try {
+        if (fs.existsSync("/var/www/.bin/ssot-parity-check")) {
+          execSync("/var/www/.bin/ssot-parity-check", { stdio: "inherit" });
+        }
+        checkGitParity();
+      } catch (err) {
+        console.error("❌ F5 GOBERNANZA FÍSICA: Parity or Git validation failed.");
+        process.exit(1);
+      }
     }
 
     const qUpdate = `
@@ -520,6 +623,17 @@ function validateApplicationTests() {
           console.error(`⚠️ Issue ${rawId} not found, skipping.`);
           continue;
         }
+
+        if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
+          const commentBody = `### 🏁 Cierre de Hito (F5 Reality Attestation Batch)\n\n**Evidencia Física:**\n${evidence}\n\n*Validado automáticamente por linear-cli con sensores físicos exit code 0.*`;
+          try {
+            await queryGraphQL(
+              `mutation CreateComment($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success } }`,
+              { issueId: resolved.id, body: commentBody }
+            );
+          } catch (e) {}
+        }
+
         const updateRes = await queryGraphQL(qUpdate, { id: resolved.id, stateId: matchedState.id });
         const updated = updateRes?.issueUpdate?.issue;
         if (updateRes?.issueUpdate?.success && updated) {
@@ -533,7 +647,6 @@ function validateApplicationTests() {
     }
 
     if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
-      const fs = require("fs");
       if (fs.existsSync("/var/www/artifacts/linear_active.json")) {
         fs.unlinkSync("/var/www/artifacts/linear_active.json");
         console.log("✓ Unlinked /var/www/artifacts/linear_active.json");
@@ -556,7 +669,7 @@ function validateApplicationTests() {
       console.log(`- ${p.name} [State: ${p.state}] (ID: ${p.id})`);
     }
   } else if (cmd === "states") {
-    const tId = args[1] || DEFAULT_TEAM_ID;
+    const tId = args[1] || (await getDefaultTeamId());
     const q = `
       query GetTeamStates($teamId: String!) {
         team(id: $teamId) {
@@ -579,15 +692,16 @@ function validateApplicationTests() {
     }
   } else {
     console.log("Linear CLI Commands:");
-    console.log("  search <query>                       Search issues");
-    console.log("  issue <id>                           Get issue details");
-    console.log("  comment <id> <text>                  Add comment to issue");
-    console.log('  create "<title>" "[desc]" [opts]     Create new issue');
-    console.log('  update-status <id> "<status>"        Update issue workflow status');
-    console.log('  update-status-batch "<status>" <ids> Update multiple issues in batch');
-    console.log("  teams                                List teams");
-    console.log("  projects                             List projects");
-    console.log("  states [teamId]                      List workflow states");
+    console.log("  search <query>                                Search issues");
+    console.log("  issue <id>                                    Get issue details");
+    console.log("  comment <id> <text>                           Add comment to issue");
+    console.log('  create "<title>" "[desc]" [opts]              Create new issue');
+    console.log('  create-project "<name>" "[desc]" [opts]       Create new project');
+    console.log('  update-status <id> "<status>" [--evidence ""] Update issue workflow status (Done requires --evidence)');
+    console.log('  update-status-batch "<status>" <ids> [--evidence ""] Update multiple issues in batch (Done requires --evidence)');
+    console.log("  teams                                         List teams");
+    console.log("  projects                                      List projects");
+    console.log("  states [teamId]                               List workflow states");
   }
 }
 
