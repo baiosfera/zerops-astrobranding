@@ -85,8 +85,6 @@ do_push() {
     # Copiar configuración si existe
     if command -v engram >/dev/null 2>&1; then
         engram export "$COLD_DIR/engram_ssot.json" >/dev/null 2>&1 || true
-        cp -f "$COLD_DIR/engram_ssot.json" "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/engram_ssot.json" 2>/dev/null || true
-        cp -f "$COLD_DIR/engram_ssot.json" "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/engram_baseline.json" 2>/dev/null || true
     fi
     if [ -f "$AGENT_ENGRAM_DIR/protocol-mode.json" ]; then
         cp -f "$AGENT_ENGRAM_DIR/protocol-mode.json" "$HOT_DIR/" 2>/dev/null || true
