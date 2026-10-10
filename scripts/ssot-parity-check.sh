@@ -242,6 +242,54 @@ for skill in "${CORE_SKILLS[@]}"; do
     fi
 done
 
+echo "--- [6/6] Checking Git Cold-Boot Upstream Repositories (iniciar.sh-First Invariant) ---"
+
+check_git_sovereign_repo() {
+    local repo_dir="$1"
+    local repo_name="$(basename "$repo_dir")"
+    if [ ! -d "$repo_dir/.git" ]; then
+        return
+    fi
+    local uncommitted
+    uncommitted=$(git -C "$repo_dir" status --porcelain 2>/dev/null || true)
+    if [ -n "$uncommitted" ]; then
+        echo "❌ Uncommitted changes detected in sovereign repo: $repo_name"
+        echo "$uncommitted" | sed 's/^/   /'
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "✓ Working tree clean in sovereign repo: $repo_name"
+    fi
+
+    local unpushed
+    unpushed=$(git -C "$repo_dir" cherry -v origin/main 2>/dev/null || true)
+    if [ -n "$unpushed" ]; then
+        echo "❌ Unpushed commits detected in sovereign repo: $repo_name (iniciar.sh cold boot will drift!)"
+        echo "$unpushed" | sed 's/^/   /'
+        echo "   👉 Acción requerida: cd $repo_dir && git push origin main"
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "✓ Git push parity verified (up to date with origin/main): $repo_name"
+    fi
+}
+
+check_git_sovereign_repo "/var/www/zerops-astro-skills"
+check_git_sovereign_repo "$LOCAL_BASE/zerops-astrobranding"
+
+for skill in "${CORE_SKILLS[@]}"; do
+    local_skill_dir="$LOCAL_BASE/.agents/skills/$skill"
+    repo_skill_dir="/var/www/zerops-astro-skills/$skill"
+    if [ -d "$repo_skill_dir" ]; then
+        DIFF_REPO=$(diff -rq --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$local_skill_dir" "$repo_skill_dir" 2>&1 || true)
+        if [ -n "$DIFF_REPO" ]; then
+            echo "❌ Drift detected between local skill and git repo (zerops-astro-skills/$skill):"
+            echo "$DIFF_REPO" | sed 's/^/   /'
+            ERRORS=$((ERRORS + 1))
+        else
+            echo "✓ Git repo tree parity verified: zerops-astro-skills/$skill"
+        fi
+    fi
+done
+
 echo "------------------------------------------------------------"
 if [ "$ERRORS" -eq 0 ]; then
     if command -v engram-sync >/dev/null 2>&1; then

@@ -31,6 +31,9 @@ echo "============================================================"
 SYNCED=0
 DRIFT_COUNT=0
 
+# Anti-Pollution Shield: Upstream / framework skills remain purely in runtime/git, not in SSoT custom skills
+EXCLUDED_REGEX="^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*)$"
+
 # Determinar universo canónico de skills soberanas desde zerops-astro-skills y Drive SSoT
 declare -A SOVEREIGN_SET
 if [ -d "$SOVEREIGN_REPO" ]; then
@@ -38,6 +41,9 @@ if [ -d "$SOVEREIGN_REPO" ]; then
         [ -d "$s_path" ] || continue
         s_name="$(basename "$s_path")"
         [ "$s_name" = ".git" ] && continue
+        if echo "$s_name" | grep -qE "$EXCLUDED_REGEX"; then
+            continue
+        fi
         SOVEREIGN_SET["$s_name"]=1
     done
 fi
@@ -45,6 +51,9 @@ fi
 for s_path in "$DRIVE_SKILLS"/*; do
     [ -d "$s_path" ] || continue
     s_name="$(basename "$s_path")"
+    if echo "$s_name" | grep -qE "$EXCLUDED_REGEX"; then
+        continue
+    fi
     SOVEREIGN_SET["$s_name"]=1
 done
 
@@ -68,11 +77,14 @@ for skill in "${!SOVEREIGN_SET[@]}"; do
         DRIFT_COUNT=$((DRIFT_COUNT + 1))
         if [ "$CHECK_ONLY" = true ]; then
             echo "  ⚠️ Drift detectado en: $skill"
-        else
             mkdir -p "$drive_skill_dir"
             # Sincronización exacta, borrando zombies en el destino
             rsync -a --delete "$source_dir/" "$drive_skill_dir/"
-            echo "  ✓ Sincronizada a SSoT: $skill"
+            if [ -d "$SOVEREIGN_REPO" ]; then
+                mkdir -p "$SOVEREIGN_REPO/$skill"
+                rsync -a --delete --exclude=".git" "$source_dir/" "$SOVEREIGN_REPO/$skill/"
+            fi
+            echo "  ✓ Sincronizada a SSoT Drive & Git Repo: $skill"
             SYNCED=$((SYNCED + 1))
         fi
     fi
