@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "setup": "./setup.sh",
+    "setup": "./iniciar.sh",
     "bootstrap": "bun scripts/bootstrap.mjs",
     "dev": "bun --filter @astrobranding/astrobranding dev",
     "build": "bun --filter '*' build",
