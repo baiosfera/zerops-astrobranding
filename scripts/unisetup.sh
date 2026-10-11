@@ -223,6 +223,11 @@ if [ "$RUN_ALL" = true ]; then
     if command -v gentle-ai >/dev/null 2>&1; then
         echo "• Refrescando registro de skills..."
         gentle-ai skill-registry refresh --force 2>/dev/null || true
+        if [ -f "$PROJECT_ROOT/.atl/skill-registry.md" ]; then
+            mkdir -p "$ZCP_ROOT/.atl" "$PROJECT_ROOT/zerops-astrobranding/.atl" 2>/dev/null || true
+            cp -f "$PROJECT_ROOT/.atl/skill-registry.md" "$ZCP_ROOT/.atl/skill-registry.md" 2>/dev/null || true
+            cp -f "$PROJECT_ROOT/.atl/skill-registry.md" "$PROJECT_ROOT/zerops-astrobranding/.atl/skill-registry.md" 2>/dev/null || true
+        fi
     fi
     mkdir -p "$PROJECT_ROOT/.bin" 2>/dev/null || true
     if [ -f "$SCRIPT_DIR/skills-suite-validate.sh" ]; then
