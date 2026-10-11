@@ -1,0 +1,13 @@
+# Hito 7: Sovereign WhatsApp AI Agent Worker (Ubuntu Bun 1.3 / NATS JetStream Consumer)
+services:
+  - hostname: whatsappbot
+    type: ubuntu/bun@1.3
+    priority: 3
+    startWithoutCode: true
+    enableSubdomainAccess: false
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10
