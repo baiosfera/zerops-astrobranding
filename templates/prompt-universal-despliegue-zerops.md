@@ -22,6 +22,7 @@ LOS 3 PILARES INDIVISIBLES DEL ECOSISTEMA
 
 2. EL ARQUITECTO Y CONSTRUCTOR (Modelo Lego Desacoplado por Demanda):
    - Cero perfiles artificiales rígidos (como minimal/ecommerce) y cero pipelines en cascada forzados.
+   - Frontera Sagrada del Plano de Control: El contenedor `zcp` es un orquestador efímero (se enciende exclusivamente para programar, auditar o actualizar; permanece apagado en operaciones normales). Todo el runtime de producción corre 24/7 en contenedores Incus LXC dedicados (Astro, Bifrost, Evolution, Whatsappbot, Postgres, Valkey).
    - La arquitectura se compone bajo demanda mediante Slots de Capacidad Aditivos:
      * Slot Frontend: Astro 5 SSR en Bun 1.3 con adaptador @astrojs/node en modo standalone (os: ubuntu, bind 0.0.0.0, puerto 3000).
      * Slot Persistencia (opcional): PostgreSQL 18 (oltp-hobby).
@@ -29,6 +30,7 @@ LOS 3 PILARES INDIVISIBLES DEL ECOSISTEMA
      * Slot Eventos / RPC (opcional): NATS 2.12 (JetStream <0.3ms P99).
      * Slot Storage (opcional): Object Storage S3 (assets >500KB).
      * Slots IA / Integraciones (opcional): Bifrost (:8080), EvolutionGo (:8085), Listmonk (:9000).
+     * Slot WhatsApp Bot (opcional): Worker agéntico desacoplado en Ubuntu Bun 1.3 (`whatsappbot`, puerto 3005) consumiendo `http://bifrost:8080` por DNS interno privado.
    - Invariantes de Hardware Zerops:
      * Base OS: SIEMPRE "os: ubuntu" en build y runtime para evitar fallas de musl libc con Rollup/Vite y módulos C nativos.
      * Despliegue de artefactos: Desplegar dist/, package.json y node_modules (NUNCA usar "bun build --target bun" que rompe silenciosamente dependencias con addons binarios como sharp o canvas).
@@ -48,9 +50,9 @@ LOS 3 PILARES INDIVISIBLES DEL ECOSISTEMA
 
 4. LOS 8 BLINDAJES FÍSICOS DE PRODUCCIÓN (MATRIZ 230 BAI):
    - Red & 502 Bad Gateway: Los adaptadores de servidor (Node/Bun) deben incluir siempre HOST: "0.0.0.0" en envVariables (escuchar en localhost rompe el balanceador L7).
-   - Bifrost & IA: config_store en PostgreSQL 18 persistente (cero SQLite efímero); vector_store en chromem o qdrant (NUNCA Valkey por ausencia de RediSearch). Virtual Keys con límites.
+   - Bifrost & IA: config_store en PostgreSQL 18 persistente (cero SQLite efímero); vector_store en chromem o qdrant (NUNCA Valkey por ausencia de RediSearch). Dual-Tier Predictive Intent Routing (`x-tier: production` para ventas/tickets/herramientas directo a Pro; FreeLLMAPI con timeout 2.5s y Circuit Breaker de 120s para FAQs). `bifrost-cli` en `zcp` es solo arnés interactivo/TUI de desarrollo, nunca proxy de producción.
    - Valkey & Locks: Locks de idempotencia de 60s en webhooks/pagos (SET lock:webhook:{id} 1 NX EX 60). Human Takeover de 2h (SET bot:takeover:{jid} 1 EX 7200) para silenciar el bot ante intervenciones manuales.
-   - WhatsApp & Worker Desacoplado: NUNCA alojar en Astro SSR (provoca downtimes en deploys web y reintentos automáticos). Ingesta ultraliviana <15ms hacia NATS JetStream; worker dedicado en Bun con Tool Calling determinista en PostgreSQL 18 (pgvector innecesario en <100 entidades), memoria híbrida (Valkey + Postgres) y transcripción Groq Whisper v3 Turbo <350ms.
+   - WhatsApp & Worker Desacoplado: NUNCA alojar en Astro SSR ni en `zcp`. Acknowledge ultraliviano <15ms del webhook antes de inferencia para eliminar tormentas de reintentos en Evolution API; worker dedicado en Bun con Tool Calling determinista en PostgreSQL 18 (pgvector innecesario en <100 entidades), memoria híbrida (Valkey + Postgres), pacing simulado (1.5s–3.0s con presencia typing) y transcripción Groq Whisper v3 Turbo <350ms.
    - Listmonk & Email: Desacople asíncrono obligatorio (cero llamadas síncronas en ruta crítica de checkout para prevenir 504). Plantillas HTML compiladas <85KB (anti-clipping Gmail).
    - Postgres 18 & Datos: Upsert defensivo (ON CONFLICT) en endpoints públicos; acumulación monótona de tags (Sets aditivos); catálogo dinámico SSR (fecha >= NOW) sin crons estáticos en producción.
    - Storage Híbrido: Videos de landing optimizados a 720p H.264 (~800kbps) con +faststart (moov al inicio) en disco local /public/media para streaming por byte-range sin egress de S3; S3 solo para uploads dinámicos >500KB; permisos zerops:zerops en /mnt/localstorage.
