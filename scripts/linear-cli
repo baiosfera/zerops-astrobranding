@@ -393,9 +393,15 @@ async function main() {
         const q = `query GetProjects { projects(first: 50) { nodes { id name state } } }`;
         const data = await queryGraphQL(q);
         const projects = data?.projects?.nodes || [];
-        const currentService = process.env.LINEAR_SERVICE || "elplacerdc";
-        const matched = projects.find((p) => p.state !== "completed" && p.state !== "canceled" && p.name.toLowerCase().includes(currentService.toLowerCase()))
-          || projects.find((p) => p.state !== "completed" && p.state !== "canceled");
+        const detectedServices = discoverServices();
+        const detectedSvc = process.env.LINEAR_SERVICE || (detectedServices.length > 0 ? detectedServices[0] : null);
+        let matched = null;
+        if (detectedSvc) {
+          matched = projects.find((p) => p.state !== "completed" && p.state !== "canceled" && p.name.toLowerCase().includes(detectedSvc.toLowerCase()));
+        }
+        if (!matched) {
+          matched = projects.find((p) => p.state !== "completed" && p.state !== "canceled");
+        }
         if (matched) {
           projectId = matched.id;
           console.log(`ℹ️ [Auto-Grouping] Asignando automáticamente al proyecto: "${matched.name}" (${matched.id})`);
