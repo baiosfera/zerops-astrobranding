@@ -218,8 +218,8 @@
     "routing_rules": [
       {
         "id": "rule-coding-and-reasoning-to-deepseek",
-        "name": "Route Coding and Deep Reasoning Directly to DeepSeek",
-        "cel_expression": "model.contains('deepseek') || model.contains('code') || model.contains('reason') || headers['x-tier'] == 'production'",
+        "name": "Route Coding, Complex Reasoning & Pro Tier Directly to DeepSeek",
+        "cel_expression": "model.contains('deepseek') || model.contains('code') || model.contains('reason') || headers['x-tier'] == 'production' || headers['x-routing-tier'] == 'pro'",
         "targets": [
           {
             "provider": "deepseek",
