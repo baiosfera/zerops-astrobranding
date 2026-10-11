@@ -29,6 +29,7 @@ zerops:
           httpSupport: true
       envVariables:
         PORT: 3000
+        HOST: "0.0.0.0"
         NODE_ENV: production
         DATABASE_URL: ${database_connectionString}
         VALKEY_URL: ${valkey_connectionString}
