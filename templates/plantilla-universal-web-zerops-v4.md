@@ -161,8 +161,12 @@ Cualquier AGY debe clasificar y persistir los datos estrictamente en su capa des
 ```
 
 1. **Google Drive SSoT (`/var/www/baiosfera/`):** Capa Fría indestructible. Espejo permanente de código fuente, configuraciones maestras y manifiestos de diseño.
-2. **`localstorage` (`/mnt/localstorage/`):** Capa Caliente POSIX con semántica nativa mononúcleo. Reservada para SQLite embebido (`engram`, `freellmapi`), sockets y archivos de configuración en caliente.
-   > **Regla de Gobernanza:** Un proyecto en Zerops representa una única marca. Está prohibido subdividir el almacenamiento creando carpetas intermedias (ej: `/proyectos/`). Los directorios de la marca se alojan directamente en la raíz (ej: `/var/www/localstorage/<APP_IDENTITY>`).
+2. **`localstorage` (`/mnt/localstorage/`):** Capa Caliente POSIX con semántica nativa mononúcleo. Reservada para SQLite embebido (`engram`, `freellmapi`), sockets, y **el Brandbook SSoT de cada marca**.
+   > **Regla de Gobernanza & Topología Multi-Marca:** Un proyecto en Zerops representa una marca soberana. Cada marca mantiene su identidad viva en:
+   > - **Ruta Activa:** `/var/www/localstorage/${PROJECT_NAME}/dev/` (o `prod/` en producción), montada en los runtimes como `/mnt/localstorage/${PROJECT_NAME}/dev/`.
+   > - **Archivos Estándar:** `system_prompt.md` (personalidad, tono y límites), `brandbook.json` (tokens DTCG y valores) y `catalog_links.json` (rutas oficiales validadas).
+   > - **Protocolo de Siembra (Seed):** Si en un arranque en frío o en un nuevo ZCP la carpeta está vacía o no existe, el bot/orquestador siembra automáticamente desde `/var/www/baiosfera/PROYECTOS/${PROJECT_NAME}/` hacia `/mnt/localstorage/${PROJECT_NAME}/dev/`. Si es un proyecto greenfield, genera un scaffold base y notifica.
+   > - **Separación Sagrada de Responsabilidades:** Bifrost es infraestructura agnóstica de inferencia. El worker desacoplado (`whatsappbot`) o la app web es quien tiene el control exclusivo de cargar el Brandbook SSoT, compilar el `System Prompt` dinámico y alimentar a Bifrost por llamada.
 3. **`objectstorage` (S3 MinIO):** Capa de Medios Públicos y Dinámicos. Toda imagen de catálogo, avatar de usuario o PDF generado en runtime reside aquí, configurado con `forcePathStyle: true` y expuesto vía Cloudflare CDN.
 4. **`postgresql` (PostgreSQL 18):** Capa Relacional Transaccional ACID. Tablas de negocio (`clients`, `orders`, `outbox`), esquemas aislados para Listmonk (`search_path=listmonk,public`) y EvolutionGo (`evogo_auth`, `evogo_users`).
 

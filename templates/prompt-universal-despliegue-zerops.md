@@ -52,10 +52,10 @@ LOS 3 PILARES INDIVISIBLES DEL ECOSISTEMA
    - Red & 502 Bad Gateway: Los adaptadores de servidor (Node/Bun) deben incluir siempre HOST: "0.0.0.0" en envVariables (escuchar en localhost rompe el balanceador L7).
    - Bifrost & IA: config_store en PostgreSQL 18 persistente (cero SQLite efímero); vector_store en chromem o qdrant (NUNCA Valkey por ausencia de RediSearch). Dual-Tier Predictive Intent Routing (`x-tier: production` para ventas/tickets/herramientas directo a Pro; FreeLLMAPI con timeout 2.5s y Circuit Breaker de 120s para FAQs). `bifrost-cli` en `zcp` es solo arnés interactivo/TUI de desarrollo, nunca proxy de producción.
    - Valkey & Locks: Locks de idempotencia de 60s en webhooks/pagos (SET lock:webhook:{id} 1 NX EX 60). Human Takeover de 2h (SET bot:takeover:{jid} 1 EX 7200) para silenciar el bot ante intervenciones manuales.
-   - WhatsApp & Worker Desacoplado: NUNCA alojar en Astro SSR ni en `zcp`. Acknowledge ultraliviano <15ms del webhook antes de inferencia para eliminar tormentas de reintentos en Evolution API; worker dedicado en Bun con Tool Calling determinista en PostgreSQL 18 (pgvector innecesario en <100 entidades), memoria híbrida (Valkey + Postgres), pacing simulado (1.5s–3.0s con presencia typing) y transcripción Groq Whisper v3 Turbo <350ms.
+   - WhatsApp & Worker Desacoplado: NUNCA alojar en Astro SSR ni en `zcp`. Acknowledge ultraliviano <15ms del webhook antes de inferencia para eliminar tormentas de reintentos en Evolution API; worker dedicado en Bun con Tool Calling determinista en PostgreSQL 18 (pgvector innecesario en <100 entidades), memoria híbrida (Valkey + Postgres), pacing simulado (1.5s–3.0s con presencia typing) y transcripción Groq Whisper v3 Turbo <350ms. El worker es el guardián de la marca: carga el Brandbook SSoT dinámicamente desde `/mnt/localstorage/${PROJECT_NAME}/dev/system_prompt.md` y construye el prompt hacia Bifrost (Bifrost es agnóstico).
    - Listmonk & Email: Desacople asíncrono obligatorio (cero llamadas síncronas en ruta crítica de checkout para prevenir 504). Plantillas HTML compiladas <85KB (anti-clipping Gmail).
    - Postgres 18 & Datos: Upsert defensivo (ON CONFLICT) en endpoints públicos; acumulación monótona de tags (Sets aditivos); catálogo dinámico SSR (fecha >= NOW) sin crons estáticos en producción.
-   - Storage Híbrido: Videos de landing optimizados a 720p H.264 (~800kbps) con +faststart (moov al inicio) en disco local /public/media para streaming por byte-range sin egress de S3; S3 solo para uploads dinámicos >500KB; permisos zerops:zerops en /mnt/localstorage.
+   - Storage Híbrido & Brandbook SSoT: Videos de landing optimizados a 720p H.264 (~800kbps) con +faststart (moov al inicio) en disco local /public/media para streaming por byte-range sin egress de S3; S3 solo para uploads dinámicos >500KB; permisos zerops:zerops en /mnt/localstorage. Cada marca tiene su carpeta `/mnt/localstorage/${PROJECT_NAME}/dev/` (con siembra automática desde `/var/www/baiosfera/PROYECTOS/${PROJECT_NAME}` en ZCPs nuevos).
    - Admin Panel & Finanzas: Hard-404 en /admin, ofuscación en /adminn, cabeceras noindex/no-store, distinción transaccional estricta de pagos reales vs cortesías manuales ($0).
 
 ================================================================================
@@ -74,9 +74,9 @@ CAPACITY_SLOTS:                             # Seleccionar ÚNICAMENTE los slots 
   # - storage_s3                            # Opcional: Object Storage S3
   # - ai_gateway_bifrost                    # Opcional: Maxim AI Bifrost
   # - whatsapp_evolution                    # Opcional: EvolutionGo WhatsApp Transport (:8085)
-  # - whatsapp_bot_worker                   # Opcional: Worker Agéntico WhatsApp Dedicado en Bun (NATS + Tool Calling)
+  # - whatsapp_bot_worker                   # Opcional: Worker Agéntico WhatsApp Dedicado en Bun (NATS + Tool Calling + Brandbook SSoT)
   # - email_listmonk                        # Opcional: Listmonk Newsletter
-BRAND_BRIEF: "[BRAND_BRIEF_OR_PATH]"        # Ruta al brandbook W3C DTCG o brief visual de la marca
+BRAND_SSOT_PATH: "/mnt/localstorage/[APP_IDENTITY]/dev" # Ruta persistente del Brandbook (fallback: /var/www/baiosfera/PROYECTOS/[APP_IDENTITY])
 ================================================================================
 
 PROTOCOLO DE EJECUCIÓN AUTÓNOMO:
