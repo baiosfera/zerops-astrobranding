@@ -123,6 +123,29 @@
         ]
       },
       {
+        "id": "vk-astrobranding-prod",
+        "name": "AstroBranding Production",
+        "value": "env.BIFROST_VK_ASTROBRANDING",
+        "is_active": true,
+        "rate_limits": {
+          "requests_per_minute": 120
+        },
+        "provider_configs": [
+          {
+            "provider": "freellmapi",
+            "allowed_models": ["*"],
+            "key_ids": ["*"],
+            "weight": 1.0
+          },
+          {
+            "provider": "deepseek",
+            "allowed_models": ["*"],
+            "key_ids": ["*"],
+            "weight": 1.0
+          }
+        ]
+      },
+      {
         "id": "vk-web-client",
         "name": "Web Client Application",
         "value": "env.BIFROST_VK_WEB",
