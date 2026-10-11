@@ -1477,8 +1477,15 @@ def main():
 
     is_post_tool = "--post-tool" in sys.argv or ("stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload))
     if is_post_tool:
-        target_file = payload.get("toolCall", {}).get("args", {}).get("TargetFile", "")
-        auto_sync_governance(target_file)
+        tool_name = payload.get("toolCall", {}).get("name", "")
+        tool_args = payload.get("toolCall", {}).get("args", {})
+        target_file = tool_args.get("TargetFile", "")
+        if not target_file and tool_name == "run_command":
+            cmd = tool_args.get("CommandLine", "")
+            if re.search(r'\b(git|skill|unisetup|iniciar|gentle-ai|\.agents|zerops-astro)\b', cmd):
+                auto_sync_governance()
+        else:
+            auto_sync_governance(target_file)
         print(json.dumps({}))
         sys.exit(0)
 
