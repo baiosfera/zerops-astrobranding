@@ -99,10 +99,32 @@ async function resolveIssueId(identifierOrId) {
   return { id: clean, teamId: defaultTeam };
 }
 
+async function resolveProjectId(identifierOrName) {
+  if (!identifierOrName) return null;
+  const clean = identifierOrName.trim();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
+    return clean;
+  }
+  try {
+    const q = `query GetProjects { projects(first: 50) { nodes { id name state } } }`;
+    const data = await queryGraphQL(q);
+    const projects = data?.projects?.nodes || [];
+    const lower = clean.toLowerCase();
+    const exact = projects.find((p) => p.name.toLowerCase() === lower);
+    if (exact) return exact.id;
+    const sub = projects.find((p) => p.name.toLowerCase().includes(lower));
+    if (sub) return sub.id;
+  } catch (e) {}
+  return null;
+}
+
 /**
  * Dynamically discovers services inside /var/www without hardcoding hostnames.
  */
 function discoverServices() {
+  if (process.env.LINEAR_SERVICE) {
+    return [process.env.LINEAR_SERVICE];
+  }
   const baseDir = "/var/www";
   const systemDirs = new Set([
     ".agents", ".atl", ".bin", ".gemini", "baiosfera", "artifacts", 
@@ -188,17 +210,27 @@ function checkGitParity() {
   const baseDir = "/var/www";
   const repos = [];
 
-  try {
-    const entries = fs.readdirSync(baseDir, { withFileTypes: true });
-    for (const ent of entries) {
-      if (ent.isDirectory() && ent.name !== "baiosfera") {
-        const repoPath = path.join(baseDir, ent.name);
-        if (fs.existsSync(path.join(repoPath, ".git"))) {
-          repos.push(repoPath);
+  if (process.env.LINEAR_SERVICE) {
+    if (fs.existsSync(path.join(baseDir, "scratch/repo/.git"))) {
+      repos.push(path.join(baseDir, "scratch/repo"));
+    }
+    const svcRepo = path.join(baseDir, process.env.LINEAR_SERVICE);
+    if (fs.existsSync(path.join(svcRepo, ".git"))) {
+      repos.push(svcRepo);
+    }
+  } else {
+    try {
+      const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+      for (const ent of entries) {
+        if (ent.isDirectory() && ent.name !== "baiosfera") {
+          const repoPath = path.join(baseDir, ent.name);
+          if (fs.existsSync(path.join(repoPath, ".git"))) {
+            repos.push(repoPath);
+          }
         }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
   let pending = false;
   for (const repo of repos) {
