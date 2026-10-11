@@ -346,6 +346,7 @@ def auto_sync_governance(target_file: str = ""):
 
             cherry = subprocess.run(["git", "cherry", "-v", "origin/main"], cwd=skills_git, capture_output=True, text=True, timeout=5)
             if cherry.returncode == 0 and cherry.stdout.strip():
+                subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
                 subprocess.run(["git", "push", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
     except Exception:
         pass
@@ -361,6 +362,7 @@ def auto_sync_governance(target_file: str = ""):
 
             cherry = subprocess.run(["git", "cherry", "-v", "origin/main"], cwd=repo_git, capture_output=True, text=True, timeout=5)
             if cherry.returncode == 0 and cherry.stdout.strip():
+                subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
                 subprocess.run(["git", "push", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
     except Exception:
         pass
