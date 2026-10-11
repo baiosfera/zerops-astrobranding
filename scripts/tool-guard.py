@@ -109,6 +109,30 @@ CORE_SYNC_PAIRS = [
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.atl/skill-registry.md",
         "/var/www/.atl/skill-registry.md"
     ),
+    (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.atl/skill-registry.md",
+        "/var/www/zerops-astrobranding/.atl/skill-registry.md"
+    ),
+    (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/iniciar.sh",
+        "/var/www/zerops-astrobranding/iniciar.sh"
+    ),
+    (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh",
+        "/var/www/zerops-astrobranding/scripts/unisetup.sh"
+    ),
+    (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/gdrive.sh",
+        "/var/www/zerops-astrobranding/scripts/gdrive.sh"
+    ),
+    (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/engram-sync",
+        "/var/www/zerops-astrobranding/scripts/engram-sync"
+    ),
+    (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/astrobranding-check.sh",
+        "/var/www/.bin/astrobranding-check"
+    ),
 ]
 
 def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
