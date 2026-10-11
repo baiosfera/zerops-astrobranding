@@ -596,6 +596,11 @@ def evaluate_hook(payload: dict) -> dict:
         except Exception:
             pass
 
+        try:
+            auto_sync_governance()
+        except Exception:
+            pass
+
         user_prompt = payload.get("userPrompt", "")
         halt_alert = ""
         dummy_plan = "/var/www/artifacts/test_plan_v1.md"
