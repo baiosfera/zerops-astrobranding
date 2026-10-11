@@ -1,7 +1,7 @@
-# 🌐 PLANTILLA UNIVERSAL WEB ZEROPS (v4.2.0) — MASTER BLUEPRINT
+# 🌐 PLANTILLA UNIVERSAL WEB ZEROPS (v4.3.0) — MASTER BLUEPRINT
 
 > **Clasificación:** Blueprint Canónico Universal para Despliegues Web Soberanos en Zerops  
-> **Versión:** 4.2.0 (SemVer Canónico — Zero-Wait CEL Bifrost, 2h Human Takeover, Dynamic Temporal Agenda & 5-Tier Data Mesh)  
+> **Versión:** 4.3.0 (SemVer Canónico — Matriz de Blindajes Físicos de 230 BAI en Producción & Desacople Lego Zero-Drift)  
 > **Gobernanza:** [`Supreme Directive`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md), [`Planner`](file:///var/www/.agents/skills/planner/SKILL.md) & [`Skill-Improver`](file:///var/www/.agents/skills/skill-improver/SKILL.md)  
 > **Stack Base:** Astro 5 SSR (Bun 1.3.9+ / Tailwind CSS 4) + PostgreSQL 18 + Valkey 7.2 + NATS 2.12 + Object Storage S3 + Bifrost AI Gateway + EvolutionGo + Listmonk  
 > **Propósito:** Guía de ejecución autónoma para que cualquier agente AGY despliegue una aplicación web, e-commerce o landing para CUALQUIER marca, producto o tema tanto en proyectos nuevos desde cero (*Greenfield*) como en adopción de repositorios preexistentes (*Brownfield*), sin ensayos, sin errores y con dependencias bloqueantes en Linear.
@@ -256,22 +256,31 @@ Los hitos se clasifican estrictamente en **CORE** (invariantes arquitectónicos 
 | **`BAI-5`** | `[OPT-IN]` | **Automatización Omnicanal & Asistentes de IA** | `BAI-3` | WhatsApp ágil con EvolutionGo (:8085), Email documental Listmonk (<85KB), Virtual Keys en Bifrost AI Gateway (:8080). |
 | **`BAI-6`** | `[CORE]` | **Atestación Física Multi-Superficie, SEO-AEO-GEO & Go-Live** | `BAI-3` / `BAI-4` / `BAI-5` | Habilitar Ingress (`zerops_subdomain action="enable"`), Atestación Pública (HTTP 200 en URL externa), Playwright E2E exit code 0, Schema.org, OpenGraph <300KB. |
 
-### Matriz de Perfiles de Despliegue (`--profile`)
+### Modelo Lego Desacoplado por Slots de Capacidad (Soberanía Frugal)
 
-Para evitar arquitecturas carcelarias o forzar servicios innecesarios en proyectos sencillos, el scaffolder soporta 4 perfiles modulares:
+> [!WARNING]
+> **Deconstrucción de Perfiles Rígidos y Pipelines Waterfall:**
+> Los perfiles predefinidos (`minimal`, `content`, `ecommerce`, `full-mesh`) son **arquetipos referenciales de conveniencia**, NO verdades absolutas ni camisas de fuerza.
+> En Zerops, imponer stacks completos artificiales genera desperdicio de recursos y fragilidad operativa.
+> El estándar real es el **Aprovisionamiento Frugal por Slots de Capacidad**: el agente evalúa la intención de negocio y cablea exclusivamente los bloques funcionales que el caso de uso requiere hoy.
 
-1. **`minimal` (Landing Estática / Portfolio / Presencia Básica):**
-   - Hitos seleccionados: `BAI-0` $\to$ `BAI-1` $\to$ `BAI-3` $\to$ `BAI-6`.
-   - Infraestructura: Solo Astro 5 SSR en Bun (cero PostgreSQL, Valkey, NATS o IA satélite ociosos).
-2. **`content` (Portal de Contenidos / Blog / Captura de Leads / Reservas):**
-   - Hitos seleccionados: `BAI-0` $\to$ `BAI-1` $\to$ `BAI-2` $\to$ `BAI-3` $\to$ `BAI-6`.
-   - Infraestructura: Astro 5 SSR + PostgreSQL 18 + S3 Object Storage. Persistencia antes de UI.
-3. **`ecommerce` (Tienda Online / Checkout / Venta de Entradas):**
-   - Hitos seleccionados: `BAI-0` $\to$ `BAI-1` $\to$ `BAI-2` $\to$ `BAI-3` $\to$ `BAI-4` $\to$ `BAI-6`.
-   - Infraestructura: Astro 5 SSR + PostgreSQL 18 + Valkey 7.2 (idempotencia y locks) + S3 Object Storage.
-4. **`full-mesh` (Ecosistema Omnicanal Completo con IA y Mensajería):**
-   - Hitos seleccionados: Todos (`BAI-0` a `BAI-6`).
-   - Infraestructura: Astro 5 SSR + PostgreSQL 18 + Valkey 7.2 + NATS 2.12 + S3 + Bifrost Gateway (:8080) + EvolutionGo (:8085) + Listmonk (:9000).
+#### Matriz de Slots de Capacidad Aditivos:
+1. **Slot Frontend (Invariante):** Astro 5 SSR en Bun 1.3 con `@astrojs/node` en modo standalone (`os: ubuntu`, `HOST: 0.0.0.0`, puerto 3000). Despliega `dist/`, `package.json` y `node_modules` (evitar `bun build --target bun` monolítico que rompe addons nativos como `sharp`).
+2. **Slot Persistencia Relacional (Aditivo):** PostgreSQL 18 (`oltp-hobby`). Solo si el proyecto maneja estado relacional (leads, usuarios, pedidos).
+3. **Slot Caché & Idempotencia (Aditivo):** Valkey 7.2 (`hobby`). Para locks atómicos de pasarelas, sesiones y rate-limiting.
+4. **Slot Eventos & Mensajería (Aditivo):** NATS 2.12 JetStream (`<0.3ms P99`). Para arquitecturas orientadas a eventos y workers de fondo.
+5. **Slot Almacenamiento S3 (Aditivo):** Object Storage (MinIO S3). Para media, comprobantes y assets pesados (>500KB).
+6. **Slot Automatización Omnicanal & IA (Aditivo):** Maxim AI Bifrost (:8080), EvolutionGo WhatsApp (:8085) o Listmonk (:9000). Solo bajo demanda explícita.
+
+#### Invariantes Físicos de Hardware y Red Zerops (Octubre 2026):
+- **Base OS Ubuntu:** Build y run DEBEN usar `os: ubuntu`. Vite/Rollup y los bindings C nativos fallan en Alpine/musl.
+- **Red Privada VXLAN:** Llamadas inter-servicio SIEMPRE por `http://` (nunca `https://`) resolviendo el hostname directo (`http://db:5432`, `http://bifrost:8080`).
+- **Autoscaling Elástico:** `cpuMode: SHARED`, `minFreeRamGB: 0.25`, `minFreeRamPercent: 10`. Omitir techos artificiales (`maxRam`/`maxCpu`) que provocan caídas por OOMKilled; Zerops factura por consumo real por segundo.
+- **Pirámide de 4 Sensores Físicos (Anti-Checklist Theater):**
+  * Capa 0: `bun x tsc --noEmit` (Exit Code 0).
+  * Capa 1: `bun run build` dentro del contenedor con artefactos generados (Exit Code 0).
+  * Capa 2: `bun test` de comportamiento (Exit Code 0).
+  * Capa 3: `curl -Ifs http://0.0.0.0:3000/health` (HTTP 200 OK) y `zerops_verify` pass.
 
 ### Invariante de Persistencia Previa (`BAI-2` antes de `BAI-3`)
 En proyectos que requieren persistencia relacional, los contratos de datos (`BAI-2`) **preceden obligatoriamente** a la construcción de las interfaces de usuario (`BAI-3`). Esto erradica el desarrollo contra mocks volátiles y asegura que cada componente visual se conecte desde el primer día a esquemas tipados y APIs vivas.
@@ -678,4 +687,59 @@ Para cualquier proyecto o marca desplegada bajo esta plantilla, la integridad de
 ### 2. Sensor Físico F5 en Linear y CI/CD (Reality Over Checklist Theater):
 - **Cierre Subordinado a la Suite de Pruebas:** El script soberano `linear-cli update-status <ID> "Done"` ejecuta obligatoriamente la suite de pruebas físicas en el runtime activo (`ssh <service> "cd /var/www && (npm test || bun test)"`).
 - **Atestación Física de Calidad:** La paridad de archivos en Google Drive o el estado limpio de Git son condiciones necesarias pero jamás suficientes. El cierre a 'Done' se consuma exclusivamente cuando la suite completa de pruebas físicas de aplicación finaliza con código de salida 0.
+
+---
+
+## 22. Matriz Universal de Lecciones de Batalla & Blindajes Físicos (Síntesis de 230 BAI en Producción)
+
+Esta sección consolida de forma 100% agnóstica a cualquier marca los descubrimientos, anomalías resueltas y blindajes arquitectónicos extraídos directamente de 230 tickets de producción (`BAI-*`). Cualquier agente AGY que despliegue infraestructura o software en Zerops debe adherirse a estos 8 axiomas probados:
+
+### 1. Maxim AI Bifrost & FreeLLMAPI (Inferencia & Gateway de IA)
+- **Persistencia Duradera Obligatoria:** Las configuraciones de modelos y registros de logs de Bifrost (`config_store` y `logs_store`) DEBEN residir en PostgreSQL 18. Queda estrictamente prohibido usar SQLite local efímero dentro del contenedor de Bifrost, ya que cualquier reinicio, escalado o despliegue borra las llaves y modelos configurados.
+- **Incompatibilidad Vectorial con Valkey:** `vector_store.type` en Bifrost debe configurarse exclusivamente como `chromem` (en memoria embebido) o `qdrant` (motor vectorial dedicado). **JAMÁS configurar `redis` apuntando a Valkey 7.2**, ya que Valkey es un motor de caché y datos en memoria puro que no incluye los módulos propietarios de Redis Stack (`FT.SEARCH`, `FT.CREATE`), lo que provoca fallos silenciosos de arranque o pánico en el binario de Go.
+- **Gobernanza por Virtual Keys:** Configurar siempre las Virtual Keys en `/api/governance/virtual-keys` con límites presupuestarios y de tasa para aislar el consumo de la web pública, bots conversacionales y paneles internos.
+- **Transcripción de Audio en Streaming (<400ms):** Descargar notas de voz autenticadas desde el motor de mensajería (Evolution) y procesarlas directamente contra Groq Whisper (`whisper-large-v3-turbo`) con token Bearer, omitiendo almacenamiento intermedio en disco para máxima velocidad y privacidad.
+
+### 2. Valkey 7.2 vs Redis Stack (Caché, Locks & Human Takeover)
+- **Frontera de Capacidades:** Valkey 7.2 es el motor canónico de alto rendimiento para estructuras de datos estándar (KV, Hashes, Sets, Sorted Sets, Pub/Sub, colas BullMQ). No intentar cargar módulos RediSearch ni RedisJSON.
+- **Locks Atómicos de Idempotencia en Pagos y Webhooks:** En pasarelas de pago y webhooks asíncronos (Wompi, ePayco, Stripe, dLocal), adquirir inmediatamente un lock atómico de 60 segundos en Valkey:
+  `SET lock:webhook:{transaccion_id} 1 NX EX 60`
+  Si la clave ya existe (colisión), responder `HTTP 200` de inmediato sin re-ejecutar la lógica. Esto erradica acreditaciones dobles de saldo, reservas duplicadas o sobrepagos de comisiones.
+- **Human Takeover & Ventana de Silencio (2 Horas):** Cuando un operador humano interviene en una conversación desde WhatsApp Web o la app móvil, el backend debe registrar una clave en Valkey:
+  `SET bot:takeover:{jid} 1 EX 7200`
+  Mientras esta clave exista, el bot de IA permanece en **silencio absoluto**, persistiendo el historial en memoria para reactivarse limpiamente solo si el cliente reanuda el contacto después de 2 horas de inactividad.
+
+### 3. EvolutionGo & Motor de Mensajería WhatsApp
+- **Especialización de Canal (Transaccional vs Campañas Masivas):** WhatsApp está reservado para comunicación de alta inmediatez y valor (<15 segundos de lectura, códigos OTP, pases con QR, alertas críticas). Campañas masivas o envíos que superen 500 destinatarios DEBEN despacharse por email (Listmonk) para blindar el número contra reportes de spam y baneos por parte de Meta.
+- **Silencio Ante Acuses de Cortesía:** Ante respuestas de cortesía o confirmación breve del usuario de 1 o 2 palabras ("ok", "gracias", "listo", "vale", "dale", "perfecto"), el bot NO debe generar respuestas con modelos de lenguaje ni gastar tokens; registra el acuse en la base de datos y calla.
+- **Normalización Canónica E.164:** Todo número telefónico capturado o procesado debe normalizarse al formato E.164 (`+` seguido de código de país y dígitos numéricos limpios) antes de interactuar con la base de datos o las APIs de mensajería.
+
+### 4. Listmonk & Automation Engine (Email Marketing Soberano)
+- **Desacople Asíncrono Estricto (Zero 504 Gateway Timeout):** La sincronización de suscriptores o disparo de campañas en Listmonk NUNCA debe bloquear la ruta HTTP crítica de un checkout o registro web. Si Listmonk o el relay SMTP tienen latencia, el usuario experimenta un error 504 y la compra se cancela. Estas operaciones se ejecutan de forma asíncrona mediante eventos NATS o workers desacoplados en background.
+- **Tupla Inmutable WhatsApp-Email:** La identidad del contacto se modela como un par indivisible `(whatsapp, email)`. Si un contacto interactúa a través de un nuevo formulario usando su email previamente registrado, el sistema no duplica la fila: unifica la metadata y preserva el historial.
+- **Presupuesto HTML de Plantillas (<85KB):** Todo correo transaccional o de marketing debe compilarse con un peso de HTML inferior a 85KB. Si excede 102KB, Gmail trunca el cuerpo ("Mensaje recortado"), ocultando los enlaces de baja obligatoria (RFC 8058) y afectando la reputación del dominio (SPF/DKIM/DMARC).
+
+### 5. PostgreSQL 18 & Modelado de Datos
+- **Upsert Defensivo Universal (`ON CONFLICT`):** Todo endpoint público de captura debe implementar operaciones `INSERT ... ON CONFLICT DO UPDATE` o `DO NOTHING`. Ninguna tabla pública debe fallar con error HTTP 500 por violaciones de clave única ante reintentos de red del cliente.
+- **Acumulación Monótona de Etiquetas:** El arreglo de etiquetas de un contacto (`metadata.tags`, `metadata.registered_channels`) debe tratarse como un conjunto aditivo estricto (`Set`). Al actualizar el perfil de un usuario, las nuevas etiquetas se añaden mediante unión matemática; jamás se sobreescribe ni se trunca el array preexistente.
+- **Catálogo Dinámico SSR (Cero Crons Estáticos):** En sitios con agendas, cartelera o eventos temporales, la consulta en el servidor (`Astro SSR`) debe filtrar en tiempo real:
+  `WHERE fecha_fin >= NOW()`
+  Prohibido usar crons o regeneraciones estáticas para ocultar eventos pasados, ya que los usuarios verán fechas vencidas si el cron se retrasa o el caché estático persiste.
+
+### 6. Storage Híbrido: POSIX NVMe vs Object Storage S3
+- **Video Web Progresivo en Almacenamiento Local (Zero S3 Bandwidth Egress):** Videos de landing pages, fondos o héroes deben transcodificarse en local a 720p H.264 (~800kbps) ubicando el índice `moov` al inicio (`-movflags +faststart`) y servirse directamente desde `/public/media`. Esto habilita streaming HTTP por rangos de bytes instantáneo (<100ms) sin costos de egress en S3.
+- **S3 MinIO Reservado para Contenido Dinámico:** El almacenamiento S3 se utiliza exclusivamente para archivos adjuntos generados por usuarios, respaldos de base de datos o activos pesados (>500KB), sirviéndose siempre con URLs prefirmadas de expiración corta.
+- **Permisos de Montaje POSIX:** Al usar `local-storage:single@1`, verificar que las carpetas montadas en `/mnt/localstorage` pertenezcan a `zerops:zerops` (`uid:gid 1000:1000`) para evitar bloqueos por permisos en contenedores no-root.
+
+### 7. GitOps & Ciclo de Vida de Plataforma Zerops
+- **Variable de Entorno `HOST: "0.0.0.0"` Mandatoria:** Los adaptadores de servidor (Astro Node standalone, Bun, Fastify) escuchan por defecto en `127.0.0.1`. En Zerops, esto impide que el balanceador L7 alcance el puerto, arrojando error `502 Bad Gateway`. Declarar siempre `HOST: "0.0.0.0"` en `envVariables`.
+- **Base OS Ubuntu para Compilaciones Complejas:** Usar `os: ubuntu` en servicios con dependencias nativas C (`glibc`, `sharp`, `canvas`, `musl-dev`). Alpine es excelente para binarios estáticos de Go, pero introduce incompatibilidades con bundlers modernos basados en Node/Bun.
+- **Empaquetado Limpio:** En `deployFiles` de aplicaciones Astro, transferir `dist/`, `package.json` y `node_modules`. No empaquetar con `bun build --target bun` monolítico cuando existan addons binarios nativos.
+- **Staging Efímero de Costo Cero:** Utilizar el esquema multi-servicio de Zerops (`webstage` en rama `stage`, `webprod` en rama `main`). El servicio de stage se activa únicamente para validar en vivo antes de promover y se puede detener para mantener costos controlados.
+
+### 8. Fortaleza Administrativa, Anti-Indexación & Finanzas
+- **Ofuscación y Retorno 404 Estricto:** La URL del panel administrativo debe residir en una ruta ofuscada (ej: `/adminn`). Las rutas comunes (`/admin`) deben devolver `HTTP 404 Not Found` en el middleware.
+- **Blindaje Anti-Rastreadores:** Servir cabeceras `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet` y `Cache-Control: no-store` en todas las respuestas del panel de gestión.
+- **Diferenciación Transaccional Financiera:** Separar explícitamente en la base de datos las transacciones con pago monetario real (que generan cálculo de saldo y comisiones para afiliados) de los pases de cortesía o manuales ($0), evitando distorsiones contables y pagos indebidos.
+
 
