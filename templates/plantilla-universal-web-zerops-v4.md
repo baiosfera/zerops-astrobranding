@@ -1,7 +1,7 @@
-# 🌐 PLANTILLA UNIVERSAL WEB ZEROPS (v4.3.0) — MASTER BLUEPRINT
+# 🌐 PLANTILLA UNIVERSAL WEB ZEROPS (v4.4.0) — MASTER BLUEPRINT
 
 > **Clasificación:** Blueprint Canónico Universal para Despliegues Web Soberanos en Zerops  
-> **Versión:** 4.3.0 (SemVer Canónico — Matriz de Blindajes Físicos de 230 BAI en Producción & Desacople Lego Zero-Drift)  
+> **Versión:** 4.4.0 (SemVer Canónico — Worker Desacoplado WhatsApp AI Agent en Bun, Ingesta NATS <15ms, Tool Calling contra PostgreSQL 18 & Memoria Híbrida)  
 > **Gobernanza:** [`Supreme Directive`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md), [`Planner`](file:///var/www/.agents/skills/planner/SKILL.md) & [`Skill-Improver`](file:///var/www/.agents/skills/skill-improver/SKILL.md)  
 > **Stack Base:** Astro 5 SSR (Bun 1.3.9+ / Tailwind CSS 4) + PostgreSQL 18 + Valkey 7.2 + NATS 2.12 + Object Storage S3 + Bifrost AI Gateway + EvolutionGo + Listmonk  
 > **Propósito:** Guía de ejecución autónoma para que cualquier agente AGY despliegue una aplicación web, e-commerce o landing para CUALQUIER marca, producto o tema tanto en proyectos nuevos desde cero (*Greenfield*) como en adopción de repositorios preexistentes (*Brownfield*), sin ensayos, sin errores y con dependencias bloqueantes en Linear.
@@ -50,6 +50,7 @@ Para que cualquier agente AGY despliegue el stack sin ensayos ni errores, cada c
 | **`evolution`** | `alpine/go@1.22` | 6 | `steps/04-evolution.yaml` | [`whatsapp-engine`](file:///var/www/.agents/skills/whatsapp-engine/SKILL.md) (whatsmeow Go, port 8085, takeover 2h) |
 | **`listmonk`** | `alpine/go@1.22` | 5 | `steps/05-listmonk.yaml` | [`listmonk`](file:///var/www/.agents/skills/listmonk/SKILL.md) / [`email-marketing`](file:///var/www/.agents/skills/email-marketing/SKILL.md) (Newsletter, port 9000) |
 | **`hermes`** | `ubuntu/python@3.12` | 4 | `services/10-hermes.yaml` | [`hermes-agent`](file:///var/www/.agents/skills/hermes-agent/SKILL.md) (Nous Hermes Co-Pilot, Telegram Gateway) |
+| **`whatsappbot`** | `ubuntu/bun@1.3` | 3 | `steps/07-whatsapp-bot.yaml` | [`whatsapp-engine`](file:///var/www/.agents/skills/whatsapp-engine/SKILL.md) (Worker NATS JetStream, Tool Calling, memoria híbrida, port 3005) |
 | **`webdev / webprod`**| `ubuntu/bun@1.3` | 2 | `steps/06-astro-web.yaml` | [`astro-web`](file:///var/www/.agents/skills/astro-web/SKILL.md) / [`bun`](file:///var/www/.agents/skills/bun/SKILL.md) / [`frnt`](file:///var/www/.agents/skills/frnt/SKILL.md) (SSR, port 3000) |
 | **Meta-Orquestador** | `zcp@1` | 1 | Chasis raíz | [`zcp`](file:///var/www/.agents/skills/zcp/SKILL.md) / [`bknd`](file:///var/www/.agents/skills/bknd/SKILL.md) (Control plane, 22 MCP tools) |
 
@@ -741,5 +742,36 @@ Esta sección consolida de forma 100% agnóstica a cualquier marca los descubrim
 - **Ofuscación y Retorno 404 Estricto:** La URL del panel administrativo debe residir en una ruta ofuscada (ej: `/adminn`). Las rutas comunes (`/admin`) deben devolver `HTTP 404 Not Found` en el middleware.
 - **Blindaje Anti-Rastreadores:** Servir cabeceras `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet` y `Cache-Control: no-store` en todas las respuestas del panel de gestión.
 - **Diferenciación Transaccional Financiera:** Separar explícitamente en la base de datos las transacciones con pago monetario real (que generan cálculo de saldo y comisiones para afiliados) de los pases de cortesía o manuales ($0), evitando distorsiones contables y pagos indebidos.
+
+---
+
+## 23. Arquitectura Canónica del Bot de WhatsApp Desacoplado (SOTA Zerops-First)
+
+Para cualquier proyecto o marca desplegada en Zerops, el agente conversacional de WhatsApp **NUNCA debe residir en el backend SSR de la aplicación web** (`/api/webhooks/whatsapp.ts`). La arquitectura soberana exige el desacople total en un worker dedicado:
+
+### 1. Desacople Operativo & Aislamiento de Ciclo de Vida:
+- **Servicio Dedicado (`whatsappbot`):** Ejecutado en runtime `ubuntu/bun@1.3` con autoescalado elástico (`cpuMode: SHARED`, `minFreeRamGB: 0.25`).
+- **Resiliencia ante Deploys Web:** Los despliegues o reinicios de la web (`webprod`) tienen impacto CERO sobre la atención al cliente por WhatsApp. El bot permanece 100% activo sin caerse ni provocar tormentas de reintentos por timeouts de Evolution Go.
+- **Ingesta en 2 Niveles (<15ms ACK):**
+  * **Nivel Ingress:** Endpoint ultraliviano recibe el webhook `messages.upsert` de Evolution Go, publica el evento en NATS JetStream (`events.whatsapp.incoming`) con identificador `Nats-Msg-Id: evt_${msgId}` para deduplicación nativa, y devuelve `HTTP 200 OK` en <15ms.
+  * **Nivel Worker:** El servicio `whatsappbot` consume de JetStream mediante Pull Consumer durable con reintentos controlados (`msg.nak()`) y Dead Letter Queue (`events.dlq.whatsapp`).
+
+### 2. Erradicación de Alucinaciones con Tool Calling Determinista:
+- **Function Calling contra PostgreSQL 18:** En lugar de inyectar catálogos completos en un System Prompt estático que alucina y gasta miles de tokens, el LLM consume 4 herramientas nativas (esquema OpenAI vía Bifrost Gateway):
+  1. `get_active_events(limit)`: Consulta SQL en vivo (`WHERE fecha >= CURRENT_DATE`) para devolver eventos reales, fechas y cupos.
+  2. `lookup_ticket_status(phone)`: Consulta si el usuario tiene pagos o reservas registradas.
+  3. `get_affiliate_stats(phone)`: Devuelve métricas de embajador, compras referidas y pases gratis ganados.
+  4. `register_community_lead(alias, rol, ciudad)`: Inserción idempotente (`ON CONFLICT`) de nuevos miembros en la base de datos.
+- **Veredicto pgvector vs SQL Relacional:** Para catálogos y sitios de <100 páginas/eventos, **`pgvector` es un sobre-diseño innecesario y riesgoso**. La búsqueda semántica confunde eventos pasados con futuros por similitud léxica. SQL relacional B-Tree resuelve en <0.5ms a coste cero. Si se requiere búsqueda textual sobre descripciones, el motor nativo `tsvector` en español de PostgreSQL 18 resuelve en <2ms.
+
+### 3. Memoria Conversacional Híbrida de 3 Niveles (Anti-Amnesia):
+- **Capa 1 (Valkey 7.2):** Buffer caliente de los últimos 6 turnos crudos (`wa:session:turns:${phone}`) con latencia sub-milisegundo (<0.5ms). Bloqueo de operador humano de 2 horas (`wa:human_takeover:${phone}`).
+- **Capa 2 (Resumidor Incremental):** Al superar 6 turnos, un modelo rápido de FreeLLMAPI vía Bifrost compacta los turnos antiguos en un resumen de ~80 palabras y poda el buffer de Valkey, inyectando el resumen en el contexto.
+- **Capa 3 (PostgreSQL 18):** Persistencia relacional permanente del perfil (`leads.metadata->'chat_summary'`) y registro auditable en `chat_messages`.
+
+### 4. Pipeline de Audio Ultra-Rápido (<350ms):
+- Descarga autenticada de notas de voz desde Evolution Go (`http://evolution:8085/message/downloadmedia`).
+- Transcripción directa por streaming con **Groq Whisper Large v3 Turbo** (`whisper-large-v3-turbo`) en ~280–350ms ($0.04 USD por hora de audio), inyectando el texto con calidez conversacional.
+
 
 
