@@ -795,8 +795,9 @@ async function main() {
     console.log("  search <query>                                Search issues");
     console.log("  issue <id>                                    Get issue details");
     console.log("  comment <id> <text>                           Add comment to issue");
-    console.log('  create "<title>" "[desc]" [opts]              Create new issue');
+    console.log('  create "<title>" "[desc]" [opts]              Create new issue (auto-groups into active project)');
     console.log('  create-project "<name>" "[desc]" [opts]       Create new project');
+    console.log('  set-project "<id|name>"                       Set active project for issue auto-grouping');
     console.log('  update-status <id> "<status>" [--evidence ""] Update issue workflow status (Done requires --evidence)');
     console.log('  update-status-batch "<status>" <ids> [--evidence ""] Update multiple issues in batch (Done requires --evidence)');
     console.log("  teams                                         List teams");
