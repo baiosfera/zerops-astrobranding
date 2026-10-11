@@ -61,7 +61,7 @@
       "keys": [
         {
           "name": "freellmapi-primary-pool",
-          "value": "env.FREELLMAPI_UNIFIED_KEY",
+          "value": "freellmapi-9f044c64ccc202f7ca57b51ed61be6cf85b4a55afe5dcc6f",
           "models": ["*"],
           "weight": 1.0
         }
@@ -82,6 +82,7 @@
           "value": "env.DEEPSEEK_API_KEY",
           "models": ["*"],
           "aliases": {
+            "auto": "deepseek-chat",
             "deepseek-chat": "deepseek-v4-pro",
             "deepseek-coder": "deepseek-v4-pro",
             "deepseek-reasoner": "deepseek-v4-pro"
