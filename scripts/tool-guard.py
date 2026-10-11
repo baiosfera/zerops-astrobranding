@@ -205,12 +205,24 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
 def auto_sync_governance(target_file: str = ""):
     """
     Autonomous Parity & Mirror Reactor: Keeps SSoT (Google Drive), Git Repositories,
-    and local runtime in real-time bidirectional lockstep.
+    and local runtime in real-time lockstep following the Sovereign Flow:
+    bak -> ssot -> iniciar.sh-first -> skill-registry -> push repositorios.
     Silently and deterministically propagates changes and pushes to GitHub without friction.
     """
-    import shutil, subprocess
-    
+    import shutil, subprocess, filecmp
+
+    def files_differ(f1: str, f2: str) -> bool:
+        try:
+            if not os.path.exists(f1) or not os.path.exists(f2):
+                return True
+            if os.path.getsize(f1) != os.path.getsize(f2):
+                return True
+            return not filecmp.cmp(f1, f2, shallow=False)
+        except Exception:
+            return True
+
     # 1. Core governance sync pairs (Drive SSoT <-> Local runtime)
+    # ZCP-First Invariant: Active development in ZCP (/var/www) reflects to Drive SSoT (0zcp-123).
     for ssot_path, runtime_path in CORE_SYNC_PAIRS:
         try:
             ssot_exists = os.path.exists(ssot_path)
@@ -218,62 +230,81 @@ def auto_sync_governance(target_file: str = ""):
             if not ssot_exists and not runtime_exists:
                 continue
 
-            if ssot_exists and not runtime_exists:
+            if runtime_exists:
+                if not ssot_exists or files_differ(runtime_path, ssot_path):
+                    os.makedirs(os.path.dirname(ssot_path), exist_ok=True)
+                    shutil.copy2(runtime_path, ssot_path)
+            elif ssot_exists and not runtime_exists:
                 os.makedirs(os.path.dirname(runtime_path), exist_ok=True)
                 shutil.copy2(ssot_path, runtime_path)
                 if runtime_path.startswith("/var/www/.bin/"):
-                    os.chmod(runtime_path, 0o755)
-                continue
-
-            if runtime_exists and not ssot_exists:
-                os.makedirs(os.path.dirname(ssot_path), exist_ok=True)
-                shutil.copy2(runtime_path, ssot_path)
-                continue
-
-            ssot_mtime = os.path.getmtime(ssot_path)
-            runtime_mtime = os.path.getmtime(runtime_path)
-
-            if abs(ssot_mtime - runtime_mtime) > 1.0:
-                if ssot_mtime > runtime_mtime:
-                    shutil.copy2(ssot_path, runtime_path)
-                    if runtime_path.startswith("/var/www/.bin/"):
+                    try:
                         os.chmod(runtime_path, 0o755)
-                else:
-                    shutil.copy2(runtime_path, ssot_path)
+                    except Exception:
+                        pass
         except Exception:
             pass
 
-    # 2. Real-time Mirror Sync for Skills
-    if target_file and "/.agents/skills/" in target_file:
+    # 2. Real-time Mirror Sync for Skills (SSoT Triad: .agents/skills <-> zerops-astro-skills <-> Drive SSoT)
+    skill_changed = False
+    is_skill_touch = bool(
+        target_file and (
+            "/.agents/skills/" in target_file or target_file.startswith(".agents/skills/") or
+            "/zerops-astro-skills/" in target_file or target_file.startswith("zerops-astro-skills/")
+        )
+    )
+
+    if is_skill_touch:
         try:
-            parts = target_file.split("/.agents/skills/")
-            if len(parts) > 1:
-                rel = parts[1]
+            rel = ""
+            skill_name = ""
+            if "/.agents/skills/" in target_file:
+                rel = target_file.split("/.agents/skills/")[1].lstrip("/")
+            elif target_file.startswith(".agents/skills/"):
+                rel = target_file.split(".agents/skills/")[1].lstrip("/")
+            elif "/zerops-astro-skills/" in target_file:
+                rel = target_file.split("/zerops-astro-skills/")[1].lstrip("/")
+            elif target_file.startswith("zerops-astro-skills/"):
+                rel = target_file.split("zerops-astro-skills/")[1].lstrip("/")
+
+            if rel:
                 skill_name = rel.split("/")[0]
+                local_path = os.path.join("/var/www/.agents/skills", rel)
                 git_dest = os.path.join("/var/www/zerops-astro-skills", rel)
                 drive_dest = os.path.join("/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills", rel)
-                
-                if os.path.exists(target_file):
-                    os.makedirs(os.path.dirname(git_dest), exist_ok=True)
-                    shutil.copy2(target_file, git_dest)
+
+                src_path = target_file if os.path.isabs(target_file) else os.path.join("/var/www", target_file)
+                if os.path.exists(src_path):
+                    for dest in [local_path, git_dest]:
+                        if dest != src_path:
+                            os.makedirs(os.path.dirname(dest), exist_ok=True)
+                            shutil.copy2(src_path, dest)
                     if not UPSTREAM_SKILLS_PATTERN.match(skill_name):
                         os.makedirs(os.path.dirname(drive_dest), exist_ok=True)
-                        shutil.copy2(target_file, drive_dest)
+                        shutil.copy2(src_path, drive_dest)
+                    skill_changed = True
         except Exception:
             pass
 
     # 3. Real-time Mirror Sync for Deployment Scripts
-    if target_file and ("/scripts/" in target_file or "/.bin/" in target_file):
+    is_script_touch = bool(
+        target_file and (
+            "/scripts/" in target_file or "/.bin/" in target_file or
+            target_file.endswith("iniciar.sh") or target_file.endswith("unisetup.sh")
+        )
+    )
+    if is_script_touch:
         try:
             base_script = os.path.basename(target_file)
             repo_script = os.path.join("/var/www/zerops-astrobranding/scripts", base_script)
             drive_script = os.path.join("/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts", base_script)
             bin_script = os.path.join("/var/www/.bin", base_script)
-            
-            if os.path.exists(target_file):
+            src_script = target_file if os.path.isabs(target_file) else os.path.join("/var/www", target_file)
+
+            if os.path.exists(src_script):
                 for dest in [repo_script, drive_script, bin_script]:
-                    if os.path.exists(os.path.dirname(dest)):
-                        shutil.copy2(target_file, dest)
+                    if dest != src_script and os.path.exists(os.path.dirname(dest)):
+                        shutil.copy2(src_script, dest)
                         if dest == bin_script or base_script.endswith(".sh"):
                             try:
                                 os.chmod(dest, 0o755)
@@ -282,28 +313,55 @@ def auto_sync_governance(target_file: str = ""):
         except Exception:
             pass
 
-    # 4. Autonomous Git Mirror Synchronization (Auto-Commit & Auto-Push)
-    # 4a. Check zerops-astro-skills
+    # 4. SKILL REGISTRY AUTONOMOUS REFRESH & SSOT MIRROR ($N_7)
+    registry_local = "/var/www/.atl/skill-registry.md"
+    registry_drive = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.atl/skill-registry.md"
+    registry_branding = "/var/www/zerops-astrobranding/.atl/skill-registry.md"
+
+    if skill_changed or (target_file and "skill-registry" in target_file):
+        try:
+            subprocess.run(["gentle-ai", "skill-registry", "refresh", "--cwd", "/var/www", "--force"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        except Exception:
+            pass
+
+    if os.path.exists(registry_local):
+        for reg_dest in [registry_drive, registry_branding]:
+            try:
+                if not os.path.exists(reg_dest) or files_differ(registry_local, reg_dest):
+                    os.makedirs(os.path.dirname(reg_dest), exist_ok=True)
+                    shutil.copy2(registry_local, reg_dest)
+            except Exception:
+                pass
+
+    # 5. Autonomous Git Mirror Synchronization (Auto-Commit & Auto-Push — iniciar.sh-first Invariant)
+    # 5a. zerops-astro-skills
     try:
         skills_git = "/var/www/zerops-astro-skills"
         if os.path.exists(os.path.join(skills_git, ".git")):
-            st = subprocess.run(["git", "status", "--porcelain"], cwd=skills_git, capture_output=True, text=True, timeout=3)
+            st = subprocess.run(["git", "status", "--porcelain"], cwd=skills_git, capture_output=True, text=True, timeout=5)
             if st.returncode == 0 and st.stdout.strip():
-                subprocess.run(["git", "add", "-A"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
-                subprocess.run(["git", "commit", "-m", "chore(skills): auto-sync mirror mode"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
-                subprocess.run(["git", "push", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                subprocess.run(["git", "add", "-A"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+                subprocess.run(["git", "commit", "-m", "chore(skills): auto-sync mirror mode"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+
+            cherry = subprocess.run(["git", "cherry", "-v", "origin/main"], cwd=skills_git, capture_output=True, text=True, timeout=5)
+            if cherry.returncode == 0 and cherry.stdout.strip():
+                subprocess.run(["git", "push", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
     except Exception:
         pass
 
-    # 4b. Check zerops-astrobranding
+    # 5b. zerops-astrobranding
     try:
         repo_git = "/var/www/zerops-astrobranding"
         if os.path.exists(os.path.join(repo_git, ".git")):
-            st = subprocess.run(["git", "status", "--porcelain"], cwd=repo_git, capture_output=True, text=True, timeout=3)
+            st = subprocess.run(["git", "status", "--porcelain"], cwd=repo_git, capture_output=True, text=True, timeout=5)
             if st.returncode == 0 and st.stdout.strip():
-                subprocess.run(["git", "add", "-A"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
-                subprocess.run(["git", "commit", "-m", "chore(repo): auto-sync mirror mode"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
-                subprocess.run(["git", "push", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                subprocess.run(["git", "add", "-A"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+                subprocess.run(["git", "commit", "-m", "chore(repo): auto-sync mirror mode"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+
+            cherry = subprocess.run(["git", "cherry", "-v", "origin/main"], cwd=repo_git, capture_output=True, text=True, timeout=5)
+            if cherry.returncode == 0 and cherry.stdout.strip():
+                subprocess.run(["git", "push", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
     except Exception:
         pass
 
@@ -327,11 +385,21 @@ def has_recent_backup(target_file: str) -> bool:
     A valid backup MUST have mtime >= target_file mtime - 1.0s.
     If the target_file was modified after the backup was created,
     a fresh snapshot of the current state must be taken before mutating.
+    Flow: bak -> ssot -> iniciar.sh-first -> skill-registry -> push repositorios ($N_1$).
     """
-    is_skill = "/.agents/skills/" in target_file or target_file.startswith(".agents/skills/")
-    is_script = "/0zcp-123/scripts/" in target_file or "/.bin/" in target_file
-    is_rule = target_file.endswith("AGENTS.md") or "/.agents/rules/" in target_file
-    is_hook = "/.bin/hooks/" in target_file or "/scripts/hooks/" in target_file
+    is_skill = bool(
+        "/.agents/skills/" in target_file or target_file.startswith(".agents/skills/") or
+        "/zerops-astro-skills/" in target_file or target_file.startswith("zerops-astro-skills/")
+    )
+    is_script = bool(
+        "/0zcp-123/scripts/" in target_file or "/.bin/" in target_file or "/scripts/" in target_file or
+        target_file.endswith("iniciar.sh") or target_file.endswith("unisetup.sh")
+    )
+    is_rule = bool(
+        target_file.endswith("AGENTS.md") or "/.agents/rules/" in target_file or
+        "/.agents/references/" in target_file or target_file.endswith("00-SUPREME-DIRECTIVE.md")
+    )
+    is_hook = bool("/.bin/hooks/" in target_file or "/scripts/hooks/" in target_file)
 
     if not (is_skill or is_script or is_rule or is_hook):
         return True
@@ -348,11 +416,21 @@ def has_recent_backup(target_file: str) -> bool:
 
     base_name = os.path.basename(target_file)
     name_stem = os.path.splitext(base_name)[0]
-    
+
     skill_name = ""
-    if is_skill and "/.agents/skills/" in target_file:
-        parts = target_file.split("/.agents/skills/")
-        skill_name = parts[1].split("/")[0] if len(parts) > 1 else ""
+    if is_skill:
+        if "/.agents/skills/" in target_file:
+            parts = target_file.split("/.agents/skills/")
+            skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
+        elif target_file.startswith(".agents/skills/"):
+            parts = target_file.split(".agents/skills/")
+            skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
+        elif "/zerops-astro-skills/" in target_file:
+            parts = target_file.split("/zerops-astro-skills/")
+            skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
+        elif target_file.startswith("zerops-astro-skills/"):
+            parts = target_file.split("zerops-astro-skills/")
+            skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
 
     latest_bak_mtime = 0.0
     if os.path.exists(target_bak_dir):
@@ -365,10 +443,10 @@ def has_recent_backup(target_file: str) -> bool:
                     match = True
                 elif base_name in fname:
                     match = True
-                
+
                 if match:
                     fpath = os.path.join(target_bak_dir, fname)
-                    if os.path.isfile(fpath) and os.path.getsize(fpath) > 0:
+                    if os.path.isfile(fpath) or os.path.isdir(fpath):
                         mtime = os.path.getmtime(fpath)
                         if mtime > latest_bak_mtime:
                             latest_bak_mtime = mtime
@@ -382,9 +460,16 @@ def has_recent_backup(target_file: str) -> bool:
             import shutil, time
             ts = int(time.time())
             if is_skill and skill_name:
-                snapshot_name = f"{skill_name}_{base_name}_{ts}.bak"
-                skill_dir = target_file[:target_file.find(skill_name) + len(skill_name)]
-                if os.path.isdir(skill_dir):
+                skill_dir = ""
+                for candidate_root in ["/var/www/.agents/skills", "/var/www/zerops-astro-skills"]:
+                    cand = os.path.join(candidate_root, skill_name)
+                    if os.path.isdir(cand):
+                        skill_dir = cand
+                        break
+                if not skill_dir and target_file.find(skill_name) != -1:
+                    skill_dir = target_file[:target_file.find(skill_name) + len(skill_name)]
+
+                if skill_dir and os.path.isdir(skill_dir):
                     skill_md = os.path.join(skill_dir, "SKILL.md")
                     ver = "latest"
                     if os.path.exists(skill_md):
@@ -403,27 +488,22 @@ def has_recent_backup(target_file: str) -> bool:
                         shutil.copytree(skill_dir, dir_bak)
             else:
                 snapshot_name = f"{name_stem}_{base_name}_{ts}.bak" if name_stem != base_name else f"{base_name}_{ts}.bak"
-            snapshot_path = os.path.join(target_bak_dir, snapshot_name)
-            shutil.copy2(target_file, snapshot_path)
+                snapshot_path = os.path.join(target_bak_dir, snapshot_name)
+                shutil.copy2(target_file, snapshot_path)
 
             # Auto-rotate: keep max 5 most recent snapshots for this specific target
-            prefix_match = f"{skill_name}_{base_name}_" if (is_skill and skill_name) else f"{name_stem}_"
+            prefix_match = f"{skill_name}_v" if (is_skill and skill_name) else (f"{name_stem}_" if name_stem != base_name else f"{base_name}_")
             existing = [os.path.join(target_bak_dir, f) for f in os.listdir(target_bak_dir) if f.startswith(prefix_match) and f.endswith(".bak")]
             if len(existing) > 5:
                 existing.sort(key=os.path.getmtime)
                 for old_f in existing[:-5]:
                     try:
-                        os.remove(old_f)
+                        if os.path.isdir(old_f):
+                            shutil.rmtree(old_f, ignore_errors=True)
+                        else:
+                            os.remove(old_f)
                     except Exception:
                         pass
-
-            if is_skill and skill_name:
-                dir_prefix = f"{skill_name}_v"
-                existing_dirs = [os.path.join(target_bak_dir, d) for d in os.listdir(target_bak_dir) if d.startswith(dir_prefix) and d.endswith(".bak") and os.path.isdir(os.path.join(target_bak_dir, d))]
-                if len(existing_dirs) > 5:
-                    existing_dirs.sort(key=os.path.getmtime)
-                    for old_d in existing_dirs[:-5]:
-                        shutil.rmtree(old_d, ignore_errors=True)
         except Exception:
             pass
     return True

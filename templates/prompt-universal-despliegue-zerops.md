@@ -1,7 +1,7 @@
-# 🌐 PROMPT MAESTRO UNIVERSAL & AGNOSTICO — ZEROPS-FIRST (v2.1 SOTA)
+# 🌐 PROMPT MAESTRO UNIVERSAL & AGNOSTICO — ZEROPS-FIRST (v2.2 SOTA)
 
 > **Destino:** Para cualquier Agente AGY en cualquier entorno ZCP / Proyecto Zerops.  
-> **Fundamento:** Estado del Arte Zerops (Octubre 2026), Arquitectura Lego Desacoplada y Matriz de Blindajes Físicos (230 BAI).  
+> **Fundamento:** Estado del Arte Zerops (Octubre 2026), Arquitectura Lego Desacoplada, Worker WhatsApp Dedicado y Matriz de Blindajes Físicos (230 BAI).  
 > **Ubicación Canónica:** `/var/www/artifacts/templates/prompt-universal-despliegue-zerops.md`
 
 ---
@@ -50,7 +50,7 @@ LOS 3 PILARES INDIVISIBLES DEL ECOSISTEMA
    - Red & 502 Bad Gateway: Los adaptadores de servidor (Node/Bun) deben incluir siempre HOST: "0.0.0.0" en envVariables (escuchar en localhost rompe el balanceador L7).
    - Bifrost & IA: config_store en PostgreSQL 18 persistente (cero SQLite efímero); vector_store en chromem o qdrant (NUNCA Valkey por ausencia de RediSearch). Virtual Keys con límites.
    - Valkey & Locks: Locks de idempotencia de 60s en webhooks/pagos (SET lock:webhook:{id} 1 NX EX 60). Human Takeover de 2h (SET bot:takeover:{jid} 1 EX 7200) para silenciar el bot ante intervenciones manuales.
-   - WhatsApp & Tono: Reservado para transaccional (<15s, OTP, QR); envíos masivos (>500) por Listmonk. Silencio absoluto ante acuses de cortesía ("ok", "gracias"). Normalización E.164 obligatoria.
+   - WhatsApp & Worker Desacoplado: NUNCA alojar en Astro SSR (provoca downtimes en deploys web y reintentos automáticos). Ingesta ultraliviana <15ms hacia NATS JetStream; worker dedicado en Bun con Tool Calling determinista en PostgreSQL 18 (pgvector innecesario en <100 entidades), memoria híbrida (Valkey + Postgres) y transcripción Groq Whisper v3 Turbo <350ms.
    - Listmonk & Email: Desacople asíncrono obligatorio (cero llamadas síncronas en ruta crítica de checkout para prevenir 504). Plantillas HTML compiladas <85KB (anti-clipping Gmail).
    - Postgres 18 & Datos: Upsert defensivo (ON CONFLICT) en endpoints públicos; acumulación monótona de tags (Sets aditivos); catálogo dinámico SSR (fecha >= NOW) sin crons estáticos en producción.
    - Storage Híbrido: Videos de landing optimizados a 720p H.264 (~800kbps) con +faststart (moov al inicio) en disco local /public/media para streaming por byte-range sin egress de S3; S3 solo para uploads dinámicos >500KB; permisos zerops:zerops en /mnt/localstorage.
@@ -71,7 +71,8 @@ CAPACITY_SLOTS:                             # Seleccionar ÚNICAMENTE los slots 
   # - events_nats                           # Opcional: NATS 2.12
   # - storage_s3                            # Opcional: Object Storage S3
   # - ai_gateway_bifrost                    # Opcional: Maxim AI Bifrost
-  # - whatsapp_evolution                    # Opcional: EvolutionGo WhatsApp
+  # - whatsapp_evolution                    # Opcional: EvolutionGo WhatsApp Transport (:8085)
+  # - whatsapp_bot_worker                   # Opcional: Worker Agéntico WhatsApp Dedicado en Bun (NATS + Tool Calling)
   # - email_listmonk                        # Opcional: Listmonk Newsletter
 BRAND_BRIEF: "[BRAND_BRIEF_OR_PATH]"        # Ruta al brandbook W3C DTCG o brief visual de la marca
 ================================================================================
