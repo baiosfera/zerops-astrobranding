@@ -773,5 +773,17 @@ Para cualquier proyecto o marca desplegada en Zerops, el agente conversacional d
 - Descarga autenticada de notas de voz desde Evolution Go (`http://evolution:8085/message/downloadmedia`).
 - Transcripción directa por streaming con **Groq Whisper Large v3 Turbo** (`whisper-large-v3-turbo`) en ~280–350ms ($0.04 USD por hora de audio), inyectando el texto con calidez conversacional.
 
+### 5. Protocolo de Desmantelamiento y Limpieza en la Aplicación Web (`webdev`/`webprod`):
+Una vez que el worker `whatsappbot` esté verificado y recibiendo el tráfico de Evolution Go:
+- **Archivos a purgar en el frontend:**
+  * `src/pages/api/webhooks/whatsapp.ts`: Reducir a un forwarder ultraliviano a NATS si Evolution Go conserva la URL, o eliminar si Evolution apunta al nuevo microservicio.
+  * `src/services/bot-knowledge.ts`: Purgar completamente (elimina el array estático de 15KB y lógica pesada).
+  * `tests/whatsapp_bot_sota.test.ts` y `tests/bot_knowledge.test.ts`: Migrar a la suite del nuevo microservicio.
+- **Archivos a preservar en el frontend:**
+  * `src/services/evolution.ts` y `src/services/notifications.ts`: Permanecen activos para las alertas y confirmaciones transaccionales de compra de entradas/reservas web.
+- **Certificación de paridad limpia:**
+  * Compilar y testear en `webdev` (`bun run build && bun test`) certificando exit code 0.
+  * Promover a `webprod` para erradicar cualquier residuo zombi del frontend.
+
 
 
