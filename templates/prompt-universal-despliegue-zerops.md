@@ -1,7 +1,7 @@
-# 🌐 PROMPT MAESTRO UNIVERSAL & AGNOSTICO — ZEROPS-FIRST (v2.2 SOTA)
+# 🌐 PROMPT MAESTRO UNIVERSAL & AGNOSTICO — ZEROPS-FIRST (v2.3 SOTA)
 
 > **Destino:** Para cualquier Agente AGY en cualquier entorno ZCP / Proyecto Zerops.  
-> **Fundamento:** Estado del Arte Zerops (Octubre 2026), Arquitectura Lego Desacoplada, Worker WhatsApp Dedicado y Matriz de Blindajes Físicos (230 BAI).  
+> **Fundamento:** Estado del Arte Zerops (Octubre 2026), Arquitectura Lego Desacoplada, Worker WhatsApp Dedicado, SSoT Dinámico en PostgreSQL 18 y Matriz de Blindajes Físicos (268 BAI).  
 > **Ubicación Canónica:** `/var/www/artifacts/templates/prompt-universal-despliegue-zerops.md`
 
 ---
@@ -31,6 +31,7 @@ LOS 3 PILARES INDIVISIBLES DEL ECOSISTEMA
      * Slot Storage (opcional): Object Storage S3 (assets >500KB).
      * Slots IA / Integraciones (opcional): Bifrost (:8080), EvolutionGo (:8085), Listmonk (:9000).
      * Slot WhatsApp Bot (opcional): Worker agéntico desacoplado en Ubuntu Bun 1.3 (`whatsappbot`, puerto 3005) consumiendo `http://bifrost:8080` por DNS interno privado.
+     * Slot Afiliados / Embajadores (opcional & desacoplado): Módulo pluggable mediante Strategy Pattern. Si el proyecto no lo define, el bot y la web operan con tarifa plena al 100% sin mencionar referidos ni códigos `?ref`.
    - Invariantes de Hardware Zerops:
      * Base OS: SIEMPRE "os: ubuntu" en build y runtime para evitar fallas de musl libc con Rollup/Vite y módulos C nativos.
      * Despliegue de artefactos: Desplegar dist/, package.json y node_modules (NUNCA usar "bun build --target bun" que rompe silenciosamente dependencias con addons binarios como sharp o canvas).
@@ -48,14 +49,16 @@ LOS 3 PILARES INDIVISIBLES DEL ECOSISTEMA
      * Capa 3 (Liveness de Red): curl -Ifs http://0.0.0.0:3000/health retornando HTTP 200 en runtime.
    - Cierre: linear-cli update-status <ID> "Done" --evidence "<logs exit 0>" y bitácora en Engram con mem_session_summary.
 
-4. LOS 8 BLINDAJES FÍSICOS DE PRODUCCIÓN (MATRIZ 230 BAI):
+4. LOS 10 BLINDAJES FÍSICOS DE PRODUCCIÓN (MATRIZ 268 BAI):
    - Red & 502 Bad Gateway: Los adaptadores de servidor (Node/Bun) deben incluir siempre HOST: "0.0.0.0" en envVariables (escuchar en localhost rompe el balanceador L7).
    - Bifrost & IA: config_store en PostgreSQL 18 persistente (cero SQLite efímero); vector_store en chromem o qdrant (NUNCA Valkey por ausencia de RediSearch). Dual-Tier Predictive Intent Routing (`x-tier: production` para ventas/tickets/herramientas directo a Pro; FreeLLMAPI con timeout 2.5s y Circuit Breaker de 120s para FAQs). `bifrost-cli` en `zcp` es solo arnés interactivo/TUI de desarrollo, nunca proxy de producción.
    - Valkey & Locks: Locks de idempotencia de 60s en webhooks/pagos (SET lock:webhook:{id} 1 NX EX 60). Human Takeover de 2h (SET bot:takeover:{jid} 1 EX 7200) para silenciar el bot ante intervenciones manuales.
    - WhatsApp & Worker Desacoplado: NUNCA alojar en Astro SSR ni en `zcp`. Acknowledge ultraliviano <15ms del webhook antes de inferencia para eliminar tormentas de reintentos en Evolution API; worker dedicado en Bun con Tool Calling determinista en PostgreSQL 18 (pgvector innecesario en <100 entidades), memoria híbrida (Valkey + Postgres), pacing simulado (1.5s–3.0s con presencia typing) y transcripción Groq Whisper v3 Turbo <350ms. El worker es el guardián de la marca: carga el Brandbook SSoT dinámicamente desde `/mnt/localstorage/${PROJECT_NAME}/dev/system_prompt.md` y construye el prompt hacia Bifrost (Bifrost es agnóstico).
    - Listmonk & Email: Desacople asíncrono obligatorio (cero llamadas síncronas en ruta crítica de checkout para prevenir 504). Plantillas HTML compiladas <85KB (anti-clipping Gmail).
-   - Postgres 18 & Datos: Upsert defensivo (ON CONFLICT) en endpoints públicos; acumulación monótona de tags (Sets aditivos); catálogo dinámico SSR (fecha >= NOW) sin crons estáticos en producción.
-   - Storage Híbrido & Brandbook SSoT: Videos de landing optimizados a 720p H.264 (~800kbps) con +faststart (moov al inicio) en disco local /public/media para streaming por byte-range sin egress de S3; S3 solo para uploads dinámicos >500KB; permisos zerops:zerops en /mnt/localstorage. Cada marca tiene su carpeta `/mnt/localstorage/${PROJECT_NAME}/dev/` (con siembra automática desde `/var/www/baiosfera/PROYECTOS/${PROJECT_NAME}` en ZCPs nuevos).
+   - Postgres 18 & Entidades Dinámicas en Tiempo Presente: Catálogos de eventos, servicios o agendas gobernados por PostgreSQL 18 SSoT con tiempo presente continuo (`date >= NOW()` en UTC-5). El frontend Astro SSR y el bot consumen la misma tabla en tiempo real. Lo que ocurrió en el pasado (`date < NOW()`) se reconoce como histórico y nunca se ofrece para reservar. Cero arrays estáticos en código o prompts.
+   - CoHaLo Positivo & Sustracción Elegante (Zero Negative Prompting): Prohibido llenar código, prompts o plantillas con directivas prohibitivas o defensivas ("NO MESAS VIP", "NO SOMOS UN BAR SWINGER", "NO AFILIADOS", "NO BOT", "NO PAGOS", "NO MEMBRESIAS"). La verdad de catálogo define afirmativamente lo que existe. Lo que no está registrado en base de datos se asume inexistente sin avisos negativos.
+   - Sesión Global de Cliente & Autofill Fricción Cero: Persistencia de perfil autenticado (`user_profile`: alias, teléfono, correo, rol) en `localStorage`/cookies tras verificación OTP. Todos los formularios de compra, checkout y reserva se autocompletan en caliente, eliminando fricción y solicitudes redundantes de OTP.
+   - Arquitectura Lego Desacoplada de Afiliados (Zero Contamination): Feature detection dinámico. Si un proyecto limpio (`iniciar.sh-first`) no define módulo de afiliados ni tabla en BD, el bot y la web operan al 100% sin mencionar jamás embajadores, enlaces de referidos ni códigos `?ref`. Si implementa afiliados, la lógica de liquidación se aísla bajo Strategy Pattern (`SingleUsePerDomainStrategy`, `ContinuousDiscountStrategy`, `StandardRateStrategy`). Cero filtración de reglas de una marca hacia plantillas base universales.
    - Admin Panel & Finanzas: Hard-404 en /admin, ofuscación en /adminn, cabeceras noindex/no-store, distinción transaccional estricta de pagos reales vs cortesías manuales ($0).
 
 ================================================================================
@@ -76,6 +79,7 @@ CAPACITY_SLOTS:                             # Seleccionar ÚNICAMENTE los slots 
   # - whatsapp_evolution                    # Opcional: EvolutionGo WhatsApp Transport (:8085)
   # - whatsapp_bot_worker                   # Opcional: Worker Agéntico WhatsApp Dedicado en Bun (NATS + Tool Calling + Brandbook SSoT)
   # - email_listmonk                        # Opcional: Listmonk Newsletter
+  # - affiliate_growth_engine               # Opcional: Motor Lego de Afiliados con Strategy Pattern
 BRAND_SSOT_PATH: "/mnt/localstorage/[APP_IDENTITY]/dev" # Ruta persistente del Brandbook (fallback: /var/www/baiosfera/PROYECTOS/[APP_IDENTITY])
 ================================================================================
 
