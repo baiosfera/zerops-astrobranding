@@ -17,14 +17,16 @@ zerops:
           httpSupport: true
       envVariables:
         PORT: "3005"
-        PROJECT_NAME: "ELPLACERDC"
-        BRAND_SSOT_PATH: "/mnt/localstorage/ELPLACERDC/dev"
+        PROJECT_NAME: ${PROJECT_NAME}
+        BRAND_SSOT_PATH: "/mnt/localstorage/${PROJECT_NAME}/dev"
         NATS_URL: ${nats_connectionString}
         VALKEY_URL: ${valkey_connectionString}
         DATABASE_URL: ${database_connectionString}
         BIFROST_URL: "http://bifrost:8080/v1"
         BIFROST_VIRTUAL_KEY: "vk-production-main"
         EVOLUTION_URL: "http://evolution:8085"
+        EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+        GROQ_API_KEY: ${WHISPER_GROQ_API_KEY}
       start: bun run src/index.ts
       healthCheck:
         httpGet:

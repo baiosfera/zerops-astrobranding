@@ -21,6 +21,7 @@ import {
   checkEvolutionConnection,
   sendWhatsAppMessage,
   transcribeAudioGroq,
+  downloadMediaFromEvolution,
 } from "./evolution.js";
 import {
   resolveBrandSSoT,
@@ -55,49 +56,158 @@ function isBriefAcknowledgement(text: string): boolean {
 /**
  * Unified Inbound Message Processing Pipeline
  */
-export async function processInboundWhatsAppMessage(event: any): Promise<{ status: string; detail?: string }> {
+export async function processInboundWhatsAppMessage(rawPayload: any): Promise<{ status: string; detail?: string }> {
   // 1. Extract metadata from Evolution payload (supports both Go and Baileys formats)
-  const isFromMe = !!(
-    event.fromMe ??
-    event.key?.fromMe ??
-    event.info?.IsFromMe ??
-    event.info?.isFromMe
+  const eventData = rawPayload?.data || rawPayload || {};
+  const info = eventData.Info || eventData.info || rawPayload?.Info || rawPayload?.info || {};
+  const key = eventData.key || rawPayload?.key || {};
+
+  const isFromMe = Boolean(
+    info.IsFromMe ??
+    info.isFromMe ??
+    key.fromMe ??
+    eventData.fromMe ??
+    rawPayload?.fromMe ??
+    false
   );
 
-  const rawChatJid = event.chatJid || event.key?.remoteJid || event.info?.Chat || "";
-  const rawSenderJid = event.senderJid || event.key?.participant || event.info?.Sender || rawChatJid;
-  const messageId = event.key?.id || event.messageId || event.info?.ID || `msg-${Date.now()}`;
+  const chatJid = String(
+    info.Chat ||
+    key.remoteJid ||
+    eventData.Chat ||
+    eventData.chatJid ||
+    rawPayload?.chatJid ||
+    rawPayload?.remoteJid ||
+    ""
+  );
+
+  const senderJid = String(
+    info.Sender ||
+    eventData.Sender ||
+    eventData.senderJid ||
+    key.participant ||
+    rawPayload?.sender ||
+    ""
+  );
+
+  const senderAlt = String(
+    info.SenderAlt ||
+    eventData.SenderAlt ||
+    eventData.senderAlt ||
+    ""
+  );
+
+  const isGroup = Boolean(
+    (info.IsGroup ?? false) ||
+    chatJid.includes("@g.us") ||
+    senderJid.includes("@g.us")
+  );
 
   // Filter out status broadcasts and groups
-  if (rawChatJid.includes("@g.us") || rawChatJid.includes("status@broadcast")) {
+  if (isGroup || chatJid.includes("status@broadcast")) {
     return { status: "ignored_group_or_status" };
   }
 
-  // Resolve customer phone
-  const primaryCustomerPhone = cleanPhoneNumber(isFromMe ? rawChatJid : rawSenderJid);
+  // Resolve customer phone (prioritizing real WhatsApp phone numbers over @lid)
+  const rawTargetIds = isFromMe
+    ? [chatJid, key.remoteJid, eventData.remoteJid]
+    : [senderAlt, senderJid, chatJid, key.remoteJid];
+
+  // Pick first ID that has @s.whatsapp.net, or doesn't have @lid
+  const realPhoneId =
+    rawTargetIds.find((id) => id && String(id).includes("@s.whatsapp.net")) ||
+    rawTargetIds.find((id) => id && !String(id).includes("@lid") && !String(id).includes("@g.us")) ||
+    rawTargetIds[0];
+
+  const primaryCustomerPhone = cleanPhoneNumber(String(realPhoneId || (isFromMe ? chatJid : senderJid || chatJid)));
   if (!primaryCustomerPhone || primaryCustomerPhone === cleanPhoneNumber(BOT_PHONE)) {
     return { status: "ignored_bot_self_message" };
   }
 
+  const messageId = String(
+    info.ID ||
+    key.id ||
+    eventData.messageId ||
+    rawPayload?.messageId ||
+    `msg-${Date.now()}`
+  );
+
   // 2. Extract message text or audio
-  let messageText = (
-    event.message?.conversation ||
-    event.message?.extendedTextMessage?.text ||
-    event.message?.imageMessage?.caption ||
-    event.text ||
+  const msgObj = eventData.Message || eventData.message || rawPayload?.Message || rawPayload?.message || {};
+  let messageText = String(
+    msgObj.conversation ||
+    msgObj.extendedTextMessage?.text ||
+    msgObj.imageMessage?.caption ||
+    msgObj.videoMessage?.caption ||
+    eventData.text ||
+    rawPayload?.text ||
     ""
   ).trim();
 
-  const isAudio = !!(event.message?.audioMessage || event.audio || event.mediaType === "audio");
+  // Quoted message context
+  const contextInfo =
+    msgObj.extendedTextMessage?.contextInfo ||
+    msgObj.contextInfo ||
+    eventData.contextInfo;
+  const quotedMessage = contextInfo?.quotedMessage;
+  if (quotedMessage) {
+    const quotedText = String(
+      quotedMessage.conversation ||
+      quotedMessage.extendedTextMessage?.text ||
+      quotedMessage.imageMessage?.caption ||
+      quotedMessage.videoMessage?.caption ||
+      ""
+    ).trim();
+    if (quotedText && messageText) {
+      messageText = `[En respuesta a: "${quotedText}"] ${messageText}`;
+    }
+  }
+
+  const isAudio = Boolean(
+    msgObj.audioMessage ||
+    msgObj.AudioMessage ||
+    msgObj.mimetype?.includes("audio") ||
+    eventData.audioMessage ||
+    eventData.AudioMessage ||
+    eventData.mimetype?.includes("audio") ||
+    eventData.mediaType === "audio" ||
+    rawPayload?.mediaType === "audio" ||
+    eventData.audio ||
+    rawPayload?.audio ||
+    rawPayload?.messageType === "audio" ||
+    rawPayload?.messageType === "audioMessage" ||
+    eventData.messageType === "audio" ||
+    eventData.messageType === "audioMessage"
+  );
+
   if (isAudio && !messageText) {
-    const audioData = event.message?.audioMessage?.base64 || event.audioBase64 || event.base64;
+    console.log(`[WhatsAppBot] Audio message detected for ${primaryCustomerPhone}`);
+    let audioData: string | null =
+      msgObj.base64 ||
+      msgObj.audioMessage?.base64 ||
+      msgObj.AudioMessage?.base64 ||
+      eventData.base64 ||
+      eventData.audioBase64 ||
+      rawPayload?.base64 ||
+      rawPayload?.data?.base64 ||
+      null;
+
+    if (!audioData && (msgObj.audioMessage || msgObj.AudioMessage || eventData.Message)) {
+      console.log(`[WhatsAppBot] Audio missing inline base64, fetching from Evolution /message/downloadmedia...`);
+      audioData = await downloadMediaFromEvolution(msgObj);
+    }
+
     if (audioData) {
+      console.log(`[WhatsAppBot] Audio payload found (${audioData.length} chars), transcribing with Groq Whisper...`);
       const transcription = await transcribeAudioGroq(audioData);
       if (transcription) {
         messageText = transcription.trim();
+        console.log(`[WhatsAppBot] Audio successfully transcribed for ${primaryCustomerPhone}: "${messageText}"`);
       }
     }
+
     if (!messageText) {
+      console.warn(`[WhatsAppBot] Audio transcription returned empty for ${primaryCustomerPhone}, sending polite fallback`);
       await sendWhatsAppMessage(
         primaryCustomerPhone,
         "Recibí tu nota de voz, pero no logré escucharla con total claridad. ¿Podrías escribirme tu consulta brevemente?"
@@ -107,8 +217,11 @@ export async function processInboundWhatsAppMessage(event: any): Promise<{ statu
   }
 
   if (!messageText) {
+    console.log(`[WhatsAppBot] Webhook ignored: empty message text for ${primaryCustomerPhone} (Event: ${rawPayload?.event || "unknown"})`);
     return { status: "ignored_empty_payload" };
   }
+
+  console.log(`[WhatsAppBot] Inbound message from ${primaryCustomerPhone}: "${messageText.substring(0, 60)}" (fromMe: ${isFromMe})`);
 
   // 3. Operator takeover controls
   if (isFromMe) {
@@ -263,73 +376,76 @@ async function startNatsConsumer() {
 /**
  * Start Bun HTTP Server (Health & Webhook Ingress)
  */
-Bun.serve({
-  port: PORT,
-  async fetch(req: Request) {
-    const url = new URL(req.url);
+if (import.meta.main) {
+  Bun.serve({
+    port: PORT,
+    async fetch(req: Request) {
+      const url = new URL(req.url);
 
-    // Healthcheck endpoint
-    if (url.pathname === "/health" || url.pathname === "/healthz") {
-      const [dbOk, valkeyOk, bifrostOk, evoOk] = await Promise.all([
-        checkDbConnection(),
-        checkValkeyConnection(),
-        checkBifrostConnection(),
-        checkEvolutionConnection(),
-      ]);
+      // Healthcheck endpoint
+      if (url.pathname === "/health" || url.pathname === "/healthz") {
+        const [dbOk, valkeyOk, bifrostOk, evoOk] = await Promise.all([
+          checkDbConnection(),
+          checkValkeyConnection(),
+          checkBifrostConnection(),
+          checkEvolutionConnection(),
+        ]);
 
-      const brand = resolveBrandSSoT();
-      const healthy = dbOk && valkeyOk && bifrostOk;
+        const brand = resolveBrandSSoT();
+        const healthy = dbOk && valkeyOk && bifrostOk;
 
-      const body = {
-        status: healthy ? "ok" : "degraded",
-        service: "whatsappbot",
-        uptime: process.uptime(),
-        checks: {
-          database: dbOk ? "healthy" : "failing",
-          valkey: valkeyOk ? "healthy" : "failing",
-          bifrost: bifrostOk ? "healthy" : "failing",
-          evolution: evoOk ? "healthy" : "failing",
-          brandbook: brand.brandName ? "loaded" : "fallback",
-        },
-        brand: {
-          name: brand.brandName,
-          archetype: brand.archetype,
-        },
-      };
+        const body = {
+          status: healthy ? "ok" : "degraded",
+          service: "whatsappbot",
+          uptime: process.uptime(),
+          checks: {
+            database: dbOk ? "healthy" : "failing",
+            valkey: valkeyOk ? "healthy" : "failing",
+            bifrost: bifrostOk ? "healthy" : "failing",
+            evolution: evoOk ? "healthy" : "failing",
+            brandbook: brand.brandName ? "loaded" : "fallback",
+          },
+          brand: {
+            name: brand.brandName,
+            archetype: brand.archetype,
+          },
+        };
 
-      return new Response(JSON.stringify(body), {
-        status: healthy ? 200 : 503,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // Direct Webhook Ingress (dual-path from Evolution)
-    if (url.pathname === "/webhook" && req.method === "POST") {
-      try {
-        const body = await req.json();
-        // Early acknowledgment < 20ms
-        const promise = processInboundWhatsAppMessage(body);
-        // Do not block HTTP response
-        promise.catch((err) => console.error("[Webhook] Background error:", err));
-
-        return new Response(JSON.stringify({ status: "acknowledged" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      } catch (err: any) {
-        return new Response(JSON.stringify({ error: err.message }), {
-          status: 400,
+        return new Response(JSON.stringify(body), {
+          status: healthy ? 200 : 503,
           headers: { "Content-Type": "application/json" },
         });
       }
-    }
 
-    return new Response(JSON.stringify({ service: "whatsappbot", status: "running" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  },
-});
+      // Direct Webhook Ingress (dual-path from Evolution)
+      if (url.pathname === "/webhook" && req.method === "POST") {
+        try {
+          const body = await req.json();
+          // Early acknowledgment < 20ms
+          const promise = processInboundWhatsAppMessage(body);
+          // Do not block HTTP response
+          promise.catch((err) => console.error("[Webhook] Background error:", err));
 
-console.log(`[whatsappbot] HTTP Server running on port :${PORT}`);
-startNatsConsumer();
+          return new Response(JSON.stringify({ status: "acknowledged" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err: any) {
+          return new Response(JSON.stringify({ error: err.message }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      return new Response(JSON.stringify({ service: "whatsappbot", status: "running" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  console.log(`[whatsappbot] HTTP Server running on port :${PORT}`);
+  startNatsConsumer();
+}
+

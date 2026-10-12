@@ -12,6 +12,9 @@ export interface CustomerData {
   id?: string;
   alias?: string;
   phone: string;
+  email?: string;
+  city?: string;
+  role?: "hombre_solo" | "mujer_sola" | "pareja" | "otro" | string | null;
   isRegistered: boolean;
   isVip: boolean; // Backwards-compat: true only if isPaidVip
   isPaidVip: boolean;
@@ -32,6 +35,35 @@ export interface CustomerData {
   affiliateShareUrl?: string;
 }
 
+let tablesCache: Set<string> | null = null;
+let columnsCache: Map<string, Set<string>> = new Map();
+
+async function getAvailableTables(): Promise<Set<string>> {
+  if (tablesCache) return tablesCache;
+  try {
+    const res = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
+    tablesCache = new Set(res.rows.map((r: any) => r.table_name));
+    return tablesCache;
+  } catch {
+    return new Set();
+  }
+}
+
+async function getTableColumns(tableName: string): Promise<Set<string>> {
+  if (columnsCache.has(tableName)) return columnsCache.get(tableName)!;
+  try {
+    const res = await pool.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1",
+      [tableName]
+    );
+    const cols = new Set(res.rows.map((r: any) => r.column_name));
+    columnsCache.set(tableName, cols);
+    return cols;
+  } catch {
+    return new Set();
+  }
+}
+
 export async function checkDbConnection(): Promise<boolean> {
   try {
     const res = await pool.query("SELECT 1 AS ok");
@@ -44,6 +76,7 @@ export async function checkDbConnection(): Promise<boolean> {
 
 export async function getCustomerHistory(rawPhone: string): Promise<CustomerData> {
   const digits = rawPhone.replace(/\D/g, "");
+  const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
   const formattedVariants = [digits, `+${digits}`, digits.startsWith("57") ? digits.slice(2) : `57${digits}`];
 
   const result: CustomerData = {
@@ -58,105 +91,151 @@ export async function getCustomerHistory(rawPhone: string): Promise<CustomerData
   };
 
   try {
-    // 1. Query leads table
-    const leadQuery = `
-      SELECT id, alias_nombre, email, corset_vip, vip_until, primer_pago_acreditado, ciudad, metadata, created_at
-      FROM leads
-      WHERE whatsapp = ANY($1::varchar[])
-      LIMIT 1
-    `;
-    const leadRes = await pool.query(leadQuery, [formattedVariants]);
+    const tables = await getAvailableTables();
+    const canonicalBaseUrl = process.env.APP_URL || process.env.CANONICAL_URL || "https://elplacerdecompartir.com";
 
-    // Query user table by phoneNumber
-    const userQuery = `
-      SELECT id, name, email, vip_until
-      FROM "user"
-      WHERE "phoneNumber" = ANY($1::varchar[])
-      LIMIT 1
-    `;
-    const userRes = await pool.query(userQuery, [formattedVariants]);
-    const userRow = userRes.rows[0];
+    // 1. Leads table (SSoT for web community and profile attributes)
+    if (tables.has("leads")) {
+      const leadCols = await getTableColumns("leads");
+      const hasRol = leadCols.has("rol");
+      const hasCity = leadCols.has("ciudad");
+      const hasVipUntil = leadCols.has("vip_until");
+      const hasCorsetVip = leadCols.has("corset_vip");
+      const hasPrimerPago = leadCols.has("primer_pago_acreditado");
+      const hasMeta = leadCols.has("metadata");
 
-    const now = new Date();
+      const leadQuery = `
+        SELECT id, alias_nombre, email
+               ${hasRol ? ", rol" : ""}
+               ${hasCity ? ", ciudad" : ""}
+               ${hasVipUntil ? ", vip_until" : ""}
+               ${hasCorsetVip ? ", corset_vip" : ""}
+               ${hasPrimerPago ? ", primer_pago_acreditado" : ""}
+               ${hasMeta ? ", metadata" : ""}
+               , created_at, updated_at
+        FROM leads
+        WHERE (whatsapp = ANY($1::varchar[]) OR RIGHT(regexp_replace(whatsapp, '\\D', '', 'g'), 10) = $2)
+        ORDER BY 
+          CASE WHEN alias_nombre IS NOT NULL AND alias_nombre != '' THEN 0 ELSE 1 END,
+          updated_at DESC NULLS LAST,
+          created_at DESC
+        LIMIT 1
+      `;
+      const leadRes = await pool.query(leadQuery, [formattedVariants, last10]);
+      const leadRow = leadRes.rows[0];
 
-    if (leadRes.rows.length > 0) {
-      const lead = leadRes.rows[0];
-      result.id = lead.id;
-      result.alias = lead.alias_nombre || userRow?.name || undefined;
-      result.isRegistered = Boolean(lead.alias_nombre || lead.email || lead.primer_pago_acreditado || userRow?.id);
+      if (leadRow) {
+        result.id = leadRow.id;
+        result.alias = leadRow.alias_nombre || undefined;
+        result.email = leadRow.email || undefined;
+        result.city = leadRow.ciudad || undefined;
+        result.role = leadRow.rol || undefined;
+        result.isRegistered = Boolean(leadRow.alias_nombre || leadRow.email || leadRow.primer_pago_acreditado);
 
-      const isPaid = Boolean(
-        (lead.vip_until && new Date(lead.vip_until) > now) ||
-        (lead.corset_vip && lead.primer_pago_acreditado) ||
-        (lead.metadata?.tags && lead.metadata.tags.includes("vip_activo")) ||
-        (userRow?.vip_until && new Date(userRow.vip_until) > now)
-      );
+        const now = new Date();
+        const isPaid = Boolean(
+          (leadRow.vip_until && new Date(leadRow.vip_until) > now) ||
+          (leadRow.corset_vip && leadRow.primer_pago_acreditado) ||
+          (leadRow.metadata?.tags && leadRow.metadata.tags.includes("vip_activo"))
+        );
 
-      result.isPaidVip = isPaid;
-      result.isVip = isPaid;
-      result.isPossibleVip = Boolean(
-        (lead.corset_vip || (lead.metadata?.tags && (lead.metadata.tags.includes("corset") || lead.metadata.tags.includes("posible vip")))) && !isPaid
-      );
-      result.vipUntil = lead.vip_until
-        ? new Date(lead.vip_until).toISOString().split("T")[0]
-        : (userRow?.vip_until ? new Date(userRow.vip_until).toISOString().split("T")[0] : null);
+        result.isPaidVip = isPaid;
+        result.isVip = isPaid;
+        result.isPossibleVip = Boolean(
+          (leadRow.corset_vip || (leadRow.metadata?.tags && (leadRow.metadata.tags.includes("corset") || leadRow.metadata.tags.includes("posible vip")))) && !isPaid
+        );
+        result.vipUntil = leadRow.vip_until
+          ? new Date(leadRow.vip_until).toISOString().split("T")[0]
+          : null;
 
-      // 2. Query event_tickets table
-      if (lead.id) {
-        const ticketsQuery = `
-          SELECT evento, tipo_entrada, monto_pagado, estado, created_at
-          FROM event_tickets
-          WHERE lead_id = $1
-          ORDER BY created_at DESC
-          LIMIT 10
-        `;
-        const ticketsRes = await pool.query(ticketsQuery, [lead.id]);
-        result.totalEvents = ticketsRes.rows.length;
-        result.pastTickets = ticketsRes.rows.map((row) => ({
-          evento: row.evento,
-          tipo_entrada: row.tipo_entrada || "General",
-          monto_pagado: String(row.monto_pagado || "0"),
-          estado: row.estado || "confirmado",
-          fecha: new Date(row.created_at).toISOString().split("T")[0],
-        }));
+        // Tickets query
+        if (tables.has("event_tickets") && leadRow.id) {
+          try {
+            const ticketsQuery = `
+              SELECT evento, tipo_entrada, monto_pagado, estado, created_at
+              FROM event_tickets
+              WHERE lead_id = $1
+              ORDER BY created_at DESC
+              LIMIT 10
+            `;
+            const ticketsRes = await pool.query(ticketsQuery, [leadRow.id]);
+            result.totalEvents = ticketsRes.rows.length;
+            result.pastTickets = ticketsRes.rows.map((row: any) => ({
+              evento: row.evento,
+              tipo_entrada: row.tipo_entrada || "General",
+              monto_pagado: String(row.monto_pagado || "0"),
+              estado: row.estado || "confirmado",
+              fecha: new Date(row.created_at).toISOString().split("T")[0],
+            }));
+          } catch {}
+        }
       }
-    } else if (userRow) {
-      result.alias = userRow.name;
-      result.isRegistered = true;
-      const isPaid = Boolean(userRow.vip_until && new Date(userRow.vip_until) > now);
-      result.isPaidVip = isPaid;
-      result.isVip = isPaid;
-      result.isPossibleVip = false;
-      result.vipUntil = userRow.vip_until ? new Date(userRow.vip_until).toISOString().split("T")[0] : null;
     }
 
-    // 3. Query afiliados table
-    const affQuery = `
-      SELECT alias, clicks, referidos_pagados, entradas_ganadas
-      FROM afiliados
-      WHERE whatsapp = ANY($1::varchar[])
-      LIMIT 1
-    `;
-    const affRes = await pool.query(affQuery, [formattedVariants]);
-    if (affRes.rows.length > 0) {
-      const aff = affRes.rows[0];
-      result.affiliateAlias = aff.alias;
-      result.affiliateClicks = aff.clicks || 0;
-      result.affiliatePaidReferrals = aff.referidos_pagados || 0;
-      result.affiliateFreeTicketsEarned = aff.entradas_ganadas || 0;
-      result.affiliateShareUrl = `https://elplacerdecompartir.com/?ref=${aff.alias}`;
-    } else if (result.alias) {
-      // Auto-provision affiliate code if registered lead has alias
+    // 2. User table (Better-Auth / platform user)
+    if (tables.has("user")) {
       try {
-        const generatedCode = await ensureAffiliateCode(result.alias, digits, lead?.email);
-        result.affiliateAlias = generatedCode;
-        result.affiliateClicks = 0;
-        result.affiliatePaidReferrals = 0;
-        result.affiliateFreeTicketsEarned = 0;
-        result.affiliateShareUrl = `https://elplacerdecompartir.com/?ref=${generatedCode}`;
-      } catch (err) {
-        console.warn(`[Afiliados:AutoProvision] Could not auto-provision for ${digits}:`, err);
-      }
+        const userQuery = `
+          SELECT id, name, email, role, vip_until, "updatedAt"
+          FROM "user"
+          WHERE "phoneNumber" = ANY($1::varchar[]) OR RIGHT(regexp_replace("phoneNumber", '\\D', '', 'g'), 10) = $2
+          ORDER BY "updatedAt" DESC NULLS LAST
+          LIMIT 1
+        `;
+        const userRes = await pool.query(userQuery, [formattedVariants, last10]);
+        const userRow = userRes.rows[0];
+
+        if (userRow) {
+          if (!result.id) result.id = userRow.id;
+          if (!result.alias && userRow.name) result.alias = userRow.name;
+          if (!result.email && userRow.email) result.email = userRow.email;
+          if (!result.role && userRow.role) result.role = userRow.role;
+          result.isRegistered = true;
+
+          const now = new Date();
+          if (userRow.vip_until && new Date(userRow.vip_until) > now) {
+            result.isPaidVip = true;
+            result.isVip = true;
+            result.vipUntil = new Date(userRow.vip_until).toISOString().split("T")[0];
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Afiliados table (Ambassador / Referral SSoT)
+    if (tables.has("afiliados")) {
+      try {
+        const affQuery = `
+          SELECT alias, nombre, email, clicks, referidos_pagados, entradas_ganadas
+          FROM afiliados
+          WHERE (whatsapp = ANY($1::varchar[]) OR RIGHT(regexp_replace(whatsapp, '\\D', '', 'g'), 10) = $2)
+          ORDER BY id DESC
+          LIMIT 1
+        `;
+        const affRes = await pool.query(affQuery, [formattedVariants, last10]);
+        if (affRes.rows.length > 0) {
+          const aff = affRes.rows[0];
+          result.affiliateAlias = aff.alias;
+          result.affiliateClicks = aff.clicks || 0;
+          result.affiliatePaidReferrals = aff.referidos_pagados || 0;
+          result.affiliateFreeTicketsEarned = aff.entradas_ganadas || 0;
+          result.affiliateShareUrl = `${canonicalBaseUrl}/?ref=${aff.alias}`;
+          if (!result.alias && aff.nombre) result.alias = aff.nombre;
+          if (!result.email && aff.email) result.email = aff.email;
+        } else if (result.alias) {
+          // Auto-provision affiliate code if registered lead has alias
+          try {
+            const generatedCode = await ensureAffiliateCode(result.alias, digits, result.email);
+            result.affiliateAlias = generatedCode;
+            result.affiliateClicks = 0;
+            result.affiliatePaidReferrals = 0;
+            result.affiliateFreeTicketsEarned = 0;
+            result.affiliateShareUrl = `${canonicalBaseUrl}/?ref=${generatedCode}`;
+          } catch (err) {
+            console.warn(`[Afiliados:AutoProvision] Could not auto-provision for ${digits}:`, err);
+          }
+        }
+      } catch {}
     }
   } catch (err) {
     console.error(`[PostgreSQL] Error fetching customer profile for ${rawPhone}:`, err);
@@ -167,17 +246,23 @@ export async function getCustomerHistory(rawPhone: string): Promise<CustomerData
 
 export async function ensureAffiliateCode(aliasOrName: string, whatsapp?: string | null, email?: string | null): Promise<string> {
   const digits = whatsapp ? whatsapp.replace(/\D/g, "") : null;
+  const last10 = digits && digits.length >= 10 ? digits.slice(-10) : digits;
   const variants = digits ? [digits, `+${digits}`, digits.startsWith("57") ? digits.slice(2) : `57${digits}`] : [];
   const cleanEmail = email ? email.trim().toLowerCase() : null;
+
+  const tables = await getAvailableTables();
+  if (!tables.has("afiliados")) {
+    return aliasOrName || "embajador";
+  }
 
   // 1. Check existing
   if (variants.length > 0 || cleanEmail) {
     const existing = await pool.query(
       `SELECT alias FROM afiliados 
-       WHERE (whatsapp = ANY($1) AND array_length($1::varchar[], 1) > 0) 
-          OR (email = $2 AND $2 IS NOT NULL) 
+       WHERE (whatsapp = ANY($1) OR RIGHT(regexp_replace(whatsapp, '\\D', '', 'g'), 10) = $2)
+          OR (email = $3 AND $3 IS NOT NULL) 
        LIMIT 1`,
-      [variants, cleanEmail]
+      [variants, last10, cleanEmail]
     );
     if (existing.rows.length > 0) {
       return existing.rows[0].alias;
@@ -216,16 +301,45 @@ export async function ensureAffiliateCode(aliasOrName: string, whatsapp?: string
 
 export async function recordIncomingLead(phone: string, alias?: string): Promise<void> {
   const digits = phone.replace(/\D/g, "");
+  if (!digits) return;
+  const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+  const canonicalPhone = `+${digits}`;
+
   try {
-    const insertQuery = `
-      INSERT INTO leads (whatsapp, alias_nombre, origen, created_at, updated_at)
-      VALUES ($1, $2, 'whatsapp_bot', NOW(), NOW())
-      ON CONFLICT (whatsapp) DO UPDATE
-      SET updated_at = NOW(),
-          alias_nombre = COALESCE(leads.alias_nombre, EXCLUDED.alias_nombre)
-    `;
-    await pool.query(insertQuery, [digits, alias || null]);
+    const tables = await getAvailableTables();
+    if (!tables.has("leads")) return;
+
+    // Check if lead already exists by any variant or suffix
+    const existing = await pool.query(
+      `SELECT id, whatsapp, alias_nombre FROM leads 
+       WHERE whatsapp = ANY($1::varchar[]) 
+          OR RIGHT(regexp_replace(whatsapp, '\\D', '', 'g'), 10) = $2
+       LIMIT 1`,
+      [[digits, canonicalPhone, `57${digits}`], last10]
+    );
+
+    if (existing.rows.length > 0) {
+      const row = existing.rows[0];
+      // Update existing lead without overwriting alias if already set
+      await pool.query(
+        `UPDATE leads 
+         SET updated_at = NOW(),
+             alias_nombre = COALESCE(leads.alias_nombre, NULLIF($2, ''))
+         WHERE id = $1`,
+        [row.id, alias || null]
+      );
+    } else {
+      // Clean insert with canonical E.164 phone
+      await pool.query(
+        `INSERT INTO leads (whatsapp, alias_nombre, origen, created_at, updated_at)
+         VALUES ($1, $2, 'whatsapp_bot', NOW(), NOW())
+         ON CONFLICT (whatsapp) DO UPDATE
+         SET updated_at = NOW(),
+             alias_nombre = COALESCE(leads.alias_nombre, EXCLUDED.alias_nombre)`,
+        [canonicalPhone, alias || null]
+      );
+    }
   } catch (err) {
-    console.error(`[PostgreSQL] Error recording lead for ${digits}:`, err);
+    console.error(`[PostgreSQL] Error in recordIncomingLead for ${digits}:`, err);
   }
 }
