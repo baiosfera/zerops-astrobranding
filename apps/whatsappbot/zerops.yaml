@@ -1,0 +1,38 @@
+zerops:
+  - setup: whatsappbot
+    build:
+      base: ubuntu/bun@1.3
+      prepareCommands:
+        - bun upgrade
+      buildCommands:
+        - bun install
+      deployFiles:
+        - src
+        - package.json
+        - tsconfig.json
+    run:
+      base: ubuntu/bun@1.3
+      prepareCommands:
+        - bun upgrade
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
+      ports:
+        - port: 3005
+          httpSupport: true
+      envVariables:
+        PORT: "3005"
+        PROJECT_NAME: "ELPLACERDC"
+        BRAND_SSOT_PATH: "/mnt/localstorage/ELPLACERDC/dev"
+        NATS_URL: ${nats_connectionString}
+        VALKEY_URL: ${valkey_connectionString}
+        DATABASE_URL: ${database_connectionString}
+        BIFROST_URL: "http://bifrost:8080/v1"
+        BIFROST_VIRTUAL_KEY: "vk-production-main"
+        EVOLUTION_URL: "http://evolution:8085"
+      start: bun run src/index.ts
+      healthCheck:
+        httpGet:
+          port: 3005
+          path: /health
