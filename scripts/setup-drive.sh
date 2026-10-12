@@ -1,18 +1,32 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Sovereign Google Drive Skills Synchronizer & Auto-Discovery Engine (setup-drive.sh)
-# Version: 1.6 (Dynamic Skill Inventory, Fast GitHub Delivery & Resilient SSoT Fallback)
+# Version: 1.7 (Self-Healing SSoT Triad, Dynamic Skill Inventory & Resilient Parity)
 # ==============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ZCP_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SKILLS_SRC="$ZCP_ROOT/.agents/skills"
+PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
+DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
+DRIVE_SSOT="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123"
+
+if [ -d "$DRIVE_SSOT" ]; then
+    SSOT_ROOT="$DRIVE_SSOT"
+elif [ -d "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" && pwd)"
+elif [ -d "$(cd "$SCRIPT_DIR/.." && pwd)/.agents" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+else
+    SSOT_ROOT="$PROJECT_ROOT"
+fi
+ZCP_ROOT="$SSOT_ROOT"
+
+SKILLS_SRC="$SSOT_ROOT/.agents/skills"
 TARGET_AGENTS="/var/www/.agents/skills"
 GEMINI_SKILLS="$HOME/.gemini/antigravity-cli/skills"
 
 echo "============================================================"
-echo "  [3/6] Sincronización Google Drive & Auto-Discovery de Skills (v1.6)"
+echo "  [3/6] Sincronización Google Drive & Auto-Discovery de Skills (v1.7)"
 echo "============================================================"
 
 mkdir -p "$TARGET_AGENTS" "$GEMINI_SKILLS" "/home/zerops/.gemini/antigravity-cli/skills" 2>/dev/null || true
