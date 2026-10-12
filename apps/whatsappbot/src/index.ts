@@ -338,8 +338,11 @@ export async function processInboundWhatsAppMessage(rawPayload: any): Promise<{ 
     return { status: "silence_brief_ack" };
   }
 
-  // 7. Load customer history and past events from PostgreSQL (SSoT)
-  const customerProfile = await getCustomerHistory(primaryCustomerPhone);
+  // 7. Load customer history and live active events from PostgreSQL (SSoT)
+  const [customerProfile, eventsContext] = await Promise.all([
+    getCustomerHistory(primaryCustomerPhone),
+    getEventsContextFromDb(),
+  ]);
 
   // Record / update lead in background
   recordIncomingLead(primaryCustomerPhone).catch(() => {});
@@ -347,8 +350,8 @@ export async function processInboundWhatsAppMessage(rawPayload: any): Promise<{ 
   // 8. Load recent session turns from Valkey
   const sessionHistory = await getSessionHistory(primaryCustomerPhone, 20);
 
-  // 9. Build Dynamic System Prompt with Brandbook SSoT and Customer Ficha
-  const systemPrompt = buildSystemPrompt(customerProfile);
+  // 9. Build Dynamic System Prompt with Brandbook SSoT, Customer Ficha, and Live Active Events
+  const systemPrompt = buildSystemPrompt(customerProfile, eventsContext);
 
   // Construct message array for LLM
   const messages: CompletionMessage[] = [
