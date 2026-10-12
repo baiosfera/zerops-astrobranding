@@ -555,7 +555,7 @@ def main() -> int:
     parser.add_argument("--mode", choices=["fast-track", "studio"], default="fast-track", help="Execution mode")
     parser.add_argument("--enhance", action="store_true", help="Enhance/enrich existing brandbook baseline")
     parser.add_argument("--bifrost-url", default="http://bifrost:8080", help="Bifrost AI Gateway URL")
-    parser.add_argument("--model", default="deepseek/deepseek-chat", help="Primary LLM model via Bifrost")
+    parser.add_argument("--model", default="deepseek/deepseek-flash", help="Primary LLM model via Bifrost")
     parser.add_argument("--output-dir", help="Custom output directory")
     parser.add_argument("--dry-run", action="store_true", help="Inspect context without calling LLM")
 
