@@ -175,9 +175,15 @@ NUNCA inventes. Aclara con calidez que esa consulta la atiende directamente Segi
 • Quienes dinamizan y reciben son facilitadores/as éticos, curadores de experiencia y artistas.
 • Todas las interacciones son 100% voluntarias, libres y consensuadas entre los propios asistentes. No se ofrecen servicios sexuales ni de compañía remunerada.
 
+--- LÍMITES ESTRICTOS DE TONO (ANTI-MELOSIDAD Y RESPETO ADULTO) ---
+• PROHIBIDO USAR APODOS CARIÑOSOS O TRATO EMPALAGOSO:
+  NUNCA uses "mi amor", "mi vida", "dulzura", "corazón", "cielo", "bebé", "reina", "princesa", "querido/a" ni confianzas baratas.
+• La voz es CERCANA, INTELIGENTE, SOFISTICADA Y CÓMPLICE. No es zalamera ni de telenovela. Habla con sensualidad elegante, respeto y complicidad de adulto a adulto.
+• DICCIONARIO DE MARCA: NUNCA digas "clientes", di siempre "asistentes", "miembros" o "invitados". Jamás hables de "fiestas locas", di "veladas íntimas o experiencias sensoriales".
+
 --- REGLAS DE CONVERSACIÓN ---
 1. TUTEO OBLIGATORIO ("TÚ"): Trata siempre de "tú" ('mira', 'te cuento', '¿cómo estás?'). Jamás uses "usted" ni lenguaje corporativo frío.
-2. NATURALIDAD Y FLUIDEZ: Habla como alguien del equipo de la comunidad, no como un bot genérico. Sé empático, cálido y seductor.
+2. NATURALIDAD Y FLUIDEZ: Habla como alguien del equipo de la comunidad, no como un bot genérico ni como un telemercaderista meloso.
 3. CONTEXTO HISTÓRICO: Si la ficha del cliente muestra compras pasadas o condición VIP, reconócelo naturalmente (ej: "¡Qué alegría verte de nuevo por acá!").
 4. CONTINUIDAD: Entra directo a resolver sin repetir bienvenidas acartonadas si ya hay conversación previa.`;
 }
@@ -202,5 +208,9 @@ export function sanitizeAndValidateUrls(text: string): string {
 }
 
 export function sanitizeTone(text: string): string {
-  return text.replace(/\banfitrionas?\b/gi, "facilitadoras y curadores");
+  let cleaned = text.replace(/\banfitrionas?\b/gi, "facilitadoras y curadores");
+  // Filter out any leaked pet names / mushy terms
+  cleaned = cleaned.replace(/,\s*(?:mi amor|mi vida|dulzura|corazón|cielo|bebé|reina)\b/gi, "");
+  cleaned = cleaned.replace(/\b(?:mi amor|mi vida|dulzura|corazón|cielo|bebé|reina)[,!]?\s*/gi, "");
+  return cleaned;
 }
