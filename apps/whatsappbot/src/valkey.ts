@@ -40,20 +40,69 @@ export async function checkRateLimit(phone: string, limit = 10, windowSecs = 60)
   return count <= limit;
 }
 
-export async function isHumanTakeover(phone: string): Promise<boolean> {
-  const key = `wa:human_takeover:${phone}`;
-  const val = await redis.get(key);
-  return val === "1";
+export async function linkPhoneAndLid(phone: string, lid: string): Promise<void> {
+  const cleanPhone = phone.replace(/\D/g, "");
+  const cleanLid = lid.replace(/\D/g, "");
+  if (!cleanPhone || !cleanLid || cleanPhone === cleanLid) return;
+
+  await Promise.all([
+    redis.set(`wa:map:lid:${cleanLid}`, cleanPhone, "EX", 2592000),
+    redis.set(`wa:map:phone:${cleanPhone}`, cleanLid, "EX", 2592000),
+  ]);
 }
 
-export async function setHumanTakeover(phone: string, durationSecs = 7200): Promise<void> {
-  const key = `wa:human_takeover:${phone}`;
-  await redis.set(key, "1", "EX", durationSecs);
+export async function resolveCanonicalPhone(phoneOrLid: string): Promise<string> {
+  const clean = phoneOrLid.replace(/\D/g, "");
+  if (!clean) return "";
+
+  if (clean.length > 13) {
+    const mappedPhone = await redis.get(`wa:map:lid:${clean}`);
+    if (mappedPhone) return mappedPhone;
+  }
+
+  return clean;
 }
 
-export async function clearHumanTakeover(phone: string): Promise<void> {
-  const key = `wa:human_takeover:${phone}`;
-  await redis.del(key);
+export async function getRelatedIdentifiers(phoneOrLid: string): Promise<string[]> {
+  const clean = phoneOrLid.replace(/\D/g, "");
+  if (!clean) return [];
+
+  const ids = new Set<string>([clean]);
+  
+  const phone = await redis.get(`wa:map:lid:${clean}`);
+  if (phone) ids.add(phone);
+
+  const lid = await redis.get(`wa:map:phone:${clean}`);
+  if (lid) ids.add(lid);
+
+  return Array.from(ids);
+}
+
+export async function isHumanTakeover(phoneOrLid: string): Promise<boolean> {
+  const relatedIds = await getRelatedIdentifiers(phoneOrLid);
+  if (relatedIds.length === 0) return false;
+
+  const keys = relatedIds.map((id) => `wa:human_takeover:${id}`);
+  const results = await redis.mget(...keys);
+  return results.some((val) => val === "1");
+}
+
+export async function setHumanTakeover(phoneOrLid: string, durationSecs = 7200): Promise<void> {
+  const relatedIds = await getRelatedIdentifiers(phoneOrLid);
+  const pipeline = redis.pipeline();
+  for (const id of relatedIds) {
+    pipeline.set(`wa:human_takeover:${id}`, "1", "EX", durationSecs);
+  }
+  await pipeline.exec();
+}
+
+export async function clearHumanTakeover(phoneOrLid: string): Promise<void> {
+  const relatedIds = await getRelatedIdentifiers(phoneOrLid);
+  const pipeline = redis.pipeline();
+  for (const id of relatedIds) {
+    pipeline.del(`wa:human_takeover:${id}`);
+  }
+  await pipeline.exec();
 }
 
 export async function isAffiliatePitched(phone: string): Promise<boolean> {
