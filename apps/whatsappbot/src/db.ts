@@ -145,12 +145,73 @@ export async function getCustomerHistory(rawPhone: string): Promise<CustomerData
       result.affiliatePaidReferrals = aff.referidos_pagados || 0;
       result.affiliateFreeTicketsEarned = aff.entradas_ganadas || 0;
       result.affiliateShareUrl = `https://elplacerdecompartir.com/?ref=${aff.alias}`;
+    } else if (result.alias) {
+      // Auto-provision affiliate code if registered lead has alias
+      try {
+        const generatedCode = await ensureAffiliateCode(result.alias, digits, lead?.email);
+        result.affiliateAlias = generatedCode;
+        result.affiliateClicks = 0;
+        result.affiliatePaidReferrals = 0;
+        result.affiliateFreeTicketsEarned = 0;
+        result.affiliateShareUrl = `https://elplacerdecompartir.com/?ref=${generatedCode}`;
+      } catch (err) {
+        console.warn(`[Afiliados:AutoProvision] Could not auto-provision for ${digits}:`, err);
+      }
     }
   } catch (err) {
     console.error(`[PostgreSQL] Error fetching customer profile for ${rawPhone}:`, err);
   }
 
   return result;
+}
+
+export async function ensureAffiliateCode(aliasOrName: string, whatsapp?: string | null, email?: string | null): Promise<string> {
+  const digits = whatsapp ? whatsapp.replace(/\D/g, "") : null;
+  const variants = digits ? [digits, `+${digits}`, digits.startsWith("57") ? digits.slice(2) : `57${digits}`] : [];
+  const cleanEmail = email ? email.trim().toLowerCase() : null;
+
+  // 1. Check existing
+  if (variants.length > 0 || cleanEmail) {
+    const existing = await pool.query(
+      `SELECT alias FROM afiliados 
+       WHERE (whatsapp = ANY($1) AND array_length($1::varchar[], 1) > 0) 
+          OR (email = $2 AND $2 IS NOT NULL) 
+       LIMIT 1`,
+      [variants, cleanEmail]
+    );
+    if (existing.rows.length > 0) {
+      return existing.rows[0].alias;
+    }
+  }
+
+  // 2. Derive base code
+  const baseCode = (aliasOrName || "embajador")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "") || "embajador";
+
+  let candidate = baseCode;
+  let attempt = 1;
+
+  while (attempt <= 10) {
+    const check = await pool.query(`SELECT 1 FROM afiliados WHERE LOWER(alias) = $1`, [candidate]);
+    if (check.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO afiliados (alias, nombre, whatsapp, email) VALUES ($1, $2, $3, $4) ON CONFLICT (alias) DO NOTHING`,
+        [candidate, aliasOrName || "Embajador", digits ? `+${digits}` : null, cleanEmail]
+      );
+      return candidate;
+    }
+    candidate = `${baseCode}${Math.floor(100 + Math.random() * 900)}`;
+    attempt++;
+  }
+
+  const fallbackCode = `embajador${Date.now().toString().slice(-5)}`;
+  await pool.query(
+    `INSERT INTO afiliados (alias, nombre, whatsapp, email) VALUES ($1, $2, $3, $4) ON CONFLICT (alias) DO NOTHING`,
+    [fallbackCode, aliasOrName || "Embajador", digits ? `+${digits}` : null, cleanEmail]
+  );
+  return fallbackCode;
 }
 
 export async function recordIncomingLead(phone: string, alias?: string): Promise<void> {
