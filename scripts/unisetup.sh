@@ -9,8 +9,21 @@ set -euo pipefail
 export PYTHONDONTWRITEBYTECODE=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ZCP_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
+DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
+DRIVE_SSOT="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123"
+
+if [ -d "$DRIVE_SSOT" ]; then
+    SSOT_ROOT="$DRIVE_SSOT"
+elif [ -d "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" && pwd)"
+elif [ -d "$REPO_DIR/.agents" ]; then
+    SSOT_ROOT="$REPO_DIR"
+else
+    SSOT_ROOT="$PROJECT_ROOT"
+fi
+ZCP_ROOT="$SSOT_ROOT"
 INTERACTIVE=false
 RUN_ALL=true
 MODULE=""
