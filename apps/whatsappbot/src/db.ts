@@ -404,3 +404,124 @@ export async function syncLidMappingsToValkey(redisClient: any): Promise<number>
   }
 }
 
+export interface EventRecord {
+  id: string;
+  slug: string;
+  title: string;
+  sub_brand?: string;
+  badge?: string;
+  date: string;
+  display_date?: string;
+  time_range?: string;
+  venue?: string;
+  city?: string;
+  description: string;
+  dress_code?: string;
+  image_url?: string;
+  url_path?: string;
+  button_text?: string;
+  pricing_tiers?: Array<{
+    id: string;
+    name: string;
+    total_cop: number;
+    deposit_cop?: number;
+    description?: string;
+  }>;
+  free_entry_window?: string;
+  is_active: boolean;
+  is_partner?: boolean;
+}
+
+export interface EventsContext {
+  upcomingEvents: EventRecord[];
+  pastEvents: EventRecord[];
+  upcomingEventsSummary: string;
+  pastEventsSummary: string;
+}
+
+export async function getEventsContextFromDb(): Promise<EventsContext> {
+  const emptyContext: EventsContext = {
+    upcomingEvents: [],
+    pastEvents: [],
+    upcomingEventsSummary: "",
+    pastEventsSummary: "",
+  };
+
+  try {
+    const tables = await getAvailableTables();
+    if (!tables.has("events")) {
+      return emptyContext;
+    }
+
+    const canonicalBaseUrl = process.env.APP_URL || process.env.CANONICAL_URL || "http://localhost:3000";
+
+    const upcomingRes = await pool.query(`
+      SELECT id, slug, title, sub_brand, badge, date, display_date, time_range, venue, city,
+             description, dress_code, image_url, url_path, button_text, pricing_tiers, free_entry_window, is_active, is_partner
+      FROM events
+      WHERE is_active = true AND date >= NOW()
+      ORDER BY date ASC
+    `);
+
+    const pastRes = await pool.query(`
+      SELECT id, slug, title, sub_brand, badge, date, display_date, time_range, venue, city,
+             description, dress_code, image_url, url_path, button_text, pricing_tiers, free_entry_window, is_active, is_partner
+      FROM events
+      WHERE date < NOW()
+      ORDER BY date DESC
+      LIMIT 5
+    `);
+
+    const upcomingEvents: EventRecord[] = upcomingRes.rows;
+    const pastEvents: EventRecord[] = pastRes.rows;
+
+    let upcomingEventsSummary = "";
+    if (upcomingEvents.length > 0) {
+      upcomingEventsSummary = "\n--- PRÓXIMOS EVENTOS VIGENTES (AGENDA OFICIAL POSTGRESQL EN TIEMPO REAL) ---\n";
+      for (const ev of upcomingEvents) {
+        const fullUrl = ev.url_path
+          ? (ev.url_path.startsWith("http") ? ev.url_path : `${canonicalBaseUrl}${ev.url_path}`)
+          : canonicalBaseUrl;
+
+        upcomingEventsSummary += `• ${ev.title} (${ev.display_date || ev.date})\n`;
+        if (ev.time_range) upcomingEventsSummary += `  - Horario: ${ev.time_range}\n`;
+        if (ev.venue) upcomingEventsSummary += `  - Sede Oficial: ${ev.venue}\n`;
+        upcomingEventsSummary += `  - Concepto: ${ev.description}\n`;
+        if (ev.dress_code) upcomingEventsSummary += `  - Código de Vestimenta: ${ev.dress_code}\n`;
+        if (ev.free_entry_window) upcomingEventsSummary += `  - Ingreso de Cortesía / Entrada Libre: ${ev.free_entry_window}\n`;
+        if (Array.isArray(ev.pricing_tiers) && ev.pricing_tiers.length > 0) {
+          upcomingEventsSummary += `  - Pases Oficiales Disponibles:\n`;
+          for (const tier of ev.pricing_tiers) {
+            upcomingEventsSummary += `    * ${tier.name}: $${Number(tier.total_cop).toLocaleString("es-CO")} COP`;
+            if (tier.deposit_cop) {
+              upcomingEventsSummary += ` (separa con $${Number(tier.deposit_cop).toLocaleString("es-CO")} COP)`;
+            }
+            if (tier.description) upcomingEventsSummary += ` — ${tier.description}`;
+            upcomingEventsSummary += `\n`;
+          }
+        }
+        upcomingEventsSummary += `  - Enlace Oficial para Detalles y Reservas: ${fullUrl}\n`;
+      }
+    }
+
+    let pastEventsSummary = "";
+    if (pastEvents.length > 0) {
+      pastEventsSummary = "\n--- HISTORIAL DE EVENTOS REALIZADOS (MEMORIA HISTÓRICA) ---\n";
+      for (const ev of pastEvents) {
+        pastEventsSummary += `• ${ev.title} (${ev.display_date || ev.date}): Culminó con éxito. Si el usuario pregunta por este evento, confírmale que ya se llevó a cabo.\n`;
+      }
+    }
+
+    return {
+      upcomingEvents,
+      pastEvents,
+      upcomingEventsSummary,
+      pastEventsSummary,
+    };
+  } catch (err) {
+    console.warn("[PostgreSQL] Error in getEventsContextFromDb:", err);
+    return emptyContext;
+  }
+}
+
+
