@@ -437,21 +437,26 @@ def has_recent_backup(target_file: str) -> bool:
     latest_bak_mtime = 0.0
     if os.path.exists(target_bak_dir):
         try:
-            for fname in os.listdir(target_bak_dir):
-                match = False
-                if skill_name and skill_name in fname:
-                    match = True
-                elif name_stem and name_stem in fname:
-                    match = True
-                elif base_name in fname:
-                    match = True
+            with os.scandir(target_bak_dir) as it:
+                for entry in it:
+                    fname = entry.name
+                    if not fname.endswith(".bak"):
+                        continue
+                    match = False
+                    if skill_name and fname.startswith(f"{skill_name}_"):
+                        match = True
+                    elif name_stem and fname.startswith(f"{name_stem}_"):
+                        match = True
+                    elif base_name and fname.startswith(f"{base_name}_"):
+                        match = True
 
-                if match:
-                    fpath = os.path.join(target_bak_dir, fname)
-                    if os.path.isfile(fpath) or os.path.isdir(fpath):
-                        mtime = os.path.getmtime(fpath)
-                        if mtime > latest_bak_mtime:
-                            latest_bak_mtime = mtime
+                    if match:
+                        try:
+                            mtime = entry.stat().st_mtime
+                            if mtime > latest_bak_mtime:
+                                latest_bak_mtime = mtime
+                        except Exception:
+                            pass
         except Exception:
             pass
 
@@ -459,7 +464,7 @@ def has_recent_backup(target_file: str) -> bool:
     if latest_bak_mtime < (target_mtime - 1.0):
         try:
             os.makedirs(target_bak_dir, exist_ok=True)
-            import shutil, time
+            import shutil, time, threading
             ts = int(time.time())
             if is_skill and skill_name:
                 skill_dir = ""
@@ -493,19 +498,31 @@ def has_recent_backup(target_file: str) -> bool:
                 snapshot_path = os.path.join(target_bak_dir, snapshot_name)
                 shutil.copy2(target_file, snapshot_path)
 
-            # Auto-rotate: keep max 5 most recent snapshots for this specific target
+            # Auto-rotate: keep max 5 most recent snapshots asynchronously without blocking FUSE
             prefix_match = f"{skill_name}_v" if (is_skill and skill_name) else (f"{name_stem}_" if name_stem != base_name else f"{base_name}_")
-            existing = [os.path.join(target_bak_dir, f) for f in os.listdir(target_bak_dir) if f.startswith(prefix_match) and f.endswith(".bak")]
-            if len(existing) > 5:
-                existing.sort(key=os.path.getmtime)
-                for old_f in existing[:-5]:
-                    try:
-                        if os.path.isdir(old_f):
-                            shutil.rmtree(old_f, ignore_errors=True)
-                        else:
-                            os.remove(old_f)
-                    except Exception:
-                        pass
+            def _async_rotate(b_dir, p_match):
+                try:
+                    entries = []
+                    with os.scandir(b_dir) as it:
+                        for entry in it:
+                            if entry.name.startswith(p_match) and entry.name.endswith(".bak"):
+                                try:
+                                    entries.append((entry.path, entry.is_dir(), entry.stat().st_mtime))
+                                except Exception:
+                                    pass
+                    if len(entries) > 5:
+                        entries.sort(key=lambda x: x[2])
+                        for old_path, is_d, _ in entries[:-5]:
+                            try:
+                                if is_d:
+                                    shutil.rmtree(old_path, ignore_errors=True)
+                                else:
+                                    os.remove(old_path)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+            threading.Thread(target=_async_rotate, args=(target_bak_dir, prefix_match), daemon=True).start()
         except Exception:
             pass
     return True
