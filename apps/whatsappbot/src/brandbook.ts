@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { CustomerData } from "./db.js";
+import type { CustomerData, EventsContext } from "./db.js";
 
 export interface BrandConfig {
   projectName: string;
@@ -40,7 +40,7 @@ export function getBogotaTimeInfo() {
 }
 
 export function resolveBrandSSoT(): BrandConfig {
-  const projectName = process.env.PROJECT_NAME || "ELPLACERDC";
+  const projectName = process.env.PROJECT_NAME || process.env.APP_IDENTITY || "BRAND";
   const customPath = process.env.BRAND_SSOT_PATH;
 
   const candidateDirs = [
