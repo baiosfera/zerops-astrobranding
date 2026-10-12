@@ -427,9 +427,10 @@ Evolution Go es un motor ultra-frugal compilado en Go (`whatsmeow`) que consume 
      * `#mute`: Silencia el bot por 24 horas (86400s) para casos donde el cliente requiere atención humana extendida.
 3. **Tuteo Mandatario ("TÚ"):**
    - La voz de marca del bot debe dirigirse SIEMPRE al usuario usando el pronombre "tú" ('¿cómo estás?', 'te esperamos', 'cuéntame'). Está estrictamente prohibido el uso de "usted" o tratamientos fríos y distantes.
-4. **Programa de Embajadores (Afiliados) & Frequency Capping:**
-   - Mecánica de crecimiento viral: *"Invita a 3 amigos con tu enlace personalizado de embajador y gana tu entrada gratis. A partir de la 4ta entrada vendida con tu enlace, recibes comisión directa en efectivo."*
-   - **Directiva Anti-Spam (Valkey):** Una vez sugerido el enlace de embajador, se registra `wa:affiliate_pitched:${phone}` con TTL de 7 días (604800s). El bot TIENE PROHIBIDO volver a mencionarlo durante esa semana para no fatigar al usuario.
+4. **Módulo Desacoplado de Afiliados / Embajadores (Opcional & Pluggable):**
+   - **Feature Detection Dinámico**: Si el proyecto o marca NO implementa programa de afiliados ni existe tabla en base de datos, el bot y la web operan con tarifa plena sin mencionar jamás referidos, enlaces ni códigos `?ref`. Lo que no existe en el catálogo, se asume inexistente sin avisos negativos.
+   - **Estrategia Aislada (Strategy Pattern)**: Si el proyecto habilita afiliados, la mecánica de recompensas y descuentos se desacopla mediante estrategias (`SingleUsePerDomainStrategy`, `ContinuousDiscountStrategy`, `StandardRateStrategy`). Cada marca define sus reglas en su propio repositorio downstream sin contaminar la plantilla universal.
+   - **Frequency Capping (Valkey)**: Si se sugiere el enlace de embajador, se registra `wa:affiliate_pitched:${phone}` con TTL de 7 días (604800s) para evitar fatiga.
 5. **Simulación Realista de Presencia:**
    - Antes de enviar la respuesta generada por Bifrost, el webhook debe aplicar una pausa de lectura y simulación de digitación proporcional al largo del texto (entre 3.5s y 8s) para garantizar un ritmo conversacional humano.
 6. **Desacople Asíncrono con NATS JetStream:**
@@ -731,9 +732,13 @@ Esta sección consolida de forma 100% agnóstica a cualquier marca los descubrim
 ### 5. PostgreSQL 18 & Modelado de Datos
 - **Upsert Defensivo Universal (`ON CONFLICT`):** Todo endpoint público de captura debe implementar operaciones `INSERT ... ON CONFLICT DO UPDATE` o `DO NOTHING`. Ninguna tabla pública debe fallar con error HTTP 500 por violaciones de clave única ante reintentos de red del cliente.
 - **Acumulación Monótona de Etiquetas:** El arreglo de etiquetas de un contacto (`metadata.tags`, `metadata.registered_channels`) debe tratarse como un conjunto aditivo estricto (`Set`). Al actualizar el perfil de un usuario, las nuevas etiquetas se añaden mediante unión matemática; jamás se sobreescribe ni se trunca el array preexistente.
-- **Catálogo Dinámico SSR (Cero Crons Estáticos):** En sitios con agendas, cartelera o eventos temporales, la consulta en el servidor (`Astro SSR`) debe filtrar en tiempo real:
-  `WHERE fecha_fin >= NOW()`
+- **Entidades de Negocio Dinámicas en PostgreSQL 18 & Tiempo Presente Continuo:** En sitios con agendas, cartelera o eventos temporales, la consulta en el servidor (`Astro SSR`) y en el worker agéntico (`whatsappbot`) debe filtrar en tiempo real sobre PostgreSQL:
+  `WHERE fecha_fin >= NOW()` (usando la zona horaria del proyecto).
+  Lo que ocurrió en el pasado (`fecha_fin < NOW()`) se reconoce como memoria histórica/archivo y nunca se ofrece como próximo ni reservable.
   Prohibido usar crons o regeneraciones estáticas para ocultar eventos pasados, ya que los usuarios verán fechas vencidas si el cron se retrasa o el caché estático persiste.
+- **CoHaLo Positivo, Sustracción Elegante & Cero Negative Prompting:** Prohibido llenar código, prompts o plantillas con directivas defensivas o restrictivas ("NO MESAS VIP", "NO SOMOS UN BAR SWINGER", "NO AFILIADOS", "NO BOT", "NO PAGOS", "NO MEMBRESIAS"). La verdad de catálogo define afirmativamente lo que existe. Lo que no está registrado en base de datos se asume inexistente sin avisos negativos en código o respuestas.
+- **Sesión Global de Cliente & Autofill Fricción Cero:** Persistencia de perfil autenticado (`user_profile`: alias, teléfono, correo, rol) en `localStorage`/cookies tras verificación OTP. Todos los formularios de compra, checkout y reserva se autocompletan en caliente, eliminando fricción y solicitudes redundantes de OTP.
+- **Arquitectura Lego Desacoplada de Afiliados (Zero Brand Contamination):** Feature detection dinámico. Si un proyecto limpio (`iniciar.sh-first`) no define módulo de afiliados ni tabla en BD, el bot y la web operan al 100% sin mencionar jamás embajadores, enlaces de referidos ni códigos `?ref`. Si implementa afiliados, la lógica de liquidación se aísla bajo Strategy Pattern (`SingleUsePerDomainStrategy`, `ContinuousDiscountStrategy`, `StandardRateStrategy`). Cero filtración de reglas de una marca hacia plantillas base universales.
 
 ### 6. Storage Híbrido: POSIX NVMe vs Object Storage S3
 - **Video Web Progresivo en Almacenamiento Local (Zero S3 Bandwidth Egress):** Videos de landing pages, fondos o héroes deben transcodificarse en local a 720p H.264 (~800kbps) ubicando el índice `moov` al inicio (`-movflags +faststart`) y servirse directamente desde `/public/media`. Esto habilita streaming HTTP por rangos de bytes instantáneo (<100ms) sin costos de egress en S3.
@@ -755,36 +760,55 @@ Esta sección consolida de forma 100% agnóstica a cualquier marca los descubrim
 
 ## 23. Arquitectura Canónica del Bot de WhatsApp Desacoplado (SOTA Zerops-First)
 
-Para cualquier proyecto o marca desplegada en Zerops, el agente conversacional de WhatsApp **NUNCA debe residir en el backend SSR de la aplicación web** (`/api/webhooks/whatsapp.ts`). La arquitectura soberana exige el desacople total en un worker dedicado:
+Para cualquier proyecto o marca desplegada en Zerops, el agente conversacional de WhatsApp **NUNCA debe residir en el backend SSR de la aplicación web** (`/api/webhooks/whatsapp.ts`). La arquitectura soberana exige el desacople total en un worker dedicado que opera bajo **7 Invariantes Canónicos**:
 
 ### 1. Desacople Operativo & Aislamiento de Ciclo de Vida:
 - **Servicio Dedicado (`whatsappbot`):** Ejecutado en runtime `ubuntu/bun@1.3` con autoescalado elástico (`cpuMode: SHARED`, `minFreeRamGB: 0.25`).
 - **Resiliencia ante Deploys Web:** Los despliegues o reinicios de la web (`webprod`) tienen impacto CERO sobre la atención al cliente por WhatsApp. El bot permanece 100% activo sin caerse ni provocar tormentas de reintentos por timeouts de Evolution Go.
 - **Ingesta en 2 Niveles (<15ms ACK):**
-  * **Nivel Ingress:** Endpoint ultraliviano recibe el webhook `messages.upsert` de Evolution Go, publica el evento en NATS JetStream (`events.whatsapp.incoming`) con identificador `Nats-Msg-Id: evt_${msgId}` para deduplicación nativa, y devuelve `HTTP 200 OK` en <15ms.
-  * **Nivel Worker:** El servicio `whatsappbot` consume de JetStream mediante Pull Consumer durable con reintentos controlados (`msg.nak()`) y Dead Letter Queue (`events.dlq.whatsapp`).
+  * **Nivel Ingress:** Endpoint ultraliviano recibe el webhook `messages.upsert` de Evolution Go, publica el evento en NATS JetStream (`events.whatsapp.incoming`) o responde inmediatamente con `HTTP 200 {"status": "acknowledged"}` en <15ms antes de iniciar decodificación de audio o inferencia LLM.
+  * **Nivel Worker:** El servicio `whatsappbot` procesa la lógica conversacional de forma asíncrona, eliminando en un 100% las tormentas de reintentos y timeouts.
 
-### 2. Erradicación de Alucinaciones con Tool Calling Determinista:
-- **Function Calling contra PostgreSQL 18:** En lugar de inyectar catálogos completos en un System Prompt estático que alucina y gasta miles de tokens, el LLM consume 4 herramientas nativas (esquema OpenAI vía Bifrost Gateway):
-  1. `get_active_events(limit)`: Consulta SQL en vivo (`WHERE fecha >= CURRENT_DATE`) para devolver eventos reales, fechas y cupos.
-  2. `lookup_ticket_status(phone)`: Consulta si el usuario tiene pagos o reservas registradas.
-  3. `get_affiliate_stats(phone)`: Devuelve métricas de embajador, compras referidas y pases gratis ganados.
-  4. `register_community_lead(alias, rol, ciudad)`: Inserción idempotente (`ON CONFLICT`) de nuevos miembros en la base de datos.
-- **Veredicto pgvector vs SQL Relacional:** Para catálogos y sitios de <100 páginas/eventos, **`pgvector` es un sobre-diseño innecesario y riesgoso**. La búsqueda semántica confunde eventos pasados con futuros por similitud léxica. SQL relacional B-Tree resuelve en <0.5ms a coste cero. Si se requiere búsqueda textual sobre descripciones, el motor nativo `tsvector` en español de PostgreSQL 18 resuelve en <2ms.
+### 2. Ingesta Agnóstica de Marca desde SSoT Local Storage (Zero Hardcoding):
+- **Cero Acoplamiento a Marcas Específicas:** Ningún archivo de plantilla, script, skill o receta debe contener cadenas quemadas (`elplacerdc`, `Segi`, `The Corset Society`, etc.).
+- **Resolución Dinámica de Identidad:** La personalidad, arquetipo, dialecto regional, políticas y catálogo se leen dinámicamente desde:
+  `/mnt/localstorage/${PROJECT_NAME}/dev/brandbook.json` y `/mnt/localstorage/${PROJECT_NAME}/dev/system_prompt.md`.
+- **Sanitización Dinámica de Enlaces:** El validador post-LLM restringe los enlaces emitidos estrictamente a los dominios canónicos declarados en el brandbook activo (`canonical_urls`) y canales de mensajería oficiales (`wa.me`), erradicando enlaces rotos o 404s.
 
-### 3. Memoria Conversacional Híbrida de 3 Niveles (Anti-Amnesia):
-- **Capa 1 (Valkey 7.2):** Buffer caliente de los últimos 6 turnos crudos (`wa:session:turns:${phone}`) con latencia sub-milisegundo (<0.5ms). Bloqueo de operador humano de 2 horas (`wa:human_takeover:${phone}`).
-- **Capa 2 (Resumidor Incremental):** Al superar 6 turnos, un modelo rápido de FreeLLMAPI vía Bifrost compacta los turnos antiguos en un resumen de ~80 palabras y poda el buffer de Valkey, inyectando el resumen en el contexto.
-- **Capa 3 (PostgreSQL 18):** Persistencia relacional permanente del perfil (`leads.metadata->'chat_summary'`) y registro auditable en `chat_messages`.
+### 3. Introspección Defensiva de Esquemas en PostgreSQL 18:
+- **Adaptabilidad a Cualquier Dominio:** No todas las marcas tienen afiliados, tickets o comercio electrónico. El bot debe inspeccionar dinámicamente `information_schema.tables` y `information_schema.columns`.
+- **Ejecución Defensiva:** Si la base de datos no contiene tablas como `afiliados`, `event_tickets` u `orders`, el worker captura la ausencia de forma limpia y devuelve perfiles vacíos sin generar excepciones SQL ni respuestas HTTP 500.
+- **Generación Canónica de URLs de Afiliado:** Los enlaces de referidos derivan siempre del host canónico de la marca activa (`${APP_URL}/?ref=${alias}`), jamás de dominios predefinidos.
 
-### 4. Pipeline de Audio Ultra-Rápido (<350ms):
-- Descarga autenticada de notas de voz desde Evolution Go (`http://evolution:8085/message/downloadmedia`).
-- Transcripción directa por streaming con **Groq Whisper Large v3 Turbo** (`whisper-large-v3-turbo`) en ~280–350ms ($0.04 USD por hora de audio), inyectando el texto con calidez conversacional.
+### 4. Ingesta Robusta de Audio en Evolution Go (`whatsmeow`) & Whisper Turbo:
+- **Doble Ruta de Extracción de Medios:** Evolution Go entrega el payload base64 en `data.Message.base64` (`msgObj.base64`). Si el webhook no lo incluye inline, el worker invoca automáticamente `POST /message/downloadmedia` pasando `{ message: msgObj }`.
+- **Compatibilidad con Variantes de Audio:** Detecta indistintamente `audioMessage`, `AudioMessage`, `mediaType: "audio"` o `mimetype: audio/...`.
+- **Transcripción de Streaming (<350ms):** Envía el buffer de audio a Groq Whisper Large v3 Turbo (`whisper-large-v3-turbo`) con respaldo multi-llave y respuesta empática en caso de audios inaudibles.
 
-### 5. Protocolo de Desmantelamiento y Limpieza en la Aplicación Web (`webdev`/`webprod`):
+### 5. Identidad WhatsApp Multi-Device & Filtrado de `@lid`:
+- **El Problema de los Linked Device IDs (`@lid`):** En cuentas multi-dispositivo, Evolution API entrega eventos con identificadores `chatJid` o `senderJid` terminados en `@lid`. Despachar mensajes de vuelta a un `@lid` falla silenciosamente en el motor Go.
+- **Resolución Prioritaria a Números E.164:** El worker filtra y descarta identificadores `@lid`, extrayendo el número real desde `SenderAlt` o JIDs con `@s.whatsapp.net`, normalizando a dígitos numéricos limpios para el despacho de mensajes.
+
+### 6. Prevención de Self-Shadowing en Zerops Vault:
+- **Invariante de Variables de Entorno en Zerops:** Declarar en `zerops.yaml` una variable con su propio nombre referenciado desde el vault (ej: `GROQ_API_KEY: ${GROQ_API_KEY}`) causa el error de preflight `whatsappbot_env_self_shadow`.
+- **Mapeo con Nombres Distintos:** Las variables secretas del vault deben nombrarse de forma explícita y mapearse a la variable de entorno del runtime:
+  `GROQ_API_KEY: ${WHISPER_GROQ_API_KEY}`.
+
+### 7. Ingesta SSoT en Tiempo Real, Adaptación Dinámica de Rol/Género y Regla SSoT > Historial:
+- **Ficha Completa de Usuario en Tiempo Real:** El bot extrae todos los datos del usuario en cada turno (`alias`, `email`, `ciudad`, `rol`, `afiliado`, `métricas`, `membresías`).
+- **Tratamiento Diferenciado por Rol / Género:**
+  * `hombre_solo`: Perfil individual masculino $\to$ trato en masculino singular ("Embajador", "bienvenido", "tú").
+  * `mujer_sola`: Perfil individual femenino $\to$ trato en femenino singular ("Embajadora", "bienvenida", "tú").
+  * `pareja`: Cuenta compartida de pareja $\to$ trato estricto en plural ("ustedes", "pareja", "chicos", "ambos", "como pareja", "Embajadores"). Nunca tratar como mujer u hombre individual.
+  * `otro` o no especificado $\to$ tono cercano, neutral y respetuoso.
+- **Regla de Verdad Absoluta en Tiempo Real (SSoT > Historial):** La ficha leída de PostgreSQL es la verdad absoluta en el milisegundo actual. Si el usuario actualizó su nombre, rol o enlace, el LLM tiene la instrucción estricta de IGNORAR el historial antiguo de Valkey y confirmar de inmediato la información actualizada, prohibiendo alucinaciones como "los cambios tardan unos minutos en sincronizarse".
+- **Deduplicación Preventiva de Leads:** Las búsquedas telefónicas emplean normalización de variantes y coincidencia de sufijo de 10 dígitos con ordenamiento por completitud (`alias_nombre IS NOT NULL`) y recencia. La inserción de nuevos leads verifica la existencia previa antes de crear filas para no fragmentar identidades con números sin prefijo `+`.
+- **Esquema Relacional Sincronizado:** Toda tabla de usuarios y afiliados debe contar con columna `updated_at TIMESTAMPTZ DEFAULT NOW()` para evitar excepciones en rutas de actualización del perfil web.
+
+### 8. Protocolo de Desmantelamiento y Limpieza en la Aplicación Web (`webdev`/`webprod`):
 Una vez que el worker `whatsappbot` esté verificado y recibiendo el tráfico de Evolution Go:
 - **Archivos a purgar en el frontend:**
-  * `src/pages/api/webhooks/whatsapp.ts`: Reducir a un forwarder ultraliviano a NATS si Evolution Go conserva la URL, o eliminar si Evolution apunta al nuevo microservicio.
+  * `src/pages/api/webhooks/whatsapp.ts`: Reducir a un forwarder ultraliviano a NATS o worker directo (`fetch("http://whatsappbot:3005/webhook", ...)`).
   * `src/services/bot-knowledge.ts`: Purgar completamente (elimina el array estático de 15KB y lógica pesada).
   * `tests/whatsapp_bot_sota.test.ts` y `tests/bot_knowledge.test.ts`: Migrar a la suite del nuevo microservicio.
 - **Archivos a preservar en el frontend:**
@@ -792,6 +816,7 @@ Una vez que el worker `whatsappbot` esté verificado y recibiendo el tráfico de
 - **Certificación de paridad limpia:**
   * Compilar y testear en `webdev` (`bun run build && bun test`) certificando exit code 0.
   * Promover a `webprod` para erradicar cualquier residuo zombi del frontend.
+
 
 
 
