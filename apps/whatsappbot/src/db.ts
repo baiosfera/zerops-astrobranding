@@ -33,6 +33,8 @@ export interface CustomerData {
   affiliatePaidReferrals?: number;
   affiliateFreeTicketsEarned?: number;
   affiliateShareUrl?: string;
+  hasAffiliatesProgram?: boolean;
+  hasVipProgram?: boolean;
 }
 
 let tablesCache: Set<string> | null = null;
