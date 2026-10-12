@@ -2,16 +2,12 @@ zerops:
   - setup: whatsappbot
     build:
       base: ubuntu/bun@1.3
-      prepareCommands:
-        - bun upgrade
       buildCommands:
         - bun install
       deployFiles:
         - .
     run:
       base: ubuntu/bun@1.3
-      prepareCommands:
-        - bun upgrade
       volume:
         hostname: localstorage
         mountPath: /mnt/localstorage
