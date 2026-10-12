@@ -51,6 +51,7 @@ export async function requestLlmCompletion(
     method: "POST",
     headers,
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15000), // 15s timeout to prevent hanging
   });
 
   if (!res.ok) {
@@ -69,12 +70,14 @@ export async function requestLlmCompletion(
 /**
  * Detects if user message indicates commercial or booking intent
  */
-export function detectPurchaseIntent(text: string): boolean {
+export function detectPurchaseIntent(text: string, customKeywords: string[] = []): boolean {
   const normalized = text.toLowerCase();
-  const buyingKeywords = [
-    "comprar", "boleta", "ticket", "pase", "reserv", "pagar", "transferencia",
-    "nequi", "daviplata", "pse", "tarjeta", "precio", "cuanto vale", "cuánto vale",
-    "costo", "vip", "pareja", "single", "unicornio", "luna llena", "link de pago"
+  const baseBuyingKeywords = [
+    "comprar", "compra", "orden", "pedido", "reserv", "pago", "pagar",
+    "transferencia", "nequi", "daviplata", "pse", "tarjeta", "precio",
+    "cuanto vale", "cuánto vale", "costo", "cotiz", "catalogo", "adquirir",
+    "contrat", "ticket", "pase", "suscripci", "link de pago"
   ];
-  return buyingKeywords.some((kw) => normalized.includes(kw));
+  const allKeywords = [...baseBuyingKeywords, ...customKeywords.map((k) => k.toLowerCase())];
+  return allKeywords.some((kw) => normalized.includes(kw));
 }
