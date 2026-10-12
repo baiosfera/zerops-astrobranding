@@ -112,8 +112,8 @@ class IngestionEngine:
 class BifrostGatewayClient:
     """Communicates with Bifrost AI Gateway enforcing production headers and structured JSON."""
 
-    def __init__(self, base_url: str = "http://bifrost:8080", primary_model: str = "deepseek/deepseek-chat",
-                 fallback_model: str = "freellmapi/gemini-2.5-flash", timeout_sec: int = 120):
+    def __init__(self, base_url: str = "http://bifrost:8080", primary_model: str = "deepseek/deepseek-flash",
+                 fallback_model: str = "deepseek/deepseek-chat", timeout_sec: int = 120):
         self.base_url = base_url.rstrip("/")
         self.primary_model = primary_model
         self.fallback_model = fallback_model
@@ -144,7 +144,7 @@ class BifrostGatewayClient:
             "messages": messages,
             "temperature": temperature,
             "response_format": {"type": "json_object"},
-            "max_tokens": 4096,
+            "max_tokens": 8192,
         }
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=data, method="POST")
@@ -152,9 +152,13 @@ class BifrostGatewayClient:
         req.add_header("x-tier", "production")
         req.add_header("x-routing-tier", "production")
 
-        with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
-            body = resp.read().decode("utf-8")
-            result = json.loads(body)
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
+                body = resp.read().decode("utf-8")
+                result = json.loads(body)
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8") if e.fp else ""
+            raise RuntimeError(f"HTTP {e.code}: {e.reason} - {err_body}") from e
 
         choices = result.get("choices", [])
         if not choices:
@@ -177,7 +181,7 @@ class BrandbookPipelineRunner:
     """Coordinates digestion, synthesis, CSS extraction, and SSoT disk distribution."""
 
     def __init__(self, brand_raw: str, mode: str = "fast-track", enhance: bool = False,
-                 bifrost_url: str = "http://bifrost:8080", model: str = "deepseek/deepseek-chat",
+                 bifrost_url: str = "http://bifrost:8080", model: str = "deepseek/deepseek-flash",
                  output_dir: Optional[str] = None):
         self.brand_upper, self.brand_lower = sanitize_brand(brand_raw)
         self.mode = mode
