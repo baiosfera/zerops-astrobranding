@@ -268,18 +268,20 @@ export async function processInboundWhatsAppMessage(rawPayload: any): Promise<{ 
 
   // 3. Operator takeover controls
   if (isFromMe) {
-    const lower = messageText.toLowerCase();
-    if (lower === "#bot") {
+    const trimmed = messageText.trim().toLowerCase();
+    if (trimmed === "#bot") {
       await clearHumanTakeover(primaryCustomerPhone);
       await sendWhatsAppMessage(primaryCustomerPhone, "[Bot reactivado para este chat]");
       return { status: "human_takeover_cleared" };
     }
-    if (["#stop", "#off", "#silencio", "#desactivar"].includes(lower)) {
-      await setHumanTakeover(primaryCustomerPhone, 315360000); // 10 years
+    if (["#stop", "#off", "#silencio", "#desactivar"].includes(trimmed)) {
+      await setHumanTakeover(primaryCustomerPhone, 315360000); // 10 years permanent stop
+      await sendWhatsAppMessage(primaryCustomerPhone, "[Atención automática pausada por operador]");
       return { status: "human_takeover_stopped_permanent" };
     }
-    if (lower === "#mute") {
+    if (trimmed === "#mute") {
       await setHumanTakeover(primaryCustomerPhone, 86400); // 24 hours
+      await sendWhatsAppMessage(primaryCustomerPhone, "[Bot en silencio por 24 horas]");
       return { status: "human_takeover_muted_24h" };
     }
 
@@ -289,8 +291,29 @@ export async function processInboundWhatsAppMessage(rawPayload: any): Promise<{ 
     return { status: "human_takeover_active_2h" };
   }
 
+  // Customer requested human assistance or stop
+  const cleanLower = messageText.trim().toLowerCase();
+  const isStopCommand = ["#stop", "#off", "#silencio", "#desactivar"].includes(cleanLower);
+  const isHumanRequest =
+    isStopCommand ||
+    /^(asesor|humano|persona|hablar con un humano|hablar con una persona|asesor humano)$/i.test(cleanLower) ||
+    cleanLower.includes("asesor humano") ||
+    cleanLower.includes("comunicarme con un humano") ||
+    cleanLower.includes("hablar con una persona");
+
+  if (isHumanRequest) {
+    console.log(`[WhatsAppBot] Customer ${primaryCustomerPhone} requested human assistance or stop`);
+    await setHumanTakeover(primaryCustomerPhone, 172800); // 48 hours
+    await appendSessionMessage(primaryCustomerPhone, "user", messageText);
+    const ackMessage = "Entendido. He pausado la atención automática para que un asesor de nuestro equipo te responda personalmente en este chat.";
+    await sendWhatsAppMessage(primaryCustomerPhone, ackMessage);
+    await appendSessionMessage(primaryCustomerPhone, "assistant", ackMessage);
+    return { status: "customer_requested_human_takeover" };
+  }
+
   // If customer is sending while human takeover is active, store in session and stay silent
   if (await isHumanTakeover(primaryCustomerPhone)) {
+    console.log(`[WhatsAppBot] Human takeover active for ${primaryCustomerPhone}. Staying silent.`);
     await appendSessionMessage(primaryCustomerPhone, "user", messageText);
     return { status: "ignored_human_takeover_active" };
   }
