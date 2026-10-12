@@ -101,7 +101,7 @@ export function resolveBrandSSoT(): BrandConfig {
   const appBaseUrl =
     process.env.APP_URL ||
     process.env.CANONICAL_URL ||
-    "https://elplacerdecompartir.com";
+    "http://localhost:3000";
 
   const canonicalUrls: Record<string, string> = {
     home: appBaseUrl,
