@@ -343,3 +343,60 @@ export async function recordIncomingLead(phone: string, alias?: string): Promise
     console.error(`[PostgreSQL] Error in recordIncomingLead for ${digits}:`, err);
   }
 }
+
+let evoPool: pg.Pool | null = null;
+function getEvoPool(): pg.Pool | null {
+  if (!evoPool && process.env.DATABASE_URL) {
+    try {
+      const parsed = new URL(process.env.DATABASE_URL);
+      parsed.pathname = "/evogo_auth";
+      evoPool = new Pool({
+        connectionString: parsed.toString(),
+        max: 3,
+        idleTimeoutMillis: 30000,
+      });
+    } catch (err) {
+      console.warn("[PostgreSQL] Could not initialize evogo_auth pool:", err);
+    }
+  }
+  return evoPool;
+}
+
+export async function lookupPhoneByLidFromDb(lid: string): Promise<string | null> {
+  const cleanLid = lid.replace(/\D/g, "");
+  if (!cleanLid) return null;
+  const pool = getEvoPool();
+  if (!pool) return null;
+  try {
+    const res = await pool.query("SELECT pn FROM whatsmeow_lid_map WHERE lid = $1 LIMIT 1", [cleanLid]);
+    if (res.rows.length > 0 && res.rows[0].pn) {
+      return res.rows[0].pn.replace(/\D/g, "");
+    }
+  } catch (err) {
+    // Ignore if table or database does not exist
+  }
+  return null;
+}
+
+export async function syncLidMappingsToValkey(redisClient: any): Promise<number> {
+  const pool = getEvoPool();
+  if (!pool) return 0;
+  try {
+    const res = await pool.query("SELECT lid, pn FROM whatsmeow_lid_map");
+    if (res.rows.length === 0) return 0;
+    const pipeline = redisClient.pipeline();
+    for (const row of res.rows) {
+      if (row.lid && row.pn) {
+        pipeline.set(`wa:map:lid:${row.lid}`, row.pn, "EX", 2592000);
+        pipeline.set(`wa:map:phone:${row.pn}`, row.lid, "EX", 2592000);
+      }
+    }
+    await pipeline.exec();
+    console.log(`[LID Sync] Successfully synced ${res.rows.length} LID mappings from PostgreSQL to Valkey`);
+    return res.rows.length;
+  } catch (err) {
+    console.warn("[LID Sync] syncLidMappingsToValkey skipped or failed:", err);
+    return 0;
+  }
+}
+
