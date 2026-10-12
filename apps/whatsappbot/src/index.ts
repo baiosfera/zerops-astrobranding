@@ -117,6 +117,28 @@ export async function processInboundWhatsAppMessage(rawPayload: any): Promise<{ 
     return { status: "ignored_group_or_status" };
   }
 
+  // Link any Phone and LID present in this webhook event
+  const allCandidateIds = [
+    chatJid,
+    senderJid,
+    senderAlt,
+    key.remoteJid,
+    key.participant,
+    eventData.Chat,
+    eventData.Sender,
+    eventData.SenderAlt,
+    eventData.remoteJid,
+  ].filter(Boolean).map(String);
+
+  const lidCandidate = allCandidateIds.find((id) => id.includes("@lid"));
+  const phoneCandidate = allCandidateIds.find(
+    (id) => id.includes("@s.whatsapp.net") && cleanPhoneNumber(id) !== cleanPhoneNumber(BOT_PHONE)
+  );
+
+  if (lidCandidate && phoneCandidate) {
+    await linkPhoneAndLid(cleanPhoneNumber(phoneCandidate), cleanPhoneNumber(lidCandidate));
+  }
+
   // Resolve customer phone (prioritizing real WhatsApp phone numbers over @lid)
   const rawTargetIds = isFromMe
     ? [chatJid, key.remoteJid, eventData.remoteJid]
@@ -128,10 +150,22 @@ export async function processInboundWhatsAppMessage(rawPayload: any): Promise<{ 
     rawTargetIds.find((id) => id && !String(id).includes("@lid") && !String(id).includes("@g.us")) ||
     rawTargetIds[0];
 
-  const primaryCustomerPhone = cleanPhoneNumber(String(realPhoneId || (isFromMe ? chatJid : senderJid || chatJid)));
-  if (!primaryCustomerPhone || primaryCustomerPhone === cleanPhoneNumber(BOT_PHONE)) {
+  const rawCleanPhone = cleanPhoneNumber(String(realPhoneId || (isFromMe ? chatJid : senderJid || chatJid)));
+  if (!rawCleanPhone || rawCleanPhone === cleanPhoneNumber(BOT_PHONE)) {
     return { status: "ignored_bot_self_message" };
   }
+
+  // Resolve canonical phone number (resolving LID -> real phone via Valkey or DB fallback)
+  let canonicalPhone = await resolveCanonicalPhone(rawCleanPhone);
+  if (canonicalPhone === rawCleanPhone && rawCleanPhone.length > 13) {
+    const dbPhone = await lookupPhoneByLidFromDb(rawCleanPhone);
+    if (dbPhone) {
+      await linkPhoneAndLid(dbPhone, rawCleanPhone);
+      canonicalPhone = dbPhone;
+    }
+  }
+
+  const primaryCustomerPhone = canonicalPhone;
 
   const messageId = String(
     info.ID ||
