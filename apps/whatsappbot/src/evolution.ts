@@ -2,7 +2,7 @@ const EVOLUTION_URL = process.env.EVOLUTION_URL || "http://evolution:8085";
 
 export async function checkEvolutionConnection(): Promise<boolean> {
   try {
-    const res = await fetch(`${EVOLUTION_URL}/health`);
+    const res = await fetch(`${EVOLUTION_URL}/server/ok`);
     return res.status === 200;
   } catch (err) {
     console.error("[Evolution] Ping failed:", err);

@@ -227,8 +227,13 @@ async function startNatsConsumer() {
   }
 
   try {
-    console.log(`[NATS] Connecting to broker at ${NATS_URL}...`);
-    const nc = await connect({ servers: NATS_URL });
+    console.log(`[NATS] Connecting to broker...`);
+    const parsed = new URL(NATS_URL);
+    const nc = await connect({
+      servers: `${parsed.hostname}:${parsed.port || "4222"}`,
+      user: parsed.username ? decodeURIComponent(parsed.username) : undefined,
+      pass: parsed.password ? decodeURIComponent(parsed.password) : undefined,
+    });
     const js = nc.jetstream();
 
     // Subscribe to subject whatsapp.messages
