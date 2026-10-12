@@ -7,9 +7,7 @@ zerops:
       buildCommands:
         - bun install
       deployFiles:
-        - src
-        - package.json
-        - tsconfig.json
+        - .
     run:
       base: ubuntu/bun@1.3
       prepareCommands:
