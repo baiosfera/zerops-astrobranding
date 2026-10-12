@@ -206,7 +206,7 @@ Para darte de baja de futuras convocatorias:
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 20px 0; background-color: #100615; border-left: 3px solid #C5A059; border-radius: 4px;">
                 <tr>
                   <td style="padding: 14px 16px; font-size: 13px; line-height: 1.6; color: #D6D0D8;">
-                    🏛️ <strong>Espacio Seguro & Consciente:</strong> En nuestro Centro Cultural prima el consentimiento lúcido y el respeto mutuo. Un ambiente multidisciplinario concebido sin presiones comerciales. No somos un bar swinger tradicional ni contamos con zonas húmedas.
+                    🏛️ <strong>Espacio Seguro & Consciente:</strong> En nuestro Centro Cultural prima el consentimiento lúcido y el respeto mutuo. Un ambiente multidisciplinario de arte, expresión y alianzas para comunidades mente abierta concebido sin presiones comerciales.
                   </td>
                 </tr>
               </table>
