@@ -90,12 +90,13 @@ export function resolveBrandSSoT(): BrandConfig {
     loadedJson?.brand_architecture?.umbrella_brand?.name ||
     loadedJson?.brand?.name ||
     process.env.BRAND_NAME ||
-    "El Placer de Compartir";
+    projectName;
 
   const archetype =
     loadedJson?.brand_architecture?.leadership_and_ambassador?.brand_archetype ||
     loadedJson?.brand?.archetype ||
-    "La Amante Sensible & La Guardiana del Confort Femenino";
+    process.env.BRAND_ARCHETYPE ||
+    "Anfitrión Oficial y Concierge de Marca";
 
   const appBaseUrl =
     process.env.APP_URL ||
@@ -105,12 +106,7 @@ export function resolveBrandSSoT(): BrandConfig {
   const canonicalUrls: Record<string, string> = {
     home: appBaseUrl,
     register: `${appBaseUrl}/#registro`,
-    centroCultural: `${appBaseUrl}/centro-cultural`,
-    galeria: `${appBaseUrl}/galeria-centro-cultural`,
-    corsetSociety: `${appBaseUrl}/the-corset-society`,
-    lunaLlena: `${appBaseUrl}/the-corset-society/luna-llena`,
-    embajadores: `${appBaseUrl}/dashboard`,
-    eventosRealizados: `${appBaseUrl}/eventos-realizados`,
+    dashboard: `${appBaseUrl}/dashboard`,
     ...(loadedJson?.canonical_urls || {}),
   };
 
@@ -120,6 +116,7 @@ export function resolveBrandSSoT(): BrandConfig {
     archetype,
     systemPrompt: customMarkdownPrompt || "",
     canonicalUrls,
+    rawBrandbook: loadedJson,
   };
 }
 
