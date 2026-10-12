@@ -98,29 +98,60 @@ if [ -d "$SKILLS_SRC" ]; then
         fi
     done
 
-    # Sincronización de Drive SSoT solo si no se obtuvo de GitHub (fallback resiliente)
-    if [ "$SYNCED_FROM_GITHUB" = false ] && [ -d "$ZCP_ROOT/.agents/skills" ]; then
-        echo "• Sincronizando skills desde Google Drive SSoT (modo fallback)..."
-        for s_dir in "$ZCP_ROOT/.agents/skills"/*; do
-            [ -d "$s_dir" ] || continue
-            s_name=$(basename "$s_dir")
-            if command -v rsync >/dev/null 2>&1; then
-                rsync -a --exclude="__pycache__" --exclude="*.pyc" "$s_dir/" "$TARGET_AGENTS/$s_name/" 2>/dev/null || true
-            else
-                cp -rf "$s_dir"/* "$TARGET_AGENTS/$s_name/" 2>/dev/null || true
-            fi
-        done
+    # AUTO-HEALING SSoT DRIVE PARITY (Garantizar paridad bidireccional absoluta)
+    DRIVE_SSOT_SKILLS="$SSOT_ROOT/.agents/skills"
+    if [ -d "$DRIVE_SSOT_SKILLS" ]; then
+        if [ "$SYNCED_FROM_GITHUB" = true ]; then
+            echo "• Verificando paridad y auto-sanando Google Drive SSoT desde GitHub..."
+            for s_dir in "$TARGET_AGENTS"/*; do
+                [ -d "$s_dir" ] || continue
+                s_name=$(basename "$s_dir")
+                case "$s_name" in
+                    react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-*|rdd-*|github-pr|work-unit-commits|jira-*|issue-*|gentle-ai-*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-*|pocock*)
+                        continue
+                        ;;
+                esac
+                d_skill_md="$DRIVE_SSOT_SKILLS/$s_name/SKILL.md"
+                l_skill_md="$s_dir/SKILL.md"
+                if [ -f "$l_skill_md" ]; then
+                    if [ ! -f "$d_skill_md" ]; then
+                        mkdir -p "$DRIVE_SSOT_SKILLS/$s_name"
+                        cp -f "$l_skill_md" "$d_skill_md" 2>/dev/null || true
+                    elif ! cmp -s "$l_skill_md" "$d_skill_md"; then
+                        cp -f "$l_skill_md" "$d_skill_md" 2>/dev/null || true
+                    fi
+                fi
+                case "$s_name" in
+                    oraculo|planner|docu|research)
+                        if command -v rsync >/dev/null 2>&1; then
+                            rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$s_dir/" "$DRIVE_SSOT_SKILLS/$s_name/" 2>/dev/null || true
+                        fi
+                        ;;
+                esac
+            done
+        else
+            echo "• Sincronizando skills desde Google Drive SSoT (modo fallback)..."
+            for s_dir in "$DRIVE_SSOT_SKILLS"/*; do
+                [ -d "$s_dir" ] || continue
+                s_name=$(basename "$s_dir")
+                if command -v rsync >/dev/null 2>&1; then
+                    rsync -a --exclude="__pycache__" --exclude="*.pyc" "$s_dir/" "$TARGET_AGENTS/$s_name/" 2>/dev/null || true
+                else
+                    cp -rf "$s_dir"/* "$TARGET_AGENTS/$s_name/" 2>/dev/null || true
+                fi
+            done
+        fi
     fi
 
-    # Sincronizar AGENTS.md y reglas de gobernanza
-    if [ -f "$ZCP_ROOT/AGENTS.md" ]; then
+    # Sincronizar AGENTS.md y reglas de gobernanza desde SSoT
+    if [ -f "$SSOT_ROOT/AGENTS.md" ]; then
         echo "• Sincronizando AGENTS.md desde Drive SSoT..."
-        cp -f "$ZCP_ROOT/AGENTS.md" "/var/www/AGENTS.md" 2>/dev/null || true
+        cp -f "$SSOT_ROOT/AGENTS.md" "/var/www/AGENTS.md" 2>/dev/null || true
     fi
-    if [ -d "$ZCP_ROOT/.agents/rules" ]; then
+    if [ -d "$SSOT_ROOT/.agents/rules" ]; then
         echo "• Sincronizando reglas de gobernanza (.agents/rules)..."
         mkdir -p "/var/www/.agents/rules" "/home/zerops/.gemini/antigravity-cli/rules" 2>/dev/null || true
-        cp -rn "$ZCP_ROOT/.agents/rules"/* "/var/www/.agents/rules/" 2>/dev/null || true
+        cp -rn "$SSOT_ROOT/.agents/rules"/* "/var/www/.agents/rules/" 2>/dev/null || true
     fi
     sudo chown -R zerops:zerops /var/www/.agents /home/zerops/.gemini 2>/dev/null || true
     echo "  ✅ Sincronización de Drive finalizada."
