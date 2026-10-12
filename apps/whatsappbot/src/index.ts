@@ -513,5 +513,6 @@ if (import.meta.main) {
 
   console.log(`[whatsappbot] HTTP Server running on port :${PORT}`);
   startNatsConsumer();
+  syncLidMappingsToValkey(redis).catch((err) => console.warn("[Startup] LID sync error:", err));
 }
 
