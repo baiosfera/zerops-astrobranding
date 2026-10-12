@@ -6,10 +6,23 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ZCP_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-TARGET_AGENT="${1:-antigravity}"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="/var/www"
-PERSISTENT_BIN="/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts"
+DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
+DRIVE_SSOT="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123"
+
+if [ -d "$DRIVE_SSOT" ]; then
+    SSOT_ROOT="$DRIVE_SSOT"
+elif [ -d "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" && pwd)"
+elif [ -d "$REPO_DIR/.agents" ]; then
+    SSOT_ROOT="$REPO_DIR"
+else
+    SSOT_ROOT="$PROJECT_ROOT"
+fi
+ZCP_ROOT="$SSOT_ROOT"
+TARGET_AGENT="${1:-antigravity}"
+PERSISTENT_BIN="$ZCP_ROOT/scripts"
 
 echo "============================================================"
 echo "  [2/7] Despliegue Gentle AI, Engram & GGA (v8.2 - SSoT)"
