@@ -413,29 +413,25 @@ async function startNatsConsumer() {
       user: parsed.username ? decodeURIComponent(parsed.username) : undefined,
       pass: parsed.password ? decodeURIComponent(parsed.password) : undefined,
     });
-    const js = nc.jetstream();
-
-    // Subscribe to subject whatsapp.messages
-    const sub = await js.subscribe("whatsapp.messages", {
+    // Core NATS subscription with queue group (works with zero pre-created stream dependencies)
+    const sub = nc.subscribe("whatsapp.messages", {
       queue: "whatsapp-worker-group",
     });
 
-    console.log("[NATS] Subscribed to JetStream stream subject 'whatsapp.messages' (queue: whatsapp-worker-group)");
+    console.log("[NATS] Subscribed to subject 'whatsapp.messages' (queue: whatsapp-worker-group)");
 
     (async () => {
       for await (const msg of sub) {
         try {
           const payload = jsonCodec.decode(msg.data);
           await processInboundWhatsAppMessage(payload);
-          msg.ack();
         } catch (err) {
-          console.error("[NATS] Error processing message from stream:", err);
-          msg.term();
+          console.error("[NATS] Error processing message from subject:", err);
         }
       }
     })();
   } catch (err) {
-    console.warn("[NATS] JetStream connection failed (will rely on HTTP webhook):", err);
+    console.warn("[NATS] NATS broker connection skipped (relying on HTTP webhook):", err);
   }
 }
 
