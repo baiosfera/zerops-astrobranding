@@ -94,11 +94,13 @@ export async function getCustomerHistory(rawPhone: string): Promise<CustomerData
 
   try {
     const tables = await getAvailableTables();
-    const canonicalBaseUrl = process.env.APP_URL || process.env.CANONICAL_URL || "https://elplacerdecompartir.com";
+    const canonicalBaseUrl = process.env.APP_URL || process.env.CANONICAL_URL || "http://localhost:3000";
+    result.hasAffiliatesProgram = tables.has("afiliados");
 
     // 1. Leads table (SSoT for web community and profile attributes)
     if (tables.has("leads")) {
       const leadCols = await getTableColumns("leads");
+      result.hasVipProgram = leadCols.has("vip_until") || leadCols.has("corset_vip");
       const hasRol = leadCols.has("rol");
       const hasCity = leadCols.has("ciudad");
       const hasVipUntil = leadCols.has("vip_until");
