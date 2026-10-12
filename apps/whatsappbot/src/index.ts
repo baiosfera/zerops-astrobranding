@@ -2,6 +2,7 @@ import { connect, JSONCodec, StringCodec } from "nats";
 import {
   checkDbConnection,
   getCustomerHistory,
+  getEventsContextFromDb,
   recordIncomingLead,
   lookupPhoneByLidFromDb,
   syncLidMappingsToValkey,
