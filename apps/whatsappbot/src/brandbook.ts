@@ -189,23 +189,34 @@ ${urlsSection}
 4. HONESTIDAD: NUNCA inventes enlaces ni precios fuera de los datos oficiales.`;
 }
 
-export function buildSystemPrompt(customer?: CustomerHistoryContext): string {
+export function buildSystemPrompt(
+  customer?: CustomerHistoryContext,
+  eventsContext?: EventsContext
+): string {
   const brand = resolveBrandSSoT();
   const timeInfo = getBogotaTimeInfo();
+
+  let eventsSection = "";
+  if (eventsContext?.upcomingEventsSummary) {
+    eventsSection += eventsContext.upcomingEventsSummary;
+  }
+  if (eventsContext?.pastEventsSummary) {
+    eventsSection += eventsContext.pastEventsSummary;
+  }
 
   let customerSection = "";
   if (!customer?.isRegistered) {
     customerSection = `\n--- ESTADO DEL INTERLOCUTOR: USUARIO NUEVO / NO REGISTRADO ---
-• Estado en base de datos: AÚN NO REGISTRADO en la comunidad oficial (no tiene alias ni perfil verificado).
+• Estado en base de datos: AÚN NO REGISTRADO en la plataforma oficial (no tiene alias ni perfil verificado).
 • INSTRUCCIÓN CLAVE DE REGISTRO:
-  - Trátalo como a un recién llegado a quien recibes con total calidez y complicidad.
-  - Si pregunta "¿cómo me llamo?", quién es, o busca acceder a eventos privados o beneficios de la comunidad: explícale amablemente que aún no tienes su nombre o perfil registrado en el sistema.
-  - INVÍTALO SIEMPRE a registrarse de forma gratuita en la comunidad oficial:
+  - Trátalo como a un recién llegado a quien recibes con total calidez y hospitalidad.
+  - Si pregunta "¿cómo me llamo?", quién es, o busca acceder a opciones privadas o beneficios: explícale amablemente que aún no tienes su nombre o perfil registrado en el sistema.
+  - INVÍTALO SIEMPRE a registrarse de forma gratuita en la plataforma oficial:
     👉 Enlace de registro: ${brand.canonicalUrls.register || brand.canonicalUrls.home + "/#registro"}
-  - Explícale el beneficio: al registrarse crea su alias oficial, puede reservar en experiencias privadas y activa de inmediato su panel de embajador con su propio enlace de referidos.\n`;
+  - Explícale el beneficio: al registrarse crea su perfil oficial y accede a las novedades y servicios de la marca.${customer?.hasAffiliatesProgram ? " Además activa de inmediato su panel de embajador con su propio enlace para compartir." : ""}\n`;
   } else {
     // Dynamic role/gender adaptation
-    let roleDescription = "👤 PERFIL DE LA COMUNIDAD. Tono cercano, neutral y respetuoso.";
+    let roleDescription = "👤 PERFIL DE USUARIO. Tono cercano, neutral y respetuoso.";
     if (customer.role === "hombre_solo") {
       roleDescription = "👨 HOMBRE SOLO (Perfil individual masculino). Dirígete a él como hombre (masculino singular: 'Embajador', 'miembro', 'bienvenido', 'tú').";
     } else if (customer.role === "mujer_sola") {
@@ -214,24 +225,20 @@ export function buildSystemPrompt(customer?: CustomerHistoryContext): string {
       roleDescription = "👫 PAREJA (Cuenta compartida de pareja). ¡REGLA ESTRICTA!: Dirígete a ellos como pareja en plural o reconociendo su vínculo ('ustedes', 'pareja', 'chicos', 'ambos', 'como pareja', 'Embajadores'). NUNCA asumas que hablas con una mujer sola o un hombre solo ni uses 'Embajadora' en femenino singular.";
     }
 
-    customerSection = `\n--- FICHA HISTÓRICA DEL MIEMBRO REGISTRADO (POSTGRESQL SSOT EN TIEMPO REAL) ---
-• Nombre / Alias oficial ACTUAL: ${customer.alias || "Miembro de la comunidad"}
-• Teléfono: ${customer.phone || "Registrado"}
-• Correo electrónico: ${customer.email || "No registrado"}
-• Ciudad: ${customer.city || "No especificada"}
-• TIPO DE PERFIL / ROL (${customer.role || "No especificado"}):
-  ${roleDescription}
-• ESTATUS VIP (DISTINCIÓN ESTRICTA — CERO CONFUSIÓN):
+    let vipSection = "";
+    if (customer.hasVipProgram) {
+      vipSection = `• ESTATUS VIP (DISTINCIÓN ESTRICTA — CERO CONFUSIÓN):
   ${customer.isPaidVip
     ? `👑 VIP ACTIVO CON CREDENCIAL PAGA (Válido hasta: ${customer.vipUntil || "Activa"}). Tiene membresía anual cancelada con credencial sellada y beneficios preferenciales.`
     : customer.isPossibleVip
-      ? `💎 PERFIL INTERESADO EN SERVICIOS VIP (Sin credencial paga activa aún). Mostró interés o reservó previamente, pero NO TIENE CREDENCIAL PAGA ACTIVA. NUNCA le digas que ya tiene la credencial activa ni le atribuyas estatus VIP pago.`
+      ? `💎 PERFIL INTERESADO EN SERVICIOS VIP (Sin membresía paga activa aún). Mostró interés o reservó previamente, pero NO TIENE CREDENCIAL PAGA ACTIVA. NUNCA le digas que ya tiene la credencial activa ni le atribuyas estatus VIP pago.`
       : `Estándar (Sin membresía VIP activa).`
-  }
-• Historial de asistencias/compras: ${customer.pastTickets && customer.pastTickets.length > 0
-  ? customer.pastTickets.map(t => `- ${t.evento} (${t.tipo_entrada}) | Estado: ${t.estado} | Pagado: $${t.monto_pagado} | Fecha: ${t.fecha}`).join("\n")
-  : "Sin compras registradas aún."}
-• PROGRAMA DE EMBAJADORES Y REFERIDOS:
+  }\n`;
+    }
+
+    let affiliateSection = "";
+    if (customer.hasAffiliatesProgram) {
+      affiliateSection = `• PROGRAMA DE EMBAJADORES Y REFERIDOS:
   ${customer.affiliateAlias
     ? `⭐ ES EMBAJADOR ACTIVO:
        - Su alias / slug de embajador para compartir: ${customer.affiliateAlias}
@@ -242,8 +249,20 @@ export function buildSystemPrompt(customer?: CustomerHistoryContext): string {
        - Su panel privado: ${brand.canonicalUrls.dashboard || brand.canonicalUrls.home}
        INSTRUCCIÓN: Si pregunta por su enlace de referido, clics, pases o compras ganadas, entrégale sus cifras exactas y su link personal.`
     : `Aún no tiene alias de embajador activado. Indícale que puede activar su panel y obtener su enlace en ${brand.canonicalUrls.dashboard || brand.canonicalUrls.home}.`
-  }
+  }\n`;
+    }
 
+    customerSection = `\n--- FICHA HISTÓRICA DEL MIEMBRO REGISTRADO (POSTGRESQL SSOT EN TIEMPO REAL) ---
+• Nombre / Alias oficial ACTUAL: ${customer.alias || "Miembro registrado"}
+• Teléfono: ${customer.phone || "Registrado"}
+• Correo electrónico: ${customer.email || "No registrado"}
+• Ciudad: ${customer.city || "No especificada"}
+• TIPO DE PERFIL / ROL (${customer.role || "No especificado"}):
+  ${roleDescription}
+${vipSection}• Historial de asistencias/compras: ${customer.pastTickets && customer.pastTickets.length > 0
+  ? customer.pastTickets.map(t => `- ${t.evento} (${t.tipo_entrada}) | Estado: ${t.estado} | Pagado: $${t.monto_pagado} | Fecha: ${t.fecha}`).join("\n")
+  : "Sin compras registradas aún."}
+${affiliateSection}
 --- REGLA DE VERDAD ABSOLUTA EN TIEMPO REAL (SSOT > HISTORIAL) ---
 1. Los datos de la FICHA DEL CLIENTE que acabas de leer provienen de PostgreSQL en este milisegundo exacto y son la VERDAD ABSOLUTA.
 2. Si en los mensajes anteriores de la conversación usabas otro nombre, alias o rol (porque el usuario lo acaba de cambiar o por error previo), IGNORA el nombre o rol del historial antiguo.
@@ -252,18 +271,19 @@ export function buildSystemPrompt(customer?: CustomerHistoryContext): string {
 
   // Base identity prompt (prefers markdown from SSoT if available, or synthesized from brandbook)
   const basePrompt = brand.systemPrompt || synthesizeAgnosticBrandPrompt(brand);
+  const venueLine = brand.canonicalUrls.venue || (brand.rawBrandbook?.brand?.venue ? `\n• Sede Física Oficial: ${brand.rawBrandbook.brand.venue}` : "");
 
   return `${basePrompt}
 
 --- TIEMPO PRESENTE CONTINUO (UTC-5) ---
 • Momento actual: ${timeInfo.readableText}.
-• Fecha ISO de referencia: ${timeInfo.isoDate}.
-${customerSection}`;
+• Fecha ISO de referencia: ${timeInfo.isoDate}.${venueLine}
+${eventsSection}${customerSection}`;
 }
 
 export function sanitizeAndValidateUrls(text: string): string {
   const brand = resolveBrandSSoT();
-  const canonicalHost = new URL(brand.canonicalUrls.home || "https://elplacerdecompartir.com").hostname;
+  const canonicalHost = new URL(brand.canonicalUrls.home || "http://localhost:3000").hostname;
 
   return text.replace(/https?:\/\/[^\s]+/g, (url) => {
     try {
