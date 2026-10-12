@@ -1,5 +1,11 @@
 import { connect, JSONCodec, StringCodec } from "nats";
-import { checkDbConnection, getCustomerHistory, recordIncomingLead } from "./db.js";
+import {
+  checkDbConnection,
+  getCustomerHistory,
+  recordIncomingLead,
+  lookupPhoneByLidFromDb,
+  syncLidMappingsToValkey,
+} from "./db.js";
 import {
   checkValkeyConnection,
   acquireLock,
@@ -9,6 +15,9 @@ import {
   clearHumanTakeover,
   getSessionHistory,
   appendSessionMessage,
+  linkPhoneAndLid,
+  resolveCanonicalPhone,
+  redis,
   type ChatMessage,
 } from "./valkey.js";
 import {
