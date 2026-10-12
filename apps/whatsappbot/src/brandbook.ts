@@ -8,6 +8,7 @@ export interface BrandConfig {
   archetype: string;
   systemPrompt: string;
   canonicalUrls: Record<string, string>;
+  rawBrandbook?: any;
 }
 
 export type CustomerHistoryContext = CustomerData;
