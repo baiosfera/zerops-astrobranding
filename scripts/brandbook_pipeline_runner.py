@@ -112,8 +112,8 @@ class IngestionEngine:
 class BifrostGatewayClient:
     """Communicates with Bifrost AI Gateway enforcing production headers and structured JSON."""
 
-    def __init__(self, base_url: str = "http://bifrost:8080", primary_model: str = "deepseek/deepseek-flash",
-                 fallback_model: str = "deepseek/deepseek-chat", timeout_sec: int = 120):
+    def __init__(self, base_url: str = "http://bifrost:8080", primary_model: str = "deepseek/deepseek-chat",
+                 fallback_model: str = "freellmapi/deepseek-v4-flash", timeout_sec: int = 180):
         self.base_url = base_url.rstrip("/")
         self.primary_model = primary_model
         self.fallback_model = fallback_model
