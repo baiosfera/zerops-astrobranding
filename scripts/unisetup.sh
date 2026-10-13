@@ -233,6 +233,81 @@ if [ "$RUN_ALL" = true ]; then
         fi
     fi
 
+    # Auto-siembra e hidratación soberana de LocalStorage SSoT por proyecto
+    seed_localstorage_from_ssot() {
+        local project="${PROJECT_NAME:-}"
+        [ -z "$project" ] && return 0
+        [ "$project" = "zerops-astrobranding" ] && return 0
+
+        local project_upper="$(echo "$project" | tr '[:lower:]' '[:upper:]')"
+        local drive_project_dev="/var/www/baiosfera/PROYECTOS/${project_upper}/dev"
+
+        # Guard 1: Verificar insumo en Google Drive SSoT (Cero presunción en proyectos limpios/vírgenes)
+        [ ! -d "$drive_project_dev" ] && return 0
+        if ! compgen -G "${drive_project_dev}/brandbook*.json" >/dev/null 2>&1; then
+            return 0
+        fi
+
+        # Guard 2: Detectar volumen localstorage activo y accesible
+        local target_localstorage=""
+        if [ -d "/var/www/webdev/localstorage" ]; then
+            target_localstorage="/var/www/webdev/localstorage"
+        elif [ -d "/mnt/localstorage" ]; then
+            target_localstorage="/mnt/localstorage"
+        elif [ -d "/var/www/localstorage" ] && mountpoint -q "/var/www/localstorage" 2>/dev/null; then
+            target_localstorage="/var/www/localstorage"
+        fi
+
+        [ -z "$target_localstorage" ] && return 0
+
+        local target_dev="${target_localstorage}/${project_upper}/dev"
+        mkdir -p "$target_dev" "${target_localstorage}/${project_upper}" 2>/dev/null || true
+
+        # Guard 3: Si ya está poblado con brandbook.json, no sobreescribir innecesariamente
+        if [ -f "${target_dev}/brandbook.json" ]; then
+            echo "• LocalStorage SSoT verificado para ${project_upper} (ya hidratado)."
+            return 0
+        fi
+
+        echo "• Auto-sembrando LocalStorage SSoT para ${project_upper} desde Google Drive..."
+        for file in "$drive_project_dev"/*; do
+            if [ -f "$file" ]; then
+                cp -n "$file" "$target_dev/" 2>/dev/null || true
+            fi
+        done
+
+        # Garantizar alias canónicos estándar
+        local source_bb=""
+        for bb in "${target_dev}/brandbook-${project}-potenciado.json" "${target_dev}/brandbook-${project}.json" $(ls "${target_dev}"/brandbook*.json 2>/dev/null | head -n1); do
+            if [ -f "$bb" ]; then
+                source_bb="$bb"
+                break
+            fi
+        done
+
+        if [ -n "$source_bb" ]; then
+            [ ! -f "${target_dev}/brandbook.json" ] && cp -f "$source_bb" "${target_dev}/brandbook.json" 2>/dev/null || true
+            [ ! -f "${target_dev}/brandbook_superfull_${project}.json" ] && cp -f "$source_bb" "${target_dev}/brandbook_superfull_${project}.json" 2>/dev/null || true
+            [ ! -f "${target_localstorage}/${project_upper}/brandbook.json" ] && cp -f "$source_bb" "${target_localstorage}/${project_upper}/brandbook.json" 2>/dev/null || true
+        fi
+
+        # Garantizar alias de tema CSS si existe
+        local source_css=""
+        for css in "${target_dev}/theme-${project}.css" "${target_dev}/theme.css" $(ls "${target_dev}"/theme*.css 2>/dev/null | head -n1); do
+            if [ -f "$css" ]; then
+                source_css="$css"
+                break
+            fi
+        done
+        if [ -n "$source_css" ]; then
+            [ ! -f "${target_dev}/brandbook-theme.css" ] && cp -f "$source_css" "${target_dev}/brandbook-theme.css" 2>/dev/null || true
+        fi
+
+        echo "  ✓ LocalStorage rehidratado deterministamente para ${project_upper}."
+    }
+
+    seed_localstorage_from_ssot
+
     if command -v gentle-ai >/dev/null 2>&1; then
         echo "• Refrescando registro de skills..."
         gentle-ai skill-registry refresh --force 2>/dev/null || true
