@@ -335,13 +335,13 @@ class BrandbookPipelineRunner:
             "W3C Design Tokens Community Group (DTCG) specification (2025.10).\n"
             "CRITICAL INVARIANTS:\n"
             "1. Output MUST be valid, parseable JSON only. Do not include markdown preamble or conversational prose.\n"
-            "2. Design Tokens MUST use strictly formatted W3C DTCG nodes: every token must have '$type', '$value', "
+            "2. Be concise, punchy, and architectural. Use high-density statements and clear bullet items. Do NOT write verbose essays or rambling filler.\n"
+            "3. Design Tokens MUST use strictly formatted W3C DTCG nodes: every token must have '$type', '$value', "
             "and optional '$description'. Extra metadata like HEX must reside in '$extensions.hex', NEVER at token root.\n"
-            "3. Colors MUST be specified primarily in OKLCH (e.g. 'oklch(0.62 0.22 35)'), with hex values in '$extensions.hex'.\n"
-            "4. Include complete Brand Architecture, Ethical Pillars, Design System (color, typography, motion), "
+            "4. Colors MUST be specified primarily in OKLCH (e.g. 'oklch(0.62 0.22 35)'), with hex values in '$extensions.hex'.\n"
+            "5. Include complete Brand Architecture, Ethical Pillars, Design System (color, typography, motion), "
             "Voice & Tone, Target Audience, and LLM System Prompt Engine.\n"
-            "5. If input includes astrological shards or semiotic briefs (Tripod of Iron, Client Triad, Stephen Arroyo Elements, "
-            "Yong Shen balancing element), ground the colors, fonts, voice, and positioning directly in these archetypes."
+            "6. Ground the colors, fonts, voice, and positioning directly in the astrological shards (Air dominant, Gemini Sun/MC, Libra Moon, Yang Wood, etc.)."
         )
 
         # Build compact user payload from silver shards & briefs
