@@ -181,7 +181,7 @@ class BrandbookPipelineRunner:
     """Coordinates digestion, synthesis, CSS extraction, and SSoT disk distribution."""
 
     def __init__(self, brand_raw: str, mode: str = "fast-track", enhance: bool = False,
-                 bifrost_url: str = "http://bifrost:8080", model: str = "deepseek/deepseek-flash",
+                 bifrost_url: str = "http://bifrost:8080", model: str = "deepseek/deepseek-chat",
                  output_dir: Optional[str] = None):
         self.brand_upper, self.brand_lower = sanitize_brand(brand_raw)
         self.mode = mode
