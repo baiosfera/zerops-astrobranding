@@ -174,7 +174,39 @@ class BifrostGatewayClient:
             cleaned_json = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned_json)
             cleaned_json = re.sub(r"\n?```$", "", cleaned_json).strip()
 
-        return json.loads(cleaned_json)
+        try:
+            return json.loads(cleaned_json)
+        except json.JSONDecodeError as err:
+            logger.warning(f"Initial JSON decode failed ({err}). Attempting truncation repair...")
+            repaired = self._repair_json_truncation(cleaned_json)
+            if repaired is not None:
+                logger.info("Successfully repaired truncated JSON!")
+                return repaired
+            raise
+
+    @staticmethod
+    def _repair_json_truncation(raw_str: str) -> Optional[Dict[str, Any]]:
+        """Repairs incomplete JSON strings caused by token limit cutoffs."""
+        s = raw_str.strip()
+        for _ in range(50):
+            quotes = re.findall(r'(?<!\\)"', s)
+            test_s = s
+            if len(quotes) % 2 != 0:
+                test_s = s + '"'
+
+            open_braces = test_s.count("{") - test_s.count("}")
+            open_brackets = test_s.count("[") - test_s.count("]")
+
+            closed_s = test_s + ("]" * max(0, open_brackets)) + ("}" * max(0, open_braces))
+            try:
+                return json.loads(closed_s)
+            except Exception:
+                last_comma = max(s.rfind(","), s.rfind("\n"))
+                if last_comma > 0:
+                    s = s[:last_comma].rstrip(", \t\n")
+                else:
+                    break
+        return None
 
 
 class BrandbookPipelineRunner:
