@@ -726,6 +726,17 @@ Esta sección consolida de forma 100% agnóstica a cualquier marca los descubrim
 
 ### 3. EvolutionGo & Motor de Mensajería WhatsApp
 - **Especialización de Canal (Transaccional vs Campañas Masivas):** WhatsApp está reservado para comunicación de alta inmediatez y valor (<15 segundos de lectura, códigos OTP, pases con QR, alertas críticas). Campañas masivas o envíos que superen 500 destinatarios DEBEN despacharse por email (Listmonk) para blindar el número contra reportes de spam y baneos por parte de Meta.
+- **Blindaje Relacional Anti-Starvation & Aislamiento de Pool (SQLSTATE 53300):** EvolutionGo/whatsmeow gestiona sus sesiones criptográficas en `evogo_auth` y datos de usuario en `evogo_users`. En escenarios de micro-cortes, rotación de sockets o sesiones desvinculadas (`LoggedOut`), los ciclos de reconexión instancian nuevos pools `database/sql` sin cerrar los anteriores (upstream issues #106, #118). Si PostgreSQL no tiene límites por base de datos, acumula decenas de conexiones `idle` hasta copar el 100% de los slots de la base compartida, bloqueando a `webprod` y APIs con `FATAL: remaining connection slots are reserved for roles with the SUPERUSER attribute`.
+  * **Invariante de Aislamiento de Base de Datos Satélite**: Toda base de datos satélite de Evolution DEBE inicializarse con cuota física y timeout de recolección de conexiones ociosas:
+    ```sql
+    ALTER DATABASE evogo_auth WITH CONNECTION LIMIT 15;
+    ALTER DATABASE evogo_users WITH CONNECTION LIMIT 15;
+    ALTER DATABASE evogo_auth SET idle_session_timeout = '5min';
+    ALTER DATABASE evogo_users SET idle_session_timeout = '5min';
+    ALTER DATABASE evogo_auth SET idle_in_transaction_session_timeout = '30s';
+    ALTER DATABASE evogo_users SET idle_in_transaction_session_timeout = '30s';
+    ```
+  * Esto garantiza un radio de impacto acotado (*blast radius* $\le 30$ conns), dejando siempre libre la mayoría del pool para el tráfico transaccional web y reservando intactos los 3 slots de superuser para administración.
 - **Silencio Ante Acuses de Cortesía:** Ante respuestas de cortesía o confirmación breve del usuario de 1 o 2 palabras ("ok", "gracias", "listo", "vale", "dale", "perfecto"), el bot NO debe generar respuestas con modelos de lenguaje ni gastar tokens; registra el acuse en la base de datos y calla.
 - **Normalización Canónica E.164:** Todo número telefónico capturado o procesado debe normalizarse al formato E.164 (`+` seguido de código de país y dígitos numéricos limpios) antes de interactuar con la base de datos o las APIs de mensajería.
 
@@ -735,6 +746,10 @@ Esta sección consolida de forma 100% agnóstica a cualquier marca los descubrim
 - **Presupuesto HTML de Plantillas (<85KB):** Todo correo transaccional o de marketing debe compilarse con un peso de HTML inferior a 85KB. Si excede 102KB, Gmail trunca el cuerpo ("Mensaje recortado"), ocultando los enlaces de baja obligatoria (RFC 8058) y afectando la reputación del dominio (SPF/DKIM/DMARC).
 
 ### 5. PostgreSQL 18 & Modelado de Datos
+- **Sizing de Conexiones (`max_connections`) & Multiplexación PgBouncer**:
+  En Zerops Incus LXC, `max_connections` se calibra automáticamente según la RAM del contenedor (50 conexiones por GiB en perfiles OLTP: 20 en 256MB, 50 en 1GB, 100 en 2GB, 200 en 4GB, 500 en 16GB+). 3 slots se reservan para superuser y hasta 4 para telemetría interna de la plataforma.
+  * **El Mito de los 100 max_connections como "Ideal"**: 100 no es un valor óptimo de concurrencia activa, sino un techo de seguridad de memoria. Conforme a la fórmula canónica de PostgreSQL/HikariCP (`Pool Size = (CPU Cores * 2) + 1`), el throughput máximo de CPU se alcanza con pocas conexiones activas concurrentes (~10 a 20). Valores superiores a 100-200 sin pooling provocan degradación severa por context-switching del kernel y contención en `ProcArrayLock`/snapshots de visibilidad MVCC.
+  * **Estrategia de Conexión en Alta Demanda**: Para cargas con cientos de clientes concurrentes, conectar los servicios a través del puerto gestionado de PgBouncer (`6432`), el cual acepta miles de clientes multiplexándolos limpiamente sobre una cuota reducida de backends reales.
 - **Upsert Defensivo Universal (`ON CONFLICT`):** Todo endpoint público de captura debe implementar operaciones `INSERT ... ON CONFLICT DO UPDATE` o `DO NOTHING`. Ninguna tabla pública debe fallar con error HTTP 500 por violaciones de clave única ante reintentos de red del cliente.
 - **Acumulación Monótona de Etiquetas:** El arreglo de etiquetas de un contacto (`metadata.tags`, `metadata.registered_channels`) debe tratarse como un conjunto aditivo estricto (`Set`). Al actualizar el perfil de un usuario, las nuevas etiquetas se añaden mediante unión matemática; jamás se sobreescribe ni se trunca el array preexistente.
 - **Entidades de Negocio Dinámicas en PostgreSQL 18 & Tiempo Presente Continuo:** En sitios con agendas, cartelera o eventos temporales, la consulta en el servidor (`Astro SSR`) y en el worker agéntico (`whatsappbot`) debe filtrar en tiempo real sobre PostgreSQL:
