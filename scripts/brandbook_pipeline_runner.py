@@ -234,13 +234,53 @@ class AstrologicalSemanticEngine:
 # ==============================================================================
 # Dynamic Epistemic OKLCH Color Engine (360° Polar Solar Wheel + 3 Ecosystems)
 # ==============================================================================
+def oklch_to_hex(l: float, c: float, h_deg: float) -> str:
+    """Converts OKLCH (L in 0..1, C in 0..0.4, H in 0..360) directly to sRGB 6-digit hex."""
+    h_rad = math.radians(h_deg)
+    a = c * math.cos(h_rad)
+    b = c * math.sin(h_rad)
+
+    l_ = l + 0.3963377774 * a + 0.2158037573 * b
+    m_ = l - 0.1055613458 * a - 0.0638541728 * b
+    s_ = l - 0.0894841775 * a - 1.2914855480 * b
+
+    l3 = l_ ** 3
+    m3 = m_ ** 3
+    s3 = s_ ** 3
+
+    r_lin = +4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3
+    g_lin = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3
+    b_lin = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3
+
+    def to_srgb(x: float) -> int:
+        x = max(0.0, min(1.0, x))
+        if x <= 0.0031308:
+            val = 12.92 * x
+        else:
+            val = 1.055 * (x ** (1.0 / 2.4)) - 0.055
+        return int(round(val * 255.0))
+
+    r = to_srgb(r_lin)
+    g = to_srgb(g_lin)
+    b = to_srgb(b_lin)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def oklch_str_to_hex(oklch_str: str) -> str:
+    """Extracts (L, C, H) from an 'oklch(L C H)' string and computes true hex."""
+    m = re.search(r"oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)", oklch_str)
+    if m:
+        return oklch_to_hex(float(m.group(1)), float(m.group(2)), float(m.group(3)))
+    return "#808080"
+
+
 def generate_polar_oklch_suite(sun_lon: float, dominant_element: str, yong_shen: str, venus_deg: float) -> Dict[str, Any]:
     """
     Computes an authentic, mathematically unique OKLCH color suite across 3 complete ecosystems
     (Quiet Luxury, High Performance, Bio-Sensual) based on the founder's exact astronomical degrees.
+    Zero Hardcoded Hex Codes — All hex values are calculated via physical OKLCH-to-sRGB transform.
     """
     # 1. Base Hue derived from Solar Longitude on the 360° chromatic wheel
-    # Aries (0°) -> Red/Warm (H=30°), Cancer (90°) -> Azure (H=220°), Libra (180°) -> Rose/Cyan (H=350°), Capricorn (270°) -> Basalt/Gold (H=80°)
     base_solar_hue = (sun_lon + 15.0) % 360.0
 
     # Element lightness & chroma modulations
@@ -268,19 +308,42 @@ def generate_polar_oklch_suite(sun_lon: float, dominant_element: str, yong_shen:
     ys_lightness = 0.68 if ys_clean == "Metal" else 0.55
 
     # Ecosystem 1: Quiet Luxury / Sovereign Authority (Deep mineral tones & refined metal)
-    eco1_primary_oklch = f"oklch({l_prim:.2f} {c_prim:.2f} {base_solar_hue:.1f})"
-    eco1_accent_oklch = f"oklch({min(0.92, l_prim + 0.22):.2f} {min(0.24, c_prim + 0.06):.2f} {((base_solar_hue + 35.0) % 360.0):.1f})"
-    eco1_balance_oklch = f"oklch({ys_lightness:.2f} {ys_chroma:.2f} {ys_base_hue:.1f})"
+    eco1_p_l, eco1_p_c, eco1_p_h = l_prim, c_prim, base_solar_hue
+    eco1_a_l, eco1_a_c, eco1_a_h = min(0.92, l_prim + 0.22), min(0.24, c_prim + 0.06), (base_solar_hue + 35.0) % 360.0
+    eco1_b_l, eco1_b_c, eco1_b_h = ys_lightness, ys_chroma, ys_base_hue
+
+    eco1_primary_oklch = f"oklch({eco1_p_l:.2f} {eco1_p_c:.2f} {eco1_p_h:.1f})"
+    eco1_accent_oklch = f"oklch({eco1_a_l:.2f} {eco1_a_c:.2f} {eco1_a_h:.1f})"
+    eco1_balance_oklch = f"oklch({eco1_b_l:.2f} {eco1_b_c:.2f} {eco1_b_h:.1f})"
 
     # Ecosystem 2: High Performance / Kinetic Vanguard (Saturated contrast & dynamic speed)
-    eco2_primary_oklch = f"oklch({max(0.40, l_prim - 0.08):.2f} {min(0.26, c_prim + 0.10):.2f} {base_solar_hue:.1f})"
-    eco2_accent_oklch = f"oklch(0.78 0.20 {((base_solar_hue + 180.0) % 360.0):.1f})"
-    eco2_balance_oklch = f"oklch(0.65 0.18 {ys_base_hue:.1f})"
+    eco2_p_l, eco2_p_c, eco2_p_h = max(0.40, l_prim - 0.08), min(0.26, c_prim + 0.10), base_solar_hue
+    eco2_a_l, eco2_a_c, eco2_a_h = 0.78, 0.20, (base_solar_hue + 180.0) % 360.0
+    eco2_b_l, eco2_b_c, eco2_b_h = 0.65, 0.18, ys_base_hue
+
+    eco2_primary_oklch = f"oklch({eco2_p_l:.2f} {eco2_p_c:.2f} {eco2_p_h:.1f})"
+    eco2_accent_oklch = f"oklch({eco2_a_l:.2f} {eco2_a_c:.2f} {eco2_a_h:.1f})"
+    eco2_balance_oklch = f"oklch({eco2_b_l:.2f} {eco2_b_c:.2f} {eco2_b_h:.1f})"
 
     # Ecosystem 3: Bio-Sensual / Organic Warmth (Velvety earth & warm luminescent textures)
-    eco3_primary_oklch = f"oklch({min(0.68, l_prim + 0.08):.2f} {max(0.07, c_prim - 0.03):.2f} {((base_solar_hue - 20.0) % 360.0):.1f})"
-    eco3_accent_oklch = f"oklch(0.84 0.12 {((venus_deg + 45.0) % 360.0):.1f})"
-    eco3_balance_oklch = f"oklch(0.72 0.09 {ys_base_hue:.1f})"
+    eco3_p_l, eco3_p_c, eco3_p_h = min(0.68, l_prim + 0.08), max(0.07, c_prim - 0.03), (base_solar_hue - 20.0) % 360.0
+    eco3_a_l, eco3_a_c, eco3_a_h = 0.84, 0.12, (venus_deg + 45.0) % 360.0
+    eco3_b_l, eco3_b_c, eco3_b_h = 0.72, 0.09, ys_base_hue
+
+    eco3_primary_oklch = f"oklch({eco3_p_l:.2f} {eco3_p_c:.2f} {eco3_p_h:.1f})"
+    eco3_accent_oklch = f"oklch({eco3_a_l:.2f} {eco3_a_c:.2f} {eco3_a_h:.1f})"
+    eco3_balance_oklch = f"oklch({eco3_b_l:.2f} {eco3_b_c:.2f} {eco3_b_h:.1f})"
+
+    # Dynamic Neutrals tinted by Yong Shen & Solar Essence
+    dark_bg_oklch = f"oklch(0.13 0.02 {ys_base_hue:.1f})"
+    dark_surface_oklch = f"oklch(0.19 0.03 {ys_base_hue:.1f})"
+    dark_text_oklch = f"oklch(0.97 0.01 {base_solar_hue:.1f})"
+    dark_muted_oklch = f"oklch(0.70 0.04 {ys_base_hue:.1f})"
+
+    light_bg_oklch = f"oklch(0.98 0.01 {base_solar_hue:.1f})"
+    light_surface_oklch = f"oklch(0.94 0.02 {base_solar_hue:.1f})"
+    light_text_oklch = f"oklch(0.18 0.03 {ys_base_hue:.1f})"
+    light_muted_oklch = f"oklch(0.48 0.04 {ys_base_hue:.1f})"
 
     return {
         "solar_longitude_deg": sun_lon,
@@ -293,48 +356,48 @@ def generate_polar_oklch_suite(sun_lon: float, dominant_element: str, yong_shen:
                 "name": "Quiet Luxury & Soberanía Mineral",
                 "description": f"Formulado a partir de la longitud solar ({sun_lon:.2f}°) en {elem_clean} con anclaje mineral {ys_clean}.",
                 "dark": {
-                    "primary": {"oklch": eco1_primary_oklch, "hex": "#8c6b3e", "name": f"Solar Essence {elem_clean}"},
-                    "accent": {"oklch": eco1_accent_oklch, "hex": "#d4b982", "name": "Gilded Accent"},
-                    "balance": {"oklch": eco1_balance_oklch, "hex": "#94a3b8", "name": f"Homeostatic {ys_clean}"},
-                    "background": {"oklch": "oklch(0.14 0.02 260)", "hex": "#0f172a", "name": "Obsidian Deep"},
-                    "surface": {"oklch": "oklch(0.20 0.03 260)", "hex": "#1e293b", "name": "Basalt Surface"},
-                    "text_primary": {"oklch": "oklch(0.96 0.01 260)", "hex": "#f8fafc", "name": "Celestial Crisp"},
-                    "text_muted": {"oklch": "oklch(0.70 0.04 260)", "hex": "#94a3b8", "name": "Astral Slate"},
+                    "primary": {"oklch": eco1_primary_oklch, "hex": oklch_to_hex(eco1_p_l, eco1_p_c, eco1_p_h), "name": f"Solar Essence {elem_clean}"},
+                    "accent": {"oklch": eco1_accent_oklch, "hex": oklch_to_hex(eco1_a_l, eco1_a_c, eco1_a_h), "name": "Gilded Accent"},
+                    "balance": {"oklch": eco1_balance_oklch, "hex": oklch_to_hex(eco1_b_l, eco1_b_c, eco1_b_h), "name": f"Homeostatic {ys_clean}"},
+                    "background": {"oklch": dark_bg_oklch, "hex": oklch_to_hex(0.13, 0.02, ys_base_hue), "name": "Obsidian Deep"},
+                    "surface": {"oklch": dark_surface_oklch, "hex": oklch_to_hex(0.19, 0.03, ys_base_hue), "name": "Basalt Surface"},
+                    "text_primary": {"oklch": dark_text_oklch, "hex": oklch_to_hex(0.97, 0.01, base_solar_hue), "name": "Celestial Crisp"},
+                    "text_muted": {"oklch": dark_muted_oklch, "hex": oklch_to_hex(0.70, 0.04, ys_base_hue), "name": "Astral Slate"},
                 },
                 "light": {
-                    "primary": {"oklch": eco1_primary_oklch, "hex": "#8c6b3e", "name": f"Solar Essence {elem_clean}"},
-                    "accent": {"oklch": eco1_accent_oklch, "hex": "#d4b982", "name": "Gilded Accent"},
-                    "balance": {"oklch": eco1_balance_oklch, "hex": "#94a3b8", "name": f"Homeostatic {ys_clean}"},
-                    "background": {"oklch": "oklch(0.98 0.01 85)", "hex": "#fdfbf7", "name": "Alabaster Light"},
-                    "surface": {"oklch": "oklch(0.94 0.02 85)", "hex": "#f4ede4", "name": "Parchment Surface"},
-                    "text_primary": {"oklch": "oklch(0.18 0.03 260)", "hex": "#0f172a", "name": "Deep Charcoal"},
-                    "text_muted": {"oklch": "oklch(0.45 0.04 260)", "hex": "#64748b", "name": "Granite Muted"},
+                    "primary": {"oklch": eco1_primary_oklch, "hex": oklch_to_hex(eco1_p_l, eco1_p_c, eco1_p_h), "name": f"Solar Essence {elem_clean}"},
+                    "accent": {"oklch": eco1_accent_oklch, "hex": oklch_to_hex(eco1_a_l, eco1_a_c, eco1_a_h), "name": "Gilded Accent"},
+                    "balance": {"oklch": eco1_balance_oklch, "hex": oklch_to_hex(eco1_b_l, eco1_b_c, eco1_b_h), "name": f"Homeostatic {ys_clean}"},
+                    "background": {"oklch": light_bg_oklch, "hex": oklch_to_hex(0.98, 0.01, base_solar_hue), "name": "Alabaster Light"},
+                    "surface": {"oklch": light_surface_oklch, "hex": oklch_to_hex(0.94, 0.02, base_solar_hue), "name": "Parchment Surface"},
+                    "text_primary": {"oklch": light_text_oklch, "hex": oklch_to_hex(0.18, 0.03, ys_base_hue), "name": "Deep Charcoal"},
+                    "text_muted": {"oklch": light_muted_oklch, "hex": oklch_to_hex(0.48, 0.04, ys_base_hue), "name": "Granite Muted"},
                 },
             },
             "eco-high-performance": {
                 "name": "High Performance & Vanguardia Activa",
                 "description": "Contraste enérgico con polaridad invertida para presencia de choque y liderazgo disruptivo.",
                 "dark": {
-                    "primary": {"oklch": eco2_primary_oklch, "hex": "#38bdf8", "name": "Kinetic Vanguard"},
-                    "accent": {"oklch": eco2_accent_oklch, "hex": "#f59e0b", "name": "Solar Flash"},
-                    "balance": {"oklch": eco2_balance_oklch, "hex": "#10b981", "name": f"Dynamic {ys_clean}"},
-                    "background": {"oklch": "oklch(0.11 0.02 260)", "hex": "#080c14", "name": "Carbon Mineral"},
-                    "surface": {"oklch": "oklch(0.18 0.03 260)", "hex": "#131b2e", "name": "Cobalt Void"},
-                    "text_primary": {"oklch": "oklch(0.98 0.01 220)", "hex": "#f0f9ff", "name": "Pure Crisp"},
-                    "text_muted": {"oklch": "oklch(0.68 0.06 220)", "hex": "#7dd3fc", "name": "Cyan Tint Muted"},
+                    "primary": {"oklch": eco2_primary_oklch, "hex": oklch_to_hex(eco2_p_l, eco2_p_c, eco2_p_h), "name": "Kinetic Vanguard"},
+                    "accent": {"oklch": eco2_accent_oklch, "hex": oklch_to_hex(eco2_a_l, eco2_a_c, eco2_a_h), "name": "Solar Flash"},
+                    "balance": {"oklch": eco2_balance_oklch, "hex": oklch_to_hex(eco2_b_l, eco2_b_c, eco2_b_h), "name": f"Dynamic {ys_clean}"},
+                    "background": {"oklch": f"oklch(0.11 0.02 {ys_base_hue:.1f})", "hex": oklch_to_hex(0.11, 0.02, ys_base_hue), "name": "Carbon Mineral"},
+                    "surface": {"oklch": f"oklch(0.18 0.03 {ys_base_hue:.1f})", "hex": oklch_to_hex(0.18, 0.03, ys_base_hue), "name": "Cobalt Void"},
+                    "text_primary": {"oklch": f"oklch(0.98 0.01 {base_solar_hue:.1f})", "hex": oklch_to_hex(0.98, 0.01, base_solar_hue), "name": "Pure Crisp"},
+                    "text_muted": {"oklch": f"oklch(0.68 0.06 {base_solar_hue:.1f})", "hex": oklch_to_hex(0.68, 0.06, base_solar_hue), "name": "Cyan Tint Muted"},
                 },
             },
             "eco-bio-sensual": {
                 "name": "Bio-Sensual & Calidez Orgánica",
                 "description": "Texturas aterciopeladas y calidez envolvente para marcas de bienestar y confianza profunda.",
                 "dark": {
-                    "primary": {"oklch": eco3_primary_oklch, "hex": "#e0533c", "name": "Terracotta Velvet"},
-                    "accent": {"oklch": eco3_accent_oklch, "hex": "#fb923c", "name": "Copper Ember"},
-                    "balance": {"oklch": eco3_balance_oklch, "hex": "#a3e635", "name": f"Verdant {ys_clean}"},
-                    "background": {"oklch": "oklch(0.15 0.03 45)", "hex": "#1c1412", "name": "Dark Umber"},
-                    "surface": {"oklch": "oklch(0.22 0.04 45)", "hex": "#2c1f1c", "name": "Earth Clay"},
-                    "text_primary": {"oklch": "oklch(0.95 0.02 65)", "hex": "#fef3c7", "name": "Warm Sand"},
-                    "text_muted": {"oklch": "oklch(0.72 0.04 55)", "hex": "#d97706", "name": "Ochre Muted"},
+                    "primary": {"oklch": eco3_primary_oklch, "hex": oklch_to_hex(eco3_p_l, eco3_p_c, eco3_p_h), "name": "Terracotta Velvet"},
+                    "accent": {"oklch": eco3_accent_oklch, "hex": oklch_to_hex(eco3_a_l, eco3_a_c, eco3_a_h), "name": "Copper Ember"},
+                    "balance": {"oklch": eco3_balance_oklch, "hex": oklch_to_hex(eco3_b_l, eco3_b_c, eco3_b_h), "name": f"Verdant {ys_clean}"},
+                    "background": {"oklch": f"oklch(0.14 0.03 {base_solar_hue:.1f})", "hex": oklch_to_hex(0.14, 0.03, base_solar_hue), "name": "Dark Umber"},
+                    "surface": {"oklch": f"oklch(0.21 0.04 {base_solar_hue:.1f})", "hex": oklch_to_hex(0.21, 0.04, base_solar_hue), "name": "Earth Clay"},
+                    "text_primary": {"oklch": f"oklch(0.95 0.02 {ys_base_hue:.1f})", "hex": oklch_to_hex(0.95, 0.02, ys_base_hue), "name": "Warm Sand"},
+                    "text_muted": {"oklch": f"oklch(0.72 0.04 {base_solar_hue:.1f})", "hex": oklch_to_hex(0.72, 0.04, base_solar_hue), "name": "Ochre Muted"},
                 },
             },
         },
