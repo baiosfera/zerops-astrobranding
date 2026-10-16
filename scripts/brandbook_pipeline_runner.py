@@ -450,6 +450,45 @@ class ShardsIngestionEngine:
         if not shards:
             raise FileNotFoundError(f"No valid dumps found in {dumps_dir}. Ensure omni_engine.py extract/compile has run.")
 
+        # Auto-hydrate shard_13 if missing or unpopulated
+        s13_data = shards.get("shard_13", {}).get("data", {})
+        if not s13_data or not s13_data.get("name") or s13_data.get("name") == "N/D":
+            prof_file = self.diag_root / "raw" / "client_profile.json"
+            if prof_file.exists():
+                try:
+                    with open(prof_file, "r", encoding="utf-8") as pf:
+                        loaded_prof = json.load(pf)
+                    if loaded_prof and isinstance(loaded_prof, dict):
+                        shards["shard_13"] = {"name": "Client Profile & Master Geometry", "data": loaded_prof}
+                        logger.info(f"Auto-hydrated shard_13 from {prof_file}")
+                except Exception as e:
+                    logger.warning(f"Failed to read client_profile.json: {e}")
+
+        # Ensure shard_09 has founder life path and names
+        s9_data = shards.get("shard_09", {}).get("data", {})
+        founder_data = s9_data.get("founder", {})
+        if not founder_data.get("life_path_number"):
+            cp_data = shards.get("shard_13", {}).get("data", {})
+            y = cp_data.get("year", 1990)
+            m = cp_data.get("month", 1)
+            d = cp_data.get("day", 1)
+            def _red(n: int) -> int:
+                while n > 9:
+                    if n in (11, 22, 33): return n
+                    n = sum(int(x) for x in str(n))
+                return n
+            lp = _red(_red(y) + _red(m) + _red(d))
+            if lp in (11, 22, 33):
+                lp = _red(sum(int(x) for x in str(lp)))
+            founder_data["life_path_number"] = lp
+            founder_data["birth_name"] = cp_data.get("birth_name") or cp_data.get("name")
+            founder_data["current_name"] = cp_data.get("current_name") or cp_data.get("preferred_name")
+            s9_data["founder"] = founder_data
+            if "shard_09" not in shards:
+                shards["shard_09"] = {"name": "Multi-System Numerology & Brands", "data": s9_data}
+            else:
+                shards["shard_09"]["data"] = s9_data
+
         return shards
 
 
@@ -1204,6 +1243,12 @@ class BifrostBrandStrategist:
         req = urllib.request.Request(url, data=data, method="POST")
         req.add_header("Content-Type", "application/json")
         req.add_header("x-tier", "production")
+        req.add_header("x-bf-cache-bypass", "true")
+        req.add_header("x-bf-cache-ttl", "0")
+        req.add_header("x-bf-cache-no-store", "true")
+        req.add_header("x-bf-cache-type", "none")
+        req.add_header("x-bf-cache-threshold", "1.0")
+        req.add_header("x-bf-cache-key", f"brandbook-{model.replace('/', '-')}-{int(time.time())}")
 
         with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
             body = resp.read().decode("utf-8")
@@ -1437,7 +1482,6 @@ class BrandbookPipelineRunner:
         (target_dir / f"astrobranding_{self.brand_lower}.md").write_text(brief, encoding="utf-8")
         (target_dir / f"brandbook_superfull_{self.brand_lower}.json").write_text(json_content, encoding="utf-8")
         (target_dir / "brandbook.json").write_text(json_content, encoding="utf-8")
-        (target_dir / f"brandbook_{self.brand_lower}.json").write_text(json_content, encoding="utf-8")
         (target_dir / "brandbook-theme.css").write_text(theme_css, encoding="utf-8")
         (target_dir / "system_prompt.md").write_text(system_prompt, encoding="utf-8")
 
