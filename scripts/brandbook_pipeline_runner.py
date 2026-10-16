@@ -551,8 +551,7 @@ class DeterministicSynthesizer:
                 p_speed = p_data.get("speed", 1.0)
                 speed_str = f"{p_speed:.2f}" if isinstance(p_speed, (int, float)) else str(p_speed)
                 planet_rows.append(f"| {p_name} | {p_sign} | {p_deg:.2f}° | Casa {p_house} | {p_retro} | {speed_str} |")
-        planets_table_str = "
-".join(planet_rows) if planet_rows else "| Sol | Capricornio | 27.93° | Casa 2 | No | 1.00 |"
+        planets_table_str = "\n".join(planet_rows) if planet_rows else "| Sol | Capricornio | 27.93° | Casa 2 | No | 1.00 |"
 
         house_rows: List[str] = []
         for h_num in range(1, 13):
@@ -561,8 +560,7 @@ class DeterministicSynthesizer:
                 h_sign = h_data.get("sign", "N/D")
                 h_deg = h_data.get("degree", 0.0)
                 house_rows.append(f"| Casa {h_num} | {h_sign} | {h_deg:.2f}° |")
-        houses_table_str = "
-".join(house_rows) if house_rows else "| Casa 1 | N/D | 0.00° |"
+        houses_table_str = "\n".join(house_rows) if house_rows else "| Casa 1 | N/D | 0.00° |"
 
         elem_pcts = elem.get("percentages", {})
         fire_pct = elem_pcts.get("Fire", 0.0)
@@ -580,8 +578,7 @@ class DeterministicSynthesizer:
                 asp_type = asp.get("aspect", "")
                 orb = asp.get("orb", 0.0)
                 aspect_lines.append(f"- **{b1}** {asp_type} **{b2}** (Orbe: {orb:.2f}°)")
-        aspects_str = "
-".join(aspect_lines) if aspect_lines else "- Conjunción Sol-Venus (Orbe < 2°)"
+        aspects_str = "\n".join(aspect_lines) if aspect_lines else "- Conjunción Sol-Venus (Orbe < 2°)"
 
         # Sidereal calculations
         fb = s2.get("fagan_bradley", {})
@@ -616,8 +613,7 @@ class DeterministicSynthesizer:
                 lah_str = f"{lah_p.get('sign', 'N/D')} {lah_p.get('degree', 0.0):.2f}°" if lah_p else "N/D"
                 p_house = p_data.get("house", "N/D")
                 sidereal_planet_rows.append(f"| {p_name} | {t_str} | {fb_str} | {lah_str} | Casa {p_house} |")
-        sidereal_table_str = "
-".join(sidereal_planet_rows) if sidereal_planet_rows else "| Sol | Capricornio 27.93° | Sagitario 3.37° | Sagitario 4.29° | Casa 2 |"
+        sidereal_table_str = "\n".join(sidereal_planet_rows) if sidereal_planet_rows else "| Sol | Capricornio 27.93° | Sagitario 3.37° | Sagitario 4.29° | Casa 2 |"
 
         # Vedic
         nak = s3.get("nakshatra", {})
@@ -638,12 +634,10 @@ class DeterministicSynthesizer:
                 virupas = p_stats.get("virupas", 0.0)
                 p_rank = p_stats.get("rank", "N/D")
                 sb_rows.append(f"| {p_name} | {r_val:.2f} | {virupas:.1f} | #{p_rank} |")
-        sb_table_str = "
-".join(sb_rows) if sb_rows else f"| {sb_dom} | {max_r:.2f} | N/D | #1 |"
+        sb_table_str = "\n".join(sb_rows) if sb_rows else f"| {sb_dom} | {max_r:.2f} | N/D | #1 |"
 
         yogas = s3.get("yogas_identified", [])
-        yogas_str = "
-".join([f"- **{y}**" for y in yogas]) if yogas else "- No se identificaron yogas restrictivos."
+        yogas_str = "\n".join([f"- **{y}**" for y in yogas]) if yogas else "- No se identificaron yogas restrictivos."
 
         kp_table = s3.get("kp_system", {}).get("cuspal_sub_lord_table", [])
         kp_rows: List[str] = []
@@ -655,8 +649,7 @@ class DeterministicSynthesizer:
                 st_lord = row.get("star_lord", "N/D")
                 sub_l = row.get("sub_lord", "N/D")
                 kp_rows.append(f"| C{h_idx} | {h_sign} | {s_lord} | {st_lord} | {sub_l} |")
-        kp_table_str = "
-".join(kp_rows) if kp_rows else "| C1 | Escorpio | Marte | Mercurio | Mercurio |"
+        kp_table_str = "\n".join(kp_rows) if kp_rows else "| C1 | Escorpio | Marte | Mercurio | Mercurio |"
 
         # BaZi
         fp = s4.get("four_pillars", {})
@@ -673,8 +666,7 @@ class DeterministicSynthesizer:
                 animal = p_data.get("animal", "")
                 pillar_str = p_data.get("pillar", f"{stem}-{branch}")
                 bazi_rows.append(f"| {p_label} | {stem} | {branch} | {p_elem} | {animal} | {pillar_str} |")
-        bazi_table_str = "
-".join(bazi_rows) if bazi_rows else "| Día | Ren | Xu | Agua | Perro | Ren-Xu |"
+        bazi_table_str = "\n".join(bazi_rows) if bazi_rows else "| Día | Ren | Xu | Agua | Perro | Ren-Xu |"
 
         # TCM
         const = s12.get("constitution", {})
@@ -693,8 +685,7 @@ class DeterministicSynthesizer:
                 theme = s_item.get("theme", "")
                 drivers = ", ".join(s_item.get("drivers", []))
                 susceptibility_lines.append(f"- **{theme}:** {drivers}")
-        susceptibility_str = "
-".join(susceptibility_lines) if susceptibility_lines else "- Balance constitutional homeostático."
+        susceptibility_str = "\n".join(susceptibility_lines) if susceptibility_lines else "- Balance constitutional homeostático."
 
         # HD
         hd = s5.get("human_design") or s5
@@ -737,8 +728,7 @@ class DeterministicSynthesizer:
                 lt = line.get("line_type", "")
                 desc = line.get("description", "")
                 acg_rows.append(f"| Línea {p_l} en {lt} | {desc} |")
-        acg_table_str = "
-".join(acg_rows) if acg_rows else "| Línea Sol en MC | Expansión comercial y máxima proyección pública. |"
+        acg_table_str = "\n".join(acg_rows) if acg_rows else "| Línea Sol en MC | Expansión comercial y máxima proyección pública. |"
 
         best_places = s8.get("best_places_ranking", {})
         car_places = ", ".join(best_places.get("career_wealth", [])) or "Ciudades angulares en meridianos natales"
@@ -777,8 +767,7 @@ class DeterministicSynthesizer:
                 harm = "Sí" if b.get("harmony_with_founder_lifepath") else "No"
                 arch = b.get("vibrational_archetype", "")
                 brand_rows.append(f"| {b_name} | Exp: {b_bexp} &#124; Soul: {b_bsoul} | {b_bcomp}/{b_bsing} | {harm} | {arch} |")
-        brands_table_str = "
-".join(brand_rows) if brand_rows else f"| {brand_name} | Exp: 7 &#124; Soul: 8 | 77/5 | Sí | The Sovereign |"
+        brands_table_str = "\n".join(brand_rows) if brand_rows else f"| {brand_name} | Exp: 7 &#124; Soul: 8 | 77/5 | Sí | The Sovereign |"
 
         # Timing
         vd = s10.get("vimshottari_dasha", {})
