@@ -1007,16 +1007,29 @@ class DeterministicSynthesizer:
         hd_type = hd.get("energy_type") or "Iniciador Consciente"
         hd_auth = hd.get("inner_authority") or "esperar claridad en su proceso reflexivo"
         hd_strat = hd.get("strategy") or "actuar según su estrategia natural"
+        hd_profile = str(hd.get("profile") or "3/5")
 
         # Dynamic behavioral adaptations
-        if "Generator" in hd_type:
-            hd_interlocution = f"Nunca fuerces a {name} a iniciar en frío o improvisar bajo presión de urgencia. Como Generator, su genialidad se enciende al **responder** a propuestas concretas. Presentá opciones claras para activar su respuesta sacral o claridad emocional."
-        elif "Projector" in hd_type:
-            hd_interlocution = f"Reconocé explícitamente la maestría directiva de {name} antes de plantear recomendaciones. Como Projector, la efectividad máxima ocurre cuando su guía es **formalmente invitada** y valorada, dosificando su energía para evitar agotamiento áurico."
-        elif "Manifestor" in hd_type:
-            hd_interlocution = f"{name} opera bajo un aura de impacto directo y autonomía radical. Como Manifestor, su motor es la **iniciación pura**; informale con claridad estratégica de los pasos sin pretender imponer supervisión burocrática."
+        if "Manifesting Generator" in hd_type or "Generador Manifestante" in hd_type:
+            hd_interlocution = f"Como **Manifesting Generator** (perfil {hd_profile}), {name} opera a velocidad cuántica, salta pasos lineales para encontrar la ruta más eficiente y valida a través de la experimentación continua y el descarte rápido de lo que no sirve. Nunca intentes frenar su ritmo con supervisión burocrática o procesos rígidos; su efectividad radica en informar antes de actuar y responder desde el sacro al impacto real de sus iniciativas en el mercado."
+        elif "Generator" in hd_type or "Generador" in hd_type:
+            hd_interlocution = f"Como **Generator Puro** (perfil {hd_profile}), la genialidad de {name} se enciende al responder desde el sacro a propuestas tangibles y desafíos concretos. Construye maestría profunda paso a paso; presentale opciones claras y respetá su tiempo de respuesta sacral para activar su máxima potencia operativa."
+        elif "Projector" in hd_type or "Proyector" in hd_type:
+            hd_interlocution = f"Como **Projector** (perfil {hd_profile}), reconocé explícitamente la maestría directiva de {name} antes de plantear recomendaciones. Su efectividad ocurre cuando su guía es formalmente invitada y valorada, dosificando su energía para evitar agotamiento áurico."
+        elif "Manifestor" in hd_type or "Manifestador" in hd_type:
+            hd_interlocution = f"Como **Manifestor** (perfil {hd_profile}), {name} opera bajo un aura de impacto directo y autonomía radical. Su motor es la iniciación pura; informale con claridad estratégica de los pasos sin pretender imponer supervisión burocrática."
         else:
-            hd_interlocution = f"Adaptar la velocidad de interacción respetando la autoridad interna de {name} ({hd_auth}). Permitir que los conceptos maduren sin imponer falsas urgencias comerciales."
+            hd_interlocution = f"Adaptar la velocidad de interacción respetando la autoridad interna de {name} ({hd_auth}) y su perfil {hd_profile}. Permitir que los conceptos maduren sin imponer falsas urgencias comerciales."
+
+        elem_clean = str(dom_el).capitalize()
+        if elem_clean in ["Earth", "Tierra"]:
+            elem_guideline = f"Comunicarse con rigor fáctico, pragmatismo tangible, métricas de retorno y solidez estructural comprobable. Evitar especulaciones etéreas o promesas abstractas; anclar cada propuesta en la realidad material y la soberanía operativa de {name}."
+        elif elem_clean in ["Air", "Aire"]:
+            elem_guideline = f"Comunicarse con agilidad conceptual, pensamiento sistémico, frameworks lógicos y síntesis multimedia elegante. Conectar ideas complejas con rapidez mental y evitar densidad emocional redundante o lentitud burocrática."
+        elif elem_clean in ["Fire", "Fuego"]:
+            elem_guideline = f"Comunicarse con visión inspiradora, audacia pionera, llamados a la acción claros y energía de conquista. Evitar análisis parálisis o titubeos técnicos; presentar horizontes ambiciosos con liderazgo directo."
+        else:  # Water / Agua
+            elem_guideline = f"Comunicarse con profundidad psicológica, resonancia empática, autenticidad emocional y respeto por los tiempos de digestión intuitiva. Reconocer los matices sutiles y el valor de la transformación humana profunda."
 
         if temp == "hot" or moist == "dry":
             tcm_pacing = f"Con una constitución {temp.upper()} y {moist.upper()} (énfasis Yang / sequedad), {name} tiende a sobre-exigirse y quemar energía rápidamente. Los reportes y agentes deben evitar sobre-estimulación agresiva; estructurar soluciones claras, dosificadas y con foco meridiano en {organs} para preservar la visión estratégica sin fatiga ocular o mental."
@@ -1040,11 +1053,10 @@ class DeterministicSynthesizer:
 
 ## 2. Directrices Dinámicas para Modelos de Inteligencia Artificial (Cero Plantillas Estáticas)
 - **Modulación del Ritmo Conversacional:** {hd_interlocution}
-- **Sintonía Elemental con la Esencia {dom_el}:** Comunicarse respetando la vibración del elemento {dom_el}: si es Tierra, fundamentar en hechos tangibles y pragmatismo; si es Aire, en agilidad conceptual y pensamiento sistémico; si es Fuego, en visión inspiradora y audacia; si es Agua, en profundidad psicológica y resonancia intuitiva.
+- **Sintonía Elemental con la Esencia {dom_el}:** {elem_guideline}
 - **Protocolo Anti-Fatiga y Prevención de Desgaste (TCM):** {tcm_pacing}
 - **Invariante de Verosimilitud:** Cada recomendación o diagnóstico debe fundamentarse estrictamente en los datos empíricos de los 15 shards verificados. Prohibido inventar datos biográficos o alterar coordenadas natales.
 """
-
     @staticmethod
     def render_astrobranding_brief(brand_name: str, shards: Dict[str, Any], palette: Dict[str, Any]) -> str:
         s1 = shards.get("shard_01", {}).get("data", {})
