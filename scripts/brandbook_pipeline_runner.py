@@ -657,14 +657,22 @@ class DeterministicSynthesizer:
         dm = s4.get("day_master", {})
         ys = s4.get("yong_shen", {})
 
+        # fp may have 'pillars' list from standard schema or direct dicts
+        pillars_list = fp.get("pillars", [])
+        pillars_map: Dict[str, Any] = {}
+        if isinstance(pillars_list, list):
+            for p in pillars_list:
+                if isinstance(p, dict) and "name" in p:
+                    pillars_map[p["name"]] = p
+
         bazi_rows: List[str] = []
         for p_key, p_label in [("year", "Año"), ("month", "Mes"), ("day", "Día (Day Master)"), ("hour", "Hora")]:
-            p_data = fp.get(p_key, {})
+            p_data = pillars_map.get(p_key) or fp.get(p_key, {})
             if isinstance(p_data, dict):
                 stem = p_data.get("stem", "N/D")
                 branch = p_data.get("branch", "N/D")
-                p_elem = p_data.get("element", "")
-                animal = p_data.get("animal", "")
+                p_elem = p_data.get("stemElementName") or p_data.get("element", "")
+                animal = p_data.get("animalName") or p_data.get("animal", "")
                 pillar_str = p_data.get("pillar", f"{stem}-{branch}")
                 bazi_rows.append(f"| {p_label} | {stem} | {branch} | {p_elem} | {animal} | {pillar_str} |")
         bazi_table_str = "\n".join(bazi_rows) if bazi_rows else "| Día | Ren | Xu | Agua | Perro | Ren-Xu |"
