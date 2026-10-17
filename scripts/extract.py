@@ -377,17 +377,21 @@ async def extract_astroway(
         "ayanamsa": "fagan-bradley"
     }
 
-    # BaZi Payloads
+    # BaZi Payloads (With True Solar Time Support)
     bazi_base_payload = {
         "date": date_str,
         "time": time_str,
         "timezoneOffset": tz_offset,
+        "latitude": lat,
+        "longitude": lng,
         "language": "en"
     }
     bazi_luck_payload = {
         "date": date_str,
         "time": time_str,
         "timezoneOffset": tz_offset,
+        "latitude": lat,
+        "longitude": lng,
         "gender": gender,
         "count": 10,
         "language": "en"
