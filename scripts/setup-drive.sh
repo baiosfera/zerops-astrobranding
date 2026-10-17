@@ -98,6 +98,15 @@ if [ -d "$SKILLS_SRC" ]; then
         fi
     done
 
+    # Blindaje Soberano Anti-Deriva: Re-sincronizar y purgar core skills estrictamente desde GitHub
+    for core_sk in oraculo planner docu research; do
+        if [ -d "$SKILLS_LOCAL_CACHE/$core_sk" ]; then
+            rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$SKILLS_LOCAL_CACHE/$core_sk/" "$TARGET_AGENTS/$core_sk/"
+            [ -d "$GEMINI_SKILLS" ] && rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$SKILLS_LOCAL_CACHE/$core_sk/" "$GEMINI_SKILLS/$core_sk/" 2>/dev/null || true
+            [ -d "/home/zerops/.gemini/antigravity-cli/skills" ] && rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$SKILLS_LOCAL_CACHE/$core_sk/" "/home/zerops/.gemini/antigravity-cli/skills/$core_sk/" 2>/dev/null || true
+        fi
+    done
+
     # AUTO-HEALING SSoT DRIVE PARITY (Garantizar paridad bidireccional absoluta)
     DRIVE_SSOT_SKILLS="$SSOT_ROOT/.agents/skills"
     if [ -d "$DRIVE_SSOT_SKILLS" ]; then
