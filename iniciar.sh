@@ -295,7 +295,8 @@ if [ ! -d "$SKILLS_LOCAL_DIR/.git" ]; then
     git clone --depth 1 "$SKILLS_REPO_URL" "$SKILLS_LOCAL_DIR" 2>/dev/null || true
 else
     echo "• [2b/4] Actualizando skills soberanas desde GitHub..."
-    git -C "$SKILLS_LOCAL_DIR" pull --ff-only 2>/dev/null || true
+    git -C "$SKILLS_LOCAL_DIR" fetch origin main 2>/dev/null || true
+    git -C "$SKILLS_LOCAL_DIR" reset --hard origin/main 2>/dev/null || git -C "$SKILLS_LOCAL_DIR" pull --ff-only 2>/dev/null || true
 fi
 
 # 2c. Verificar disponibilidad de scripts SSoT en Google Drive (tolerancia de indexación FUSE)
