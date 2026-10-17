@@ -1481,186 +1481,18 @@ class BifrostBrandStrategist:
         self.fallback_model = fallback_model
         self.timeout_sec = timeout_sec
 
-    def generate_strategy(self, brand_name: str, shards: Dict[str, Any],
-                          palette: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Calls Bifrost with the full multi-tradition lakehouse. Falls back to dynamic domain baseline if needed."""
-        prompt = self._build_prompt(brand_name, shards, palette)
-        models_to_try = [self.primary_model]
-        if self.fallback_model and self.fallback_model != self.primary_model:
-            models_to_try.append(self.fallback_model)
-
-        for model in models_to_try:
-            try:
-                logger.info(f"Invoking Bifrost Gateway with model: {model} (x-tier: production, max_tokens: 8192, timeout: {self.timeout_sec}s)")
-                res = self._send_request(model, prompt)
-                if isinstance(res, dict):
-                    # Unwrap if model wrapped under schema_required or similar
-                    if "schema_required" in res and isinstance(res["schema_required"], dict):
-                        res = res["schema_required"]
-                    if "brand_architecture" in res:
-                        arch = res.get("brand_architecture", {})
-                        if not arch.get("brand_archetypes"):
-                            arch["brand_archetypes"] = self._derive_bespoke_archetypes(shards)
-                        logger.info("Successfully received bespoke strategy and full briefs from Bifrost AI Gateway!")
-                        return res
-            except Exception as e:
-                logger.warning(f"Bifrost call with {model} failed: {e}. Trying next...")
-
-        logger.warning("Bifrost models were unreachable or returned invalid response. Using dynamic domain synthesis.")
-        return self._generate_dynamic_domain_baseline(brand_name, shards)
-
-    def _build_prompt(self, brand_name: str, shards: Dict[str, Any],
-                      palette: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
-        s1 = shards.get("shard_01", {}).get("data", {})
-        s2 = shards.get("shard_02", {}).get("data", {})
-        s3 = shards.get("shard_03", {}).get("data", {})
-        s4 = shards.get("shard_04", {}).get("data", {})
-        s5 = shards.get("shard_05", {}).get("data", {})
-        s6 = shards.get("shard_06", {}).get("data", {})
-        s7 = shards.get("shard_07", {}).get("data", {})
-        s8 = shards.get("shard_08", {}).get("data", {})
-        s9 = shards.get("shard_09", {}).get("data", {})
-        s10 = shards.get("shard_10", {}).get("data", {})
-        s11 = shards.get("shard_11", {}).get("data", {})
-        s12 = shards.get("shard_12", {}).get("data", {})
-        cp = shards.get("shard_13", {}).get("data", {})
-        s14 = shards.get("shard_14", {}).get("data", {})
-        s15 = shards.get("shard_15", {}).get("data", [])
-
-        founder = s9.get("founder", {})
-        founder_name = str(cp.get("preferred_name") or cp.get("name") or founder.get("birth_name") or brand_name)
-
-        system_msg = (
-            "You are an Elite Brand Strategist, Creative Director, and Design Systems Engineer.\n"
-            "Your task is to craft a complete, sovereign brand architecture, deep psychological author profile, "
-            "and master semiotic astrobranding brief based strictly on the provided multi-tradition astrological "
-            "lakehouse of the founder.\n\n"
-            "CRITICAL ARCHITECTURAL CONTRACTS:\n"
-            "1. Output MUST be valid, parseable JSON conforming strictly to the requested schema.\n"
-            "2. Root keys MUST be: brand_architecture, voice_and_tone, target_audience, brand_narrative, "
-            "author_psychology_markdown, astrobranding_brief_markdown.\n"
-            "3. ZERO generic corporate fluff or superficial summaries. Every statement must be anchored in the "
-            "founder's exact planetary coordinates, Day Master, Nakshatra, Human Design, and elemental balance.\n"
-            "4. author_psychology_markdown MUST be a complete, dense, production-ready Markdown document "
-            "(120-200 lines) with psychological coordinates, cognitive pacing, anti-fatigue TCM protocols, "
-            "and precise guidelines for downstream AI agents (Fases 1-9).\n"
-            "5. astrobranding_brief_markdown MUST be a complete, dense, production-ready Master Brief "
-            "(120-200 lines) detailing the Iron Tripod, ICP Triad (Houses 7, 8, 11, Venus), 360° OKLCH color suite rationale, "
-            "sacred geometry of the symbol (Nakshatra & deified geometry), kinetic motion cadence (GSAP 60fps), "
-            "and naming vibrational resonance."
-        )
-
-        lakehouse_context = {
-            "brand_name": brand_name,
-            "founder_name": founder_name,
-            "client_profile": {
-                "birth_date": f"{cp.get('year', 1990):04d}-{cp.get('month', 1):02d}-{cp.get('day', 1):02d}",
-                "birth_time": f"{cp.get('hour', 12):02d}:{cp.get('minute', 0):02d}",
-                "birth_place": f"{cp.get('city', 'N/D')} (Lat: {cp.get('lat', 0.0)}, Lon: {cp.get('lng', 0.0)})",
-                "timezone": f"{cp.get('tz_str', 'America/Bogota')} (UTC {cp.get('tz_offset', -5.0)})",
-                "preferred_name": founder_name,
-                "brand_names": cp.get("brand_names", [brand_name]),
-            },
-            "shard_01_western_tropical": {
-                "tripod_of_iron": s1.get("tripod_of_iron", {}),
-                "client_triad": s1.get("client_triad", {}),
-                "arroyo_elements": s1.get("arroyo_elements", {}),
-                "planets": s1.get("planets", {}),
-                "houses": s1.get("houses", {}),
-                "aspects_sample": s1.get("aspects_sample", [])[:10],
-            },
-            "shard_02_western_sidereal": {
-                "fagan_bradley": {
-                    "ayanamsa": s2.get("fagan_bradley", {}).get("ayanamsa_degrees"),
-                    "ascendant": s2.get("fagan_bradley", {}).get("ascendant"),
-                    "midheaven": s2.get("fagan_bradley", {}).get("midheaven"),
-                },
-                "lahiri": {
-                    "ayanamsa": s2.get("lahiri", {}).get("ayanamsa_degrees"),
-                    "ascendant": s2.get("lahiri", {}).get("ascendant"),
-                    "midheaven": s2.get("lahiri", {}).get("midheaven"),
-                },
-                "comparative_delta": s2.get("comparative_delta", {}),
-                "mundoscope_cross_of_malta": s2.get("mundoscope_cross_of_malta", {}),
-            },
-            "shard_03_vedic_jyotish": {
-                "nakshatra": s3.get("nakshatra", {}),
-                "shadbala": {
-                    "dominant_planet": s3.get("shadbala", {}).get("dominant_planet"),
-                    "max_rupas": s3.get("shadbala", {}).get("max_rupas"),
-                    "planetary_strengths": s3.get("shadbala", {}).get("planetary_strengths", {}),
-                },
-                "yogas_identified": s3.get("yogas_identified", []),
-                "kp_system": s3.get("kp_system", {}),
-            },
-            "shard_04_chinese_bazi": {
-                "four_pillars": s4.get("four_pillars", {}),
-                "day_master": s4.get("day_master", {}),
-                "yong_shen": s4.get("yong_shen", {}),
-            },
-            "shard_05_human_design": s5.get("human_design") or s5,
-            "shard_06_kabbalah_zmanim": {
-                "hebrew_calendar": s6.get("hebrew_calendar", {}),
-                "tikkun_rav_berg": s6.get("tikkun_rav_berg", {}),
-                "zmanim_halachic_times": s6.get("zmanim_halachic_times", {}),
-            },
-            "shard_07_vocational_wealth": s7,
-            "shard_08_astrocartography": s8,
-            "shard_09_15_numerology": {
-                "founder": s9.get("founder", {}),
-                "brands": s9.get("brands") or s15 or [],
-            },
-            "shard_10_predictive_timing": s10,
-            "shard_11_cosmobiology_dial90": s11,
-            "shard_12_tcm_constitution": s12,
-            "computed_polar_oklch_palette": palette or {},
-        }
-
-        output_schema_structure = {
-            "brand_architecture": {
-                "brand_essence": "One potent 2-4 word phrase capturing brand sovereignty",
-                "purpose": "Why the brand exists",
-                "mission": "What it builds for its clients",
-                "vision": "Aspirational future state",
-                "values": ["List of 5 core values with 1-line definitions"],
-                "positioning_statement": "For [ICP] who [need], [Brand] is [category] that [benefit], unlike [alternatives], because [astrological/elemental differentiator].",
-                "brand_archetypes": [
-                    {"role": "Primary", "name": "Archetype Name", "description": "Why it represents the founder"},
-                    {"role": "Secondary", "name": "Archetype Name", "description": "Balancing behavioral nuance"}
-                ],
-            },
-            "voice_and_tone": {
-                "primary_tone": "2-3 word tone descriptor",
-                "voice_traits": ["List of 4 sharp traits grounded in founder coordinates"],
-                "preferred_vocabulary": ["List of 6 empowered words"],
-                "forbidden_vocabulary": ["List of 6 banned words/clichés"],
-                "conversational_protocols": "Specific behavioral guidelines for downstream agents on how to communicate with the founder without fatigue or friction",
-            },
-            "target_audience": {
-                "ideal_customer_profile": "Clear profile of who buys high-ticket grounded in Houses 7, 8, 11",
-                "core_pain_points": ["3 main frustrations"],
-                "aspirations": ["3 core desires"],
-                "conversion_triggers": ["Key high-ticket decision triggers"],
-            },
-            "brand_narrative": "A rich, multi-paragraph brand story fusing the founder's elemental nature, cosmic coordinates, mission, and client transformation.",
-            "author_psychology_markdown": "# Perfil Psicológico de Autor & Pautas de Voz y Tono (Fase 0)\n\n(Extensive, multi-section Markdown document with complete psychological coordinates, cognitive pacing, anti-fatigue TCM protocols, and instructions for downstream models).",
-            "astrobranding_brief_markdown": "# Master Brief de Astrobranding Semiótico: [Brand]\n\n(Extensive, multi-section Master Brief with Iron Tripod, ICP Triad, OKLCH palette rationale, Sacred Geometry, Kinetic 60fps cadence, and Vibrational Naming).",
-        }
-
-        return [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": f"Generate the comprehensive Brand Strategy JSON for '{brand_name}' adhering strictly to the schema structure:\n\n### ASTROLOGICAL LAKEHOUSE CONTEXT:\n{json.dumps(lakehouse_context, indent=2, ensure_ascii=False)}\n\n### REQUIRED JSON SCHEMA:\n{json.dumps(output_schema_structure, indent=2, ensure_ascii=False)}"},
-        ]
-
-    def _send_request(self, model: str, messages: List[Dict[str, str]]) -> Dict[str, Any]:
+    def _send_completion(self, model: str, messages: List[Dict[str, str]],
+                         response_format: str = "text", max_tokens: int = 4096) -> str:
         url = f"{self.base_url}/v1/chat/completions"
-        payload = {
+        payload: Dict[str, Any] = {
             "model": model,
             "messages": messages,
-            "temperature": 0.3,
-            "response_format": {"type": "json_object"},
-            "max_tokens": 8192,
+            "temperature": 0.2 if response_format == "json_object" else 0.3,
+            "max_tokens": max_tokens,
         }
+        if response_format == "json_object":
+            payload["response_format"] = {"type": "json_object"}
+
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=data, method="POST")
         req.add_header("Content-Type", "application/json")
@@ -1680,15 +1512,257 @@ class BifrostBrandStrategist:
         if not choices:
             raise ValueError(f"Empty choices in Bifrost response: {result}")
 
-        content_raw = choices[0].get("message", {}).get("content", "").strip()
+        choice = choices[0]
+        content_raw = choice.get("message", {}).get("content", "").strip()
+        finish_reason = choice.get("finish_reason", "")
+
         if not content_raw:
-            raise ValueError("Empty message content received from Bifrost.")
+            if finish_reason == "length":
+                raise ValueError(f"Model {model} exhausted max_tokens ({max_tokens}) during reasoning phase.")
+            raise ValueError(f"Empty message content received from Bifrost ({model}).")
 
-        if content_raw.startswith("```"):
-            content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
-            content_raw = re.sub(r"\n?```$", "", content_raw).strip()
+        return content_raw
 
-        return json.loads(content_raw)
+    def generate_strategy_json(self, brand_name: str, shards: Dict[str, Any],
+                               palette: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Call 1: Generates clean, fast brand strategy JSON (< 2500 tokens, ~15-20s)."""
+        prompt = self._build_strategy_json_prompt(brand_name, shards, palette)
+        models_to_try = [self.primary_model]
+        if self.fallback_model and self.fallback_model != self.primary_model:
+            models_to_try.append(self.fallback_model)
+
+        for model in models_to_try:
+            try:
+                logger.info(f"[Call 1/3] Invoking Bifrost for Brand Strategy JSON with {model} (max_tokens: 3000)...")
+                content_raw = self._send_completion(model, prompt, response_format="json_object", max_tokens=3000)
+                if content_raw.startswith("```"):
+                    content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
+                    content_raw = re.sub(r"\n?```$", "", content_raw).strip()
+                res = json.loads(content_raw)
+                if isinstance(res, dict):
+                    if "schema_required" in res and isinstance(res["schema_required"], dict):
+                        res = res["schema_required"]
+                    if "brand_architecture" in res:
+                        arch = res.get("brand_architecture", {})
+                        if not arch.get("brand_archetypes"):
+                            arch["brand_archetypes"] = self._derive_bespoke_archetypes(shards)
+                        logger.info(f"✅ Successfully received Brand Strategy JSON from {model}!")
+                        return res
+            except Exception as e:
+                logger.warning(f"Strategy JSON generation with {model} failed: {e}. Trying next...")
+
+        logger.warning("Bifrost models were unreachable for strategy JSON. Using dynamic domain baseline.")
+        return self._generate_dynamic_domain_baseline(brand_name, shards)
+
+    def generate_author_psychology_markdown(self, brand_name: str, shards: Dict[str, Any]) -> str:
+        """Call 2: Generates complete, dense fase0_author_psychology.md in pure Markdown (~25s)."""
+        prompt = self._build_author_psychology_prompt(brand_name, shards)
+        models_to_try = [self.primary_model]
+        if self.fallback_model and self.fallback_model != self.primary_model:
+            models_to_try.append(self.fallback_model)
+
+        for model in models_to_try:
+            try:
+                logger.info(f"[Call 2/3] Invoking Bifrost for Author Psychology Markdown with {model} (max_tokens: 4096)...")
+                content_raw = self._send_completion(model, prompt, response_format="text", max_tokens=4096)
+                if content_raw.startswith("```"):
+                    content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
+                    content_raw = re.sub(r"\n?```$", "", content_raw).strip()
+                if len(content_raw.strip()) > 500:
+                    logger.info(f"✅ Successfully received Author Psychology from {model} ({len(content_raw)} chars, {len(content_raw.splitlines())} lines)!")
+                    return content_raw
+            except Exception as e:
+                logger.warning(f"Author Psychology generation with {model} failed: {e}. Trying next...")
+
+        logger.warning("Bifrost models were unreachable for Author Psychology. Using mathematical fallback.")
+        return DeterministicSynthesizer.render_author_psychology(brand_name, shards)
+
+    def generate_astrobranding_brief_markdown(self, brand_name: str, shards: Dict[str, Any], palette: Dict[str, Any]) -> str:
+        """Call 3: Generates complete, dense astrobranding_{brand}.md in pure Markdown (~25s)."""
+        prompt = self._build_astrobranding_brief_prompt(brand_name, shards, palette)
+        models_to_try = [self.primary_model]
+        if self.fallback_model and self.fallback_model != self.primary_model:
+            models_to_try.append(self.fallback_model)
+
+        for model in models_to_try:
+            try:
+                logger.info(f"[Call 3/3] Invoking Bifrost for Astrobranding Brief Markdown with {model} (max_tokens: 4096)...")
+                content_raw = self._send_completion(model, prompt, response_format="text", max_tokens=4096)
+                if content_raw.startswith("```"):
+                    content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
+                    content_raw = re.sub(r"\n?```$", "", content_raw).strip()
+                if len(content_raw.strip()) > 500:
+                    logger.info(f"✅ Successfully received Astrobranding Brief from {model} ({len(content_raw)} chars, {len(content_raw.splitlines())} lines)!")
+                    return content_raw
+            except Exception as e:
+                logger.warning(f"Astrobranding Brief generation with {model} failed: {e}. Trying next...")
+
+        logger.warning("Bifrost models were unreachable for Astrobranding Brief. Using mathematical fallback.")
+        return DeterministicSynthesizer.render_astrobranding_brief(brand_name, shards, palette)
+
+    def _extract_context(self, brand_name: str, shards: Dict[str, Any], palette: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        s1 = shards.get("shard_01", {}).get("data", {})
+        s2 = shards.get("shard_02", {}).get("data", {})
+        s3 = shards.get("shard_03", {}).get("data", {})
+        s4 = shards.get("shard_04", {}).get("data", {})
+        s5 = shards.get("shard_05", {}).get("data", {})
+        s6 = shards.get("shard_06", {}).get("data", {})
+        s7 = shards.get("shard_07", {}).get("data", {})
+        s8 = shards.get("shard_08", {}).get("data", {})
+        s9 = shards.get("shard_09", {}).get("data", {})
+        s10 = shards.get("shard_10", {}).get("data", {})
+        s11 = shards.get("shard_11", {}).get("data", {})
+        s12 = shards.get("shard_12", {}).get("data", {})
+        cp = shards.get("shard_13", {}).get("data", {})
+        s15 = shards.get("shard_15", {}).get("data", [])
+
+        founder = s9.get("founder", {})
+        founder_name = str(cp.get("preferred_name") or cp.get("name") or founder.get("birth_name") or brand_name)
+
+        return {
+            "brand_name": brand_name,
+            "founder_name": founder_name,
+            "client_profile": {
+                "birth_date": f"{cp.get('year', 1990):04d}-{cp.get('month', 1):02d}-{cp.get('day', 1):02d}",
+                "birth_time": f"{cp.get('hour', 12):02d}:{cp.get('minute', 0):02d}",
+                "birth_place": f"{cp.get('city', 'N/D')} (Lat: {cp.get('lat', 0.0)}, Lon: {cp.get('lng', 0.0)})",
+                "timezone": f"{cp.get('tz_str', 'America/Bogota')} (UTC {cp.get('tz_offset', -5.0)})",
+                "preferred_name": founder_name,
+                "birth_name": founder.get("birth_name") or cp.get("birth_name") or founder_name,
+                "brand_names": cp.get("brand_names", [brand_name]),
+            },
+            "shard_01_western_tropical": {
+                "tripod_of_iron": s1.get("tripod_of_iron", {}),
+                "client_triad": s1.get("client_triad", {}),
+                "arroyo_elements": s1.get("arroyo_elements", {}),
+                "planets": s1.get("planets", {}),
+                "houses": s1.get("houses", {}),
+            },
+            "shard_02_western_sidereal": {
+                "fagan_bradley": {
+                    "ayanamsa": s2.get("fagan_bradley", {}).get("ayanamsa_degrees"),
+                    "ascendant": s2.get("fagan_bradley", {}).get("ascendant"),
+                    "midheaven": s2.get("fagan_bradley", {}).get("midheaven"),
+                    "planets": s2.get("fagan_bradley", {}).get("planets", {}),
+                },
+                "comparative_delta": s2.get("comparative_delta", {}),
+                "mundoscope_cross_of_malta": s2.get("mundoscope_cross_of_malta", {}),
+            },
+            "shard_03_vedic_jyotish": {
+                "nakshatra": s3.get("nakshatra", {}),
+                "shadbala": s3.get("shadbala", {}),
+                "yogas_identified": s3.get("yogas_identified", []),
+            },
+            "shard_04_chinese_bazi": {
+                "four_pillars": s4.get("four_pillars", {}),
+                "day_master": s4.get("day_master", {}),
+                "yong_shen": s4.get("yong_shen", {}),
+            },
+            "shard_05_human_design": s5.get("human_design") or s5,
+            "shard_06_kabbalah_zmanim": {
+                "hebrew_calendar": s6.get("hebrew_calendar", {}),
+                "tikkun_rav_berg": s6.get("tikkun_rav_berg", {}),
+            },
+            "shard_07_vocational_wealth": s7,
+            "shard_08_astrocartography": s8,
+            "shard_09_15_numerology": {
+                "founder": s9.get("founder", {}),
+                "brands": s9.get("brands") or s15 or [],
+            },
+            "shard_10_predictive_timing": s10,
+            "shard_12_tcm_constitution": s12,
+            "computed_polar_oklch_palette": palette or {},
+        }
+
+    def _build_strategy_json_prompt(self, brand_name: str, shards: Dict[str, Any],
+                                    palette: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
+        context = self._extract_context(brand_name, shards, palette)
+        system_msg = (
+            "You are an Elite Brand Strategist, Creative Director, and Design Systems Engineer.\n"
+            "Your task is to craft a dense, authoritative Brand Strategy JSON for the founder's brand.\n\n"
+            "CRITICAL ARCHITECTURAL CONTRACTS:\n"
+            "1. Output MUST be valid, parseable JSON conforming strictly to the requested schema.\n"
+            "2. Root keys MUST be: brand_architecture, voice_and_tone, target_audience, brand_narrative.\n"
+            "3. ZERO generic corporate fluff or superficial summaries. Every statement must be anchored in the "
+            "founder's exact planetary coordinates, Day Master, Nakshatra, Human Design, and elemental balance.\n"
+            "4. brand_narrative must be an inspiring, multi-paragraph brand manifesto (3-4 rich paragraphs)."
+        )
+        output_schema_structure = {
+            "brand_architecture": {
+                "brand_essence": "One potent 2-4 word phrase capturing brand sovereignty",
+                "purpose": "Why the brand exists (anchored in Sun and Nakshatra)",
+                "mission": "What it builds for its clients (anchored in Midheaven and Day Master)",
+                "vision": "Aspirational future state of authority and market positioning",
+                "values": ["List of 5 core values with 1-line definitions"],
+                "positioning_statement": "For [ICP] who [need], [Brand] is [category] that [benefit], unlike [alternatives], because [astrological/elemental differentiator].",
+                "brand_archetypes": [
+                    {"role": "Primary", "name": "Archetype Name", "description": "Why it represents the founder"},
+                    {"role": "Secondary", "name": "Archetype Name", "description": "Balancing behavioral nuance"}
+                ],
+            },
+            "voice_and_tone": {
+                "primary_tone": "2-3 word tone descriptor",
+                "voice_traits": ["List of 4 sharp traits grounded in founder coordinates"],
+                "preferred_vocabulary": ["List of 6 empowered words"],
+                "forbidden_vocabulary": ["List of 6 banned words/clichés"],
+                "conversational_protocols": "Specific behavioral guidelines for downstream agents on how to communicate with the founder without fatigue or friction",
+            },
+            "target_audience": {
+                "ideal_customer_profile": "Clear profile of who buys high-ticket grounded in Houses 7, 8, 11",
+                "core_pain_points": ["3 main frustrations of the avatar"],
+                "aspirations": ["3 core desires of the avatar"],
+                "conversion_triggers": ["Key high-ticket decision triggers"],
+            },
+            "brand_narrative": "A rich, 3-4 paragraph brand story fusing the founder's elemental nature, cosmic coordinates, mission, and client transformation.",
+        }
+        return [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": f"Generate the comprehensive Brand Strategy JSON for '{brand_name}':\n\n### ASTROLOGICAL LAKEHOUSE CONTEXT:\n{json.dumps(context, indent=2, ensure_ascii=False)}\n\n### REQUIRED JSON SCHEMA:\n{json.dumps(output_schema_structure, indent=2, ensure_ascii=False)}"},
+        ]
+
+    def _build_author_psychology_prompt(self, brand_name: str, shards: Dict[str, Any]) -> List[Dict[str, str]]:
+        context = self._extract_context(brand_name, shards)
+        system_msg = (
+            "You are the Lead Epistemic Astrologer, Transpersonal Psychologist, and System Prompt Architect.\n"
+            "Your task is to write the complete, dense, authoritative Cognitive System Prompt and Author Psychology Dossier "
+            "(fase0_author_psychology.md) in pure Markdown (150-250 lines).\n\n"
+            "MANDATORY MULTI-TRADITION SEPARATION CONTRACT:\n"
+            "You must explicitly separate, contrast, and integrate the three distinct astrological systems without conflating them:\n"
+            "1. Occidental Tropical Placidus: Ego psychology, conscious mind, Stephen Arroyo elemental balance (percentages, dominant element), and communication style.\n"
+            "2. Occidental Sideral Fagan-Bradley: Quantum physical astronomical truth, fixed stars, Ascendant (Lagna) and Midheaven (MC), precessional Ayanamsa delta (~55' vs Lahiri), and Mundoscope.\n"
+            "3. Védica Jyotish Lahiri: Janma Nakshatra and tutelary deity, planetary lord, Shadbala dominant planet with Rupas, Yogas, active Vimshottari Mahadasha and Antardasha with exact dates and business impact.\n"
+            "4. Metafísica China BaZi: Day Master, 4 Pillars (Stem/Branch/Element/Animal), and Yong Shen homeostatic balancer.\n"
+            "5. Mecánica de Diseño Humano: Energy Type, Profile, Strategy, Inner Authority, Incarnation Cross, Defined/Open Centers, and Active Channels.\n"
+            "6. Medicina Tradicional China (TCM): Biological constitution (Temperature, Moisture, Yin/Yang ratio), organs under metabolic demand, and anti-fatigue protocol.\n"
+            "7. Cábala Hebrea & Zmanim: Hebrew birth date, Parashat Hashavua, Tikkun (Rav Berg) and commercial application.\n"
+            "8. Pautas Concretas para Modelos Downstream (Fases 1 a 9): How agents must communicate with the founder, cadence modulation, language tone, and anti-fatigue safeguards.\n\n"
+            "OUTPUT FORMAT: Pure Markdown starting with '# Perfil Psicológico de Autor & Pautas de Voz y Tono (Fase 0)'. ZERO JSON, zero code blocks wrapping the entire document."
+        )
+        return [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": f"Author the complete, dense, production-ready 'fase0_author_psychology.md' for {context['founder_name']} ({brand_name}):\n\n### VERIFIED ASTROLOGICAL LAKEHOUSE:\n{json.dumps(context, indent=2, ensure_ascii=False)}"},
+        ]
+
+    def _build_astrobranding_brief_prompt(self, brand_name: str, shards: Dict[str, Any], palette: Dict[str, Any]) -> List[Dict[str, str]]:
+        context = self._extract_context(brand_name, shards, palette)
+        system_msg = (
+            "You are the Creative Director, Design Systems Engineer, and Semiotic Astrobranding Master.\n"
+            "Your task is to write the complete, dense, authoritative Master Semiotic Brief (astrobranding_{brand}.md) "
+            "in pure Markdown (150-250 lines).\n\n"
+            "MANDATORY SECTIONS TO DEVELOP THOROUGHLY:\n"
+            "1. Trípode de Hierro & Ejes Cuánticos de Marca: Sun Natal (Core purpose), Midheaven (Public authority & career), House 2 (Wealth & pricing architecture). Explicitly contrast with Sideral Fagan-Bradley Lagna/MC and Vedic Nakshatra dharma.\n"
+            "2. Tríada Sistémica del Avatar de Cliente Ideal (ICP): House 7 (Relational mirror & direct conversion), House 8 (High-ticket investment & radical transformation), House 11 (Community & power alliances), and Venus Natal (Aesthetic desire & visual magnet).\n"
+            "3. Paleta Bipolar Epistémica OKLCH: 360° Polar Solar Wheel rationale, base hue calculation, dominant element + Yong Shen balance, detailed breakdown of all 3 DTCG ecosystems (Quiet Luxury, High Performance, Bio-Sensual) with APCA and WCAG AAA ratings.\n"
+            "4. Geometría Sagrada del Símbolo & Nakshatra: Tutelary deity, sacred geometry proportions (Golden ratio 1:1.618), monochromatic vector guidelines for the mark.\n"
+            "5. Cadencia Cinética & Motion Design (GSAP 60fps): Dynamic pacing derived from dominant Shadbala planet and speed, cubic-bezier curves, micro-interactions.\n"
+            "6. Estrategia de Naming & Resonancia Vibracional: Transmutation from birth name to active/commercial name, Pythagorean and Chaldean vibrational harmony with founder's Life Path.\n"
+            "7. Ventanas Temporales & Cronocratores de Lanzamiento: Active Vimshottari Mahadasha/Antardasha window impact on campaign releases and high-ticket offers.\n\n"
+            "OUTPUT FORMAT: Pure Markdown starting with '# Master Brief de Astrobranding Semiótico: {brand_name}'. ZERO JSON, zero code blocks wrapping the entire document."
+        )
+        return [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": f"Author the complete, dense, production-ready 'astrobranding_{brand_name.lower()}.md' for '{brand_name}':\n\n### VERIFIED ASTROLOGICAL LAKEHOUSE:\n{json.dumps(context, indent=2, ensure_ascii=False)}"},
+        ]
 
     def _derive_bespoke_archetypes(self, shards: Dict[str, Any]) -> List[Dict[str, str]]:
         s1 = shards.get("shard_01", {}).get("data", {})
@@ -1822,7 +1896,7 @@ class BrandbookPipelineRunner:
     def run(self, dry_run: bool = False) -> int:
         logger.info(f"=== Starting Brandbook Pipeline Runner for '{self.brand_upper}' ===")
         logger.info(f"SSoT Diagnostic Destination: {self.diag_output_dir}")
-        logger.info(f"Project Staging Destination:  {self.project_dev_dir}")
+        logger.info(f"Project Staging Destination:  {self.project_dev_dir} (Symlink to SSoT)")
 
         # 1. Ingestion of Relational Shards
         ingestor = ShardsIngestionEngine(self.brand_upper, diag_root=self.diag_dir)
@@ -1849,7 +1923,7 @@ class BrandbookPipelineRunner:
             logger.info(f"  • Technical Sheet length: {len(tech_sheet_md)} chars")
             return 0
 
-        # 4. Strategic Reasoning via Bifrost (DeepSeek authors psychological and semiotic briefs)
+        # 4. Decoupled Strategic Reasoning via Bifrost (DeepSeek authors psychological and semiotic briefs)
         if self.offline:
             logger.info("Offline mode requested: using pure dynamic domain baseline.")
             strategist = BifrostBrandStrategist()
@@ -1858,22 +1932,15 @@ class BrandbookPipelineRunner:
             astrobranding_md = synth.render_astrobranding_brief(self.brand_upper, shards, palette)
         else:
             strategist = BifrostBrandStrategist(base_url=self.bifrost_url, primary_model=self.model, timeout_sec=180)
-            strategy_data = strategist.generate_strategy(self.brand_upper, shards, palette)
+            
+            # Step 4.1: Brand Strategy JSON (< 20s)
+            strategy_data = strategist.generate_strategy_json(self.brand_upper, shards, palette)
 
-            # Consume bespoke prose authored by DeepSeek via Bifrost
-            author_psych_md = strategy_data.get("author_psychology_markdown")
-            if not author_psych_md or len(author_psych_md.strip()) < 200:
-                logger.warning("DeepSeek did not return full author_psychology_markdown; using mathematical fallback.")
-                author_psych_md = synth.render_author_psychology(self.brand_upper, shards)
-            else:
-                logger.info(f"Consumed bespoke Author Psychology from DeepSeek ({len(author_psych_md)} chars)")
+            # Step 4.2: Full Author Psychology Markdown (~25s)
+            author_psych_md = strategist.generate_author_psychology_markdown(self.brand_upper, shards)
 
-            astrobranding_md = strategy_data.get("astrobranding_brief_markdown")
-            if not astrobranding_md or len(astrobranding_md.strip()) < 200:
-                logger.warning("DeepSeek did not return full astrobranding_brief_markdown; using mathematical fallback.")
-                astrobranding_md = synth.render_astrobranding_brief(self.brand_upper, shards, palette)
-            else:
-                logger.info(f"Consumed bespoke Astrobranding Brief from DeepSeek ({len(astrobranding_md)} chars)")
+            # Step 4.3: Full Astrobranding Brief Markdown (~25s)
+            astrobranding_md = strategist.generate_astrobranding_brief_markdown(self.brand_upper, shards, palette)
 
         # 5. Assemble W3C DTCG Brandbook JSON
         brandbook_json = self._assemble_dtcg_brandbook(self.brand_upper, shards, palette, strategy_data)
@@ -1882,20 +1949,32 @@ class BrandbookPipelineRunner:
         theme_css = self._derive_tailwind_theme_css(brandbook_json)
         system_prompt_md = self._derive_system_prompt_md(brandbook_json)
 
-        # 7. Dual-Destination File Emission
-        destinations = [self.diag_output_dir, self.project_dev_dir]
-        for dest in destinations:
-            dest.mkdir(parents=True, exist_ok=True)
-            self._write_artifacts_to_dir(dest, tech_sheet_md, author_psych_md, astrobranding_md,
-                                         brandbook_json, theme_css, system_prompt_md)
+        # 7. Canonical SSoT File Emission & Atomic Staging Symlink
+        # SSoT Destination: /var/www/baiosfera/ASTROLOGÍA/DIAG/{BRAND}/raw/llm
+        self.diag_output_dir.mkdir(parents=True, exist_ok=True)
+        self._write_artifacts_to_dir(self.diag_output_dir, tech_sheet_md, author_psych_md, astrobranding_md,
+                                     brandbook_json, theme_css, system_prompt_md)
+
+        # Staging Destination: /var/www/baiosfera/PROYECTOS/{BRAND}/dev (Atomic Symlink to SSoT)
+        self.projects_dir.mkdir(parents=True, exist_ok=True)
+        if self.project_dev_dir.is_symlink():
+            self.project_dev_dir.unlink()
+        elif self.project_dev_dir.is_dir():
+            import shutil
+            shutil.rmtree(self.project_dev_dir)
+        elif self.project_dev_dir.exists():
+            self.project_dev_dir.unlink()
+
+        self.project_dev_dir.symlink_to(self.diag_output_dir)
+        logger.info(f"Atomic symlink established: {self.project_dev_dir} -> {self.diag_output_dir}")
 
         # 8. Physical Sensors Verification
         self._verify_artifacts()
 
         print("=" * 76)
         print(f"✅ BRANDBOOK PIPELINE FINALIZADO EXITOSAMENTE PARA: {self.brand_upper}")
-        print(f"📂 Destino 1 (Dossier SSoT Diag): {self.diag_output_dir}")
-        print(f"📂 Destino 2 (Staging Proyecto):  {self.project_dev_dir}")
+        print(f"📂 Destino SSoT Canónico:       {self.diag_output_dir}")
+        print(f"🔗 Staging Proyecto (Symlink):   {self.project_dev_dir} -> {self.diag_output_dir}")
         print(f"  • Ficha Técnica Matemática SSoT: coach_technical_sheet.md ({len(tech_sheet_md)} chars)")
         print(f"  • Pautas Psicológicas de Autor:  fase0_author_psychology.md ({len(author_psych_md)} chars)")
         print(f"  • Master Brief Astrobranding:    astrobranding_{self.brand_lower}.md ({len(astrobranding_md)} chars)")
@@ -1919,6 +1998,10 @@ class BrandbookPipelineRunner:
         (target_dir / "brandbook.json").write_text(json_content, encoding="utf-8")
         (target_dir / "brandbook-theme.css").write_text(theme_css, encoding="utf-8")
         (target_dir / "system_prompt.md").write_text(system_prompt, encoding="utf-8")
+
+    def _assemble_dtcg_brandbook(self, brand_name: str, shards: Dict[str, Any],
+                                 palette: Dict[str, Any], strategy: Dict[str, Any]) -> Dict[str, Any]:
+        """Assembles a valid W3C Design Tokens Community Group (DTCG 2025.10) document."""
 
     def _assemble_dtcg_brandbook(self, brand_name: str, shards: Dict[str, Any],
                                  palette: Dict[str, Any], strategy: Dict[str, Any]) -> Dict[str, Any]:
