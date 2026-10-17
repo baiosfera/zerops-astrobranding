@@ -527,8 +527,8 @@ class DeterministicSynthesizer:
         lat = cp.get("lat", 0.0)
         lng = cp.get("lng", 0.0)
         city = cp.get("city", "N/D")
-        tz_str = cp.get("tz_str", "America/Bogota")
-        tz_offset = cp.get("tz_offset", -5.0)
+        tz_str = cp.get("tz_str") or "UTC"
+        tz_offset = cp.get("tz_offset", 0.0)
 
         planets = s1.get("planets", {})
         houses = s1.get("houses", {})
