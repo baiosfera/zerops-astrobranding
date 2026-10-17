@@ -385,6 +385,9 @@ mkdir -p "$PROJECT_ROOT/.bin/hooks" "$PROJECT_ROOT/.agents" "$ZCP_ROOT/scripts/h
 if [ -f "$SCRIPT_DIR/hooks/tool-guard.py" ]; then
     cp -f "$SCRIPT_DIR/hooks/tool-guard.py" "$PROJECT_ROOT/.bin/hooks/tool-guard.py"
     chmod +x "$PROJECT_ROOT/.bin/hooks/tool-guard.py"
+    if [ -d "$ZCP_ROOT/scripts/hooks" ]; then
+        cp -f "$SCRIPT_DIR/hooks/tool-guard.py" "$ZCP_ROOT/scripts/hooks/tool-guard.py" 2>/dev/null || true
+    fi
 fi
 
 if [ -f "$ZCP_ROOT/.agents/hooks.json" ]; then
