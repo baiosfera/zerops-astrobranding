@@ -1710,7 +1710,7 @@ class BifrostBrandStrategist:
                 "birth_date": f"{cp.get('year', 1990):04d}-{cp.get('month', 1):02d}-{cp.get('day', 1):02d}",
                 "birth_time": f"{cp.get('hour', 12):02d}:{cp.get('minute', 0):02d}",
                 "birth_place": f"{cp.get('city', 'N/D')} (Lat: {cp.get('lat', 0.0)}, Lon: {cp.get('lng', 0.0)})",
-                "timezone": f"{cp.get('tz_str', 'America/Bogota')} (UTC {cp.get('tz_offset', -5.0)})",
+                "timezone": f"{cp.get('tz_str') or 'UTC'} (UTC {cp.get('tz_offset', 0.0)})",
                 "preferred_name": founder_name,
                 "birth_name": founder.get("birth_name") or cp.get("birth_name") or founder_name,
                 "brand_names": cp.get("brand_names", [brand_name]),
