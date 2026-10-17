@@ -716,17 +716,31 @@ class DeterministicSynthesizer:
         tikkun_comm = tikkun.get("commercial_application", "N/D")
 
         zmanim_data = s6.get("zmanim_halachic_times", {})
-        times_obj = zmanim_data.get("times", {})
+        times_obj = zmanim_data.get("times") if isinstance(zmanim_data.get("times"), dict) else zmanim_data
         if isinstance(times_obj, str):
             try:
                 times_obj = ast.literal_eval(times_obj)
             except Exception:
                 times_obj = {}
-        sunrise = times_obj.get("sunrise", "N/D")
-        sunset = times_obj.get("sunset", "N/D")
-        shma = times_obj.get("sofZmanShma", "N/D")
-        chatzot = times_obj.get("chatzot", "N/D")
-        plag = times_obj.get("plagHaMincha", "N/D")
+
+        def _fmt_time(val: Any) -> str:
+            if not val or val == "N/D":
+                return "N/D"
+            val_str = str(val).strip()
+            if "T" in val_str:
+                try:
+                    time_part = val_str.split("T")[1][:5]
+                    tz_part = val_str[-6:] if ("+" in val_str or "-" in val_str[10:]) else ""
+                    return f"{time_part} ({tz_part})" if tz_part else time_part
+                except Exception:
+                    pass
+            return val_str
+
+        sunrise = _fmt_time(times_obj.get("sunrise", "N/D"))
+        sunset = _fmt_time(times_obj.get("sunset", "N/D"))
+        shma = _fmt_time(times_obj.get("sofZmanShma", "N/D"))
+        chatzot = _fmt_time(times_obj.get("chatzot", "N/D"))
+        plag = _fmt_time(times_obj.get("plagHaMincha", "N/D"))
 
         # ACG
         acg_lines = s8.get("planetary_lines", [])
