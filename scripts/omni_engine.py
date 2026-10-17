@@ -414,12 +414,11 @@ def main():
     dob = f"{y:04d}-{m:02d}-{d:02d}"
     h, mn = [int(x) for x in tob.split(":")[:2]]
 
-    tz_offset = -5.0
     try:
         dt = datetime(y, m, d, h, mn, tzinfo=ZoneInfo(tz))
         tz_offset = dt.utcoffset().total_seconds() / 3600.0
     except Exception:
-        pass
+        tz_offset = round(lon / 15.0)
 
     client_payload = {
         "year": y, "month": m, "day": d,
