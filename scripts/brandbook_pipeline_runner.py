@@ -2329,7 +2329,10 @@ class BrandbookPipelineRunner:
         return "\n".join(lines)
 
     def _verify_artifacts(self) -> None:
-        """Physical sensor check verifying file existence, non-zero size, and parseable JSON in both destinations."""
+        """Physical sensor check verifying file existence, non-zero size, parseable JSON, and valid symlink."""
+        assert self.project_dev_dir.is_symlink(), f"Physical verification failed: {self.project_dev_dir} must be an atomic symlink to {self.diag_output_dir}"
+        assert self.project_dev_dir.resolve() == self.diag_output_dir.resolve(), f"Symlink target mismatch: {self.project_dev_dir.resolve()} != {self.diag_output_dir.resolve()}"
+
         for target_dir in [self.diag_output_dir, self.project_dev_dir]:
             expected_files = [
                 target_dir / "coach_technical_sheet.md",
@@ -2349,7 +2352,7 @@ class BrandbookPipelineRunner:
                 data = json.load(f)
             assert "$schema" in data and "design_system" in data, f"DTCG validation failed in {target_dir}"
 
-        logger.info("Physical sensor verification passed across dual destinations (Exit code 0).")
+        logger.info("Physical sensor verification passed across dual destinations with verified symlink (Exit code 0).")
 
 
 # ==============================================================================
