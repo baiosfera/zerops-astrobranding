@@ -1878,13 +1878,13 @@ class BifrostBrandStrategist:
         ys = s4.get("yong_shen", {})
         nak = s3.get("nakshatra", {})
 
-        sun_sign = tripod.get("sun", {}).get("sign", "Capricorn")
-        sun_house = tripod.get("sun", {}).get("house", 2)
-        mc_sign = tripod.get("midheaven_house_10", {}).get("sign", "Virgo")
-        dom_el = elem.get("dominant_element", "Tierra")
-        dm_name = dm.get("name", "Ren")
-        ys_elem = ys.get("element", "Metal")
-        nak_name = nak.get("name", "Ashwini")
+        sun_sign = tripod.get("sun", {}).get("sign") or "N/D"
+        sun_house = tripod.get("sun", {}).get("house") or 1
+        mc_sign = tripod.get("midheaven_house_10", {}).get("sign") or "N/D"
+        dom_el = elem.get("dominant_element") or "N/D"
+        dm_name = dm.get("name") or "N/D"
+        ys_elem = ys.get("element") or "N/D"
+        nak_name = nak.get("name") or "N/D"
 
         f_name = cp.get("preferred_name") or cp.get("name") or brand_name
 
