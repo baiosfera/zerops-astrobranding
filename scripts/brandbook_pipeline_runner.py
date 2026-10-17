@@ -1794,17 +1794,17 @@ class BifrostBrandStrategist:
         context = self._extract_context(brand_name, shards)
         system_msg = (
             "You are the Lead Epistemic Astrologer, Transpersonal Psychologist, and System Prompt Architect.\n"
-            "Your task is to write the complete, dense, authoritative Cognitive System Prompt and Author Psychology Dossier "
-            "(fase0_author_psychology.md) in pure Markdown (150-250 lines).\n\n"
-            "MANDATORY MULTI-TRADITION SEPARATION CONTRACT:\n"
+            "Your task is to write the complete, deeply comprehensive, exhaustive, unconstrained Cognitive System Prompt "
+            "and Author Psychology Dossier (fase0_author_psychology.md) in pure Markdown. Do NOT truncate, abbreviate, or summarize.\n\n"
+            "MANDATORY MULTI-TRADITION SEPARATION & COMPARISON CONTRACT:\n"
             "You must explicitly separate, contrast, and integrate the three distinct astrological systems without conflating them:\n"
             "1. Occidental Tropical Placidus: Ego psychology, conscious mind, Stephen Arroyo elemental balance (percentages, dominant element), and communication style.\n"
-            "2. Occidental Sideral Fagan-Bradley: Quantum physical astronomical truth, fixed stars, Ascendant (Lagna) and Midheaven (MC), precessional Ayanamsa delta (~55' vs Lahiri), and Mundoscope.\n"
-            "3. Védica Jyotish Lahiri: Janma Nakshatra and tutelary deity, planetary lord, Shadbala dominant planet with Rupas, Yogas, active Vimshottari Mahadasha and Antardasha with exact dates and business impact.\n"
-            "4. Metafísica China BaZi: Day Master, 4 Pillars (Stem/Branch/Element/Animal), and Yong Shen homeostatic balancer.\n"
+            "2. Occidental Sideral Fagan-Bradley: Quantum physical astronomical truth, fixed stars, Ascendant (Lagna) and Midheaven (MC), precessional Ayanamsa delta (~55' vs Lahiri), and Mundoscope (Cruz de Malta).\n"
+            "3. Védica Jyotish Lahiri & Sistema KP: Janma Nakshatra and tutelary deity, planetary lord, Shadbala dominant planet with Rupas and rank, Yogas, active Vimshottari Mahadasha and Antardasha with exact dates and business impact, and KP cuspal sub-lords.\n"
+            "4. Metafísica China BaZi: Day Master, 4 Pillars (Stem/Branch/Element/Animal/NaYin), and Yong Shen homeostatic balancer.\n"
             "5. Mecánica de Diseño Humano: Energy Type, Profile, Strategy, Inner Authority, Incarnation Cross, Defined/Open Centers, and Active Channels.\n"
             "6. Medicina Tradicional China (TCM): Biological constitution (Temperature, Moisture, Yin/Yang ratio), organs under metabolic demand, and anti-fatigue protocol.\n"
-            "7. Cábala Hebrea & Zmanim: Hebrew birth date, Parashat Hashavua, Tikkun (Rav Berg) and commercial application.\n"
+            "7. Cábala Hebrea & Zmanim: Hebrew birth date, Parashat Hashavua, Tikkun (Rav Berg) with soul correction and commercial application, and halachic solar times (Sunrise, Shma, Chatzot, Plag HaMincha, Sunset).\n"
             "8. Pautas Concretas para Modelos Downstream (Fases 1 a 9): How agents must communicate with the founder, cadence modulation, language tone, and anti-fatigue safeguards.\n\n"
             "OUTPUT FORMAT: Pure Markdown starting with '# Perfil Psicológico de Autor & Pautas de Voz y Tono (Fase 0)'. ZERO JSON, zero code blocks wrapping the entire document."
         )
@@ -1817,10 +1817,10 @@ class BifrostBrandStrategist:
         context = self._extract_context(brand_name, shards, palette)
         system_msg = (
             "You are the Creative Director, Design Systems Engineer, and Semiotic Astrobranding Master.\n"
-            "Your task is to write the complete, dense, authoritative Master Semiotic Brief (astrobranding_{brand}.md) "
-            "in pure Markdown (150-250 lines).\n\n"
+            "Your task is to write the complete, deeply comprehensive, exhaustive, unconstrained Master Semiotic Brief "
+            "(astrobranding_{brand}.md) in pure Markdown. Do NOT truncate, abbreviate, or summarize.\n\n"
             "MANDATORY SECTIONS TO DEVELOP THOROUGHLY:\n"
-            "1. Trípode de Hierro & Ejes Cuánticos de Marca: Sun Natal (Core purpose), Midheaven (Public authority & career), House 2 (Wealth & pricing architecture). Explicitly contrast with Sideral Fagan-Bradley Lagna/MC and Vedic Nakshatra dharma.\n"
+            "1. Trípode de Hierro & Ejes Cuánticos de Marca: Sun Natal (Core purpose), Midheaven (Public authority & career), House 2 (Wealth & pricing architecture). Explicitly contrast Tropical Placidus vs. Sideral Fagan-Bradley Lagna/MC vs. Vedic Nakshatra dharma.\n"
             "2. Tríada Sistémica del Avatar de Cliente Ideal (ICP): House 7 (Relational mirror & direct conversion), House 8 (High-ticket investment & radical transformation), House 11 (Community & power alliances), and Venus Natal (Aesthetic desire & visual magnet).\n"
             "3. Paleta Bipolar Epistémica OKLCH: 360° Polar Solar Wheel rationale, base hue calculation, dominant element + Yong Shen balance, detailed breakdown of all 3 DTCG ecosystems (Quiet Luxury, High Performance, Bio-Sensual) with APCA and WCAG AAA ratings.\n"
             "4. Geometría Sagrada del Símbolo & Nakshatra: Tutelary deity, sacred geometry proportions (Golden ratio 1:1.618), monochromatic vector guidelines for the mark.\n"
