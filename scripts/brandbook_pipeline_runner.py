@@ -1504,14 +1504,15 @@ class BifrostBrandStrategist:
         self.timeout_sec = timeout_sec
 
     def _send_completion(self, model: str, messages: List[Dict[str, str]],
-                         response_format: str = "text", max_tokens: int = 8192) -> str:
+                         response_format: str = "text", max_tokens: Optional[int] = None) -> str:
         url = f"{self.base_url}/v1/chat/completions"
         payload: Dict[str, Any] = {
             "model": model,
             "messages": messages,
             "temperature": 0.2 if response_format == "json_object" else 0.3,
-            "max_tokens": max_tokens,
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         if response_format == "json_object":
             payload["response_format"] = {"type": "json_object"}
 
@@ -1540,14 +1541,14 @@ class BifrostBrandStrategist:
 
         if not content_raw:
             if finish_reason == "length":
-                raise ValueError(f"Model {model} exhausted max_tokens ({max_tokens}) during reasoning phase.")
+                raise ValueError(f"Model {model} exhausted token limit during reasoning/generation phase.")
             raise ValueError(f"Empty message content received from Bifrost ({model}).")
 
         return content_raw
 
     def generate_strategy_json(self, brand_name: str, shards: Dict[str, Any],
                                palette: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Call 1: Generates clean, fast brand strategy JSON (< 3500 tokens, ~20s)."""
+        """Call 1: Generates clean, fast brand strategy JSON unconstrained (~20s)."""
         prompt = self._build_strategy_json_prompt(brand_name, shards, palette)
         models_to_try = [self.primary_model]
         if self.fallback_model and self.fallback_model != self.primary_model:
@@ -1555,8 +1556,8 @@ class BifrostBrandStrategist:
 
         for model in models_to_try:
             try:
-                logger.info(f"[Call 1/3] Invoking Bifrost for Brand Strategy JSON with {model} (max_tokens: 8192)...")
-                content_raw = self._send_completion(model, prompt, response_format="json_object", max_tokens=8192)
+                logger.info(f"[Call 1/3] Invoking Bifrost for Brand Strategy JSON with {model} (unconstrained tokens)...")
+                content_raw = self._send_completion(model, prompt, response_format="json_object", max_tokens=None)
                 if content_raw.startswith("```"):
                     content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
                     content_raw = re.sub(r"\n?```$", "", content_raw).strip()
@@ -1573,11 +1574,11 @@ class BifrostBrandStrategist:
             except Exception as e:
                 logger.warning(f"Strategy JSON generation with {model} failed: {e}. Trying next...")
 
-        logger.warning("Bifrost models were unreachable for strategy JSON. Using dynamic domain baseline.")
-        return self._generate_dynamic_domain_baseline(brand_name, shards)
+        # SOVEREIGN DIRECTIVE: NO OFFLINE FALLBACK! FAIL LOUDLY AND COMPLETELY.
+        raise RuntimeError(f"FATAL: All Bifrost models failed for Brand Strategy JSON ({models_to_try}). Offline Python fallback is strictly eradicated per sovereign architecture directive.")
 
     def generate_author_psychology_markdown(self, brand_name: str, shards: Dict[str, Any]) -> str:
-        """Call 2: Generates complete, dense fase0_author_psychology.md in pure Markdown (~25s)."""
+        """Call 2: Generates complete, dense, unconstrained fase0_author_psychology.md in pure Markdown."""
         prompt = self._build_author_psychology_prompt(brand_name, shards)
         models_to_try = [self.primary_model]
         if self.fallback_model and self.fallback_model != self.primary_model:
@@ -1585,8 +1586,8 @@ class BifrostBrandStrategist:
 
         for model in models_to_try:
             try:
-                logger.info(f"[Call 2/3] Invoking Bifrost for Author Psychology Markdown with {model} (max_tokens: 8192)...")
-                content_raw = self._send_completion(model, prompt, response_format="text", max_tokens=8192)
+                logger.info(f"[Call 2/3] Invoking Bifrost for Author Psychology Markdown with {model} (unconstrained tokens)...")
+                content_raw = self._send_completion(model, prompt, response_format="text", max_tokens=None)
                 if content_raw.startswith("```"):
                     content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
                     content_raw = re.sub(r"\n?```$", "", content_raw).strip()
@@ -1596,11 +1597,11 @@ class BifrostBrandStrategist:
             except Exception as e:
                 logger.warning(f"Author Psychology generation with {model} failed: {e}. Trying next...")
 
-        logger.warning("Bifrost models were unreachable for Author Psychology. Using mathematical fallback.")
-        return DeterministicSynthesizer.render_author_psychology(brand_name, shards)
+        # SOVEREIGN DIRECTIVE: NO OFFLINE FALLBACK! FAIL LOUDLY AND COMPLETELY.
+        raise RuntimeError(f"FATAL: All Bifrost models failed for Author Psychology Markdown ({models_to_try}). Offline Python fallback is strictly eradicated per sovereign architecture directive.")
 
     def generate_astrobranding_brief_markdown(self, brand_name: str, shards: Dict[str, Any], palette: Dict[str, Any]) -> str:
-        """Call 3: Generates complete, dense astrobranding_{brand}.md in pure Markdown (~25s)."""
+        """Call 3: Generates complete, dense, unconstrained astrobranding_{brand}.md in pure Markdown."""
         prompt = self._build_astrobranding_brief_prompt(brand_name, shards, palette)
         models_to_try = [self.primary_model]
         if self.fallback_model and self.fallback_model != self.primary_model:
@@ -1608,8 +1609,8 @@ class BifrostBrandStrategist:
 
         for model in models_to_try:
             try:
-                logger.info(f"[Call 3/3] Invoking Bifrost for Astrobranding Brief Markdown with {model} (max_tokens: 8192)...")
-                content_raw = self._send_completion(model, prompt, response_format="text", max_tokens=8192)
+                logger.info(f"[Call 3/3] Invoking Bifrost for Astrobranding Brief Markdown with {model} (unconstrained tokens)...")
+                content_raw = self._send_completion(model, prompt, response_format="text", max_tokens=None)
                 if content_raw.startswith("```"):
                     content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
                     content_raw = re.sub(r"\n?```$", "", content_raw).strip()
@@ -1619,8 +1620,8 @@ class BifrostBrandStrategist:
             except Exception as e:
                 logger.warning(f"Astrobranding Brief generation with {model} failed: {e}. Trying next...")
 
-        logger.warning("Bifrost models were unreachable for Astrobranding Brief. Using mathematical fallback.")
-        return DeterministicSynthesizer.render_astrobranding_brief(brand_name, shards, palette)
+        # SOVEREIGN DIRECTIVE: NO OFFLINE FALLBACK! FAIL LOUDLY AND COMPLETELY.
+        raise RuntimeError(f"FATAL: All Bifrost models failed for Astrobranding Brief Markdown ({models_to_try}). Offline Python fallback is strictly eradicated per sovereign architecture directive.")
 
     def _extract_context(self, brand_name: str, shards: Dict[str, Any], palette: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         s1 = shards.get("shard_01", {}).get("data", {})
