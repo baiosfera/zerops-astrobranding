@@ -352,7 +352,13 @@ if [ "$RUN_ALL" = true ]; then
     rm -rf "$PROJECT_ROOT/baiosfera/CURSOS/MCV/__pycache__" 2>/dev/null || true
     find /tmp -maxdepth 1 \( -name "gentle_*" -o -name "gai_*" -o -name "engram_*" -o -name "gga_*" \) -type d -exec rm -rf {} + 2>/dev/null || true
     rm -f "$PROJECT_ROOT/.env" "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT"/key*.md "$PROJECT_ROOT"/key*.env 2>/dev/null || true
-    echo "  ✓ Bytecode (__pycache__, *.pyc) y archivos temporales (.env, gdrive.env, keys) purgados."
+    # Invariante de Paridad de Skills Soberanas: purga de subcarpetas ajenas o residuales
+    rm -rf "$PROJECT_ROOT/.agents/skills/planner/"{assets,scripts} 2>/dev/null || true
+    rm -rf "$PROJECT_ROOT/.agents/skills/docu/scripts" 2>/dev/null || true
+    rm -rf "$PROJECT_ROOT/.agents/skills/research/scripts" 2>/dev/null || true
+    rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/raw" 2>/dev/null || true
+    rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/pipeline/synthesis.py" 2>/dev/null || true
+    echo "  ✓ Bytecode (__pycache__, *.pyc), residuos de skills y archivos temporales (.env, gdrive.env, keys) purgados."
 
     # Invariante Anti-Forwarding y Persistencia de Terminales Web en Code-Server
     echo "• Asegurando persistencia de terminales web y remote.autoForwardPorts en Code-Server..."
