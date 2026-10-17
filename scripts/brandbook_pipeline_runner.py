@@ -614,7 +614,7 @@ class DeterministicSynthesizer:
                 lah_str = f"{lah_p.get('sign', 'N/D')} {lah_p.get('degree', 0.0):.2f}°" if lah_p else "N/D"
                 p_house = p_data.get("house", "N/D")
                 sidereal_planet_rows.append(f"| {p_name} | {t_str} | {fb_str} | {lah_str} | Casa {p_house} |")
-        sidereal_table_str = "\n".join(sidereal_planet_rows) if sidereal_planet_rows else "| Sol | Capricornio 27.93° | Sagitario 3.37° | Sagitario 4.29° | Casa 2 |"
+        sidereal_table_str = "\n".join(sidereal_planet_rows) if sidereal_planet_rows else "| Sin posiciones siderales | N/D | N/D | N/D | N/D |"
 
         # Vedic
         nak = s3.get("nakshatra", {})
