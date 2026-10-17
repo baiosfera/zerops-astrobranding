@@ -675,7 +675,7 @@ class DeterministicSynthesizer:
                 animal = p_data.get("animalName") or p_data.get("animal", "")
                 pillar_str = p_data.get("pillar", f"{stem}-{branch}")
                 bazi_rows.append(f"| {p_label} | {stem} | {branch} | {p_elem} | {animal} | {pillar_str} |")
-        bazi_table_str = "\n".join(bazi_rows) if bazi_rows else "| Día | Ren | Xu | Agua | Perro | Ren-Xu |"
+        bazi_table_str = "\n".join(bazi_rows) if bazi_rows else "| Sin pilares BaZi | N/D | N/D | N/D | N/D | N/D |"
 
         # TCM
         const = s12.get("constitution", {})
