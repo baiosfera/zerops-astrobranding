@@ -243,7 +243,8 @@ if [ ! -d "$REPO_DIR" ]; then
     git clone "$REPO_URL" "$REPO_DIR"
 else
     echo "• [1/4] Repositorio detectado en $REPO_DIR. Sincronizando con origen..."
-    git -C "$REPO_DIR" pull --ff-only 2>/dev/null || true
+    git -C "$REPO_DIR" fetch origin main 2>/dev/null || true
+    git -C "$REPO_DIR" reset --hard origin/main 2>/dev/null || git -C "$REPO_DIR" pull --ff-only 2>/dev/null || true
 fi
 
 # 2. Asegurar montaje de Google Drive SSoT vía gdrive.sh
