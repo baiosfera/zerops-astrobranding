@@ -252,6 +252,12 @@ def resolve_astroway_payload(
             "dashaSystem": "vimshottari"
         }
 
+    # 13. Sidereal Charts (Fagan-Bradley Campanus & Lahiri)
+    if "lahiri" in path:
+        return {**base_payload, "houseSystem": "W", "zodiacType": "sidereal", "ayanamsa": "lahiri"}
+    if "sidereal" in path or "fagan" in path or "campanus" in path:
+        return fc_payload
+
     # Default: Standard Tropical Placidus ChartInput
     return base_payload
 
