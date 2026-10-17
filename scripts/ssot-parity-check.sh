@@ -297,6 +297,9 @@ for skill in "${CORE_SKILLS[@]}"; do
     local_skill_dir="$LOCAL_BASE/.agents/skills/$skill"
     repo_skill_dir="/var/www/zerops-astro-skills/$skill"
     if [ -d "$repo_skill_dir" ]; then
+        if [ -d "$local_skill_dir" ]; then
+            rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$repo_skill_dir/" "$local_skill_dir/" 2>/dev/null || true
+        fi
         DIFF_REPO=$(diff -rq --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$local_skill_dir" "$repo_skill_dir" 2>&1 || true)
         if [ -n "$DIFF_REPO" ]; then
             echo "❌ Drift detected between local skill and git repo (zerops-astro-skills/$skill):"
