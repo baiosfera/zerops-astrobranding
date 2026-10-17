@@ -242,6 +242,10 @@ CORE_SKILLS=("oraculo" "planner" "docu" "research")
 for skill in "${CORE_SKILLS[@]}"; do
     local_skill_dir="$LOCAL_BASE/.agents/skills/$skill"
     drive_skill_dir="$DRIVE_BASE/.agents/skills/$skill"
+    # Auto-healing anti-deriva: purgar carpetas o archivos locales ajenos que no existan en Drive SSoT
+    if [ -d "$drive_skill_dir" ] && [ -d "$local_skill_dir" ]; then
+        rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$drive_skill_dir/" "$local_skill_dir/" 2>/dev/null || true
+    fi
     DIFF_OUT=$(diff -rq --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$local_skill_dir" "$drive_skill_dir" 2>&1 || true)
     if [ -n "$DIFF_OUT" ]; then
         echo "❌ Drift or missing files detected in core skill $skill:"
