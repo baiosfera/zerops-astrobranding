@@ -43,7 +43,9 @@ if git ls-remote "$SKILLS_REPO_URL" &>/dev/null; then
     if [ ! -d "$SKILLS_LOCAL_CACHE/.git" ]; then
         git clone --depth 1 "$SKILLS_REPO_URL" "$SKILLS_LOCAL_CACHE" 2>/dev/null || true
     else
-        git -C "$SKILLS_LOCAL_CACHE" pull --ff-only 2>/dev/null || true
+        git -C "$SKILLS_LOCAL_CACHE" fetch origin main 2>/dev/null || true
+        git -C "$SKILLS_LOCAL_CACHE" reset --hard origin/main 2>/dev/null || git -C "$SKILLS_LOCAL_CACHE" pull --ff-only 2>/dev/null || true
+        git -C "$SKILLS_LOCAL_CACHE" clean -fd 2>/dev/null || true
     fi
     if [ -d "$SKILLS_LOCAL_CACHE" ]; then
         SKILLS_SRC="$SKILLS_LOCAL_CACHE"
