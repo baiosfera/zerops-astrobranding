@@ -1985,11 +1985,12 @@ class BrandbookPipelineRunner:
         self.diag_output_dir = self.diag_dir / "raw" / "llm"
         self.projects_dir = Path("/var/www/baiosfera/PROYECTOS") / self.brand_upper
         self.project_dev_dir = self.projects_dir / "dev"
+        self.localstorage_dev_dir = Path("/var/www/localstorage") / self.brand_upper / "dev"
 
     def run(self, dry_run: bool = False) -> int:
         logger.info(f"=== Starting Brandbook Pipeline Runner for '{self.brand_upper}' ===")
-        logger.info(f"SSoT Diagnostic Destination: {self.diag_output_dir}")
-        logger.info(f"Project Staging Destination:  {self.project_dev_dir} (Symlink to SSoT)")
+        logger.info(f"Project Staging Destination (zcp-sync SSoT): {self.project_dev_dir}")
+        logger.info(f"Diagnostic Archive Destination:             {self.diag_output_dir}")
 
         # 1. Ingestion of Relational Shards
         ingestor = ShardsIngestionEngine(self.brand_upper, diag_root=self.diag_dir)
@@ -2042,38 +2043,36 @@ class BrandbookPipelineRunner:
         theme_css = self._derive_tailwind_theme_css(brandbook_json)
         system_prompt_md = self._derive_system_prompt_md(brandbook_json)
 
-        # 7. Canonical SSoT File Emission & Atomic Staging Symlink
-        # SSoT Destination: /var/www/baiosfera/ASTROLOGÍA/DIAG/{BRAND}/raw/llm
+        # 7. Canonical File Emission directly to /PROYECTOS/{BRAND}/dev (Native SSoT for zcp-sync)
+        # Primary Destination: /var/www/baiosfera/PROYECTOS/{BRAND}/dev
+        self.project_dev_dir.mkdir(parents=True, exist_ok=True)
+        self._write_artifacts_to_dir(self.project_dev_dir, tech_sheet_md, author_psych_md, astrobranding_md,
+                                     brandbook_json, theme_css, system_prompt_md)
+        logger.info(f"Direct native artifacts written to primary project staging: {self.project_dev_dir}")
+
+        # Secondary/Archive Destination: /var/www/baiosfera/ASTROLOGÍA/DIAG/{BRAND}/raw/llm
         self.diag_output_dir.mkdir(parents=True, exist_ok=True)
         self._write_artifacts_to_dir(self.diag_output_dir, tech_sheet_md, author_psych_md, astrobranding_md,
                                      brandbook_json, theme_css, system_prompt_md)
+        logger.info(f"Mirrored physical artifacts written to diagnostic archive: {self.diag_output_dir}")
 
-        # Staging Destination: /var/www/baiosfera/PROYECTOS/{BRAND}/dev (Atomic Symlink to SSoT)
-        self.projects_dir.mkdir(parents=True, exist_ok=True)
-        if self.project_dev_dir.is_symlink():
-            self.project_dev_dir.unlink()
-        elif self.project_dev_dir.is_dir():
-            import shutil
-            shutil.rmtree(self.project_dev_dir)
-        elif self.project_dev_dir.exists():
-            self.project_dev_dir.unlink()
-
-        try:
-            self.project_dev_dir.symlink_to(self.diag_output_dir)
-            logger.info(f"Atomic symlink established: {self.project_dev_dir} -> {self.diag_output_dir}")
-        except OSError as e:
-            logger.warning(f"Underlying filesystem does not support unix symlinks ({e}). Creating directory staging copy...")
-            import shutil
-            shutil.copytree(self.diag_output_dir, self.project_dev_dir)
-            logger.info(f"Staging directory copy established: {self.project_dev_dir}")
+        # LocalStorage Destination (if localstorage is mounted)
+        if Path("/var/www/localstorage").exists():
+            try:
+                self.localstorage_dev_dir.mkdir(parents=True, exist_ok=True)
+                self._write_artifacts_to_dir(self.localstorage_dev_dir, tech_sheet_md, author_psych_md, astrobranding_md,
+                                             brandbook_json, theme_css, system_prompt_md)
+                logger.info(f"Mirrored physical artifacts written to localstorage: {self.localstorage_dev_dir}")
+            except Exception as e:
+                logger.warning(f"Could not mirror to localstorage: {e}")
 
         # 8. Physical Sensors Verification
         self._verify_artifacts()
 
         print("=" * 76)
         print(f"✅ BRANDBOOK PIPELINE FINALIZADO EXITOSAMENTE PARA: {self.brand_upper}")
-        print(f"📂 Destino SSoT Canónico:       {self.diag_output_dir}")
-        print(f"🔗 Staging Proyecto (Symlink):   {self.project_dev_dir} -> {self.diag_output_dir}")
+        print(f"📂 Destino Primario (zcp-sync):   {self.project_dev_dir}")
+        print(f"📁 Destino Diagnóstico/Lakehouse: {self.diag_output_dir}")
         print(f"  • Ficha Técnica Matemática SSoT: coach_technical_sheet.md ({len(tech_sheet_md)} chars)")
         print(f"  • Pautas Psicológicas de Autor:  fase0_author_psychology.md ({len(author_psych_md)} chars)")
         print(f"  • Master Brief Astrobranding:    astrobranding_{self.brand_lower}.md ({len(astrobranding_md)} chars)")
