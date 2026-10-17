@@ -552,7 +552,7 @@ class DeterministicSynthesizer:
                 p_speed = p_data.get("speed", 1.0)
                 speed_str = f"{p_speed:.2f}" if isinstance(p_speed, (int, float)) else str(p_speed)
                 planet_rows.append(f"| {p_name} | {p_sign} | {p_deg:.2f}° | Casa {p_house} | {p_retro} | {speed_str} |")
-        planets_table_str = "\n".join(planet_rows) if planet_rows else "| Sol | Capricornio | 27.93° | Casa 2 | No | 1.00 |"
+        planets_table_str = "\n".join(planet_rows) if planet_rows else "| Sin planetas registrados en caché | N/D | 0.00° | N/D | No | 0.00 |"
 
         house_rows: List[str] = []
         for h_num in range(1, 13):
