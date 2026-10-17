@@ -190,6 +190,13 @@ else
     echo "  ⚠️ No se pudo clonar mattpocock/skills (usando SSoT local)."
 fi
 
+# Blindaje Soberano Anti-Contaminación: Purgar carpetas ajenas upstream en core skills soberanas
+rm -rf "$PROJECT_ROOT/.agents/skills/planner/"{assets,scripts} 2>/dev/null || true
+rm -rf "$PROJECT_ROOT/.agents/skills/docu/scripts" 2>/dev/null || true
+rm -rf "$PROJECT_ROOT/.agents/skills/research/scripts" 2>/dev/null || true
+rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/raw" 2>/dev/null || true
+rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/pipeline/synthesis.py" 2>/dev/null || true
+
 rm -rf "$TMP_SKILLS_DIR" 2>/dev/null || true
 
 # Replicación Universal de Skills hacia el perfil global de Antigravity CLI
