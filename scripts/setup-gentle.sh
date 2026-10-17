@@ -139,6 +139,7 @@ TMP_SKILLS_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t 'gentle_skills.XXXXXX')"
 # 1. SDD Suite & Canonical ATL Skills (Upstream Oficial)
 if timeout 15s git clone --depth 1 https://github.com/Gentleman-Programming/agent-teams-lite.git "$TMP_SKILLS_DIR/atl" >/dev/null 2>&1; then
     echo "  ✓ Upstream ATL/SDD skills descargadas con éxito."
+    rm -rf "$TMP_SKILLS_DIR/atl/skills/planner" "$TMP_SKILLS_DIR/atl/skills/docu" "$TMP_SKILLS_DIR/atl/skills/research" "$TMP_SKILLS_DIR/atl/skills/oraculo" 2>/dev/null || true
     [ -d "$TMP_SKILLS_DIR/atl/skills" ] && cp -rn "$TMP_SKILLS_DIR/atl/skills/"* "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
 else
     echo "  ⚠️ No se pudo clonar agent-teams-lite (usando SSoT local)."
