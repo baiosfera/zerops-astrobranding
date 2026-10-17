@@ -1987,8 +1987,14 @@ class BrandbookPipelineRunner:
         elif self.project_dev_dir.exists():
             self.project_dev_dir.unlink()
 
-        self.project_dev_dir.symlink_to(self.diag_output_dir)
-        logger.info(f"Atomic symlink established: {self.project_dev_dir} -> {self.diag_output_dir}")
+        try:
+            self.project_dev_dir.symlink_to(self.diag_output_dir)
+            logger.info(f"Atomic symlink established: {self.project_dev_dir} -> {self.diag_output_dir}")
+        except OSError as e:
+            logger.warning(f"Underlying filesystem does not support unix symlinks ({e}). Creating directory staging copy...")
+            import shutil
+            shutil.copytree(self.diag_output_dir, self.project_dev_dir)
+            logger.info(f"Staging directory copy established: {self.project_dev_dir}")
 
         # 8. Physical Sensors Verification
         self._verify_artifacts()
