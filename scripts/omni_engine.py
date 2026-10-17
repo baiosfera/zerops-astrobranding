@@ -71,11 +71,19 @@ def parse_client_file(file_path: Path) -> dict:
             parent_dir = file_path.parent
             resolved = None
             if parent_dir.is_dir():
+                md_candidates = []
                 for candidate in parent_dir.iterdir():
                     if candidate.is_file() and candidate.suffix.lower() in [".md", ".txt", ".json"]:
-                        if _strip_accents(candidate.stem) == target_stem:
+                        cand_stem = _strip_accents(candidate.stem)
+                        if cand_stem == target_stem:
                             resolved = candidate
                             break
+                        elif cand_stem in target_stem or target_stem in cand_stem:
+                            md_candidates.append(candidate)
+                        elif candidate.suffix.lower() == ".md":
+                            md_candidates.append(candidate)
+                if not resolved and md_candidates:
+                    resolved = md_candidates[0]
             if resolved and resolved.exists():
                 print(f"ℹ️ Archivo resuelto automáticamente por coincidencia diacrítica: {resolved}")
                 file_path = resolved
