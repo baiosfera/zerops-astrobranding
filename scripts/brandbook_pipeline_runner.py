@@ -1490,6 +1490,29 @@ class DeterministicSynthesizer:
 """
 
 
+def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
+    """Robust regex-based JSON extractor: strips <think> tags, extracts codeblocks or balanced braces."""
+    cleaned = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
+    m_block = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+    if m_block:
+        try:
+            return json.loads(m_block.group(1).strip())
+        except Exception:
+            pass
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        pass
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(cleaned[start:end+1])
+        except Exception:
+            pass
+    raise ValueError(f"No parseable JSON structure found in response: {cleaned[:150]}")
+
+
 # ==============================================================================
 # Bifrost AI Gateway Client (Concise Reasoning, Root JSON, Zero Truncation)
 # ==============================================================================
@@ -1498,7 +1521,7 @@ class BifrostBrandStrategist:
 
     def __init__(self, base_url: str = "http://bifrost:8080", primary_model: str = "deepseek/deepseek-chat",
                  fallback_model: str = "freellmapi/deepseek-v4-flash", timeout_sec: int = 180):
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (os.getenv("BIFROST_URL") or base_url).rstrip("/")
         self.primary_model = primary_model
         self.fallback_model = fallback_model
         self.timeout_sec = timeout_sec
@@ -1519,6 +1542,9 @@ class BifrostBrandStrategist:
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=data, method="POST")
         req.add_header("Content-Type", "application/json")
+        auth_key = os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if auth_key:
+            req.add_header("Authorization", f"Bearer {auth_key}")
         req.add_header("x-tier", "production")
         req.add_header("x-bf-cache-bypass", "true")
         req.add_header("x-bf-cache-ttl", "0")
@@ -1558,10 +1584,7 @@ class BifrostBrandStrategist:
             try:
                 logger.info(f"[Call 1/3] Invoking Bifrost for Brand Strategy JSON with {model} (unconstrained tokens)...")
                 content_raw = self._send_completion(model, prompt, response_format="json_object", max_tokens=None)
-                if content_raw.startswith("```"):
-                    content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
-                    content_raw = re.sub(r"\n?```$", "", content_raw).strip()
-                res = json.loads(content_raw)
+                res = extract_json_from_text(content_raw)
                 if isinstance(res, dict):
                     if "schema_required" in res and isinstance(res["schema_required"], dict):
                         res = res["schema_required"]
