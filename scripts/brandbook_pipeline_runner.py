@@ -2002,10 +2002,6 @@ class BrandbookPipelineRunner:
     def _assemble_dtcg_brandbook(self, brand_name: str, shards: Dict[str, Any],
                                  palette: Dict[str, Any], strategy: Dict[str, Any]) -> Dict[str, Any]:
         """Assembles a valid W3C Design Tokens Community Group (DTCG 2025.10) document."""
-
-    def _assemble_dtcg_brandbook(self, brand_name: str, shards: Dict[str, Any],
-                                 palette: Dict[str, Any], strategy: Dict[str, Any]) -> Dict[str, Any]:
-        """Assembles a valid W3C Design Tokens Community Group (DTCG 2025.10) document."""
         s1 = shards.get("shard_01", {}).get("data", {})
         s3 = shards.get("shard_03", {}).get("data", {})
         s4 = shards.get("shard_04", {}).get("data", {})
