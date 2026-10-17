@@ -455,37 +455,9 @@ def has_recent_backup(target_file: str) -> bool:
             os.makedirs(target_bak_dir, exist_ok=True)
             import shutil, time
             ts = int(time.time())
-            if is_skill and skill_name:
-                skill_dir = ""
-                for candidate_root in ["/var/www/.agents/skills", "/var/www/zerops-astro-skills"]:
-                    cand = os.path.join(candidate_root, skill_name)
-                    if os.path.isdir(cand):
-                        skill_dir = cand
-                        break
-                if not skill_dir and target_file.find(skill_name) != -1:
-                    skill_dir = target_file[:target_file.find(skill_name) + len(skill_name)]
-
-                if skill_dir and os.path.isdir(skill_dir):
-                    skill_md = os.path.join(skill_dir, "SKILL.md")
-                    ver = "latest"
-                    if os.path.exists(skill_md):
-                        try:
-                            with open(skill_md, "r", encoding="utf-8") as f:
-                                for line in f:
-                                    m_ver = re.search(r'version:\s*["\']?([^"\'\n]+)', line)
-                                    if m_ver:
-                                        ver = m_ver.group(1).strip()
-                                        break
-                        except Exception:
-                            pass
-                    dt_str = time.strftime("%Y%m%d_%H%M%S")
-                    dir_bak = os.path.join(target_bak_dir, f"{skill_name}_v{ver}_{dt_str}.bak")
-                    if not os.path.exists(dir_bak):
-                        shutil.copytree(skill_dir, dir_bak)
-            else:
-                snapshot_name = f"{name_stem}_{base_name}_{ts}.bak" if name_stem != base_name else f"{base_name}_{ts}.bak"
-                snapshot_path = os.path.join(target_bak_dir, snapshot_name)
-                shutil.copy2(target_file, snapshot_path)
+            snapshot_name = f"{skill_name}_{base_name}_{ts}.bak" if (is_skill and skill_name) else (f"{name_stem}_{base_name}_{ts}.bak" if name_stem != base_name else f"{base_name}_{ts}.bak")
+            snapshot_path = os.path.join(target_bak_dir, snapshot_name)
+            shutil.copy2(target_file, snapshot_path)
 
             # Auto-rotate: keep max 5 most recent snapshots for this specific target
             prefix_match = f"{skill_name}_v" if (is_skill and skill_name) else (f"{name_stem}_" if name_stem != base_name else f"{base_name}_")
