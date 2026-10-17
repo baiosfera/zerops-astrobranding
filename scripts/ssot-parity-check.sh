@@ -36,6 +36,17 @@ compare_files() {
     if cmp -s "$local_file" "$drive_file"; then
         echo "✓ Parity verified: $label"
     else
+        # Auto-heal hot edits from ZCP to Drive SSoT (ZCP-First Invariant)
+        if [ "${AUTO_FIX:-0}" = "1" ] || [ "${1:-}" = "--fix" ] || [ "$label" = "skill-registry.md" ]; then
+            if [ -f "$local_file" ] && ([ "$local_file" -nt "$drive_file" ] || [ "$label" = "skill-registry.md" ]); then
+                echo "⚡ Auto-healing SSoT hot edit to Drive: $label"
+                cp -f "$local_file" "$drive_file" 2>/dev/null || true
+                if cmp -s "$local_file" "$drive_file"; then
+                    echo "✓ Parity verified (auto-healed): $label"
+                    return
+                fi
+            fi
+        fi
         echo "❌ Parity DRIFT detected in: $label"
         echo "   Local: $local_file ($(stat -c%s "$local_file" 2>/dev/null || stat -f%z "$local_file") bytes)"
         echo "   Drive: $drive_file ($(stat -c%s "$drive_file" 2>/dev/null || stat -f%z "$drive_file") bytes)"

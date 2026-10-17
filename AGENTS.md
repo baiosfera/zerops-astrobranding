@@ -10,7 +10,7 @@ After bootstrap or adopt provision closes, service code SSHFS-mounts at `/var/ww
 `zerops.yaml` lives at `/var/www/{hostname}/zerops.yaml`; per-service rules MAY exist at `/var/www/{hostname}/CLAUDE.md` — read if present. If `ls /var/www/{hostname}/` is empty, the service hasn't been bootstrapped yet — run `zerops_workflow action="start" workflow="bootstrap" route="adopt"` first.
 
 
-**Other projects.** This container's token may reach Zerops projects other than this one — `zcli project list` and `zerops_*` show exactly what it reaches, and what it may do there is the token's, not a convention. Look there before you provision anything of your own — what you are about to build may already run. Code reaches another project through the repository's pipeline, never from here. Inside this project the ZCP workflow owns deploys, including promoting a dev service to its paired stage service with `zerops_deploy sourceService="<dev>" targetService="<stage>"` — that stage service previews the production build of this project's code, and it is not a separate stage project.
+**Other projects.** This container's token may reach Zerops projects other than this one — `zcli project list` and `zerops_*` show exactly what it reaches, and what it may do there is the token's, not a convention. Look there before you provision anything of your own — what you are about to build may already run. Code reaches another project through the repository's pipeline, never from here. Inside this project the ZCP workflow owns deploys, including promoting a dev service to its paired stage service with `zerops_deploy sourceService="<dev>" targetService="<stage>"` — that stage service previews the production build of this project's code, and it is not a separate stage project. To the person it is their preview, never "stage".
 
 ## Zerops onboarding
 
@@ -58,6 +58,14 @@ Reference by name, never paste the value. `zerops_env`/`zerops_discover` read en
 - Bash/SSH for platform ops covered by `zerops_*` (env, logs, scale, restart, etc.).
 - Diagnosing live errors/502s/build failures from prose instead of `zerops_verify`/`zerops_logs`/`zerops_events`/`zerops_env`.
 - Hand-rolling `import.yaml` or `zcli project create` for a "promote to prod" / "go live" intent → `workflow="launch-production"`.
+
+## Words for the person
+
+A standard pair's halves are `{name}dev` and `{name}stage` to the tools; those names, "dev/stage pair" and "promote to stage" stay in tool calls and never reach the person. What you tell the person:
+
+- The stage half is **your preview** (in a Mate, "<Mate>'s preview"): a copy of the app for trying the work, whose data is a test copy. Never call it "online", "live", "stage", "deployed to stage" or "dev and stage", and never suggest installing or sharing it — no "Add to Home Screen", no link to pass around. In a Mate, "stage" and "production" are only the application's environments.
+- The dev half is where you build; if you give its address, it is work in progress, a preview too, never the app.
+- The real app is production. Until its first release there is none, so the preview is not yet what anyone uses — say so if they treat it as the app. Once production runs a release (in a Mate, the application's production the person released; elsewhere the project `launch-production` made), its address is the real app's: say so, and send them there for anything real — sharing, installing, real data.
 
 ## Workflow detail
 
