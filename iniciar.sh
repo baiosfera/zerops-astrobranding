@@ -520,6 +520,11 @@ fi
 
 # 4. Certificación final determinista
 echo "• [4/4] Verificando paridad SSoT..."
+rm -rf "$PROJECT_ROOT/.agents/skills/planner/"{assets,scripts} 2>/dev/null || true
+rm -rf "$PROJECT_ROOT/.agents/skills/docu/scripts" 2>/dev/null || true
+rm -rf "$PROJECT_ROOT/.agents/skills/research/scripts" 2>/dev/null || true
+rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/raw" 2>/dev/null || true
+rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/pipeline/synthesis.py" 2>/dev/null || true
 if command -v ssot-parity-check >/dev/null 2>&1; then
     ssot-parity-check
 elif [ -f "$SSOT_SCRIPTS/ssot-parity-check.sh" ]; then
