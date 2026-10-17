@@ -1164,25 +1164,26 @@ class DeterministicSynthesizer:
 # Bifrost AI Gateway Client (Concise Reasoning, Root JSON, Zero Truncation)
 # ==============================================================================
 class BifrostBrandStrategist:
-    """Invokes Bifrost for bounded, high-impact brand positioning without token overflows."""
+    """Invokes Bifrost for comprehensive, deep multi-tradition brand positioning and narrative authoring."""
 
     def __init__(self, base_url: str = "http://bifrost:8080", primary_model: str = "deepseek/deepseek-chat",
-                 fallback_model: str = "freellmapi/deepseek-v4-flash", timeout_sec: int = 90):
+                 fallback_model: str = "freellmapi/deepseek-v4-flash", timeout_sec: int = 180):
         self.base_url = base_url.rstrip("/")
         self.primary_model = primary_model
         self.fallback_model = fallback_model
         self.timeout_sec = timeout_sec
 
-    def generate_strategy(self, brand_name: str, shards: Dict[str, Any]) -> Dict[str, Any]:
-        """Calls Bifrost with a strictly bounded prompt. Falls back to dynamic domain baseline if needed."""
-        prompt = self._build_prompt(brand_name, shards)
+    def generate_strategy(self, brand_name: str, shards: Dict[str, Any],
+                          palette: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Calls Bifrost with the full multi-tradition lakehouse. Falls back to dynamic domain baseline if needed."""
+        prompt = self._build_prompt(brand_name, shards, palette)
         models_to_try = [self.primary_model]
         if self.fallback_model and self.fallback_model != self.primary_model:
             models_to_try.append(self.fallback_model)
 
         for model in models_to_try:
             try:
-                logger.info(f"Invoking Bifrost Gateway with model: {model} (x-tier: production, max_tokens: 4096)")
+                logger.info(f"Invoking Bifrost Gateway with model: {model} (x-tier: production, max_tokens: 8192, timeout: {self.timeout_sec}s)")
                 res = self._send_request(model, prompt)
                 if isinstance(res, dict):
                     # Unwrap if model wrapped under schema_required or similar
@@ -1192,7 +1193,7 @@ class BifrostBrandStrategist:
                         arch = res.get("brand_architecture", {})
                         if not arch.get("brand_archetypes"):
                             arch["brand_archetypes"] = self._derive_bespoke_archetypes(shards)
-                        logger.info("Successfully received bespoke strategy from Bifrost AI Gateway!")
+                        logger.info("Successfully received bespoke strategy and full briefs from Bifrost AI Gateway!")
                         return res
             except Exception as e:
                 logger.warning(f"Bifrost call with {model} failed: {e}. Trying next...")
@@ -1200,91 +1201,147 @@ class BifrostBrandStrategist:
         logger.warning("Bifrost models were unreachable or returned invalid response. Using dynamic domain synthesis.")
         return self._generate_dynamic_domain_baseline(brand_name, shards)
 
-    def _build_prompt(self, brand_name: str, shards: Dict[str, Any]) -> List[Dict[str, str]]:
+    def _build_prompt(self, brand_name: str, shards: Dict[str, Any],
+                      palette: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
         s1 = shards.get("shard_01", {}).get("data", {})
+        s2 = shards.get("shard_02", {}).get("data", {})
         s3 = shards.get("shard_03", {}).get("data", {})
         s4 = shards.get("shard_04", {}).get("data", {})
         s5 = shards.get("shard_05", {}).get("data", {})
+        s6 = shards.get("shard_06", {}).get("data", {})
+        s7 = shards.get("shard_07", {}).get("data", {})
+        s8 = shards.get("shard_08", {}).get("data", {})
         s9 = shards.get("shard_09", {}).get("data", {})
+        s10 = shards.get("shard_10", {}).get("data", {})
+        s11 = shards.get("shard_11", {}).get("data", {})
         s12 = shards.get("shard_12", {}).get("data", {})
         cp = shards.get("shard_13", {}).get("data", {})
+        s14 = shards.get("shard_14", {}).get("data", {})
+        s15 = shards.get("shard_15", {}).get("data", [])
 
-        tripod = s1.get("tripod_of_iron", {})
-        elem = s1.get("arroyo_elements", {})
-        nak = s3.get("nakshatra", {})
-        sb = s3.get("shadbala", {})
-        dm = s4.get("day_master", {})
-        ys = s4.get("yong_shen", {})
-        hd = s5.get("human_design") or s5
         founder = s9.get("founder", {})
-        const = s12.get("constitution", {})
-
         founder_name = str(cp.get("preferred_name") or cp.get("name") or founder.get("birth_name") or brand_name)
 
         system_msg = (
             "You are an Elite Brand Strategist, Creative Director, and Design Systems Engineer.\n"
-            "Your task is to craft a high-impact, sovereign brand positioning and narrative based solely on "
-            "the provided astrological and elemental profile of the founder.\n"
-            "CRITICAL INVARIANTS:\n"
+            "Your task is to craft a complete, sovereign brand architecture, deep psychological author profile, "
+            "and master semiotic astrobranding brief based strictly on the provided multi-tradition astrological "
+            "lakehouse of the founder.\n\n"
+            "CRITICAL ARCHITECTURAL CONTRACTS:\n"
             "1. Output MUST be valid, parseable JSON conforming strictly to the requested schema.\n"
-            "2. Do NOT write lengthy chain-of-thought. Keep internal reflection concise (< 100 words) and output the target JSON object immediately.\n"
-            "3. Root keys MUST be: brand_architecture, voice_and_tone, target_audience, brand_narrative. Do NOT nest under 'schema_required'.\n"
-            "4. NEVER output empty arrays for brand_archetypes. Provide Primary and Secondary archetypes with rationales.\n"
-            "5. NO generic corporate fluff. Ground every statement in the founder's exact planetary coordinates and Day Master."
+            "2. Root keys MUST be: brand_architecture, voice_and_tone, target_audience, brand_narrative, "
+            "author_psychology_markdown, astrobranding_brief_markdown.\n"
+            "3. ZERO generic corporate fluff or superficial summaries. Every statement must be anchored in the "
+            "founder's exact planetary coordinates, Day Master, Nakshatra, Human Design, and elemental balance.\n"
+            "4. author_psychology_markdown MUST be a complete, dense, production-ready Markdown document "
+            "(120-200 lines) with psychological coordinates, cognitive pacing, anti-fatigue TCM protocols, "
+            "and precise guidelines for downstream AI agents (Fases 1-9).\n"
+            "5. astrobranding_brief_markdown MUST be a complete, dense, production-ready Master Brief "
+            "(120-200 lines) detailing the Iron Tripod, ICP Triad (Houses 7, 8, 11, Venus), 360° OKLCH color suite rationale, "
+            "sacred geometry of the symbol (Nakshatra & deified geometry), kinetic motion cadence (GSAP 60fps), "
+            "and naming vibrational resonance."
         )
 
-        user_content = {
+        lakehouse_context = {
             "brand_name": brand_name,
             "founder_name": founder_name,
-            "founder_signature": {
-                "sun": f"{tripod.get('sun', {}).get('sign')} {tripod.get('sun', {}).get('degree', 0.0):.2f}° in House {tripod.get('sun', {}).get('house')}",
-                "midheaven": f"{tripod.get('midheaven_house_10', {}).get('sign')} (Ruler: {tripod.get('midheaven_house_10', {}).get('ruler')})",
-                "house_2_wealth": tripod.get("house_2_wealth", {}).get("sign"),
-                "dominant_element": f"{elem.get('dominant_element')} ({elem.get('percentages', {}).get(elem.get('dominant_element', ''), 0)}%)",
-                "bazi_day_master": f"{dm.get('name')} ({dm.get('element')} {dm.get('polarity')})",
-                "yong_shen": ys.get("element"),
-                "shadbala_dominant_planet": sb.get("dominant_planet"),
-                "nakshatra": f"{nak.get('name')} (Deity: {nak.get('deity')})",
-                "human_design": {
-                    "type": hd.get("energy_type"),
-                    "strategy": hd.get("strategy"),
-                    "authority": hd.get("inner_authority"),
-                    "profile": hd.get("profile"),
-                },
-                "tcm_temperament": f"{const.get('temperature', 'balanced')} / {const.get('moisture', 'balanced')}",
-                "life_path_number": founder.get("life_path_number"),
+            "client_profile": {
+                "birth_date": f"{cp.get('year', 1990):04d}-{cp.get('month', 1):02d}-{cp.get('day', 1):02d}",
+                "birth_time": f"{cp.get('hour', 12):02d}:{cp.get('minute', 0):02d}",
+                "birth_place": f"{cp.get('city', 'N/D')} (Lat: {cp.get('lat', 0.0)}, Lon: {cp.get('lng', 0.0)})",
+                "timezone": f"{cp.get('tz_str', 'America/Bogota')} (UTC {cp.get('tz_offset', -5.0)})",
+                "preferred_name": founder_name,
+                "brand_names": cp.get("brand_names", [brand_name]),
             },
-            "output_schema_structure": {
-                "brand_architecture": {
-                    "brand_essence": "One potent 2-4 word phrase capturing brand sovereignty",
-                    "purpose": "Why the brand exists",
-                    "mission": "What it builds for its clients",
-                    "vision": "Aspirational future state",
-                    "values": ["List of 5 core values with 1-line definitions"],
-                    "positioning_statement": "For [ICP] who [need], [Brand] is [category] that [benefit], unlike [alternatives], because [astrological/elemental differentiator].",
-                    "brand_archetypes": [
-                        {"role": "Primary", "name": "Archetype Name", "description": "Why it represents the founder"},
-                        {"role": "Secondary", "name": "Archetype Name", "description": "Balancing behavioral nuance"}
-                    ],
-                },
-                "voice_and_tone": {
-                    "primary_tone": "2-3 word tone descriptor",
-                    "voice_traits": ["List of 4 sharp traits"],
-                    "preferred_vocabulary": ["List of 6 empowered words"],
-                    "forbidden_vocabulary": ["List of 6 banned words/clichés"],
-                },
-                "target_audience": {
-                    "ideal_customer_profile": "Clear profile of who buys high-ticket",
-                    "core_pain_points": ["2-3 main frustrations"],
-                    "aspirations": ["2-3 core desires"],
-                },
-                "brand_narrative": "A concise 2-paragraph brand story fusing the founder's elemental nature, mission, and transformation.",
+            "shard_01_western_tropical": {
+                "tripod_of_iron": s1.get("tripod_of_iron", {}),
+                "client_triad": s1.get("client_triad", {}),
+                "arroyo_elements": s1.get("arroyo_elements", {}),
+                "planets": s1.get("planets", {}),
+                "houses": s1.get("houses", {}),
+                "aspects_sample": s1.get("aspects_sample", [])[:10],
             },
+            "shard_02_western_sidereal": {
+                "fagan_bradley": {
+                    "ayanamsa": s2.get("fagan_bradley", {}).get("ayanamsa_degrees"),
+                    "ascendant": s2.get("fagan_bradley", {}).get("ascendant"),
+                    "midheaven": s2.get("fagan_bradley", {}).get("midheaven"),
+                },
+                "lahiri": {
+                    "ayanamsa": s2.get("lahiri", {}).get("ayanamsa_degrees"),
+                    "ascendant": s2.get("lahiri", {}).get("ascendant"),
+                    "midheaven": s2.get("lahiri", {}).get("midheaven"),
+                },
+                "comparative_delta": s2.get("comparative_delta", {}),
+                "mundoscope_cross_of_malta": s2.get("mundoscope_cross_of_malta", {}),
+            },
+            "shard_03_vedic_jyotish": {
+                "nakshatra": s3.get("nakshatra", {}),
+                "shadbala": {
+                    "dominant_planet": s3.get("shadbala", {}).get("dominant_planet"),
+                    "max_rupas": s3.get("shadbala", {}).get("max_rupas"),
+                    "planetary_strengths": s3.get("shadbala", {}).get("planetary_strengths", {}),
+                },
+                "yogas_identified": s3.get("yogas_identified", []),
+                "kp_system": s3.get("kp_system", {}),
+            },
+            "shard_04_chinese_bazi": {
+                "four_pillars": s4.get("four_pillars", {}),
+                "day_master": s4.get("day_master", {}),
+                "yong_shen": s4.get("yong_shen", {}),
+            },
+            "shard_05_human_design": s5.get("human_design") or s5,
+            "shard_06_kabbalah_zmanim": {
+                "hebrew_calendar": s6.get("hebrew_calendar", {}),
+                "tikkun_rav_berg": s6.get("tikkun_rav_berg", {}),
+                "zmanim_halachic_times": s6.get("zmanim_halachic_times", {}),
+            },
+            "shard_07_vocational_wealth": s7,
+            "shard_08_astrocartography": s8,
+            "shard_09_15_numerology": {
+                "founder": s9.get("founder", {}),
+                "brands": s9.get("brands") or s15 or [],
+            },
+            "shard_10_predictive_timing": s10,
+            "shard_11_cosmobiology_dial90": s11,
+            "shard_12_tcm_constitution": s12,
+            "computed_polar_oklch_palette": palette or {},
+        }
+
+        output_schema_structure = {
+            "brand_architecture": {
+                "brand_essence": "One potent 2-4 word phrase capturing brand sovereignty",
+                "purpose": "Why the brand exists",
+                "mission": "What it builds for its clients",
+                "vision": "Aspirational future state",
+                "values": ["List of 5 core values with 1-line definitions"],
+                "positioning_statement": "For [ICP] who [need], [Brand] is [category] that [benefit], unlike [alternatives], because [astrological/elemental differentiator].",
+                "brand_archetypes": [
+                    {"role": "Primary", "name": "Archetype Name", "description": "Why it represents the founder"},
+                    {"role": "Secondary", "name": "Archetype Name", "description": "Balancing behavioral nuance"}
+                ],
+            },
+            "voice_and_tone": {
+                "primary_tone": "2-3 word tone descriptor",
+                "voice_traits": ["List of 4 sharp traits grounded in founder coordinates"],
+                "preferred_vocabulary": ["List of 6 empowered words"],
+                "forbidden_vocabulary": ["List of 6 banned words/clichés"],
+                "conversational_protocols": "Specific behavioral guidelines for downstream agents on how to communicate with the founder without fatigue or friction",
+            },
+            "target_audience": {
+                "ideal_customer_profile": "Clear profile of who buys high-ticket grounded in Houses 7, 8, 11",
+                "core_pain_points": ["3 main frustrations"],
+                "aspirations": ["3 core desires"],
+                "conversion_triggers": ["Key high-ticket decision triggers"],
+            },
+            "brand_narrative": "A rich, multi-paragraph brand story fusing the founder's elemental nature, cosmic coordinates, mission, and client transformation.",
+            "author_psychology_markdown": "# Perfil Psicológico de Autor & Pautas de Voz y Tono (Fase 0)\n\n(Extensive, multi-section Markdown document with complete psychological coordinates, cognitive pacing, anti-fatigue TCM protocols, and instructions for downstream models).",
+            "astrobranding_brief_markdown": "# Master Brief de Astrobranding Semiótico: [Brand]\n\n(Extensive, multi-section Master Brief with Iron Tripod, ICP Triad, OKLCH palette rationale, Sacred Geometry, Kinetic 60fps cadence, and Vibrational Naming).",
         }
 
         return [
             {"role": "system", "content": system_msg},
-            {"role": "user", "content": f"Generate the Brand Strategy JSON for '{brand_name}' with root keys brand_architecture, voice_and_tone, target_audience, brand_narrative:\n{json.dumps(user_content, indent=2, ensure_ascii=False)}"},
+            {"role": "user", "content": f"Generate the comprehensive Brand Strategy JSON for '{brand_name}' adhering strictly to the schema structure:\n\n### ASTROLOGICAL LAKEHOUSE CONTEXT:\n{json.dumps(lakehouse_context, indent=2, ensure_ascii=False)}\n\n### REQUIRED JSON SCHEMA:\n{json.dumps(output_schema_structure, indent=2, ensure_ascii=False)}"},
         ]
 
     def _send_request(self, model: str, messages: List[Dict[str, str]]) -> Dict[str, Any]:
@@ -1292,9 +1349,9 @@ class BifrostBrandStrategist:
         payload = {
             "model": model,
             "messages": messages,
-            "temperature": 0.25,
+            "temperature": 0.3,
             "response_format": {"type": "json_object"},
-            "max_tokens": 4096,
+            "max_tokens": 8192,
         }
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=data, method="POST")
