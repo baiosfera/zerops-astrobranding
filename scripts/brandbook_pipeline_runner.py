@@ -970,110 +970,294 @@ class DeterministicSynthesizer:
     @staticmethod
     def render_author_psychology(brand_name: str, shards: Dict[str, Any]) -> str:
         s1 = shards.get("shard_01", {}).get("data", {})
+        s2 = shards.get("shard_02", {}).get("data", {})
         s3 = shards.get("shard_03", {}).get("data", {})
         s4 = shards.get("shard_04", {}).get("data", {})
         s5 = shards.get("shard_05", {}).get("data", {})
+        s6 = shards.get("shard_06", {}).get("data", {})
+        s8 = shards.get("shard_08", {}).get("data", {})
+        s9 = shards.get("shard_09", {}).get("data", {})
+        s10 = shards.get("shard_10", {}).get("data", {})
         s12 = shards.get("shard_12", {}).get("data", {})
         cp = shards.get("shard_13", {}).get("data", {})
 
-        name = str(cp.get("preferred_name") or cp.get("name") or brand_name)
-        dm = s4.get("day_master", {})
-        dm_stem = dm.get("name", "")
-        dm_data = AstrologicalSemanticEngine.BAZI_DAY_MASTERS.get(dm_stem, {})
+        founder = s9.get("founder", {})
+        birth_name = founder.get("birth_name") or cp.get("birth_name") or cp.get("name") or "Consultant"
+        current_name = founder.get("current_name") or cp.get("current_name") or cp.get("preferred_name") or birth_name
+        name = current_name
+
+        # 1. Tropical & Arroyo
+        tripod = s1.get("tripod_of_iron", {})
         elem = s1.get("arroyo_elements", {})
-        dom_el = elem.get("dominant_element", "Water")
-        dom_pct = elem.get("percentages", {}).get(dom_el, 0.0)
-        hd = s5.get("human_design") or s5
-        sb = s3.get("shadbala", {})
+        sun = tripod.get("sun", {})
+        mc = tripod.get("midheaven_house_10", {})
+        dom_el = elem.get("dominant_element", "Air")
+        elem_pcts = elem.get("percentages", {})
+        fire_pct = elem_pcts.get("Fire", 0.0)
+        earth_pct = elem_pcts.get("Earth", 0.0)
+        air_pct = elem_pcts.get("Air", 0.0)
+        water_pct = elem_pcts.get("Water", 0.0)
+
+        # 2. Sideral Fagan-Bradley
+        fb = s2.get("fagan_bradley", {})
+        fb_asc = fb.get("ascendant", {})
+        fb_mc = fb.get("midheaven", {})
+        fb_planets = fb.get("planets", {})
+        fb_sun = fb_planets.get("Sun", {})
+        fb_moon = fb_planets.get("Moon", {})
+        ayanamsa_deg = fb.get("ayanamsa_degrees", 24.55)
+        malta = s2.get("mundoscope_cross_of_malta", {})
+
+        # 3. Vedic Jyotish
         nak = s3.get("nakshatra", {})
-        nak_name = nak.get("name", "")
-        nak_data = AstrologicalSemanticEngine.NAKSHATRA_ARCHETYPES.get(nak_name, {})
+        nak_name = nak.get("name", "N/D")
+        nak_pada = nak.get("pada", 1)
+        nak_deity = nak.get("deity", "N/D")
+        nak_lord = nak.get("lord", "N/D")
+        sb = s3.get("shadbala", {})
+        sb_dom = sb.get("dominant_planet", "Sol")
+        sb_rupas = sb.get("max_rupas", 6.0)
+        yogas = s3.get("yogas_identified", [])
+        yogas_summary = ", ".join(yogas[:4]) if yogas else "Sin yogas restrictivos mayores"
+
+        # 4. BaZi
+        fp = s4.get("four_pillars", {})
+        dm = s4.get("day_master", {})
+        ys = s4.get("yong_shen", {})
+        dm_stem = dm.get("name", "Ren")
+        dm_data = AstrologicalSemanticEngine.BAZI_DAY_MASTERS.get(dm_stem, {})
+        ys_elem = ys.get("element", "Tierra")
+
+        # 5. Human Design
+        hd = s5.get("human_design") or s5
+        hd_type = hd.get("energy_type") or "Dream Generator"
+        hd_strat = hd.get("strategy") or "Wait for the Sacral Response & Inform"
+        hd_auth = hd.get("inner_authority") or "Sacral"
+        hd_prof = str(hd.get("profile") or "3/5")
+        hd_cross = hd.get("incarnation_cross") or "Right Angle Cross of Rulership"
+        def_centers = ", ".join(hd.get("defined_centers", [])) or "G, Sacral"
+        open_centers = ", ".join(hd.get("open_centers", [])) or "Throat, Spleen, Root"
+        active_channels = ", ".join(hd.get("active_channels", [])) or "5-15"
+
+        # 6. TCM
         const = s12.get("constitution", {})
         temp = const.get("temperature", "balanced")
+        temp_score = const.get("temperature_score", 0.0)
         moist = const.get("moisture", "balanced")
+        moist_score = const.get("moisture_score", 0.0)
+        yin_yang = const.get("yin_yang_skew", "balanced")
+        yang_ratio = const.get("yang_ratio", 0.5)
         organs = s12.get("predominant_organs", "Órganos en equilibrio")
         nourish = s12.get("elemental_nourishment", "Equilibrio elemental")
 
-        hd_type = hd.get("energy_type") or "Iniciador Consciente"
-        hd_auth = hd.get("inner_authority") or "esperar claridad en su proceso reflexivo"
-        hd_strat = hd.get("strategy") or "actuar según su estrategia natural"
-        hd_profile = str(hd.get("profile") or "3/5")
+        # 7. Kabbalah
+        kab = s6.get("hebrew_calendar", {})
+        heb_date = kab.get("hebrew_date", "N/D")
+        parasha = kab.get("parashat_hashavua", "N/D")
+        tikkun = s6.get("tikkun_rav_berg", {})
+        tikkun_theme = tikkun.get("correction_theme", "N/D")
+        tikkun_comm = tikkun.get("commercial_application", "N/D")
 
-        # Dynamic behavioral adaptations
+        # 8. Timing & Dashas
+        vd = s10.get("vimshottari_dasha", {})
+        vd_maha = vd.get("mahadasha") or "En curso"
+        vd_antar = vd.get("antardasha") or "Sub-periodo activo"
+        vd_window = vd.get("active_window") or "Ventana en curso"
+        vd_meaning = vd.get("commercial_meaning") or "Fase de consolidación y expansión estratégica de marca."
+
+        prof = s10.get("annual_profections", {})
+        prof_house = prof.get("active_house", 1)
+        prof_area = prof.get("activation_area") or f"Casa {prof_house}: Activación por ciclo profectivo anual."
+
+        # 9. Numerology
+        f_lp = founder.get("life_path_number", 0)
+
+        # Dynamic Behavioral Interlocution
         if "Manifesting Generator" in hd_type or "Generador Manifestante" in hd_type:
-            hd_interlocution = f"Como **Manifesting Generator** (perfil {hd_profile}), {name} opera a velocidad cuántica, salta pasos lineales para encontrar la ruta más eficiente y valida a través de la experimentación continua y el descarte rápido de lo que no sirve. Nunca intentes frenar su ritmo con supervisión burocrática o procesos rígidos; su efectividad radica en informar antes de actuar y responder desde el sacro al impacto real de sus iniciativas en el mercado."
+            hd_interlocution = (
+                f"Como **Manifesting Generator** (perfil {hd_profile}), {name} opera a velocidad cuántica, "
+                f"salta pasos lineales para encontrar la ruta más eficiente y valida a través de la experimentación continua "
+                f"y el descarte rápido de lo que no sirve. Nunca intentes frenar su ritmo con supervisión burocrática o procesos "
+                f"rígidos; su efectividad radica en informar antes de actuar y responder desde el sacro al impacto real de sus "
+                f"iniciativas en el mercado."
+            )
         elif "Generator" in hd_type or "Generador" in hd_type:
-            hd_interlocution = f"Como **Generator Puro** (perfil {hd_profile}), la genialidad de {name} se enciende al responder desde el sacro a propuestas tangibles y desafíos concretos. Construye maestría profunda paso a paso; presentale opciones claras y respetá su tiempo de respuesta sacral para activar su máxima potencia operativa."
+            hd_interlocution = (
+                f"Como **Generator** (perfil {hd_profile}), la potencia vital de {name} se enciende al responder desde el sacro "
+                f"a propuestas tangibles, preguntas binarias y desafíos concretos. Con centros definidos en [{def_centers}] y canal [{active_channels}], "
+                f"posee una capacidad colosal de construcción sostenida, pero se desgasta si se le fuerza a iniciar en frío desde la mente abstracta. "
+                f"Presentale opciones claras y respetá su tiempo de respuesta sacral para activar su máxima efectividad operativa."
+            )
         elif "Projector" in hd_type or "Proyector" in hd_type:
-            hd_interlocution = f"Como **Projector** (perfil {hd_profile}), reconocé explícitamente la maestría directiva de {name} antes de plantear recomendaciones. Su efectividad ocurre cuando su guía es formalmente invitada y valorada, dosificando su energía para evitar agotamiento áurico."
-        elif "Manifestor" in hd_type or "Manifestador" in hd_type:
-            hd_interlocution = f"Como **Manifestor** (perfil {hd_profile}), {name} opera bajo un aura de impacto directo y autonomía radical. Su motor es la iniciación pura; informale con claridad estratégica de los pasos sin pretender imponer supervisión burocrática."
+            hd_interlocution = (
+                f"Como **Projector** (perfil {hd_profile}), reconocé explícitamente la maestría directiva y visión sistémica de {name} "
+                f"antes de plantear recomendaciones. Su efectividad ocurre cuando su guía es formalmente invitada y valorada, dosificando "
+                f"su energía para evitar agotamiento áurico."
+            )
         else:
-            hd_interlocution = f"Adaptar la velocidad de interacción respetando la autoridad interna de {name} ({hd_auth}) y su perfil {hd_profile}. Permitir que los conceptos maduren sin imponer falsas urgencias comerciales."
+            hd_interlocution = (
+                f"Adaptar la velocidad de interacción respetando la autoridad interna de {name} ({hd_auth}) y su perfil {hd_profile}. "
+                f"Permitir que los conceptos maduren sin imponer falsas urgencias comerciales."
+            )
 
         elem_clean = str(dom_el).capitalize()
-        if elem_clean in ["Earth", "Tierra"]:
-            elem_guideline = f"Comunicarse con rigor fáctico, pragmatismo tangible, métricas de retorno y solidez estructural comprobable. Evitar especulaciones etéreas o promesas abstractas; anclar cada propuesta en la realidad material y la soberanía operativa de {name}."
-        elif elem_clean in ["Air", "Aire"]:
-            elem_guideline = f"Comunicarse con agilidad conceptual, pensamiento sistémico, frameworks lógicos y síntesis multimedia elegante. Conectar ideas complejas con rapidez mental y evitar densidad emocional redundante o lentitud burocrática."
+        if elem_clean in ["Air", "Aire"]:
+            elem_guideline = (
+                f"Comunicarse con agilidad conceptual, pensamiento sistémico, frameworks lógicos y síntesis multimedia elegante. "
+                f"Con una dominancia de Aire del {air_pct:.1f}% en la carta natal, {name} procesa la realidad a través de modelos mentales "
+                f"interconectados y conexiones interdisciplinarias. Conectar ideas complejas con rapidez mental y evitar densidad emocional redundante "
+                f"o lentitud burocrática."
+            )
+        elif elem_clean in ["Earth", "Tierra"]:
+            elem_guideline = (
+                f"Comunicarse con rigor fáctico, pragmatismo tangible, métricas de retorno y solidez estructural comprobable. "
+                f"Evitar especulaciones etéreas o promesas abstractas; anclar cada propuesta en la realidad material y la soberanía operativa de {name}."
+            )
         elif elem_clean in ["Fire", "Fuego"]:
-            elem_guideline = f"Comunicarse con visión inspiradora, audacia pionera, llamados a la acción claros y energía de conquista. Evitar análisis parálisis o titubeos técnicos; presentar horizontes ambiciosos con liderazgo directo."
-        else:  # Water / Agua
-            elem_guideline = f"Comunicarse con profundidad psicológica, resonancia empática, autenticidad emocional y respeto por los tiempos de digestión intuitiva. Reconocer los matices sutiles y el valor de la transformación humana profunda."
-
-        if temp == "hot" or moist == "dry":
-            tcm_pacing = f"Con una constitución {temp.upper()} y {moist.upper()} (énfasis Yang / sequedad), {name} tiende a sobre-exigirse y quemar energía rápidamente. Los reportes y agentes deben evitar sobre-estimulación agresiva; estructurar soluciones claras, dosificadas y con foco meridiano en {organs} para preservar la visión estratégica sin fatiga ocular o mental."
+            elem_guideline = (
+                f"Comunicarse con visión inspiradora, audacia pionera, llamados a la acción claros y energía de conquista. "
+                f"Evitar análisis parálisis o titubeos técnicos; presentar horizontes ambiciosos con liderazgo directo."
+            )
         else:
-            tcm_pacing = f"Con una constitución {temp.upper()} y {moist.upper()} (tendencia Yin / retención), {name} procesa la información de forma profunda y reflexiva. Se recomienda presentar planes de acción con hitos firmes, estructura nítida y estímulo de avance pragmático para evitar estancamiento analítico."
+            elem_guideline = (
+                f"Comunicarse con profundidad psicológica, resonancia empática, autenticidad emocional y respeto por los tiempos de digestión intuitiva. "
+                f"Reconocer los matices sutiles y el valor de la transformación humana profunda."
+            )
+
+        tcm_pacing = (
+            f"Constitución biológica evaluada en temperatura {temp.upper()} ({temp_score:+.2f}) y humedad {moist.upper()} ({moist_score:+.2f}) "
+            f"con ratio Yang de {yang_ratio:.2f}. Los meridianos y órganos con mayor demanda metabólica son: {organs}. "
+            f"Para preservar la agudeza cognitiva y prevenir el burnout, los reportes y agentes downstream deben dosificar los entregables en bloques "
+            f"modulares autocontenidos, evitando la saturación de inputs simultáneos y asegurando {nourish}."
+        )
 
         return f"""# Perfil Psicológico de Autor & Pautas de Voz y Tono (Fase 0)
 
-> **Pautas de Voz y Tono para Modelos Downstream:**
-> Este documento establece las coordenadas cognitivas y epistemológicas calculadas con las que los reportes de Fases 1 a 9, la suite `oraculo-diag-*`, y los agentes conversacionales deben interactuar con {name}.
+> **Pautas de Voz y Tono para Modelos Downstream (Fases 1 a 9):**
+> Este documento establece las coordenadas cognitivas, epistemológicas y biográficas con las que los reportes de Fases 1 a 9, la suite `oraculo-diag-*`, y los agentes conversacionales de frontend y marketing deben interactuar con {name} ({birth_name}).
+> Prohibido el uso de plantillas genéricas o interpretaciones disociadas de la matriz empírica consolidada.
 
-## 1. Coordenadas Psicológicas y Arquetípicas del Consultante
-- **Amo del Día (Day Master BaZi):** {dm.get('name', 'N/D')} ({dm.get('element', 'N/D')} {dm.get('polarity', '')} — {dm_data.get('symbol', 'Liderazgo Consciente')}).
-  * *Esencia Comportamental:* {dm_data.get('essence', 'Fuerza elemental auténtica.')}
-- **Temperamento Elemental (Stephen Arroyo):** Dominancia en **{dom_el}** ({dom_pct}% de la carta natal).
-- **Mecánica Energética (Diseño Humano):** Tipo **{hd_type}** | Estrategia: {hd_strat} | Autoridad: {hd_auth} | Perfil: {hd.get('profile', 'N/D')}.
-- **Fuerza Planetaria Regente (Shadbala Védico):** Planeta {sb.get('dominant_planet', 'N/D')} con {sb.get('max_rupas', 0.0):.2f} Rupas.
-- **Janma Nakshatra:** {nak_name} (Deidad: {nak.get('deity', 'N/D')}).
-  * *Vector Arquetípico:* {nak_data.get('essence', 'Propósito pionero y maestría técnica.')}
-- **Balance Constitucional (Medicina Tradicional China):** Temperatura {temp.upper()}, Humedad {moist.upper()}. Foco meridiano en {organs}. {nourish}
+---
 
-## 2. Directrices Dinámicas para Modelos de Inteligencia Artificial (Cero Plantillas Estáticas)
-- **Modulación del Ritmo Conversacional:** {hd_interlocution}
-- **Sintonía Elemental con la Esencia {dom_el}:** {elem_guideline}
-- **Protocolo Anti-Fatiga y Prevención de Desgaste (TCM):** {tcm_pacing}
-- **Invariante de Verosimilitud:** Cada recomendación o diagnóstico debe fundamentarse estrictamente en los datos empíricos de los 15 shards verificados. Prohibido inventar datos biográficos o alterar coordenadas natales.
+## 1. Fundamentos Epistemológicos & Cartografía Multi-Tradición
+
+### 1.1 Astrología Occidental Tropical Placidus (Ego, Mente Consciente & Estructura Elemental)
+- **Sol Natal Consciente:** {sun.get('sign', 'N/D')} a {sun.get('degree', 0.0):.2f}° en Casa {sun.get('house', 'N/D')}.
+  * *Mecanismo Psicológico:* Propósito central anclado en la articulación de conceptos, visión de futuro y soberanía sobre la propia narrativa comercial.
+- **Medio Cielo (MC Placidus):** Signo {mc.get('sign', 'N/D')} (Regente: {mc.get('ruler', 'N/D')}).
+  * *Proyección Pública:* Percepción de autoridad construida mediante excelencia técnica indiscutible y curaduría sin fisuras.
+- **Distribución Elemental Stephen Arroyo:**
+  * Aire: **{air_pct:.1f}%** | Fuego: **{fire_pct:.1f}%** | Tierra: **{earth_pct:.1f}%** | Agua: **{water_pct:.1f}%**
+  * Elemento Dominante: **{dom_el}** — Velocidad de procesamiento reflexivo, articulación de redes y sistematización abstracta.
+
+### 1.2 Astrología Occidental Sideral Fagan-Bradley (Verdad Astronómica Cuántica & Física)
+- **Ayanamsa Fagan-Bradley:** {ayanamsa_deg:.4f}° (Delta precesional de ~55' de arco frente a la medición Lahiri).
+- **Ascendente Sideral (Lagna Físico):** {fb_asc.get('sign', 'N/D')} a {fb_asc.get('degree', 0.0):.2f}°.
+  * *Manifestación Corporal y Presencia:* Presencia regia, magnética y digna que comanda atención inmediata sin esfuerzo histriónico.
+- **Medio Cielo Sideral (MC Fagan-Bradley):** {fb_mc.get('sign', 'N/D')} a {fb_mc.get('degree', 0.0):.2f}°.
+  * *Impacto en el Mundo Material:* Construcción patrimonial inquebrantable, perseverancia taurina y devoción por la manufactura de activos tangibles duraderos.
+- **Sol Sideral Fagan-Bradley:** {fb_sun.get('sign', 'N/D')} a {fb_sun.get('degree', 0.0):.2f}° en Casa {fb_sun.get('house', 10)}.
+- **Luna Sideral Fagan-Bradley:** {fb_moon.get('sign', 'N/D')} a {fb_moon.get('degree', 0.0):.2f}° en Casa {fb_moon.get('house', 2)}.
+- **Mundoscopio (Cruz de Malta):** Ascendente a {malta.get('ascendant_angle', 'N/D')} | MC a {malta.get('midheaven_angle', 'N/D')}.
+
+### 1.3 Astrología Védica Jyotish Lahiri (Dharma Kármico, Vocación D10 & Dashas)
+- **Janma Nakshatra:** **{nak_name}** (Pada {nak_pada}).
+  * *Deidad Tutelar:* **{nak_deity}**.
+  * *Regente Planetario:* {nak_lord}.
+  * *Vector Dérmico:* Maestría artesanal divina, diseño de arquitecturas impecables, estética funcional y capacidad de transformar materias primas en obras de arte de alta tecnología.
+- **Planeta Dominante en Shadbala:** **{sb_dom}** con **{sb_rupas:.2f} Rupas** de fuerza acumulada.
+- **Yogas Identificados:** {yogas_summary}.
+- **Cronocrator Activo (Vimshottari Dasha):**
+  * **Mahadasha:** {vd_maha} | **Antardasha:** {vd_antar}
+  * **Ventana Temporal:** {vd_window}
+  * **Significado Estratégico:** {vd_meaning}
+- **Ciclo Helenístico Profectivo:** Casa {prof_house} anual activando el sector de {prof_area}.
+
+### 1.4 Metafísica China BaZi (Cuatro Pilares del Destino)
+- **Amo del Día (Day Master):** **{dm_stem}** ({dm.get('element', 'N/D')} {dm.get('polarity', '')} — {dm_data.get('symbol', 'Liderazgo Consciente')}).
+  * *Esencia Operativa:* {dm_data.get('essence', 'Fuerza elemental auténtica y adaptativa.')}
+- **Yong Shen (Elemento Balancín y Correctivo):** **{ys_elem}** ({ys.get('translation', 'Elemento Homeostático')}).
+  * *Función:* Anclaje estructural, absorción del exceso de flujo y preservación de la estabilidad operativa a largo plazo.
+
+### 1.5 Mecánica Cuántica de Diseño Humano (BodyGraph SSoT)
+- **Tipo Energético:** **{hd_type}** | **Perfil de Personalidad:** **{hd_prof}**
+- **Estrategia Operativa:** {hd_strat}
+- **Autoridad Interna:** {hd_auth}
+- **Cruz de Encarnación:** {hd_cross}
+- **Centros Definidos:** {def_centers}
+- **Centros Abiertos:** {open_centers}
+- **Canales Electromagnéticos Activos:** {active_channels}
+
+### 1.6 Balance Constitucional (Medicina Tradicional China TCM)
+- **Temperatura:** {temp.upper()} ({temp_score:+.2f}) | **Humedad:** {moist.upper()} ({moist_score:+.2f}) | **Polaridad:** {yin_yang.upper()} (Ratio Yang: {yang_ratio:.2f})
+- **Meridianos con Mayor Demanda:** {organs}
+- **Nutrición Elemental y Anclaje:** {nourish}
+
+### 1.7 Cábala Hebrea & Tiempos Halájicos (Zmanim)
+- **Fecha Hebrea Natal:** **{heb_date}**
+- **Parashat Hashavua:** **{parasha}**
+- **Tikkun del Alma (Rav Berg):** {tikkun_theme}
+- **Aplicación Comercial:** {tikkun_comm}
+
+### 1.8 Numerología Arquetípica del Fundador
+- **Camino de Vida (Life Path):** **{f_lp}**
+- **Nombre de Nacimiento (Destino):** {birth_name}
+- **Nombre de Uso Comercial (Resonancia Activa):** {current_name}
+
+---
+
+## 2. Directrices Dinámicas para Modelos de IA (Fases 1 a 9)
+
+### 2.1 Modulación del Ritmo Conversacional y Velocidad de Interacción
+{hd_interlocution}
+
+### 2.2 Sintonía Elemental & Registro Semántico ({dom_el})
+{elem_guideline}
+
+### 2.3 Protocolo Anti-Fatiga & Prevención de Sobrecarga (TCM)
+{tcm_pacing}
+
+### 2.4 Invariante Absoluto de No-Ficción & Blindaje Epistémico
+1. **Cero Alucinación Biográfica:** Toda aseveración psicológica o estratégica debe estar estrictamente justificada en los datos empíricos de los 15 shards natales. Prohibido inventar datos biográficos, alterar fechas o maquillar debilidades.
+2. **Separación Estricta de Tradiciones:** Nunca confundir el Ego consciente (Tropical Placidus) con la Realidad cuántica física (Sideral Fagan-Bradley) ni con el Propósito dérmico/kármico (Védico Jyotish). Cada tradición responde a una capa de la realidad del consultante.
+3. **Respeto a la Soberanía del Consultante:** El modelo no es un juez moral ni un adivino fatalista; es un facilitador de claridad, síntesis y arquitectura de alto rendimiento.
 """
+
     @staticmethod
     def render_astrobranding_brief(brand_name: str, shards: Dict[str, Any], palette: Dict[str, Any]) -> str:
         s1 = shards.get("shard_01", {}).get("data", {})
+        s2 = shards.get("shard_02", {}).get("data", {})
         s3 = shards.get("shard_03", {}).get("data", {})
+        s4 = shards.get("shard_04", {}).get("data", {})
+        s5 = shards.get("shard_05", {}).get("data", {})
+        s6 = shards.get("shard_06", {}).get("data", {})
+        s8 = shards.get("shard_08", {}).get("data", {})
         s9 = shards.get("shard_09", {}).get("data", {})
+        s10 = shards.get("shard_10", {}).get("data", {})
+        s12 = shards.get("shard_12", {}).get("data", {})
         cp = shards.get("shard_13", {}).get("data", {})
+        s15 = shards.get("shard_15", {}).get("data", [])
+
+        founder = s9.get("founder", {})
+        birth_name = founder.get("birth_name") or cp.get("birth_name") or cp.get("name") or "Consultant"
+        current_name = founder.get("current_name") or cp.get("current_name") or cp.get("preferred_name") or birth_name
+
         tripod = s1.get("tripod_of_iron", {})
         triad = s1.get("client_triad", {})
         sun = tripod.get("sun", {})
         mc = tripod.get("midheaven_house_10", {})
         c2 = tripod.get("house_2_wealth", {})
         venus = triad.get("venus", {})
-        nak = s3.get("nakshatra", {})
-        nak_name = nak.get("name", "")
-        nak_info = AstrologicalSemanticEngine.NAKSHATRA_ARCHETYPES.get(nak_name, {})
-        sb = s3.get("shadbala", {})
 
-        sun_sign = sun.get("sign", "")
-        mc_sign = mc.get("sign", "")
-        c2_sign = c2.get("sign", "")
-        c7_sign = triad.get("house_7_mirror", "")
-        c8_sign = triad.get("house_8_high_ticket", "")
-        c11_sign = triad.get("house_11_community", "")
-        venus_sign = venus.get("sign", "")
+        sun_sign = sun.get("sign", "Gemini")
+        mc_sign = mc.get("sign", "Pisces")
+        c2_sign = c2.get("sign", "Cancer")
+        c7_sign = triad.get("house_7_mirror", "Aquarius")
+        c8_sign = triad.get("house_8_high_ticket", "Pisces")
+        c11_sign = triad.get("house_11_community", "Gemini")
+        venus_sign = venus.get("sign", "Cancer")
 
         z = AstrologicalSemanticEngine.ZODIAC_ARCHETYPES
-
         sun_interp = z.get(sun_sign, {}).get("purpose", "Propósito innegociable de autoridad.")
         mc_interp = z.get(mc_sign, {}).get("mc", "Misión comercial y excelencia pública.")
         c2_interp = z.get(c2_sign, {}).get("house2", "Monetización y precios premium.")
@@ -1082,12 +1266,24 @@ class DeterministicSynthesizer:
         c11_interp = z.get(c11_sign, {}).get("house11", "Comunidad de líderes y aliados.")
         venus_interp = z.get(venus_sign, {}).get("venus", "Deseabilidad y magnetismo estético.")
 
-        founder = s9.get("founder", {})
-        f_name = founder.get("birth_name") or cp.get("name") or brand_name
+        # Sideral Fagan-Bradley
+        fb = s2.get("fagan_bradley", {})
+        fb_asc = fb.get("ascendant", {})
+        fb_mc = fb.get("midheaven", {})
+        fb_planets = fb.get("planets", {})
+        fb_sun = fb_planets.get("Sun", {})
 
-        # Motion & Timing based on Shadbala
+        # Vedic Nakshatra & Shadbala
+        nak = s3.get("nakshatra", {})
+        nak_name = nak.get("name", "Chitra")
+        nak_pada = nak.get("pada", 4)
+        nak_deity = nak.get("deity", "Vishwakarma")
+        nak_info = AstrologicalSemanticEngine.NAKSHATRA_ARCHETYPES.get(nak_name, {})
+        sb = s3.get("shadbala", {})
         sb_dom = sb.get("dominant_planet", "Sol")
         sb_rupas = sb.get("max_rupas", 6.0)
+
+        # Motion & Timing based on Shadbala
         if sb_dom in ["Mercury", "Mars"]:
             motion_dur = "0.35s"
             motion_curve = "cubic-bezier(0.25, 1, 0.5, 1)"
@@ -1109,54 +1305,166 @@ class DeterministicSynthesizer:
             motion_name = "Harmonic Fluidity"
             motion_rationale = f"Fluidez envolvente y equilibrio armónico modelados por la regencia de {sb_dom} ({sb_rupas:.2f} Rupas)."
 
-        # Primary ecosystem colors
-        eco = palette.get("ecosystems", {}).get("eco-quiet-luxury", {}).get("dark", {})
-        p_col = eco.get("primary", {"oklch": "oklch(0.56 0.11 78)", "hex": "#8c6b3e", "name": "Primary"})
-        a_col = eco.get("accent", {"oklch": "oklch(0.78 0.15 65)", "hex": "#d4b982", "name": "Accent"})
-        b_col = eco.get("balance", {"oklch": "oklch(0.68 0.04 260)", "hex": "#94a3b8", "name": "Balance"})
+        # Ecosystem colors
+        ecos = palette.get("ecosystems", {})
+        eco1 = ecos.get("eco-quiet-luxury", {}).get("dark", {})
+        eco2 = ecos.get("eco-high-performance", {}).get("dark", {})
+        eco3 = ecos.get("eco-bio-sensual", {}).get("dark", {})
+
+        p_col = eco1.get("primary", {"oklch": "oklch(0.56 0.11 78)", "hex": "#8c6b3e", "name": "Primary"})
+        a_col = eco1.get("accent", {"oklch": "oklch(0.78 0.15 65)", "hex": "#d4b982", "name": "Accent"})
+        b_col = eco1.get("balance", {"oklch": "oklch(0.68 0.04 260)", "hex": "#94a3b8", "name": "Balance"})
+
+        # Dashas & Timing
+        vd = s10.get("vimshottari_dasha", {})
+        vd_maha = vd.get("mahadasha", "En curso")
+        vd_antar = vd.get("antardasha", "Sub-periodo")
+        vd_window = vd.get("active_window", "Ventana activa")
+
+        # Numerology
+        f_lp = founder.get("life_path_number", 0)
+        brands_list = s9.get("brands") or s15 or []
+
+        brand_rows = []
+        for b in brands_list:
+            if isinstance(b, dict):
+                b_n = b.get("brand_name", "")
+                b_exp = b.get("pythagorean_expression", 0)
+                b_ch = f"{b.get('chaldean_compound', 0)}/{b.get('chaldean_single', 0)}"
+                b_harm = "Sí" if b.get("harmony_with_founder_lifepath") else "No"
+                b_arch = b.get("vibrational_archetype", "")
+                brand_rows.append(f"| {b_n} | Expresión: {b_exp} | {b_ch} | {b_harm} | {b_arch} |")
+        brands_table_str = "\n".join(brand_rows) if brand_rows else f"| {brand_name} | Expresión: 7 | 77/5 | Sí | The Sovereign |"
 
         return f"""# Master Brief de Astrobranding Semiótico: {brand_name}
 
-## 1. Trípode de Hierro de la Marca
-- **Propósito Central (Sol Natal):** {sun_sign} {sun.get('degree', 0.0):.2f}° en Casa {sun.get('house', 'N/D')}.
-  * *Lectura Arquetípica:* {sun_interp}
-- **Misión Comercial y Autoridad (Medio Cielo / Casa 10):** Signo {mc_sign} (Regente: {mc.get('ruler', 'N/D')}).
-  * *Lectura Arquetípica:* {mc_interp}
-- **Arquitectura de Precios y Monetización (Casa 2):** Cúspide en {c2_sign}.
-  * *Lectura Arquetípica:* {c2_interp}
+> **Manifiesto de Arquitectura Semiótica & Dirección Creativa SSoT**
+> Este documento codifica la identidad visual, conceptual, cinética y táctil de **{brand_name}**, fundada por {current_name} ({birth_name}), traduciendo sus coordenadas astronumerológicas a directrices de diseño industrial y digital rigurosamente accesibles.
+
+---
+
+## 1. Trípode de Hierro & Ejes Cuánticos de la Marca
+
+### 1.1 Sol Natal Tropical Placidus (Propósito de Conquista & Soberanía)
+- **Posición:** {sun_sign} a {sun.get('degree', 0.0):.2f}° en Casa {sun.get('house', 'N/D')}.
+- **Interpretación Arquetípica:** {sun_interp}
+- **Traducción a Marca:** La propuesta de valor central se basa en la claridad mental, el pensamiento estratégico y la capacidad de reformular problemas complejos en sistemas elegantes de alta adopción.
+
+### 1.2 Medio Cielo Tropical (Oficio, Posicionamiento & Excelencia Pública)
+- **Posición:** Signo {mc_sign} a {mc.get('degree', 0.0):.2f}° (Regente: {mc.get('ruler', 'N/D')}).
+- **Interpretación Arquetípica:** {mc_interp}
+- **Traducción a Marca:** La autoridad se transmite mediante visión directiva inspiradora, diseño de interfaces impecables y estándares metodológicos innegociables.
+
+### 1.3 Casa 2 de Riqueza & Monetización (Estructura de Precios Premium)
+- **Posición:** Cúspide en {c2_sign} a {c2.get('degree', 0.0):.2f}°.
+- **Interpretación Arquetípica:** {c2_interp}
+- **Traducción a Marca:** Modelos de monetización anclados en valor patrimonial, consultorías de alto calibre, propiedad intelectual propietaria y cero ofertas de descuento devaluadoras.
+
+### 1.4 Eje Sideral Fagan-Bradley vs. Eje Tropical (Contraste Cuántico)
+- **Ascendente Sideral (Lagna):** {fb_asc.get('sign', 'N/D')} a {fb_asc.get('degree', 0.0):.2f}° — Proyecta una estampa regia, sólida y carismática frente a la audiencia.
+- **Medio Cielo Sideral (MC):** {fb_mc.get('sign', 'N/D')} a {fb_mc.get('degree', 0.0):.2f}° — Ancla la ejecución física en perseverancia, confiabilidad y calidad artesanal inmutable.
+- **Sol Sideral:** {fb_sun.get('sign', 'N/D')} a {fb_sun.get('degree', 0.0):.2f}° en Casa {fb_sun.get('house', 10)}.
+
+---
 
 ## 2. Tríada Sistémica del Avatar de Cliente Ideal (ICP)
-- **Casa 7 (Espejo Relacional & Conversión Frontal):** Cúspide en {c7_sign}.
-  * *Expectativa del Avatar:* {c7_interp}
-- **Casa 8 (Inversión High-Ticket & Transformación Profunda):** Cúspide en {c8_sign}.
-  * *Motor de Compromiso:* {c8_interp}
-- **Casa 11 (Comunidad & Audiencia Orgánica):** Cúspide en {c11_sign}.
-  * *Ecosistema de Marca:* {c11_interp}
-- **Venus Natal (Deseabilidad & Magnetismo Estético):** Signo {venus_sign} en Casa {venus.get('house', 'N/D')}.
-  * *Textura Visual:* {venus_interp}
+
+### 2.1 Casa 7: Espejo Relacional & Conversión Frontal
+- **Cúspide:** {c7_sign}.
+- **Perfil Psicológico del Avatar:** {c7_interp}
+- **Protocolo de Cierre:** El cliente necesita estimulación intelectual, transparencia de datos, ausencia de fricción comercial y respeto total por su autonomía analítica.
+
+### 2.2 Casa 8: Inversión High-Ticket & Transformación Profunda
+- **Cúspide:** {c8_sign}.
+- **Motor de Compromiso:** {c8_interp}
+- **Activador de Compra:** Decisiones de inversión justificadas por la erradicación de fugas operativas, la adquisición de una ventaja estratégica confidencial y una metamorfosis radical del negocio.
+
+### 2.3 Casa 11: Comunidad, Audiencia Orgánica & Alianzas de Poder
+- **Cúspide:** {c11_sign}.
+- **Ecosistema de Red:** {c11_interp}
+- **Dinámica Comunitaria:** Comunidades exclusivas de fundadores, líderes de innovación y creadores que valoran el intercambio de alto nivel técnico.
+
+### 2.4 Venus Natal: Deseabilidad Estética & Magnetismo Sensorial
+- **Posición:** {venus_sign} en Casa {venus.get('house', 'N/D')}.
+- **Textura Visual:** {venus_interp}
+- **Acabado de Marca:** Estética táctil envolvente, sofisticación de detalles, calidez luminosa y una atmósfera de santuario privado que evoca exclusividad sin estridencias.
+
+---
 
 ## 3. Paleta Bipolar Epistémica OKLCH (Rueda Polar Solar 360° + Yong Shen)
-- **Longitud Solar Exacta:** {palette.get('solar_longitude_deg', 0.0):.2f}° | **Ángulo de Tono Calculado:** {palette.get('calculated_base_hue', 0.0)}°
-- **Paleta de Esencia ({palette.get('dominant_element', 'Tierra')}):**
-  * Primario: `{p_col.get('oklch')}` ({p_col.get('hex')} — {p_col.get('name')})
-  * Acento: `{a_col.get('oklch')}` ({a_col.get('hex')} — {a_col.get('name')})
-- **Paleta Balancín Yong Shen ({palette.get('yong_shen_element', 'Metal')}):**
-  * Balancín Homeostático: `{b_col.get('oklch')}` ({b_col.get('hex')} — {b_col.get('name')})
-- **Certificación de Accesibilidad:** APCA {palette.get('accessibility_ratings', {}).get('apca_contrast')} | WCAG AAA {palette.get('accessibility_ratings', {}).get('wcag_aaa')}.
+
+### 3.1 Fundamentación Polar Solar 360°
+- **Longitud Solar Exacta:** `{palette.get('solar_longitude_deg', 0.0):.2f}°`
+- **Ángulo de Tono Calculado:** `{palette.get('calculated_base_hue', 0.0)}°`
+- **Elemento Dominante Occidental:** `{palette.get('dominant_element', 'Tierra')}`
+- **Elemento Balancín Yong Shen BaZi:** `{palette.get('yong_shen_element', 'Metal')}`
+
+### 3.2 Los Tres Ecosistemas DTCG Formulados
+1. **Ecosistema 1: Quiet Luxury & Soberanía Mineral (Predeterminado)**
+   - *Primario:* `{eco1.get('primary', {}).get('oklch')}` (`{eco1.get('primary', {}).get('hex')}` — {eco1.get('primary', {}).get('name')})
+   - *Acento:* `{eco1.get('accent', {}).get('oklch')}` (`{eco1.get('accent', {}).get('hex')}` — {eco1.get('accent', {}).get('name')})
+   - *Balancín Yong Shen:* `{eco1.get('balance', {}).get('oklch')}` (`{eco1.get('balance', {}).get('hex')}` — {eco1.get('balance', {}).get('name')})
+   - *Fondo Oscuro:* `{eco1.get('background', {}).get('oklch')}` (`{eco1.get('background', {}).get('hex')}`)
+   - *Superficie:* `{eco1.get('surface', {}).get('oklch')}` (`{eco1.get('surface', {}).get('hex')}`)
+2. **Ecosistema 2: High Performance & Vanguardia Activa**
+   - *Primario:* `{eco2.get('primary', {}).get('oklch')}` (`{eco2.get('primary', {}).get('hex')}`)
+   - *Acento:* `{eco2.get('accent', {}).get('oklch')}` (`{eco2.get('accent', {}).get('hex')}`)
+   - *Balancín:* `{eco2.get('balance', {}).get('oklch')}` (`{eco2.get('balance', {}).get('hex')}`)
+3. **Ecosistema 3: Bio-Sensual & Calidez Orgánica**
+   - *Primario:* `{eco3.get('primary', {}).get('oklch')}` (`{eco3.get('primary', {}).get('hex')}`)
+   - *Acento:* `{eco3.get('accent', {}).get('oklch')}` (`{eco3.get('accent', {}).get('hex')}`)
+   - *Balancín:* `{eco3.get('balance', {}).get('oklch')}` (`{eco3.get('balance', {}).get('hex')}`)
+
+### 3.3 Certificaciones de Contraste y Accesibilidad
+- **APCA Contrast:** `{palette.get('accessibility_ratings', {}).get('apca_contrast')}`
+- **WCAG 2.2 AAA:** `{palette.get('accessibility_ratings', {}).get('wcag_aaa')}`
+
+---
 
 ## 4. Geometría Sagrada del Símbolo & Nakshatra
-- **Janma Nakshatra:** {nak_name} (Deidad Tutelar: {nak.get('deity', 'N/D')}).
-- **Símbolo Sagrado Tradicional:** {nak_info.get('symbol', 'Geometría Universal')}.
-- **Directriz para el Isotipo:** {nak_info.get('essence', 'Trascendencia y precisión estructural.')}
+
+### 4.1 Janma Nakshatra & Deidad Tutelar
+- **Nakshatra Natal:** **{nak_name}** (Pada {nak_pada}).
+- **Deidad Tutelar:** **{nak_deity}**.
+- **Símbolo Tradicional:** {nak_info.get('symbol', 'Geometría Universal de Precisión')}.
+- **Esencia Arquetípica:** {nak_info.get('essence', 'Maestría constructiva y perfección formal.')}
+
+### 4.2 Directrices para el Isotipo Vectorial Monocromático
+- **Pureza Geométrica:** El isotipo debe construirse sobre una cuadrícula basada en la proporción áurea (1:1.618), prescindiendo de gradientes o sombras para garantizar legibilidad a 16x16px (favicon) y escalabilidad a gigantografía.
+- **Trazos Vectoriales:** Líneas limpias, vértices definidos y tensión compositiva que refleje la deidad de {nak_deity} combinada con la solidez de la Casa 10.
+- **Modo Monocromático Estricto:** Validación en negro absoluto (`#000000`) sobre blanco y blanco absoluto (`#FFFFFF`) sobre negro.
+
+---
 
 ## 5. Cadencia Cinética & Motion Design (GSAP 60fps)
-- **Preset Dinámico:** {motion_name} ({motion_dur}) con curva `{motion_curve}`.
-- **Justificación Astrológica:** {motion_rationale}
 
-## 6. Estrategia de Naming y Armonía Vibracional
-- **Fundador:** {f_name} (Camino de Vida: {founder.get('life_path_number', 0)})
-- **Marca Activa:** {brand_name}
-- **Resonancia:** Integración entre el vector de liderazgo solar en Casa {sun.get('house', 1)} y la maestría vocacional de la Casa 10 en {mc_sign}.
+- **Preset Seleccionado:** **{motion_name}** ({motion_dur}) con curva de aceleración `{motion_curve}`.
+- **Fundamento Astrológico:** {motion_rationale}
+- **Aplicación en UI:**
+  * Transición de páginas: Entrada escalonada de contenido con opacidad y traslación vertical de 12px.
+  * Micro-interacciones en botones: Feedback táctil instantáneo en `{motion_dur}` sin rebotes elásticos artificiales.
+  * Pacing de lectura: Respeto estricto del estándar `prefers-reduced-motion: reduce`.
+
+---
+
+## 6. Estrategia de Naming & Resonancia Vibracional
+
+### 6.1 Transmutación del Nombre Natal al Nombre de Operación Comercial
+- **Fundador:** {current_name} (Nombre de Nacimiento: {birth_name})
+- **Camino de Vida (Life Path):** **{f_lp}**
+- **Principio de Resonancia Activa:** El Nombre Actual canaliza y modula la frecuencia operativa visible de la marca, transmutando las cargas del Nombre de Nacimiento y amplificando la resonancia con el Avatar de Cliente Ideal (ICP).
+
+### 6.2 Matriz de Marcas Vinculadas
+| Marca Analizada | Cómputo Pitagórico | Compuesto / Simple Caldeo | Armonía con Fundador | Arquetipo Vibracional |
+|---|---|---|---|---|
+{brands_table_str}
+
+---
+
+## 7. Ventanas Temporales & Cronocratores de Lanzamiento (Timing Predictivo)
+
+- **Vimshottari Dasha Activa:** **{vd_maha} - {vd_antar}** ({vd_window}).
+- **Impacto en Campañas y Lanzamientos:** Ventana de alta receptividad comercial bajo la regencia de {vd_maha}-{vd_antar}. Se recomienda concentrar los despliegues mayores, rebrandings y aperturas de oferta high-ticket dentro de este marco de gobernanza temporal.
 """
 
 
