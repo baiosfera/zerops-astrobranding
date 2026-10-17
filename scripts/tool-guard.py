@@ -334,20 +334,17 @@ def auto_sync_governance(target_file: str = ""):
             except Exception:
                 pass
 
-    # 5. Autonomous Git Mirror Synchronization (Auto-Commit & Auto-Push — iniciar.sh-first Invariant)
+    # 5. Autonomous Git Mirror Synchronization (Non-blocking background spawn to preserve <30ms execution)
     # 5a. zerops-astro-skills
     try:
         skills_git = "/var/www/zerops-astro-skills"
         if os.path.exists(os.path.join(skills_git, ".git")):
-            st = subprocess.run(["git", "status", "--porcelain"], cwd=skills_git, capture_output=True, text=True, timeout=5)
+            st = subprocess.run(["git", "status", "--porcelain"], cwd=skills_git, capture_output=True, text=True, timeout=1)
             if st.returncode == 0 and st.stdout.strip():
-                subprocess.run(["git", "add", "-A"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
-                subprocess.run(["git", "commit", "-m", "chore(skills): auto-sync mirror mode"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-
-            cherry = subprocess.run(["git", "cherry", "-v", "origin/main"], cwd=skills_git, capture_output=True, text=True, timeout=5)
-            if cherry.returncode == 0 and cherry.stdout.strip():
-                subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
-                subprocess.run(["git", "push", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
+                subprocess.run(["git", "add", "-A"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                subprocess.run(["git", "commit", "-m", "chore(skills): auto-sync mirror mode"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                # Background push to never block hook
+                subprocess.Popen(["git", "push", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
 
@@ -355,15 +352,12 @@ def auto_sync_governance(target_file: str = ""):
     try:
         repo_git = "/var/www/zerops-astrobranding"
         if os.path.exists(os.path.join(repo_git, ".git")):
-            st = subprocess.run(["git", "status", "--porcelain"], cwd=repo_git, capture_output=True, text=True, timeout=5)
+            st = subprocess.run(["git", "status", "--porcelain"], cwd=repo_git, capture_output=True, text=True, timeout=1)
             if st.returncode == 0 and st.stdout.strip():
-                subprocess.run(["git", "add", "-A"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
-                subprocess.run(["git", "commit", "-m", "chore(repo): auto-sync mirror mode"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-
-            cherry = subprocess.run(["git", "cherry", "-v", "origin/main"], cwd=repo_git, capture_output=True, text=True, timeout=5)
-            if cherry.returncode == 0 and cherry.stdout.strip():
-                subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
-                subprocess.run(["git", "push", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
+                subprocess.run(["git", "add", "-A"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                subprocess.run(["git", "commit", "-m", "chore(repo): auto-sync mirror mode"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                # Background push to never block hook
+                subprocess.Popen(["git", "push", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
 
@@ -437,26 +431,21 @@ def has_recent_backup(target_file: str) -> bool:
     latest_bak_mtime = 0.0
     if os.path.exists(target_bak_dir):
         try:
-            with os.scandir(target_bak_dir) as it:
-                for entry in it:
-                    fname = entry.name
-                    if not fname.endswith(".bak"):
-                        continue
-                    match = False
-                    if skill_name and fname.startswith(f"{skill_name}_"):
-                        match = True
-                    elif name_stem and fname.startswith(f"{name_stem}_"):
-                        match = True
-                    elif base_name and fname.startswith(f"{base_name}_"):
-                        match = True
+            for fname in os.listdir(target_bak_dir):
+                match = False
+                if skill_name and skill_name in fname:
+                    match = True
+                elif name_stem and name_stem in fname:
+                    match = True
+                elif base_name in fname:
+                    match = True
 
-                    if match:
-                        try:
-                            mtime = entry.stat().st_mtime
-                            if mtime > latest_bak_mtime:
-                                latest_bak_mtime = mtime
-                        except Exception:
-                            pass
+                if match:
+                    fpath = os.path.join(target_bak_dir, fname)
+                    if os.path.isfile(fpath) or os.path.isdir(fpath):
+                        mtime = os.path.getmtime(fpath)
+                        if mtime > latest_bak_mtime:
+                            latest_bak_mtime = mtime
         except Exception:
             pass
 
@@ -464,7 +453,7 @@ def has_recent_backup(target_file: str) -> bool:
     if latest_bak_mtime < (target_mtime - 1.0):
         try:
             os.makedirs(target_bak_dir, exist_ok=True)
-            import shutil, time, threading
+            import shutil, time
             ts = int(time.time())
             if is_skill and skill_name:
                 skill_dir = ""
@@ -498,31 +487,19 @@ def has_recent_backup(target_file: str) -> bool:
                 snapshot_path = os.path.join(target_bak_dir, snapshot_name)
                 shutil.copy2(target_file, snapshot_path)
 
-            # Auto-rotate: keep max 5 most recent snapshots asynchronously without blocking FUSE
+            # Auto-rotate: keep max 5 most recent snapshots for this specific target
             prefix_match = f"{skill_name}_v" if (is_skill and skill_name) else (f"{name_stem}_" if name_stem != base_name else f"{base_name}_")
-            def _async_rotate(b_dir, p_match):
-                try:
-                    entries = []
-                    with os.scandir(b_dir) as it:
-                        for entry in it:
-                            if entry.name.startswith(p_match) and entry.name.endswith(".bak"):
-                                try:
-                                    entries.append((entry.path, entry.is_dir(), entry.stat().st_mtime))
-                                except Exception:
-                                    pass
-                    if len(entries) > 5:
-                        entries.sort(key=lambda x: x[2])
-                        for old_path, is_d, _ in entries[:-5]:
-                            try:
-                                if is_d:
-                                    shutil.rmtree(old_path, ignore_errors=True)
-                                else:
-                                    os.remove(old_path)
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-            threading.Thread(target=_async_rotate, args=(target_bak_dir, prefix_match), daemon=True).start()
+            existing = [os.path.join(target_bak_dir, f) for f in os.listdir(target_bak_dir) if f.startswith(prefix_match) and f.endswith(".bak")]
+            if len(existing) > 5:
+                existing.sort(key=os.path.getmtime)
+                for old_f in existing[:-5]:
+                    try:
+                        if os.path.isdir(old_f):
+                            shutil.rmtree(old_f, ignore_errors=True)
+                        else:
+                            os.remove(old_f)
+                    except Exception:
+                        pass
         except Exception:
             pass
     return True
