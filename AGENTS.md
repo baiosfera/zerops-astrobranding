@@ -132,3 +132,16 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 
 <!-- CUSTOM:END -->
 
+
+<!-- ZEROPS:REFLOG -->
+### 2026-10-17 — Bootstrap: Provision PostgreSQL 18, Valkey 7.2, NATS 2.12, Object Storage, and EvolutionGo for Catalina Glamur
+
+- **Runtime:** webdev (ubuntu/bun@1.3, standard)
+- **Stage:** webstage
+- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2), nats (nats:single@2.12), objectstorage (object-storage), localstorage (local-storage:single@1)
+- **Runtime:** evolution (alpine/go@1.22, simple)
+- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2)
+- **Session:** 0a836147c72d8e6a
+
+> This is a historical record. Verify current state via `zerops_discover`.
+<!-- /ZEROPS:REFLOG -->
