@@ -334,20 +334,17 @@ def auto_sync_governance(target_file: str = ""):
             except Exception:
                 pass
 
-    # 5. Autonomous Git Mirror Synchronization (Auto-Commit & Auto-Push — iniciar.sh-first Invariant)
+    # 5. Autonomous Git Mirror Synchronization (Non-blocking background spawn to preserve <30ms execution)
     # 5a. zerops-astro-skills
     try:
         skills_git = "/var/www/zerops-astro-skills"
         if os.path.exists(os.path.join(skills_git, ".git")):
-            st = subprocess.run(["git", "status", "--porcelain"], cwd=skills_git, capture_output=True, text=True, timeout=5)
+            st = subprocess.run(["git", "status", "--porcelain"], cwd=skills_git, capture_output=True, text=True, timeout=1)
             if st.returncode == 0 and st.stdout.strip():
-                subprocess.run(["git", "add", "-A"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
-                subprocess.run(["git", "commit", "-m", "chore(skills): auto-sync mirror mode"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-
-            cherry = subprocess.run(["git", "cherry", "-v", "origin/main"], cwd=skills_git, capture_output=True, text=True, timeout=5)
-            if cherry.returncode == 0 and cherry.stdout.strip():
-                subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
-                subprocess.run(["git", "push", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
+                subprocess.run(["git", "add", "-A"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                subprocess.run(["git", "commit", "-m", "chore(skills): auto-sync mirror mode"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                # Background push to never block hook
+                subprocess.Popen(["git", "push", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
 
@@ -355,15 +352,12 @@ def auto_sync_governance(target_file: str = ""):
     try:
         repo_git = "/var/www/zerops-astrobranding"
         if os.path.exists(os.path.join(repo_git, ".git")):
-            st = subprocess.run(["git", "status", "--porcelain"], cwd=repo_git, capture_output=True, text=True, timeout=5)
+            st = subprocess.run(["git", "status", "--porcelain"], cwd=repo_git, capture_output=True, text=True, timeout=1)
             if st.returncode == 0 and st.stdout.strip():
-                subprocess.run(["git", "add", "-A"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
-                subprocess.run(["git", "commit", "-m", "chore(repo): auto-sync mirror mode"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-
-            cherry = subprocess.run(["git", "cherry", "-v", "origin/main"], cwd=repo_git, capture_output=True, text=True, timeout=5)
-            if cherry.returncode == 0 and cherry.stdout.strip():
-                subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
-                subprocess.run(["git", "push", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
+                subprocess.run(["git", "add", "-A"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                subprocess.run(["git", "commit", "-m", "chore(repo): auto-sync mirror mode"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+                # Background push to never block hook
+                subprocess.Popen(["git", "push", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
 
@@ -461,37 +455,9 @@ def has_recent_backup(target_file: str) -> bool:
             os.makedirs(target_bak_dir, exist_ok=True)
             import shutil, time
             ts = int(time.time())
-            if is_skill and skill_name:
-                skill_dir = ""
-                for candidate_root in ["/var/www/.agents/skills", "/var/www/zerops-astro-skills"]:
-                    cand = os.path.join(candidate_root, skill_name)
-                    if os.path.isdir(cand):
-                        skill_dir = cand
-                        break
-                if not skill_dir and target_file.find(skill_name) != -1:
-                    skill_dir = target_file[:target_file.find(skill_name) + len(skill_name)]
-
-                if skill_dir and os.path.isdir(skill_dir):
-                    skill_md = os.path.join(skill_dir, "SKILL.md")
-                    ver = "latest"
-                    if os.path.exists(skill_md):
-                        try:
-                            with open(skill_md, "r", encoding="utf-8") as f:
-                                for line in f:
-                                    m_ver = re.search(r'version:\s*["\']?([^"\'\n]+)', line)
-                                    if m_ver:
-                                        ver = m_ver.group(1).strip()
-                                        break
-                        except Exception:
-                            pass
-                    dt_str = time.strftime("%Y%m%d_%H%M%S")
-                    dir_bak = os.path.join(target_bak_dir, f"{skill_name}_v{ver}_{dt_str}.bak")
-                    if not os.path.exists(dir_bak):
-                        shutil.copytree(skill_dir, dir_bak)
-            else:
-                snapshot_name = f"{name_stem}_{base_name}_{ts}.bak" if name_stem != base_name else f"{base_name}_{ts}.bak"
-                snapshot_path = os.path.join(target_bak_dir, snapshot_name)
-                shutil.copy2(target_file, snapshot_path)
+            snapshot_name = f"{skill_name}_{base_name}_{ts}.bak" if (is_skill and skill_name) else (f"{name_stem}_{base_name}_{ts}.bak" if name_stem != base_name else f"{base_name}_{ts}.bak")
+            snapshot_path = os.path.join(target_bak_dir, snapshot_name)
+            shutil.copy2(target_file, snapshot_path)
 
             # Auto-rotate: keep max 5 most recent snapshots for this specific target
             prefix_match = f"{skill_name}_v" if (is_skill and skill_name) else (f"{name_stem}_" if name_stem != base_name else f"{base_name}_")
