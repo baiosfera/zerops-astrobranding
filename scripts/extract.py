@@ -252,7 +252,31 @@ async def extract_freeastroapi(
     }
 
     catalog_path = Path(__file__).parent.parent / "assets" / "natal_endpoints_catalog.json"
-    endpoints_to_run = []
+    endpoints_to_run = [
+        ("api_v1_natal_calculate_tropical_placidus", "POST", f"{BASE_URL}/api/v1/natal/calculate", payload_tropical_placidus, None),
+        ("api_v1_natal_calculate_tropical_campanus", "POST", f"{BASE_URL}/api/v1/natal/calculate", payload_tropical_campanus, None),
+        ("api_v1_natal_calculate_sidereal_fagan_campanus", "POST", f"{BASE_URL}/api/v1/natal/calculate", payload_sidereal_fc, None),
+        ("api_v1_natal_calculate_sidereal_lahiri", "POST", f"{BASE_URL}/api/v1/natal/calculate", payload_sidereal_lahiri, None),
+    ]
+
+    for num_sys in ["pythagorean", "chaldean", "kabbalah", "ank_jyotish"]:
+        num_payload = {
+            "method": {
+                "system": num_sys,
+                "profile": "standard",
+                "compound_policy": "compound_and_root"
+            },
+            "subject": {
+                "birth_date": date_str,
+                "name": {
+                    "birth": full_name,
+                    "current": pref_name
+                },
+                "tz_str": tz_str
+            },
+            "include_interpretations": True
+        }
+        endpoints_to_run.append((f"api_v1_numerology_profile_{num_sys}", "POST", f"{BASE_URL}/api/v1/numerology/profile", num_payload, None))
 
     if catalog_path.exists():
         try:
@@ -265,17 +289,15 @@ async def extract_freeastroapi(
                 # Skip permanently closed/deprecated or invalid endpoints
                 if p == "/api/v1/natal/experimental" or "job_id" in p:
                     continue
+                # Skip endpoints already registered explicitly
+                if p == "/api/v1/natal/calculate" or p == "/api/v1/numerology/profile":
+                    continue
 
                 formatted_p = p.replace("{date}", date_str)
                 url = f"{BASE_URL}{formatted_p}"
 
+                # Keep version prefix to avoid collision between versions
                 clean_key = p.strip("/").replace("/", "_").replace("-", "_").replace("{", "").replace("}", "")
-                if clean_key.startswith("api_v1_"):
-                    clean_key = clean_key[7:]
-                elif clean_key.startswith("api_v2_"):
-                    clean_key = clean_key[7:]
-                elif clean_key.startswith("api_v3_"):
-                    clean_key = clean_key[7:]
 
                 body = None
                 params = None
