@@ -62,7 +62,7 @@ if [ -d "$SKILLS_SRC" ]; then
             # Sincronización activa soberana: actualizar o desplegar la skill hacia el workspace local
             mkdir -p "$TARGET_AGENTS/$skill_name"
             if command -v rsync >/dev/null 2>&1; then
-                rsync -a --exclude="__pycache__" --exclude="*.pyc" "$skill_dir/" "$TARGET_AGENTS/$skill_name/"
+                rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$skill_dir/" "$TARGET_AGENTS/$skill_name/"
             else
                 cp -rf "$skill_dir"/* "$TARGET_AGENTS/$skill_name/" 2>/dev/null || true
             fi
