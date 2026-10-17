@@ -1532,27 +1532,40 @@ class BrandbookPipelineRunner:
         palette = generate_polar_oklch_suite(sun_lon, dom_elem, yong_shen, venus_deg)
         logger.info(f"Synthesized Epistemic Color Suite: SolarLon={sun_lon:.2f}° | BaseHue={palette['calculated_base_hue']}° | Essence={dom_elem} | Balance={yong_shen}")
 
-        # 3. Deterministic Mathematical Artifacts (Zero Templates, Pure Semantic Engine)
+        # 3. Deterministic Mathematical Artifacts (Ficha Técnica SSoT is purely mathematical/tabular)
         synth = DeterministicSynthesizer()
         tech_sheet_md = synth.render_technical_sheet(self.brand_upper, shards)
-        author_psych_md = synth.render_author_psychology(self.brand_upper, shards)
-        astrobranding_md = synth.render_astrobranding_brief(self.brand_upper, shards, palette)
 
         if dry_run:
             logger.info("Dry-run requested. Verified inputs:")
             logger.info(f"  • Technical Sheet length: {len(tech_sheet_md)} chars")
-            logger.info(f"  • Author Psychology length: {len(author_psych_md)} chars")
-            logger.info(f"  • Astrobranding Brief length: {len(astrobranding_md)} chars")
             return 0
 
-        # 4. Strategic Reasoning via Bifrost (or dynamic domain baseline if offline)
+        # 4. Strategic Reasoning via Bifrost (DeepSeek authors psychological and semiotic briefs)
         if self.offline:
             logger.info("Offline mode requested: using pure dynamic domain baseline.")
             strategist = BifrostBrandStrategist()
             strategy_data = strategist._generate_dynamic_domain_baseline(self.brand_upper, shards)
+            author_psych_md = synth.render_author_psychology(self.brand_upper, shards)
+            astrobranding_md = synth.render_astrobranding_brief(self.brand_upper, shards, palette)
         else:
-            strategist = BifrostBrandStrategist(base_url=self.bifrost_url, primary_model=self.model)
-            strategy_data = strategist.generate_strategy(self.brand_upper, shards)
+            strategist = BifrostBrandStrategist(base_url=self.bifrost_url, primary_model=self.model, timeout_sec=180)
+            strategy_data = strategist.generate_strategy(self.brand_upper, shards, palette)
+
+            # Consume bespoke prose authored by DeepSeek via Bifrost
+            author_psych_md = strategy_data.get("author_psychology_markdown")
+            if not author_psych_md or len(author_psych_md.strip()) < 200:
+                logger.warning("DeepSeek did not return full author_psychology_markdown; using mathematical fallback.")
+                author_psych_md = synth.render_author_psychology(self.brand_upper, shards)
+            else:
+                logger.info(f"Consumed bespoke Author Psychology from DeepSeek ({len(author_psych_md)} chars)")
+
+            astrobranding_md = strategy_data.get("astrobranding_brief_markdown")
+            if not astrobranding_md or len(astrobranding_md.strip()) < 200:
+                logger.warning("DeepSeek did not return full astrobranding_brief_markdown; using mathematical fallback.")
+                astrobranding_md = synth.render_astrobranding_brief(self.brand_upper, shards, palette)
+            else:
+                logger.info(f"Consumed bespoke Astrobranding Brief from DeepSeek ({len(astrobranding_md)} chars)")
 
         # 5. Assemble W3C DTCG Brandbook JSON
         brandbook_json = self._assemble_dtcg_brandbook(self.brand_upper, shards, palette, strategy_data)
