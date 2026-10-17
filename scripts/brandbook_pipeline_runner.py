@@ -1642,9 +1642,47 @@ class BifrostBrandStrategist:
         founder = s9.get("founder", {})
         founder_name = str(cp.get("preferred_name") or cp.get("name") or founder.get("birth_name") or brand_name)
 
+        # Explicit 3-Tradition Comparative Triad
+        t_sun = s1.get("tripod_of_iron", {}).get("sun", {})
+        t_moon = s1.get("planets", {}).get("Moon", {})
+        t_houses = s1.get("houses", {})
+        t_asc = t_houses.get("1") or t_houses.get("House 1") or {}
+        t_mc = t_houses.get("10") or t_houses.get("House 10") or s1.get("tripod_of_iron", {}).get("midheaven_house_10", {})
+
+        fb = s2.get("fagan_bradley", {})
+        lah = s2.get("lahiri", {})
+        nak = s3.get("nakshatra", {})
+
+        comparative_triad = {
+            "occidental_tropical_placidus": {
+                "sistema": "Occidental Tropical Placidus (Ego, Mente Consciente, Máscara Social)",
+                "sol": f"{t_sun.get('sign', 'N/D')} a {t_sun.get('degree', 0.0):.2f}° (Casa {t_sun.get('house', 'N/D')})",
+                "luna": f"{t_moon.get('sign', 'N/D')} a {t_moon.get('degree', 0.0):.2f}° (Casa {t_moon.get('house', 'N/D')})",
+                "ascendente": f"{t_asc.get('sign', 'N/D')} a {t_asc.get('degree', 0.0):.2f}°",
+                "medio_cielo": f"{t_mc.get('sign', 'N/D')} a {t_mc.get('degree', 0.0):.2f}°",
+            },
+            "occidental_sideral_fagan_bradley": {
+                "sistema": f"Occidental Sideral Fagan-Bradley (Verdad Cuántica / Físico-Astronómica, Ayanamsa: {fb.get('ayanamsa_degrees', 0.0):.2f}°)",
+                "sol": f"{fb.get('planets', {}).get('Sun', {}).get('sign', 'N/D')} a {fb.get('planets', {}).get('Sun', {}).get('degree', 0.0):.2f}°",
+                "luna": f"{fb.get('planets', {}).get('Moon', {}).get('sign', 'N/D')} a {fb.get('planets', {}).get('Moon', {}).get('degree', 0.0):.2f}°",
+                "ascendente": f"{fb.get('ascendant', {}).get('sign', 'N/D')} a {fb.get('ascendant', {}).get('degree', 0.0):.2f}°",
+                "medio_cielo": f"{fb.get('midheaven', {}).get('sign', 'N/D')} a {fb.get('midheaven', {}).get('degree', 0.0):.2f}°",
+            },
+            "vedica_jyotish_lahiri_kp": {
+                "sistema": f"Védica Jyotish Lahiri / Chitra-Paksha (Dharma, Karma, Nakshatras, Ayanamsa: {lah.get('ayanamsa_degrees', 0.0):.2f}°)",
+                "surya_sol": f"{lah.get('planets', {}).get('Sun', {}).get('sign', 'N/D')} a {lah.get('planets', {}).get('Sun', {}).get('degree', 0.0):.2f}°",
+                "chandra_luna_rashi": f"{lah.get('planets', {}).get('Moon', {}).get('sign', 'N/D')} a {lah.get('planets', {}).get('Moon', {}).get('degree', 0.0):.2f}°",
+                "lagna_ascendente": f"{lah.get('ascendant', {}).get('sign', 'N/D')} a {lah.get('ascendant', {}).get('degree', 0.0):.2f}°",
+                "medio_cielo": f"{lah.get('midheaven', {}).get('sign', 'N/D')} a {lah.get('midheaven', {}).get('degree', 0.0):.2f}°",
+                "janma_nakshatra": f"{nak.get('name', 'N/D')} (Pada {nak.get('pada', 1)}, Deidad: {nak.get('deity', 'N/D')}, Regente: {nak.get('lord', 'N/D')})",
+            },
+            "delta_precesional": f"Delta Fagan-Bradley vs. Lahiri: {s2.get('comparative_delta', {}).get('fagan_vs_lahiri_arcminutes', 0.0):.1f}' de arco",
+        }
+
         return {
             "brand_name": brand_name,
             "founder_name": founder_name,
+            "comparative_triad_3_traditions": comparative_triad,
             "client_profile": {
                 "birth_date": f"{cp.get('year', 1990):04d}-{cp.get('month', 1):02d}-{cp.get('day', 1):02d}",
                 "birth_time": f"{cp.get('hour', 12):02d}:{cp.get('minute', 0):02d}",
@@ -1668,13 +1706,21 @@ class BifrostBrandStrategist:
                     "midheaven": s2.get("fagan_bradley", {}).get("midheaven"),
                     "planets": s2.get("fagan_bradley", {}).get("planets", {}),
                 },
+                "lahiri": {
+                    "ayanamsa": s2.get("lahiri", {}).get("ayanamsa_degrees"),
+                    "ascendant": s2.get("lahiri", {}).get("ascendant"),
+                    "midheaven": s2.get("lahiri", {}).get("midheaven"),
+                    "planets": s2.get("lahiri", {}).get("planets", {}),
+                },
                 "comparative_delta": s2.get("comparative_delta", {}),
                 "mundoscope_cross_of_malta": s2.get("mundoscope_cross_of_malta", {}),
             },
             "shard_03_vedic_jyotish": {
                 "nakshatra": s3.get("nakshatra", {}),
                 "shadbala": s3.get("shadbala", {}),
+                "kp_system": s3.get("kp_system", {}),
                 "yogas_identified": s3.get("yogas_identified", []),
+                "vargas": s3.get("vargas", {}),
             },
             "shard_04_chinese_bazi": {
                 "four_pillars": s4.get("four_pillars", {}),
@@ -1685,6 +1731,7 @@ class BifrostBrandStrategist:
             "shard_06_kabbalah_zmanim": {
                 "hebrew_calendar": s6.get("hebrew_calendar", {}),
                 "tikkun_rav_berg": s6.get("tikkun_rav_berg", {}),
+                "zmanim_halachic_times": s6.get("zmanim_halachic_times", {}),
             },
             "shard_07_vocational_wealth": s7,
             "shard_08_astrocartography": s8,
