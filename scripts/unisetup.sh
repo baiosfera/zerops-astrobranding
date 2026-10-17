@@ -139,7 +139,8 @@ ZEROPS_SYNC_PID=""
 # Auto-recuperación y sincronización de repositorio zerops-astrobranding
 if [ -d "$PROJECT_ROOT/zerops-astrobranding/.git" ]; then
     echo "• Sincronizando repositorio zerops-astrobranding con GitHub (git pull)..."
-    git -C "$PROJECT_ROOT/zerops-astrobranding" pull --ff-only 2>/dev/null || true
+    git -C "$PROJECT_ROOT/zerops-astrobranding" fetch origin main 2>/dev/null || true
+    git -C "$PROJECT_ROOT/zerops-astrobranding" reset --hard origin/main 2>/dev/null || git -C "$PROJECT_ROOT/zerops-astrobranding" pull --ff-only 2>/dev/null || true
 fi
 if [ -f "$SCRIPT_DIR/iniciar.sh" ] && [ -f "$PROJECT_ROOT/zerops-astrobranding/iniciar.sh" ]; then
     if ! cmp -s "$SCRIPT_DIR/iniciar.sh" "$PROJECT_ROOT/zerops-astrobranding/iniciar.sh"; then
