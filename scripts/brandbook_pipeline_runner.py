@@ -1504,7 +1504,7 @@ class BifrostBrandStrategist:
         self.timeout_sec = timeout_sec
 
     def _send_completion(self, model: str, messages: List[Dict[str, str]],
-                         response_format: str = "text", max_tokens: int = 4096) -> str:
+                         response_format: str = "text", max_tokens: int = 8192) -> str:
         url = f"{self.base_url}/v1/chat/completions"
         payload: Dict[str, Any] = {
             "model": model,
@@ -1547,7 +1547,7 @@ class BifrostBrandStrategist:
 
     def generate_strategy_json(self, brand_name: str, shards: Dict[str, Any],
                                palette: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Call 1: Generates clean, fast brand strategy JSON (< 2500 tokens, ~15-20s)."""
+        """Call 1: Generates clean, fast brand strategy JSON (< 3500 tokens, ~20s)."""
         prompt = self._build_strategy_json_prompt(brand_name, shards, palette)
         models_to_try = [self.primary_model]
         if self.fallback_model and self.fallback_model != self.primary_model:
@@ -1555,8 +1555,8 @@ class BifrostBrandStrategist:
 
         for model in models_to_try:
             try:
-                logger.info(f"[Call 1/3] Invoking Bifrost for Brand Strategy JSON with {model} (max_tokens: 3000)...")
-                content_raw = self._send_completion(model, prompt, response_format="json_object", max_tokens=3000)
+                logger.info(f"[Call 1/3] Invoking Bifrost for Brand Strategy JSON with {model} (max_tokens: 8192)...")
+                content_raw = self._send_completion(model, prompt, response_format="json_object", max_tokens=8192)
                 if content_raw.startswith("```"):
                     content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
                     content_raw = re.sub(r"\n?```$", "", content_raw).strip()
@@ -1585,8 +1585,8 @@ class BifrostBrandStrategist:
 
         for model in models_to_try:
             try:
-                logger.info(f"[Call 2/3] Invoking Bifrost for Author Psychology Markdown with {model} (max_tokens: 4096)...")
-                content_raw = self._send_completion(model, prompt, response_format="text", max_tokens=4096)
+                logger.info(f"[Call 2/3] Invoking Bifrost for Author Psychology Markdown with {model} (max_tokens: 8192)...")
+                content_raw = self._send_completion(model, prompt, response_format="text", max_tokens=8192)
                 if content_raw.startswith("```"):
                     content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
                     content_raw = re.sub(r"\n?```$", "", content_raw).strip()
@@ -1608,8 +1608,8 @@ class BifrostBrandStrategist:
 
         for model in models_to_try:
             try:
-                logger.info(f"[Call 3/3] Invoking Bifrost for Astrobranding Brief Markdown with {model} (max_tokens: 4096)...")
-                content_raw = self._send_completion(model, prompt, response_format="text", max_tokens=4096)
+                logger.info(f"[Call 3/3] Invoking Bifrost for Astrobranding Brief Markdown with {model} (max_tokens: 8192)...")
+                content_raw = self._send_completion(model, prompt, response_format="text", max_tokens=8192)
                 if content_raw.startswith("```"):
                     content_raw = re.sub(r"^```[a-zA-Z]*\n?", "", content_raw)
                     content_raw = re.sub(r"\n?```$", "", content_raw).strip()
