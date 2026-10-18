@@ -2098,6 +2098,14 @@ class BrandbookPipelineRunner:
         (target_dir / "brandbook-theme.css").write_text(theme_css, encoding="utf-8")
         (target_dir / "system_prompt.md").write_text(system_prompt, encoding="utf-8")
 
+        # Canonical DIAG root mirror for Track B (orchesbrand / fontgen / symbol / chroma)
+        diag_root_brief = Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{self.brand_upper}/astrobranding_{self.brand_lower}.md")
+        try:
+            diag_root_brief.parent.mkdir(parents=True, exist_ok=True)
+            diag_root_brief.write_text(brief, encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"Could not mirror brief to canonical DIAG root: {e}")
+
     def _assemble_dtcg_brandbook(self, brand_name: str, shards: Dict[str, Any],
                                  palette: Dict[str, Any], strategy: Dict[str, Any]) -> Dict[str, Any]:
         """Assembles a valid W3C Design Tokens Community Group (DTCG 2025.10) document."""
