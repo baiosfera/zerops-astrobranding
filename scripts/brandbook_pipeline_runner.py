@@ -2322,7 +2322,14 @@ class BrandbookPipelineRunner:
                             "$value": mono_fonts,
                             "$description": "Mathematical coordinate and token font",
                         },
+                        "accent": {
+                            "$type": "fontFamily",
+                            "$value": accent_fonts,
+                            "$description": "Brand voice and monogram accent typography",
+                        },
                     },
+                    "ecosystems": typo_ecosystems,
+                    "cls_metric_overrides": cls_overrides,
                     "fontSize": {
                         "display": {"$type": "dimension", "$value": "clamp(2.5rem, 5vw + 1rem, 4.5rem)"},
                         "h1": {"$type": "dimension", "$value": "clamp(2rem, 4vw + 1rem, 3.5rem)"},
