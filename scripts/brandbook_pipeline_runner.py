@@ -2393,6 +2393,7 @@ class BrandbookPipelineRunner:
         font_disp = format_font(typo.get("display"), "'Cinzel', serif")
         font_body = format_font(typo.get("body"), "'Plus Jakarta Sans', sans-serif")
         font_mono = format_font(typo.get("mono"), "'JetBrains Mono', monospace")
+        font_accent = format_font(typo.get("accent"), "'Adorn Chiseled Monogram', cursive")
 
         return f"""/* ==========================================================================
    Tailwind CSS v4 Brand Theme Tokens — {self.brand_upper}
@@ -2413,6 +2414,7 @@ class BrandbookPipelineRunner:
   --font-display: {font_disp};
   --font-body: {font_body};
   --font-mono: {font_mono};
+  --font-accent: {font_accent};
 }}
 
 :root {{
@@ -2427,6 +2429,7 @@ class BrandbookPipelineRunner:
   --font-display: {font_disp};
   --font-body: {font_body};
   --font-mono: {font_mono};
+  --font-accent: {font_accent};
 }}
 """
 
