@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """
 fontgen_engine.py — Sovereign Agnostic Typographic Engine & Art Direction Matrix.
-Zero-Hallucination Design Synthesis | Gestalt Theory | Anti-CLS Calibration.
+Zero-Hallucination Design Synthesis | Real-Time Exa Sourcing | Anti-CLS Calibration.
 Complies with W3C DTCG 2025.10 & font_manifest.schema.json (Draft 2020-12).
 
-All Envato Elements items in this catalog are physically verified with HTTP 200 OK.
-Includes Google Fonts v2 Variable multiaxis pairings and anti-CLS metric overrides.
+Architecture:
+- Real-time dynamic discovery via Exa API ($EXA_API_KEY) with live HTTP 200 validation.
+- Zero-hallucination offline fallback using physically verified Envato catalog (HTTP 200 OK).
+- Fully agnostic astrological matrix (12 signs, 4 elements, 3 modalities, 10 Day Masters, 27 Nakshatras).
+- Diverse Google Fonts v2 Variable multiaxis pairings (Newsreader, Instrument Sans, Bricolage, Fraunces, Manrope, etc.).
+- Direct category search URLs (tagged-{keywords}) for effortless manual download via Envato Pro subscription.
 
 Author: Gentleman Programming & Antigravity Orchestrator
-Version: 2.1.0
+Version: 2.2.0
 """
 
 import os
@@ -285,20 +289,119 @@ NAKSHATRA_FEATURES = {
 
 class FontgenEngine:
     """
+    Sovereign Agnostic Typographic Engine.
     Synthesizes 3 differentiated typography ecosystems based on verified real fonts.
-    Guarantees every Envato URL is valid and provides a direct search fallback link.
+    Supports real-time dynamic sourcing via Exa API with live HTTP 200 validation,
+    and falls back to a physically verified zero-hallucination catalog.
     """
 
-    def __init__(self, brand: str, shards_path: Optional[Path] = None, brief_path: Optional[Path] = None):
+    def __init__(self, brand: str, shards_path: Optional[Path] = None, brief_path: Optional[Path] = None, use_exa: bool = True):
         self.brand_raw = brand.strip()
         self.brand_upper = self.brand_raw.upper()
         self.brand_lower = self.brand_raw.lower()
         self.shards_path = shards_path
         self.brief_path = brief_path
+        self.use_exa = use_exa
 
         self.diag_dir = Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{self.brand_upper}")
         self.project_dev_dir = Path(f"/var/www/baiosfera/PROYECTOS/{self.brand_upper}/dev")
         self.localstorage_dir = Path(f"/var/www/localstorage/{self.brand_upper}/dev")
+
+    def _get_exa_api_key(self) -> Optional[str]:
+        """Retrieves Exa API key from environment or /etc/environment."""
+        k = os.environ.get("EXA_API_KEY")
+        if not k:
+            try:
+                with open("/etc/environment", "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("EXA_API_KEY="):
+                            k = line.strip().split("=", 1)[1].strip("\"'")
+                            break
+            except Exception:
+                pass
+        return k
+
+    def _verify_url_200(self, url: str) -> bool:
+        """Physically validates that an Envato URL returns HTTP 200 OK."""
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        try:
+            req = urllib.request.Request(url, headers=headers, method="HEAD")
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                return resp.status == 200
+        except Exception:
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=4) as resp:
+                    return resp.status == 200
+            except Exception:
+                return False
+
+    def _clean_family_name(self, title: str, url: str) -> str:
+        """Extracts a clean typographic family name from title or URL slug."""
+        slug = url.rstrip("/").split("/")[-1]
+        slug_tokens = slug.split("-")
+        if len(slug_tokens) > 1 and len(slug_tokens[-1]) >= 5:
+            slug_tokens = slug_tokens[:-1]
+
+        if title:
+            first_part = re.split(r"\s*[-–—]\s*", title)[0].strip()
+            first_part = re.split(r",", first_part)[0].strip()
+            cleaned = re.sub(r"\b(Font|Typeface|Family|Display|Serif|Sans|Grotesk|Script)\b", "", first_part, flags=re.IGNORECASE).strip()
+            if len(cleaned) >= 2:
+                return cleaned.title()
+
+        name_tokens = []
+        for token in slug_tokens:
+            if token.lower() in ["font", "typeface", "family", "serif", "sans", "display", "modern", "luxury", "clean", "vintage"]:
+                break
+            name_tokens.append(token.capitalize())
+        if name_tokens:
+            return " ".join(name_tokens)
+        return slug_tokens[0].capitalize()
+
+    def _search_live_envato_fonts(self, query: str, category: str = "serif", default_weights: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+        """Queries Exa API for live Envato Elements fonts matching query, verifies 200 OK."""
+        if not self.use_exa:
+            return None
+
+        key = self._get_exa_api_key()
+        if not key:
+            return None
+
+        clean_tags = "+".join(query.replace("font", "").replace("typeface", "").split()[:3])
+        search_url = f"https://elements.envato.com/all-items/fonts/tagged-{clean_tags}"
+
+        try:
+            req_data = json.dumps({
+                "query": f"site:elements.envato.com {query}",
+                "numResults": 5,
+                "type": "neural"
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                "https://api.exa.ai/search",
+                data=req_data,
+                headers={"x-api-key": key, "Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                for item in data.get("results", []):
+                    u = item.get("url", "")
+                    if not re.search(r"^https://elements\.envato\.com/[a-zA-Z0-9\-]+-[A-Z0-9]+/?$", u):
+                        continue
+                    if self._verify_url_200(u):
+                        family = self._clean_family_name(item.get("title", ""), u)
+                        return {
+                            "family": family,
+                            "url": u,
+                            "search_url": search_url,
+                            "weights": default_weights or ["400", "600", "700"],
+                            "category": category,
+                            "style": f"Dynamic Sourcing ({query})",
+                            "description": f"Live verified Envato item: {item.get('title', family)} (HTTP 200 OK)."
+                        }
+        except Exception:
+            pass
+        return None
 
     def resolve_inputs(self) -> Dict[str, Any]:
         """Discovers astronomical coordinates from shards or brief."""
@@ -389,17 +492,30 @@ class FontgenEngine:
 
         # --- ECOSISTEMA 1: QUIET LUXURY (Editorial & Authority) ---
         if mc_elem in ["Earth", "Water"]:
-            eco1_prim = ENVATO_VERIFIED_CATALOG["luxury_editorial_serif"]    # Royalist (Verified 200 OK)
-            eco1_body = GOOGLE_FONTS_CATALOG["newsreader"]                   # Newsreader Variable
-            eco1_acc = ENVATO_VERIFIED_CATALOG["monogram_holder"]            # Monogram Holder (Verified 200 OK)
+            fallback_prim = ENVATO_VERIFIED_CATALOG["luxury_editorial_serif"]    # Royalist
+            eco1_body = GOOGLE_FONTS_CATALOG["newsreader"]                       # Newsreader Variable
+            fallback_acc = ENVATO_VERIFIED_CATALOG["monogram_holder"]            # Monogram Holder
+            query_prim = "luxury editorial serif font"
+            query_acc = "monogram ligature logo display font"
         elif mc_elem == "Fire":
-            eco1_prim = ENVATO_VERIFIED_CATALOG["romanesque_display"]        # Trabuline (Verified 200 OK)
-            eco1_body = GOOGLE_FONTS_CATALOG["instrument_sans"]              # Instrument Sans
-            eco1_acc = ENVATO_VERIFIED_CATALOG["augor_monogram"]             # AUGOR (Verified 200 OK)
+            fallback_prim = ENVATO_VERIFIED_CATALOG["romanesque_display"]        # Trabuline
+            eco1_body = GOOGLE_FONTS_CATALOG["instrument_sans"]                  # Instrument Sans
+            fallback_acc = ENVATO_VERIFIED_CATALOG["augor_monogram"]             # AUGOR
+            query_prim = "roman titling royal display serif font"
+            query_acc = "architectural monogram logo font"
         else: # Air
-            eco1_prim = ENVATO_VERIFIED_CATALOG["modern_luxury_serif"]       # The Triquery (Verified 200 OK)
-            eco1_body = GOOGLE_FONTS_CATALOG["manrope"]                      # Manrope Variable
-            eco1_acc = ENVATO_VERIFIED_CATALOG["augor_monogram"]             # AUGOR (Verified 200 OK)
+            fallback_prim = ENVATO_VERIFIED_CATALOG["modern_luxury_serif"]       # The Triquery
+            eco1_body = GOOGLE_FONTS_CATALOG["manrope"]                          # Manrope Variable
+            fallback_acc = ENVATO_VERIFIED_CATALOG["augor_monogram"]             # AUGOR
+            query_prim = "modern luxury high contrast editorial serif"
+            query_acc = "modern geometric monogram font"
+
+        # Try live Exa sourcing with fallback
+        live_prim_1 = self._search_live_envato_fonts(query_prim, category="serif", default_weights=fallback_prim["weights"])
+        eco1_prim = live_prim_1 if live_prim_1 else fallback_prim
+
+        live_acc_1 = self._search_live_envato_fonts(query_acc, category="display", default_weights=fallback_acc["weights"])
+        eco1_acc = live_acc_1 if live_acc_1 else fallback_acc
 
         eco1 = {
             "id": "eco-1",
@@ -473,17 +589,29 @@ class FontgenEngine:
 
         # --- ECOSISTEMA 2: HIGH PERFORMANCE (Kinetic Precision) ---
         if bazi_info["element"] in ["Metal", "Fire"]:
-            eco2_prim = ENVATO_VERIFIED_CATALOG["modern_brutalist"]        # Karl Zone (Verified 200 OK)
-            eco2_body = GOOGLE_FONTS_CATALOG["bricolage_grotesque"]        # Bricolage Grotesque Variable
-            eco2_acc = ENVATO_VERIFIED_CATALOG["modern_grotesk_stencil"]   # Mardem (Verified 200 OK)
+            fallback_prim2 = ENVATO_VERIFIED_CATALOG["modern_brutalist"]        # Karl Zone
+            eco2_body = GOOGLE_FONTS_CATALOG["bricolage_grotesque"]             # Bricolage Grotesque
+            fallback_acc2 = ENVATO_VERIFIED_CATALOG["modern_grotesk_stencil"]   # Mardem
+            query_prim2 = "brutalist heavy kinetic display font"
+            query_acc2 = "futuristic geometric grotesk font"
         elif bazi_info["element"] == "Wood":
-            eco2_prim = ENVATO_VERIFIED_CATALOG["clean_geometric_sans"]    # JUST Sans (Verified 200 OK)
-            eco2_body = GOOGLE_FONTS_CATALOG["urbanist"]                   # Urbanist Variable
-            eco2_acc = ENVATO_VERIFIED_CATALOG["augor_monogram"]           # AUGOR (Verified 200 OK)
+            fallback_prim2 = ENVATO_VERIFIED_CATALOG["clean_geometric_sans"]    # JUST Sans
+            eco2_body = GOOGLE_FONTS_CATALOG["urbanist"]                        # Urbanist Variable
+            fallback_acc2 = ENVATO_VERIFIED_CATALOG["augor_monogram"]           # AUGOR
+            query_prim2 = "clean modern geometric sans typeface"
+            query_acc2 = "architectural geometric display font"
         else: # Earth or Water
-            eco2_prim = ENVATO_VERIFIED_CATALOG["modern_grotesk_stencil"]   # Mardem (Verified 200 OK)
-            eco2_body = GOOGLE_FONTS_CATALOG["instrument_sans"]            # Instrument Sans Variable
-            eco2_acc = ENVATO_VERIFIED_CATALOG["augor_monogram"]           # AUGOR (Verified 200 OK)
+            fallback_prim2 = ENVATO_VERIFIED_CATALOG["modern_grotesk_stencil"]  # Mardem
+            eco2_body = GOOGLE_FONTS_CATALOG["instrument_sans"]                 # Instrument Sans
+            fallback_acc2 = ENVATO_VERIFIED_CATALOG["augor_monogram"]           # AUGOR
+            query_prim2 = "modular geometric display grotesque"
+            query_acc2 = "modern monogram brand seal font"
+
+        live_prim_2 = self._search_live_envato_fonts(query_prim2, category="sans", default_weights=fallback_prim2["weights"])
+        eco2_prim = live_prim_2 if live_prim_2 else fallback_prim2
+
+        live_acc_2 = self._search_live_envato_fonts(query_acc2, category="display", default_weights=fallback_acc2["weights"])
+        eco2_acc = live_acc_2 if live_acc_2 else fallback_acc2
 
         eco2 = {
             "id": "eco-2",
@@ -557,14 +685,24 @@ class FontgenEngine:
 
         # --- ECOSISTEMA 3: ALCHEMICAL BIO-SENSUAL VANGUARD ---
         acc_key = nak_info.get("accent", "luxury_calligraphy")
-        eco3_acc = ENVATO_VERIFIED_CATALOG.get(acc_key, ENVATO_VERIFIED_CATALOG["luxury_calligraphy"])
+        fallback_acc3 = ENVATO_VERIFIED_CATALOG.get(acc_key, ENVATO_VERIFIED_CATALOG["luxury_calligraphy"])
 
         if mc_elem == "Water" or day_master in ["Ren", "Gui"]:
-            eco3_prim = ENVATO_VERIFIED_CATALOG["high_contrast_didone"]    # Mellgro (Verified 200 OK)
-            eco3_body = GOOGLE_FONTS_CATALOG["spectral"]                    # Spectral Variable
+            fallback_prim3 = ENVATO_VERIFIED_CATALOG["high_contrast_didone"]    # Mellgro
+            eco3_body = GOOGLE_FONTS_CATALOG["spectral"]                        # Spectral
+            query_prim3 = "modern high contrast didone serif font"
         else:
-            eco3_prim = ENVATO_VERIFIED_CATALOG["modern_luxury_serif"]      # The Triquery (Verified 200 OK)
-            eco3_body = GOOGLE_FONTS_CATALOG["fraunces"]                    # Fraunces Variable
+            fallback_prim3 = ENVATO_VERIFIED_CATALOG["modern_luxury_serif"]     # The Triquery
+            eco3_body = GOOGLE_FONTS_CATALOG["fraunces"]                        # Fraunces Variable
+            query_prim3 = "modern luxury organic editorial serif"
+
+        query_acc3 = "luxury romantic calligraphy script font"
+
+        live_prim_3 = self._search_live_envato_fonts(query_prim3, category="serif", default_weights=fallback_prim3["weights"])
+        eco3_prim = live_prim_3 if live_prim_3 else fallback_prim3
+
+        live_acc_3 = self._search_live_envato_fonts(query_acc3, category="script", default_weights=fallback_acc3["weights"])
+        eco3_acc = live_acc_3 if live_acc_3 else fallback_acc3
 
         eco3 = {
             "id": "eco-3",
@@ -661,7 +799,7 @@ class FontgenEngine:
                 "ui_buttons": selected_eco["layers"]["ui"]
             },
             "metadata": {
-                "generator": "fontgen_engine.py v2.1 (Physically Verified Fonts)",
+                "generator": "fontgen_engine.py v2.2 (Dynamic Exa Sourcing + Verified Fonts)",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "astrological_grounding": {
                     "sun": f"{params.get('sun_sign')} ({ZODIAC_ELEMENTS.get(params.get('sun_sign'), 'Earth')})",
@@ -781,8 +919,9 @@ class FontgenEngine:
 def derive_agnostic_typography(brand: str, shards: Optional[Dict[str, Any]] = None,
                                shards_path: Optional[Path] = None,
                                brief_path: Optional[Path] = None,
-                               selected_eco_id: str = "eco-1") -> Dict[str, Any]:
-    engine = FontgenEngine(brand=brand, shards_path=shards_path, brief_path=brief_path)
+                               selected_eco_id: str = "eco-1",
+                               use_exa: bool = True) -> Dict[str, Any]:
+    engine = FontgenEngine(brand=brand, shards_path=shards_path, brief_path=brief_path, use_exa=use_exa)
     manifest, _ = engine.run(selected_eco_id=selected_eco_id, dry_run=False)
     return manifest
 
@@ -794,12 +933,13 @@ def main():
     parser.add_argument("--brief", type=Path, default=None, help="Path to astrobranding_[marca].md")
     parser.add_argument("--eco", default="eco-1", choices=["eco-1", "eco-2", "eco-3"], help="Selected ecosystem ID")
     parser.add_argument("--dry-run", action="store_true", help="Calculate without writing to disk")
+    parser.add_argument("--no-exa", action="store_true", help="Disable real-time Exa live sourcing")
     args = parser.parse_args()
 
-    engine = FontgenEngine(brand=args.brand, shards_path=args.shards, brief_path=args.brief)
+    engine = FontgenEngine(brand=args.brand, shards_path=args.shards, brief_path=args.brief, use_exa=not args.no_exa)
     manifest, markdown = engine.run(selected_eco_id=args.eco, dry_run=args.dry_run)
 
-    print(f"✅ FONTGEN ENGINE (VERIFIED V2.1) EJECUTADO EXITOSAMENTE PARA: {args.brand.upper()}")
+    print(f"✅ FONTGEN ENGINE (V2.2 DYNAMIC SOURCING) EJECUTADO EXITOSAMENTE PARA: {args.brand.upper()}")
     print(f"  • Ecosistema Seleccionado: {manifest.get('selected_ecosystem_id')}")
     print(f"  • Display: {manifest['selected_ecosystem']['tokens']['display_primary']['$value']} ({manifest['selected_ecosystem']['tokens']['display_primary']['url']})")
     print(f"  • Body:    {manifest['selected_ecosystem']['tokens']['ui_secondary']['$value']} ({manifest['selected_ecosystem']['tokens']['ui_secondary']['url']})")
