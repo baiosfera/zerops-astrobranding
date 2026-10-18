@@ -2478,6 +2478,7 @@ class BrandbookPipelineRunner:
         style = engine.get("communication_style", "Autoridad serena y calidez profesional.")
         guardrails = engine.get("guardrails", [
             "Never hallucinate services or products outside verified brand assets.",
+            "Dynamic Business Data Invariant: Catalog, live prices, events, schedule availability, and payment URLs must be queried in real time via database/API tools (PostgreSQL 18 / Present Continuous); never hardcode or assume business data from this prompt.",
             "Respect the brand's tone and forbidden vocabulary at all times.",
             "Prioritize genuine connection and value before conversion.",
         ])
