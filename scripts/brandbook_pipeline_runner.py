@@ -2126,15 +2126,60 @@ class BrandbookPipelineRunner:
         sb_dom = sb.get("dominant_planet", "Sol")
         sb_rupas = sb.get("max_rupas", 6.0)
 
-        # Dynamic typography choice
-        if mc_sign in ["Gemini", "Libra", "Aquarius", "Aries", "Leo", "Sagittarius"]:
-            disp_fonts = ["Space Grotesk", "Syne", "sans-serif"]
-            body_fonts = ["Outfit", "Inter", "sans-serif"]
-            mono_fonts = ["Space Mono", "monospace"]
-        else:
-            disp_fonts = ["Cormorant Garamond", "Cinzel", "serif"]
-            body_fonts = ["Plus Jakarta Sans", "Inter", "sans-serif"]
+        # Agnostic Typography Derivation & SSoT Manifest Adoption
+        font_manifest_candidates = [
+            Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{brand_name}/font_manifest.json"),
+            Path(f"/var/www/baiosfera/PROYECTOS/{brand_name}/dev/font_manifest.json"),
+        ]
+        font_manifest_data = None
+        for fc in font_manifest_candidates:
+            if fc.exists():
+                try:
+                    font_manifest_data = json.loads(fc.read_text(encoding="utf-8"))
+                    logger.info(f"Adopted existing font_manifest.json SSoT from: {fc}")
+                    break
+                except Exception:
+                    pass
+
+        if not font_manifest_data:
+            try:
+                # Add fontgen/scripts to path if needed
+                fontgen_dir = Path("/var/www/.agents/skills/fontgen/scripts")
+                if str(fontgen_dir) not in sys.path:
+                    sys.path.insert(0, str(fontgen_dir))
+                from fontgen_engine import FontgenEngine
+                f_engine = FontgenEngine(brand=brand_name, shards_path=self.shards_path)
+                font_manifest_data, _ = f_engine.run(dry_run=False)
+                logger.info(f"Dynamically generated agnostic font_manifest.json for: {brand_name}")
+            except Exception as e:
+                logger.warning(f"Could not run fontgen_engine: {e}")
+
+        if font_manifest_data:
+            sel_eco = font_manifest_data.get("selected_ecosystem") or font_manifest_data.get("candidate_ecosystems", [{}])[0]
+            tokens_typo = sel_eco.get("tokens", {})
+            disp_primary = tokens_typo.get("display_primary", {}).get("$value", "Glamour Luxury Serif")
+            ui_secondary = tokens_typo.get("ui_secondary", {}).get("$value", "Plus Jakarta Sans")
+            accent_brand = tokens_typo.get("accent_brand", {}).get("$value", "Adorn Chiseled Monogram")
+
+            disp_fonts = [disp_primary, "serif"]
+            body_fonts = [ui_secondary, "sans-serif"]
+            accent_fonts = [accent_brand, "display"]
             mono_fonts = ["JetBrains Mono", "monospace"]
+            typo_ecosystems = font_manifest_data.get("candidate_ecosystems", [])
+            cls_overrides = sel_eco.get("cls_metric_overrides", {})
+        else:
+            if mc_sign in ["Gemini", "Libra", "Aquarius", "Aries", "Leo", "Sagittarius"]:
+                disp_fonts = ["Space Grotesk", "Syne", "sans-serif"]
+                body_fonts = ["Outfit", "Inter", "sans-serif"]
+                accent_fonts = ["Space Mono", "display"]
+                mono_fonts = ["Space Mono", "monospace"]
+            else:
+                disp_fonts = ["Cormorant Garamond", "Cinzel", "serif"]
+                body_fonts = ["Plus Jakarta Sans", "Inter", "sans-serif"]
+                accent_fonts = ["Cinzel Decorative", "display"]
+                mono_fonts = ["JetBrains Mono", "monospace"]
+            typo_ecosystems = []
+            cls_overrides = {}
 
         # Dynamic motion timing
         if sb_dom in ["Mercury", "Mars"]:
