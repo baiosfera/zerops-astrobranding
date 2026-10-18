@@ -2026,16 +2026,49 @@ class BrandbookPipelineRunner:
             author_psych_md = synth.render_author_psychology(self.brand_upper, shards)
             astrobranding_md = synth.render_astrobranding_brief(self.brand_upper, shards, palette)
         else:
-            strategist = BifrostBrandStrategist(base_url=self.bifrost_url, primary_model=self.model, timeout_sec=180)
-            
-            # Step 4.1: Brand Strategy JSON (< 20s)
-            strategy_data = strategist.generate_strategy_json(self.brand_upper, shards, palette)
+            try:
+                strategist = BifrostBrandStrategist(base_url=self.bifrost_url, primary_model=self.model, timeout_sec=180)
+                # Step 4.1: Brand Strategy JSON (< 20s)
+                strategy_data = strategist.generate_strategy_json(self.brand_upper, shards, palette)
+                # Step 4.2: Full Author Psychology Markdown (~25s)
+                author_psych_md = strategist.generate_author_psychology_markdown(self.brand_upper, shards)
+                # Step 4.3: Full Astrobranding Brief Markdown (~25s)
+                astrobranding_md = strategist.generate_astrobranding_brief_markdown(self.brand_upper, shards, palette)
+            except Exception as bifrost_err:
+                logger.warning(f"Bifrost Gateway unreachable ({bifrost_err}). Checking for existing SSoT briefs to adopt...")
+                # Try adopting existing artifacts from dev or diag
+                existing_bb_candidates = [
+                    self.project_dev_dir / "brandbook.json",
+                    self.diag_output_dir / "brandbook.json"
+                ]
+                strategy_data = None
+                for cand in existing_bb_candidates:
+                    if cand.exists():
+                        try:
+                            bb_raw = json.loads(cand.read_text(encoding="utf-8"))
+                            strategy_data = {
+                                "brand_architecture": bb_raw.get("brand_architecture", {}),
+                                "voice_and_tone": bb_raw.get("voice_tone_and_messaging", {}),
+                                "target_audience": bb_raw.get("target_audience", {}),
+                                "brand_narrative": bb_raw.get("brand_narrative", ""),
+                            }
+                            logger.info(f"Adopted existing Brand Strategy from: {cand}")
+                            break
+                        except Exception:
+                            pass
 
-            # Step 4.2: Full Author Psychology Markdown (~25s)
-            author_psych_md = strategist.generate_author_psychology_markdown(self.brand_upper, shards)
+                existing_psych = self.project_dev_dir / "fase0_author_psychology.md"
+                if not existing_psych.exists():
+                    existing_psych = self.diag_output_dir / "fase0_author_psychology.md"
+                author_psych_md = existing_psych.read_text(encoding="utf-8") if existing_psych.exists() else None
 
-            # Step 4.3: Full Astrobranding Brief Markdown (~25s)
-            astrobranding_md = strategist.generate_astrobranding_brief_markdown(self.brand_upper, shards, palette)
+                existing_brief = self.project_dev_dir / f"astrobranding_{self.brand_lower}.md"
+                if not existing_brief.exists():
+                    existing_brief = self.diag_output_dir / f"astrobranding_{self.brand_lower}.md"
+                astrobranding_md = existing_brief.read_text(encoding="utf-8") if existing_brief.exists() else None
+
+                if not strategy_data or not author_psych_md or not astrobranding_md:
+                    raise bifrost_err
 
         # 5. Assemble W3C DTCG Brandbook JSON
         brandbook_json = self._assemble_dtcg_brandbook(self.brand_upper, shards, palette, strategy_data)
