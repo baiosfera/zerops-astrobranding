@@ -1984,6 +1984,7 @@ class BrandbookPipelineRunner:
         # Base directories
         self.diag_dir = Path("/var/www/baiosfera/ASTROLOGÍA/DIAG") / self.brand_upper
         self.diag_output_dir = self.diag_dir / "raw" / "llm"
+        self.shards_path = self.diag_dir / "raw" / "json" / "dumps" / "client_dumps_15_shards.json"
         self.projects_dir = Path("/var/www/baiosfera/PROYECTOS") / self.brand_upper
         self.project_dev_dir = self.projects_dir / "dev"
         self.localstorage_dev_dir = Path("/var/www/localstorage") / self.brand_upper / "dev"
