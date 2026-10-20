@@ -145,13 +145,23 @@ export async function uploadBrandbookToS3(
   const s3Key = options?.key || `brandbooks/${brandbook.metadata.clientId || "default"}/brandbook.json`;
   const content = JSON.stringify(brandbook, null, 2);
 
-  const endpoint = options?.s3Endpoint || process.env.OBJECTSTORAGE_ENDPOINT;
-  const bucket = options?.bucket || process.env.OBJECTSTORAGE_BUCKET || "brandview";
+  const rawEndpoint = options?.s3Endpoint || process.env.S3_ENDPOINT || process.env.OBJECTSTORAGE_ENDPOINT;
+  const rawBucket = options?.bucket || process.env.S3_BUCKET || process.env.OBJECTSTORAGE_BUCKET || "brandview";
 
-  if (!endpoint) {
-    console.info(`[DTCG Bridge] Object Storage not configured. Brandbook manifest compiled in memory for key: ${s3Key}`);
+  const isConfigured = Boolean(
+    rawEndpoint &&
+    !rawEndpoint.startsWith("${") &&
+    rawBucket &&
+    !rawBucket.startsWith("${")
+  );
+
+  if (!isConfigured) {
+    console.info(`[DTCG Bridge] Object Storage not configured or unprovisioned. Brandbook manifest compiled in memory for key: ${s3Key}`);
     return { success: true, s3Key, url: `memory://${s3Key}` };
   }
+
+  const endpoint = rawEndpoint as string;
+  const bucket = rawBucket as string;
 
   try {
     const uploadUrl = `${endpoint.replace(/\/$/, "")}/${bucket}/${s3Key}`;
