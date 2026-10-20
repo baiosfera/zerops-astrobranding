@@ -2028,7 +2028,7 @@ class BrandbookPipelineRunner:
             astrobranding_md = synth.render_astrobranding_brief(self.brand_upper, shards, palette)
         else:
             try:
-                strategist = BifrostBrandStrategist(base_url=self.bifrost_url, primary_model=self.model, timeout_sec=180)
+                strategist = BifrostBrandStrategist(base_url=self.bifrost_url, primary_model=self.model, timeout_sec=300)
                 # Step 4.1: Brand Strategy JSON (< 20s)
                 strategy_data = strategist.generate_strategy_json(self.brand_upper, shards, palette)
                 # Step 4.2: Full Author Psychology Markdown (~25s)
