@@ -596,24 +596,57 @@ class BrandviewStateCompiler:
         symbol = self._load_symbol_domain()
         motion = self._load_motion_domain()
 
+        bb = self._load_brandbook_data()
+        astro_sig = bb.get("metadata", {}).get("astrological_signature", {})
+        west = astro_sig.get("western", {})
+        vedic = astro_sig.get("vedic", {})
+        bazi = astro_sig.get("bazi", {})
+
+        sun_raw = west.get("sun", "Gemini 19.01°")
+        sun_sign = sun_raw.split()[0] if sun_raw else "Gemini"
+
+        z_offsets = {
+            "Aries": 0, "Taurus": 30, "Gemini": 60, "Cancer": 90,
+            "Leo": 120, "Virgo": 150, "Libra": 180, "Scorpio": 210,
+            "Sagittarius": 240, "Capricorn": 270, "Aquarius": 300, "Pisces": 330
+        }
+        deg_val = 0.0
+        try:
+            m = re.search(r"([0-9]+(?:\.[0-9]+)?)°", sun_raw)
+            if m:
+                deg_val = float(m.group(1))
+        except Exception:
+            pass
+        solar_lon = round(z_offsets.get(sun_sign, 0) + deg_val, 2)
+
+        mc_raw = west.get("midheaven", "Gemini")
+        mc_sign = mc_raw.split()[0] if mc_raw else "Gemini"
+        dom_elem = west.get("dominant_element", "Air")
+        dm_raw = bazi.get("day_master", "Jia")
+        day_master = dm_raw.split()[0] if dm_raw else "Jia"
+        nak_raw = vedic.get("nakshatra", "Chitra")
+        nakshatra = nak_raw.split()[0] if nak_raw else "Chitra"
+
+        grounding = {
+            "sun_sign": sun_sign,
+            "solar_longitude_deg": solar_lon,
+            "midheaven_sign": mc_sign,
+            "dominant_element": dom_elem,
+            "day_master": day_master,
+            "nakshatra": nakshatra,
+            "scale_ratio": 1.250 if dom_elem in ["Air", "Fire"] else 1.200
+        }
+
         state = {
             "brand": self.brand_upper,
             "version": "1.0.0",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "generator": "orchesbrand_unified_v2",
-            "astrological_grounding": {
-                "sun_sign": "Capricorn",
-                "solar_longitude_deg": 297.93,
-                "midheaven_sign": "Virgo",
-                "dominant_element": "Earth",
-                "day_master": "Ren",
-                "nakshatra": "Ashwini",
-                "scale_ratio": 1.250
-            },
+            "astrological_grounding": grounding,
             "active_selection": {
                 "selected_typography_id": "eco-1",
-                "selected_color_id": "eco-quiet-luxury",
-                "selected_symbol_id": "symbol-monogram-sovereign",
+                "selected_color_id": color["candidate_ecosystems"][0]["id"],
+                "selected_symbol_id": symbol["candidate_vectors"][0]["id"],
                 "selected_motion_id": "motion-orbital-breathing"
             },
             "typography": typo,
