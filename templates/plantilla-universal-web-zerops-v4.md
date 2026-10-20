@@ -147,33 +147,43 @@ Todo nuevo despliegue adopta su identidad dinámicamente mediante variables de e
 
 ---
 
-## 2. Taxonomía Soberana de Almacenamiento (Las 4 Capas Indivisibles)
+## 2. Taxonomía Soberana de Almacenamiento (Local Storage vs Object Storage)
 
-Cualquier AGY debe clasificar y persistir los datos estrictamente en su capa designada:
+Cualquier AGY debe clasificar y persistir los datos según la necesidad real y fase de madurez del proyecto, **sin empaquetar servicios innecesarios por defecto**:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                   TAXONOMÍA DE ALMACENAMIENTO ZEROPS                   │
 ├─────────────────┬─────────────────┬──────────────────┬─────────────────┤
 │ 1. GDRIVE SSoT  │ 2. LOCALSTORAGE │ 3. OBJECTSTORAGE │ 4. POSTGRESQL   │
-│ (Capa Fría)     │ (Capa Caliente) │ (Capa Medios S3) │ (Capa ACID Rel) │
+│ (Capa Fría)     │ (Bloques POSIX) │ (S3 MinIO - Opt) │ (Capa ACID Rel) │
 ├─────────────────┼─────────────────┼──────────────────┼─────────────────┤
-│ • Repositorios  │ • SQLite Engram │ • Fotos producto │ • Tablas leads  │
-│ • brandbook.json│ • FreeLLMAPI db │ • PDFs facturas  │ • Tablas orders │
-│ • Esquemas SQL  │ • Sockets POSIX │ • Assets >500KB  │ • Bifrost logs  │
-│ • Backups bak/  │ • Caché disco   │ • S3 forcePath   │ • Listmonk PG   │
+│ • Repositorios  │ • Fotos Catálogo│ • Escalado Multi-│ • Tablas leads  │
+│ • brandbook.json│ • Medios Marca  │   host horizontal│ • Tablas orders │
+│ • Esquemas SQL  │ • SQLite Engram │ • Cloudflare CDN │ • DIAN CUFE / ID│
+│ • Backups bak/  │ • FreeLLMAPI db │ • Blobs >100GB   │ • Bifrost logs  │
+│ • Manifiestos   │ • Brandbook SSoT│ • S3 forcePath   │ • Listmonk PG   │
 └─────────────────┴─────────────────┴──────────────────┴─────────────────┘
 ```
 
 1. **Google Drive SSoT (`/var/www/baiosfera/`):** Capa Fría indestructible. Espejo permanente de código fuente, configuraciones maestras y manifiestos de diseño.
-2. **`localstorage` (`/mnt/localstorage/`):** Capa Caliente POSIX con semántica nativa mononúcleo. Reservada para SQLite embebido (`engram`, `freellmapi`), sockets, y **el Brandbook SSoT de cada marca**.
-   > **Regla de Gobernanza & Topología Multi-Marca:** Un proyecto en Zerops representa una marca soberana. Cada marca mantiene su identidad viva en:
-   > - **Ruta Activa:** `/var/www/localstorage/${PROJECT_NAME}/dev/` (o `prod/` en producción), montada en los runtimes como `/mnt/localstorage/${PROJECT_NAME}/dev/`.
-   > - **Archivos Estándar:** `system_prompt.md` (personalidad, tono y límites), `brandbook.json` (tokens DTCG y valores) y `catalog_links.json` (rutas oficiales validadas).
-   > - **Protocolo de Siembra (Seed):** Si en un arranque en frío o en un nuevo ZCP la carpeta está vacía o no existe, el bot/orquestador siembra automáticamente desde `/var/www/baiosfera/PROYECTOS/${PROJECT_NAME}/` hacia `/mnt/localstorage/${PROJECT_NAME}/dev/`. Si es un proyecto greenfield, genera un scaffold base y notifica.
-   > - **Separación Sagrada de Responsabilidades:** Bifrost es infraestructura agnóstica de inferencia. El worker desacoplado (`whatsappbot`) o la app web es quien tiene el control exclusivo de cargar el Brandbook SSoT, compilar el `System Prompt` dinámico y alimentar a Bifrost por llamada.
-3. **`objectstorage` (S3 MinIO):** Capa de Medios Públicos y Dinámicos. Toda imagen de catálogo, avatar de usuario o PDF generado en runtime reside aquí, configurado con `forcePathStyle: true` y expuesto vía Cloudflare CDN.
-4. **`postgresql` (PostgreSQL 18):** Capa Relacional Transaccional ACID. Tablas de negocio (`clients`, `orders`, `outbox`), esquemas aislados para Listmonk (`search_path=listmonk,public`) y EvolutionGo (`evogo_auth`, `evogo_users`).
+2. **`localstorage` (`/mnt/localstorage/`):** Capa Primaria de Persistencia POSIX (<0.1ms latencia NVMe).
+   - **Uso Estándar Starter (Fase 1):** Es el **almacenamiento por defecto** para e-commerce ligero y marcas. Las fotos de productos (`/mnt/localstorage/${PROJECT_NAME}/media/productos/`), bases de datos SQLite locales (`engram`, `freellmapi`) y el Brandbook SSoT (`/mnt/localstorage/${PROJECT_NAME}/dev/`) residen aquí.
+   - **Regla de Gobernanza Multi-Marca:** Cada marca mantiene su identidad viva en `/mnt/localstorage/${PROJECT_NAME}/dev/` (`system_prompt.md`, `brandbook.json`, `catalog_links.json`).
+   - **Restricción de Infraestructura (Ley de Co-Location):** Todos los contenedores que montan el mismo `localstorage` se ejecutan forzosamente en el mismo nodo físico de Zerops.
+3. **`objectstorage` (S3 MinIO - Estrictamente Opcional / On-Demand):**
+   - **¿Cuándo SÍ se aprovisiona?**
+     a) **Escalado Horizontal Masivo:** Cuando el frontend (`web`) requiere autoescalar a N réplicas distribuidas en múltiples servidores físicos (rompiendo la restricción de Co-Location).
+     b) **Offloading Directo a CDN:** Cuando se desea servir gigabytes de fotos directamente desde Cloudflare Edge sin consumir ancho de banda ni CPU del contenedor web.
+     c) **Expansión a ERPNext / Frappe CRM:** Cuando el archivo digital tributario (XMLs CUFE, PDFs DIAN y adjuntos de clientes) amerita archivado masivo desacoplado mediante el plugin `frappe_s3_attachment`.
+   - **¿Cuándo NO se aprovisiona?** En fases iniciales, tiendas en arranque o plataformas transaccionales estándar. Si el proyecto no lo usa activamente, **no se aprovisiona** para evitar costos inoficiosos.
+4. **`postgresql` (PostgreSQL 18):** Capa Relacional Transaccional ACID. Tablas de negocio (`clients`, `orders`, `leads`, `outbox`), facturación electrónica (`dian_cufe`), esquemas de Listmonk y EvolutionGo.
+
+### Puente de Evolución Sin Fricción: De PostgreSQL Ligero a Frappe CRM & ERPNext
+- **Fase Inicial (Lean):** El e-commerce gestiona pedidos, pasarelas de pago y datos de facturación en PostgreSQL 18 (`orders`). Los assets de producto se sirven desde `localstorage`. Cero overhead.
+- **Fase de Maduración (ERPNext / Frappe):** Cuando el negocio activa ERPNext y Frappe CRM:
+  * **Conexión Desacoplada:** El bridge sincroniza transacciones de PostgreSQL hacia Frappe DocTypes (`Sales Order`, `Sales Invoice`, `Customer`) vía workers asíncronos BullMQ / NATS.
+  * **Archivos y Facturas:** Si Frappe corre en Frappe Cloud o en contenedor dedicado en Zerops, los comprobantes PDF/XML se gestionan vía API REST o, si el volumen lo exige, se aprovisiona `recipes/services/04-objectstorage.yaml` de forma aditiva para almacenar los adjuntos pesados en MinIO S3 sin alterar la lógica del frontend.
 
 ---
 
