@@ -327,6 +327,14 @@ if [ "$RUN_ALL" = true ]; then
         bash "$SCRIPT_DIR/skills-suite-validate.sh"
     fi
 
+    if [ -f "$SCRIPT_DIR/harden-postgres-quotas.sh" ]; then
+        echo "• Calibrando cuotas de conexión y anti-starvation en PostgreSQL..."
+        cp -f "$SCRIPT_DIR/harden-postgres-quotas.sh" "$PROJECT_ROOT/.bin/harden-postgres-quotas" 2>/dev/null || true
+        chmod +x "$PROJECT_ROOT/.bin/harden-postgres-quotas" "$SCRIPT_DIR/harden-postgres-quotas.sh" 2>/dev/null || true
+        sudo ln -sf "$PROJECT_ROOT/.bin/harden-postgres-quotas" /usr/local/bin/harden-postgres-quotas 2>/dev/null || true
+        bash "$SCRIPT_DIR/harden-postgres-quotas.sh" || true
+    fi
+
     if [ -n "${ZEROPS_SYNC_PID:-}" ]; then
         echo "• Verificando sincronización de variables con Zerops Cloud (PID $ZEROPS_SYNC_PID)..."
         for _wait_idx in {1..90}; do

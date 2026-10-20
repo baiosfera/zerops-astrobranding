@@ -1,4 +1,8 @@
 # Hito 2: PostgreSQL 18 + Valkey 7.2 Cache + Maxim AI Bifrost Enterprise Gateway
+# Anti-Starvation Invariant:
+# - Capped database slots: 'db' (60 slots), satellite databases (15 slots each).
+# - Defensive reaping: idle_session_timeout = '2min', idle_in_transaction_session_timeout = '30s'.
+# - Enforced deterministically via scripts/harden-postgres-quotas.sh.
 services:
   - hostname: database
     type: postgresql:single@18

@@ -756,6 +756,31 @@ Esta sección consolida de forma 100% agnóstica a cualquier marca los descubrim
 - **Presupuesto HTML de Plantillas (<85KB):** Todo correo transaccional o de marketing debe compilarse con un peso de HTML inferior a 85KB. Si excede 102KB, Gmail trunca el cuerpo ("Mensaje recortado"), ocultando los enlaces de baja obligatoria (RFC 8058) y afectando la reputación del dominio (SPF/DKIM/DMARC).
 
 ### 5. PostgreSQL 18 & Modelado de Datos
+- **Blindaje Universal Anti-Starvation & Aislamiento de Pool (SQLSTATE 53300)**:
+  PostgreSQL asigna un número finito de conexiones concurrentes (`max_connections`, usualmente 100 en perfiles estándar de Zerops), reservando 3 para superusuarios (`postgres`) y telemetría de plataforma. Cuando servicios satélites (como motores de WhatsApp, workers o listeners) reconectan sin control o cuando endpoints web abren conexiones dedicadas en lugar de atómicas, el pool global se agota y los usuarios reciben `FATAL: remaining connection slots are reserved for roles with the SUPERUSER attribute`.
+  * **Invariante de Cuotas Físicas por Base de Datos (`CONNECTION LIMIT`)**:
+    Toda base de datos principal (`db`) y satélite (`evogo_auth`, `evogo_users`, colas) DEBE inicializarse con cuotas estrictas y timeouts de recolección de conexiones ociosas:
+    ```sql
+    ALTER DATABASE db WITH CONNECTION LIMIT 60;
+    ALTER DATABASE evogo_auth WITH CONNECTION LIMIT 15;
+    ALTER DATABASE evogo_users WITH CONNECTION LIMIT 15;
+    ALTER DATABASE db SET idle_session_timeout = '2min';
+    ALTER DATABASE db SET idle_in_transaction_session_timeout = '30s';
+    ALTER DATABASE evogo_auth SET idle_session_timeout = '2min';
+    ALTER DATABASE evogo_auth SET idle_in_transaction_session_timeout = '30s';
+    ALTER DATABASE evogo_users SET idle_session_timeout = '2min';
+    ALTER DATABASE evogo_users SET idle_in_transaction_session_timeout = '30s';
+    ALTER ROLE db SET idle_session_timeout = '2min';
+    ALTER ROLE db SET idle_in_transaction_session_timeout = '30s';
+    ```
+    Esto garantiza un radio de impacto acotado (*blast radius* total $\le 90$ conexiones), protegiendo permanentemente al menos 10 slots libres para administración y telemetría.
+  * **Invariante de Pooling Transaccional (Erradicación de `pool.connect()` no transaccional)**:
+    Prohibido llamar `await pool.connect()` para consultas simples en rutas de checkout, webhooks o APIs. Usar estrictamente `pool.query(text, params)` (o Drizzle/Kysely ORM). `pool.query()` toma y retorna el socket atómicamente en un solo tick, erradicando retención de conexiones concurrentes y fugas por excepciones no capturadas.
+    `pool.connect()` queda restringido EXCLUSIVAMENTE a transacciones atómicas (`BEGIN ... COMMIT/ROLLBACK`) dentro de un bloque estructurado con `try ... finally { client.release(); }`.
+  * **Manejo Defensivo y Sanitización de Errores de Base de Datos en Frontera Web**:
+    Todo endpoint de pago o captura debe capturar excepciones de saturación (`code === '53300'`, `connection slots`, `timeout exceeded`) y responder `HTTP 503 Service Unavailable` con mensaje amigable al usuario ("En este momento estamos experimentando alta demanda en el sistema de pagos. Por favor intenta de nuevo en unos instantes"), NUNCA filtrando volcados o mensajes internos de PostgreSQL al usuario final.
+  * **Soporte PgBouncer con TLS (`:6432`)**:
+    Si un servicio de alta concurrencia se conecta a través del puerto gestionado de PgBouncer (`${database_connectionTlsString}` / `:6432`), el pool cliente en Node/Bun debe configurarse con `ssl: { rejectUnauthorized: false }` para satisfacer el requerimiento de cifrado de PgBouncer en Zerops.
 - **Sizing de Conexiones (`max_connections`) & Multiplexación PgBouncer**:
   En Zerops Incus LXC, `max_connections` se calibra automáticamente según la RAM del contenedor (50 conexiones por GiB en perfiles OLTP: 20 en 256MB, 50 en 1GB, 100 en 2GB, 200 en 4GB, 500 en 16GB+). 3 slots se reservan para superuser y hasta 4 para telemetría interna de la plataforma.
   * **El Mito de los 100 max_connections como "Ideal"**: 100 no es un valor óptimo de concurrencia activa, sino un techo de seguridad de memoria. Conforme a la fórmula canónica de PostgreSQL/HikariCP (`Pool Size = (CPU Cores * 2) + 1`), el throughput máximo de CPU se alcanza con pocas conexiones activas concurrentes (~10 a 20). Valores superiores a 100-200 sin pooling provocan degradación severa por context-switching del kernel y contención en `ProcArrayLock`/snapshots de visibilidad MVCC.

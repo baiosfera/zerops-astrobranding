@@ -58,6 +58,10 @@ case "$STEP" in
         else
             log_info "Receta lista para importar vía ZCP MCP (zerops_import): $RECIPE"
         fi
+        if [ -x "$SCRIPT_DIR/harden-postgres-quotas.sh" ]; then
+            log_info "Aplicando blindaje anti-starvation y cuotas físicas en PostgreSQL..."
+            "$SCRIPT_DIR/harden-postgres-quotas.sh" || log_warn "Aviso en calibración de cuotas."
+        fi
         log_ok "Hito 2 aprovisionado. Próximo paso: verificar conexión Postgres y auditar /health de Bifrost."
         ;;
     3)
@@ -77,6 +81,10 @@ case "$STEP" in
             zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
         else
             log_info "Receta lista para importar: $RECIPE"
+        fi
+        if [ -x "$SCRIPT_DIR/harden-postgres-quotas.sh" ]; then
+            log_info "Asegurando cuotas de conexión aisladas (15 slots) para Evolution..."
+            "$SCRIPT_DIR/harden-postgres-quotas.sh" || log_warn "Aviso al calibrar cuotas de Evolution."
         fi
         log_ok "Hito 4 aprovisionado. Próximo paso: auditar /server/ok de Evolution."
         ;;

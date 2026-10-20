@@ -1,4 +1,11 @@
 # Service: PostgreSQL 18 Relational & Vector Lakehouse
+# Anti-Starvation Governance:
+# - Shared cluster max_connections = 100.
+# - Primary application DB ('db') is capped to 60 slots: ALTER DATABASE db WITH CONNECTION LIMIT 60;
+# - Satellite DBs ('evogo_auth', 'evogo_users') are capped to 15 slots each.
+# - 10 slots remain strictly reserved for superuser, monitoring, and administrative access.
+# - Automatic idle session reaping: idle_session_timeout = '2min', idle_in_transaction = '30s'.
+# - Post-provisioning quota enforcement: run scripts/harden-postgres-quotas.sh
 services:
   - hostname: database
     type: postgresql:single@18
