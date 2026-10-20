@@ -439,12 +439,20 @@ class BrandviewStateCompiler:
 
     def _load_symbol_domain(self) -> Dict[str, Any]:
         """Loads or builds 3 monochrome B/N vector proposals in pure SVG."""
+        bb = self._load_brandbook_data()
+        astro_sig = bb.get("metadata", {}).get("astrological_signature", {})
+        vedic = astro_sig.get("vedic", {})
+        west = astro_sig.get("western", {})
+        nak_name = vedic.get("nakshatra", "Chitra").split()[0]
+        dom_elem = west.get("dominant_element", "Air")
+        deity = "Vishwakarma" if "Chitra" in nak_name else "Cosmic Sovereign"
+
         return {
             "color_mode": "monochrome_bw",
             "candidate_vectors": [
                 {
                     "id": "symbol-monogram-sovereign",
-                    "name": "Monograma Soberano Esculpido",
+                    "name": f"Monograma Soberano ({self.brand_upper})",
                     "category": "monogram",
                     "geometry_style": "Proporción Áurea & Curvas de Bézier Cúbicas Interconectadas",
                     "viewBox": "0 0 512 512",
@@ -460,10 +468,10 @@ class BrandviewStateCompiler:
                     }
                 },
                 {
-                    "id": "symbol-isologo-mineral",
-                    "name": "Isologo Arquitectónico Chevron",
+                    "id": "symbol-isologo-architectural",
+                    "name": f"Isologo Arquitectónico ({nak_name})",
                     "category": "isologo",
-                    "geometry_style": "Octagrama Sagrado y Solidez Geológica Capricorniana",
+                    "geometry_style": f"Octagrama Sagrado y Estructura Elemental {dom_elem}",
                     "viewBox": "0 0 512 512",
                     "aspect_ratio": "1:1",
                     "svg_raw": '<svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="symbol-core"><polygon points="256,64 432,256 256,448 80,256" stroke="currentColor" stroke-width="6" vector-effect="non-scaling-stroke"/><polygon points="256,128 384,256 256,384 128,256" stroke="currentColor" stroke-width="4" stroke-dasharray="8 8" vector-effect="non-scaling-stroke"/><path d="M256 160 L256 352 M160 256 L352 256" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke"/><circle cx="256" cy="256" r="28" fill="currentColor"/></g></svg>',
@@ -478,7 +486,7 @@ class BrandviewStateCompiler:
                 },
                 {
                     "id": "symbol-seal-orbital",
-                    "name": "Sello Celestial Ashvins",
+                    "name": f"Sello Celestial ({deity})",
                     "category": "seal",
                     "geometry_style": "Precesión Orbital Asimétrica & Micro-Glifo Heráldico",
                     "viewBox": "0 0 512 512",
@@ -488,6 +496,13 @@ class BrandviewStateCompiler:
                         "symbolScale": 1.05,
                         "symbolStroke": 4.0,
                         "symbolX": 256.0,
+                        "symbolY": 175.0,
+                        "brandY": 385.0,
+                        "sloganY": 425.0
+                    }
+                }
+            ]
+        }
                         "symbolY": 175.0,
                         "brandY": 385.0,
                         "sloganY": 425.0
