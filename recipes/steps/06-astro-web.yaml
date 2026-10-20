@@ -1,12 +1,9 @@
-# Hito 6: S3 Object Storage + Astro-Web Sovereign Engine (Bun 1.3.9 Ubuntu)
-# Arquitectura Canónica GitOps (Opción B ghcicd): Servicio principal en producción (rama main)
+# Hito 6: Astro-Web Sovereign Engine (Bun 1.3.9 Ubuntu)
+# Arquitectura Canónica GitOps: Servicio principal en producción (rama main)
+# Almacenamiento: localstorage por defecto. Si el proyecto escala y requiere S3 MinIO,
+# se aprovisiona de forma aditiva e independiente vía recipes/services/04-objectstorage.yaml.
 services:
-  - hostname: objectstorage
-    type: object-storage
-    objectStorageSize: 10
-    priority: 10
-
-  # Entorno Producción / Primario (Trafico en vivo, pasarelas reales, rama main)
+  # Entorno Producción / Primario (Tráfico en vivo, pasarelas reales, rama main)
   - hostname: web
     type: ubuntu/bun@1.3.9
     priority: 5
