@@ -1,0 +1,21 @@
+# Hito 8: Motor Efímero de Renderizado de Video (Lego On-Demand / Costo Cero)
+# Runtime Ubuntu Node.js 22 con Chromium headless, glibc y FFmpeg.
+# Desplegable bajo demanda para lotes de video y eliminable tras finalizar para costo cero.
+services:
+  - hostname: videoworker
+    type: ubuntu/nodejs@22
+    priority: 5
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.5
+      minFreeRamPercent: 15
+    envVariables:
+      NATS_URL: ${nats_connectionString}
+      VALKEY_URL: ${valkey_connectionString}
+      NODE_ENV: "production"
+      MAX_CONCURRENT_RENDERS: "1"
+      VIDEO_OUTPUT_DIR: "/var/www/output"

@@ -26,8 +26,9 @@ Comandos:
   4             Aprovisionar Hito 4: evolution
   5             Aprovisionar Hito 5: listmonk
   6             Aprovisionar Hito 6: objectstorage + astrobranding
+  8             Aprovisionar Hito 8: videoworker (Motor Efímero de Video / Costo Cero)
   status        Verificar estado físico de los servicios en Zerops
-  test <1-6>    Ejecutar sensor de salud para el hito correspondiente
+  test <1-8>    Ejecutar sensor de salud para el hito correspondiente
   help          Mostrar esta ayuda
 EOF
 }
@@ -108,6 +109,16 @@ case "$STEP" in
         fi
         log_ok "Hito 6 aprovisionado. Ecosistema completo desplegado."
         ;;
+    8)
+        RECIPE="$RECIPES_DIR/08-video-worker.yaml"
+        log_info "==> Hito 8: Aprovisionando 'videoworker' (Motor Efímero de Video)..."
+        if command -v zcli >/dev/null 2>&1; then
+            zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
+        else
+            log_info "Receta lista para importar: $RECIPE"
+        fi
+        log_ok "Hito 8 aprovisionado. Listo para renderizar por colas y ser eliminado tras finalizar (costo cero)."
+        ;;
     test)
         SUB_STEP="${2:-1}"
         case "$SUB_STEP" in
@@ -149,6 +160,11 @@ case "$STEP" in
                 log_info "Probando sensor de Astro-Web..."
                 URL="${ASTRO_URL:-http://astrobranding:3000}"
                 curl -fsS --max-time 10 "$URL/health" && log_ok "Astro-Web responde OK" || log_err "Fallo al conectar con $URL/health"
+                ;;
+            8)
+                log_info "Probando sensor de videoworker..."
+                URL="${VIDEOWORKER_URL:-http://videoworker:3000}"
+                curl -fsS --max-time 10 "$URL/health" >/dev/null 2>&1 && log_ok "VideoWorker responde OK" || log_warn "VideoWorker no activo o ya purgado (estado efímero)."
                 ;;
             *)
                 log_warn "Sensor no definido para el hito $SUB_STEP."
