@@ -128,15 +128,18 @@ for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
     fi
 done
 
-# 2. Comprobación de conectividad de red SSH al servicio Zerops
+# 2. Comprobación de conectividad de red SSH al servicio Zerops (con reintentos para tolerancia de arranque)
 if [ "$LOCALSTORAGE_FOUND" = false ]; then
     for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
         [ -z "$cand" ] && continue
-        if timeout 3s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=2 "$cand" "test -d /data" 2>/dev/null; then
-            LOCALSTORAGE_FOUND=true
-            LOCALSTORAGE_HOST="$cand"
-            break
-        fi
+        for attempt in 1 2 3; do
+            if timeout 5s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=4 "$cand" "test -d /data" 2>/dev/null; then
+                LOCALSTORAGE_FOUND=true
+                LOCALSTORAGE_HOST="$cand"
+                break 2
+            fi
+            sleep 1
+        done
     done
 fi
 
