@@ -37,6 +37,21 @@ class BrandviewStateCompiler:
 
         self.schema_path = Path("/var/www/zerops-astro-skills/orchesbrand/assets/schemas/brandview_state.schema.json")
 
+    def _load_brandbook_data(self) -> Dict[str, Any]:
+        """Loads existing brandbook.json if available."""
+        candidates = [
+            self.project_dev_dir / "brandbook.json",
+            self.diag_dir / "raw" / "llm" / "brandbook.json",
+            self.localstorage_dev_dir / "brandbook.json"
+        ]
+        for c in candidates:
+            if c.exists():
+                try:
+                    return json.loads(c.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+        return {}
+
     def _load_typography_domain(self) -> Dict[str, Any]:
         """Loads or derives the 3 candidate typography ecosystems."""
         # 1. Try existing font_manifest.json
