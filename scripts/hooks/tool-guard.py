@@ -564,11 +564,7 @@ def evaluate_hook(payload: dict) -> dict:
         except Exception:
             pass
 
-        try:
-            auto_sync_governance()
-        except Exception:
-            pass
-
+        # Zero-Hang: auto_sync_governance síncrono purgado de PreInvocation para evitar timeouts y SIGKILL por FUSE
         user_prompt = payload.get("userPrompt", "")
         halt_alert = ""
         dummy_plan = "/var/www/artifacts/test_plan_v1.md"
@@ -1445,15 +1441,7 @@ def main():
 
     is_post_tool = "--post-tool" in sys.argv or ("stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload))
     if is_post_tool:
-        tool_name = payload.get("toolCall", {}).get("name", "")
-        tool_args = payload.get("toolCall", {}).get("args", {})
-        target_file = tool_args.get("TargetFile", "")
-        if not target_file and tool_name == "run_command":
-            cmd = tool_args.get("CommandLine", "")
-            if re.search(r'\b(git|skill|unisetup|iniciar|gentle-ai|\.agents|zerops-astro)\b', cmd):
-                auto_sync_governance()
-        else:
-            auto_sync_governance(target_file)
+        # Zero-Hang: auto_sync_governance síncrono purgado de PostToolUse para evitar bloqueos por FUSE
         print(json.dumps({}))
         sys.exit(0)
 
