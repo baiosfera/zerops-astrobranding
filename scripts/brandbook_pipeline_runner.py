@@ -2191,9 +2191,13 @@ class BrandbookPipelineRunner:
         if font_manifest_data:
             sel_eco = font_manifest_data.get("selected_ecosystem") or font_manifest_data.get("candidate_ecosystems", [{}])[0]
             tokens_typo = sel_eco.get("tokens", {})
-            disp_primary = tokens_typo.get("display_primary", {}).get("$value", "Glamour Luxury Serif")
-            ui_secondary = tokens_typo.get("ui_secondary", {}).get("$value", "Plus Jakarta Sans")
-            accent_brand = tokens_typo.get("accent_brand", {}).get("$value", "Adorn Chiseled Monogram")
+            fallback_disp = "Space Grotesk" if mc_sign in ["Gemini", "Libra", "Aquarius", "Aries", "Leo", "Sagittarius"] else "Cormorant Garamond"
+            fallback_body = "Outfit" if mc_sign in ["Gemini", "Libra", "Aquarius", "Aries", "Leo", "Sagittarius"] else "Plus Jakarta Sans"
+            fallback_accent = "Space Mono" if mc_sign in ["Gemini", "Libra", "Aquarius", "Aries", "Leo", "Sagittarius"] else "Cinzel Decorative"
+
+            disp_primary = tokens_typo.get("display_primary", {}).get("$value") or fallback_disp
+            ui_secondary = tokens_typo.get("ui_secondary", {}).get("$value") or fallback_body
+            accent_brand = tokens_typo.get("accent_brand", {}).get("$value") or fallback_accent
 
             disp_fonts = [disp_primary, "serif"]
             body_fonts = [ui_secondary, "sans-serif"]
