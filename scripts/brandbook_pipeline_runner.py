@@ -1521,7 +1521,7 @@ class BifrostBrandStrategist:
     """Invokes Bifrost for comprehensive, deep multi-tradition brand positioning and narrative authoring."""
 
     def __init__(self, base_url: str = "http://bifrost:8080", primary_model: str = "deepseek/deepseek-chat",
-                 fallback_model: str = "freellmapi/deepseek-v4-flash", timeout_sec: int = 180):
+                 fallback_model: str = "freellmapi/deepseek-v4-flash", timeout_sec: int = 300):
         self.base_url = (os.getenv("BIFROST_URL") or base_url).rstrip("/")
         self.primary_model = primary_model
         self.fallback_model = fallback_model
