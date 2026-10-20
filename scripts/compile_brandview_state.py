@@ -503,13 +503,6 @@ class BrandviewStateCompiler:
                 }
             ]
         }
-                        "symbolY": 175.0,
-                        "brandY": 385.0,
-                        "sloganY": 425.0
-                    }
-                }
-            ]
-        }
 
     def _load_motion_domain(self) -> Dict[str, Any]:
         """Loads or builds 3 kinetic presets at 60fps with procedural ADSR audio."""
