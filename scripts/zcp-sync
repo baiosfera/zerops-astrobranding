@@ -134,6 +134,13 @@ case "${1:-}" in
             list_projects
             exit 1
         fi
+
+        ACTIVE_PROJ="${PROJECT_NAME:-${CLIENT_NAME:-${ENGRAM_PROJECT:-}}}"
+        if [ -n "$ACTIVE_PROJ" ] && [ "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')" != "$(echo "$ACTIVE_PROJ" | tr '[:lower:]' '[:upper:]')" ]; then
+            echo "ℹ️ Aviso de Gobernanza: El proyecto solicitado [$TARGET] difiere de la marca activa en este runtime [$ACTIVE_PROJ]."
+            echo "   (Prioridad arquitectónica: una marca activa por localstorage. Procediendo por solicitud explícita sin bloqueo...)"
+        fi
+
         sync_project "$TARGET"
         ;;
 esac
