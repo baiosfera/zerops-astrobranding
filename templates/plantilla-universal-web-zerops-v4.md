@@ -169,7 +169,7 @@ Cualquier AGY debe clasificar y persistir los datos según la necesidad real y f
 1. **Google Drive SSoT (`/var/www/baiosfera/`):** Capa Fría indestructible. Espejo permanente de código fuente, configuraciones maestras y manifiestos de diseño.
 2. **`localstorage` (`/mnt/localstorage/`):** Capa Primaria de Persistencia POSIX (<0.1ms latencia NVMe).
    - **Uso Estándar Starter (Fase 1):** Es el **almacenamiento por defecto** para e-commerce ligero y marcas. Las fotos de productos (`/mnt/localstorage/${PROJECT_NAME}/media/productos/`), bases de datos SQLite locales (`engram`, `freellmapi`) y el Brandbook SSoT (`/mnt/localstorage/${PROJECT_NAME}/dev/`) residen aquí.
-   - **Regla de Gobernanza Multi-Marca:** Cada marca mantiene su identidad viva en `/mnt/localstorage/${PROJECT_NAME}/dev/` (`system_prompt.md`, `brandbook.json`, `catalog_links.json`).
+   - **Regla de Prioridad de Marca en Local Storage (Sin Cárcel Obligatoria):** Cada entorno Zerops (`$PROJECT_NAME`) aísla su `localstorage` prioritariamente para su marca activa (`/mnt/localstorage/${PROJECT_NAME}/dev/`) para evitar colisiones de personalidad y saturación de disco local. Google Drive SSoT (`/var/www/baiosfera/PROYECTOS/`) es el repositorio universal donde conviven todas las marcas. El operador puede ejecutar `zcp-sync <MARCA>` libremente sin restricciones ni bloqueos cuando requiera sincronizar ad-hoc otras marcas para pruebas o diagnósticos.
    - **Restricción de Infraestructura (Ley de Co-Location):** Todos los contenedores que montan el mismo `localstorage` se ejecutan forzosamente en el mismo nodo físico de Zerops.
 3. **`objectstorage` (S3 MinIO - Estrictamente Opcional / On-Demand):**
    - **¿Cuándo SÍ se aprovisiona?**
