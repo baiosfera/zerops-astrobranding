@@ -124,6 +124,10 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 7. **Invariante de Doble Dominio (Software vs Prompts)**:
    - **Scripts y Código (Python/Bash/TS)**: Rige CoHaLo Engineering (contexto acotado sin variables globales mutables, harness con validación de sintaxis física `python3 -m py_compile`/`bash -n` y pruebas exit code 0 `bun test`/`pytest`, loops deterministas sin silenciar errores) y Skill-Improver (preservación invariable de AST de funciones y clases, cero mutilación, módulos profundos). NUNCA limitar código de software por presupuesto de palabras o tokens.
    - **Prompts & Skills (Markdown/Instrucciones)**: Rige CoHaLo Prompting (Positive Guidance afirmativo, directivas de dominio cerrado) y Skill-Improver (revelación progresiva Dual-RAG, router `SKILL.md` $\le$ 480 palabras / ~550 tokens, especificaciones desacopladas en `references/`).
+8. **Soberanía de Storage y Aislamiento de Marcas (Local Storage vs Drive SSoT)**:
+   - **Prioridad de Marca Nativa en Local Storage**: El volumen persistente `localstorage` (`/mnt/localstorage` o `/var/www/localstorage`) debe priorizar y aislar los assets de la marca nativa del proyecto activo (`${PROJECT_NAME}`, ej. `ELPLACERDC`) para evitar saturación de disco local y colisiones de personalidad en los agentes.
+   - **Google Drive como SSoT Universal Multi-Marca**: `/var/www/baiosfera/PROYECTOS/` y `/var/www/baiosfera/ASTROLOGÍA/DIAG/` son el repositorio global indestructible donde conviven todas las marcas y clientes del ecosistema.
+   - **Flexibilidad Sin Bloqueos ("Zero-Lock / Sin Cárcel")**: El usuario puede ejecutar libremente `zcp-sync <MARCA>` para cualquier cliente cuando lo necesite de forma manual. La herramienta advierte de forma constructiva si la marca difiere de `${PROJECT_NAME}`, pero no bloquea la sincronización.
 
 ## 📦 Catálogo y Herramientas Soberanas
 - **Catálogo Oficial (141 skills)**: [`.atl/skill-registry.md`](file:///var/www/.atl/skill-registry.md).
