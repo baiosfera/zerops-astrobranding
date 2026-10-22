@@ -175,9 +175,9 @@ ensure_storage_symlink() {
     local target_src="$1"
     local link_dst="$2"
 
-    # 1. Si existe un montaje FUSE/SSHFS residual previo en link_dst (por ej. montado por otro usuario o sin allow_other), desmontar
-    if grep -q " ${link_dst} " /proc/mounts 2>/dev/null || mountpoint -q "$link_dst" 2>/dev/null; then
-        echo "  • Limpiando montaje FUSE previo en $link_dst..."
+    # 1. Si existe un montaje físico previo en link_dst (y NO es un symlink), desmontar
+    if [ ! -L "$link_dst" ] && (grep -q " ${link_dst} " /proc/mounts 2>/dev/null || mountpoint -q "$link_dst" 2>/dev/null); then
+        echo "  • Limpiando montaje físico FUSE previo en $link_dst..."
         fusermount3 -uz "$link_dst" 2>/dev/null || sudo fusermount3 -uz "$link_dst" 2>/dev/null || sudo umount -l "$link_dst" 2>/dev/null || true
     fi
 
@@ -220,7 +220,7 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/bin/mkdir -p /mnt/$LOCALSTORAGE_HOST
-ExecStart=/bin/bash -c 'if ! mountpoint -q /mnt/$LOCALSTORAGE_HOST; then for i in \$(seq 1 15); do /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 $LOCALSTORAGE_HOST:/data /mnt/$LOCALSTORAGE_HOST 2>/dev/null && break; sleep 2; done; fi; if grep -q " $PROJECT_ROOT/$LOCALSTORAGE_HOST " /proc/mounts 2>/dev/null || mountpoint -q $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null; then /usr/bin/fusermount3 -uz $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; if [ -d $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ]; then rmdir $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; ln -sfn /mnt/$LOCALSTORAGE_HOST $PROJECT_ROOT/$LOCALSTORAGE_HOST'
+ExecStart=/bin/bash -c 'if ! mountpoint -q /mnt/$LOCALSTORAGE_HOST; then for i in \$(seq 1 15); do /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 $LOCALSTORAGE_HOST:/data /mnt/$LOCALSTORAGE_HOST 2>/dev/null && break; sleep 2; done; fi; if [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && mountpoint -q $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null; then /usr/bin/fusermount3 -uz $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; if [ -d $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ]; then rmdir $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; ln -sfn /mnt/$LOCALSTORAGE_HOST $PROJECT_ROOT/$LOCALSTORAGE_HOST'
 ExecStop=/bin/bash -c 'if mountpoint -q /mnt/$LOCALSTORAGE_HOST; then /usr/bin/fusermount3 -uz /mnt/$LOCALSTORAGE_HOST || true; fi'
 TimeoutStartSec=60
 TimeoutStopSec=15

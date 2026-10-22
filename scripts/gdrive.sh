@@ -299,7 +299,7 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/bin/mkdir -p $STORAGE_DIR
-ExecStart=/bin/bash -c 'if ! mountpoint -q $STORAGE_DIR; then for i in \$(seq 1 15); do /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 ${DISCOVERED_TARGET}:/data $STORAGE_DIR 2>/dev/null && break; sleep 2; done; fi; if grep -q " /var/www/${DISCOVERED_TARGET} " /proc/mounts 2>/dev/null || mountpoint -q /var/www/${DISCOVERED_TARGET} 2>/dev/null; then /usr/bin/fusermount3 -uz /var/www/${DISCOVERED_TARGET} 2>/dev/null || true; fi; if [ -d /var/www/${DISCOVERED_TARGET} ] && [ ! -L /var/www/${DISCOVERED_TARGET} ]; then rmdir /var/www/${DISCOVERED_TARGET} 2>/dev/null || true; fi; ln -sfn $STORAGE_DIR /var/www/${DISCOVERED_TARGET}'
+ExecStart=/bin/bash -c 'if ! mountpoint -q $STORAGE_DIR; then for i in \$(seq 1 15); do /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 ${DISCOVERED_TARGET}:/data $STORAGE_DIR 2>/dev/null && break; sleep 2; done; fi; if [ ! -L /var/www/${DISCOVERED_TARGET} ] && mountpoint -q /var/www/${DISCOVERED_TARGET} 2>/dev/null; then /usr/bin/fusermount3 -uz /var/www/${DISCOVERED_TARGET} 2>/dev/null || true; fi; if [ -d /var/www/${DISCOVERED_TARGET} ] && [ ! -L /var/www/${DISCOVERED_TARGET} ]; then rmdir /var/www/${DISCOVERED_TARGET} 2>/dev/null || true; fi; ln -sfn $STORAGE_DIR /var/www/${DISCOVERED_TARGET}'
 ExecStop=/bin/bash -c 'if mountpoint -q $STORAGE_DIR; then /usr/bin/fusermount3 -uz $STORAGE_DIR || true; fi'
 TimeoutStartSec=60
 TimeoutStopSec=15
