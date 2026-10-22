@@ -58,7 +58,11 @@ ensure_dependencies() {
     if [ ${#pkgs_needed[@]} -gt 0 ]; then
         echo "  📦 Instalando paquetes requeridos: ${pkgs_needed[*]}..."
         sudo apt-get update -qq
-        sudo apt-get install -y -qq "${pkgs_needed[@]}"
+        sudo apt-get install -y "${pkgs_needed[@]}"
+    fi
+
+    if [ -d "/usr/share/novnc" ] && [ ! -f "/usr/share/novnc/index.html" ]; then
+        sudo ln -sf vnc.html /usr/share/novnc/index.html 2>/dev/null || true
     fi
 
     if ! command -v google-chrome >/dev/null 2>&1; then
@@ -67,6 +71,17 @@ ensure_dependencies() {
         curl -fsSL "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" -o "$chrome_deb"
         sudo dpkg -i "$chrome_deb" 2>/dev/null || sudo apt-get install -f -y -qq
         rm -f "$chrome_deb"
+    fi
+
+    local missing=()
+    for bin_cmd in Xvfb x11vnc websockify google-chrome; do
+        if ! command -v "$bin_cmd" >/dev/null 2>&1; then
+            missing+=("$bin_cmd")
+        fi
+    done
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo "  ❌ Error: No se pudieron encontrar o instalar: ${missing[*]}" >&2
+        exit 1
     fi
 
     echo "  ✅ Dependencias de sistema y Google Chrome operativas ($(google-chrome --version 2>/dev/null || echo 'OK'))."
@@ -145,61 +160,85 @@ sync_to_drive() {
 run_interactive_vnc_login() {
     ensure_dependencies
 
-    local DISPLAY_NUM=":99"
-    local VNC_PORT=5900
-    local NOVNC_PORT=6080
+    DISPLAY_NUM=":99"
+    VNC_PORT=5900
+    NOVNC_PORT=6080
+    XVFB_PID=""
+    X11VNC_PID=""
+    WEBSOCK_PID=""
 
     echo "=================================================================="
     echo "🚀 Iniciando Entorno Gráfico Efímero noVNC para Google NotebookLM"
     echo "=================================================================="
 
     # Limpiar procesos residuales previos si existieran
-    pkill -f "Xvfb $DISPLAY_NUM" 2>/dev/null || true
-    pkill -f "x11vnc.*$VNC_PORT" 2>/dev/null || true
-    pkill -f "websockify.*$NOVNC_PORT" 2>/dev/null || true
+    pkill -f "Xvfb ${DISPLAY_NUM}" 2>/dev/null || true
+    pkill -f "x11vnc.*${VNC_PORT}" 2>/dev/null || true
+    pkill -f "websockify.*${NOVNC_PORT}" 2>/dev/null || true
+    if ! pgrep -f "google-chrome" >/dev/null 2>&1; then
+        rm -f "$NLM_LOCAL_DIR/chrome-profiles/default/Singleton"* 2>/dev/null || true
+    fi
     sleep 1
 
     # Iniciar Framebuffer virtual Xvfb
     echo "• Iniciando Xvfb en $DISPLAY_NUM (1280x800x24)..."
     Xvfb "$DISPLAY_NUM" -screen 0 1280x800x24 -nolisten tcp &
-    local XVFB_PID=$!
+    XVFB_PID=$!
 
     # Iniciar servidor x11vnc
     echo "• Iniciando x11vnc en puerto $VNC_PORT..."
     x11vnc -display "$DISPLAY_NUM" -rfbport "$VNC_PORT" -forever -nopw -listen 127.0.0.1 -quiet &
-    local X11VNC_PID=$!
+    X11VNC_PID=$!
 
     # Iniciar websockify para exponer cliente web HTML5 noVNC
     echo "• Iniciando websockify en puerto $NOVNC_PORT..."
     websockify --web=/usr/share/novnc "$NOVNC_PORT" "127.0.0.1:$VNC_PORT" >/dev/null 2>&1 &
-    local WEBSOCK_PID=$!
+    WEBSOCK_PID=$!
 
     # Limpieza garantizada al salir (0 MB en reposo)
     cleanup_vnc() {
         echo ""
         echo "🧹 Limpiando procesos gráficos efímeros (Zero Overhead Invariant)..."
-        kill -15 "${WEBSOCK_PID:-}" "${X11VNC_PID:-}" "${XVFB_PID:-}" 2>/dev/null || true
-        pkill -f "Xvfb $DISPLAY_NUM" 2>/dev/null || true
-        pkill -f "x11vnc.*$VNC_PORT" 2>/dev/null || true
-        pkill -f "websockify.*$NOVNC_PORT" 2>/dev/null || true
+        [ -n "${WEBSOCK_PID:-}" ] && kill -15 "$WEBSOCK_PID" 2>/dev/null || true
+        [ -n "${X11VNC_PID:-}" ] && kill -15 "$X11VNC_PID" 2>/dev/null || true
+        [ -n "${XVFB_PID:-}" ] && kill -15 "$XVFB_PID" 2>/dev/null || true
+        pkill -f "Xvfb ${DISPLAY_NUM:-:99}" 2>/dev/null || true
+        pkill -f "x11vnc.*${VNC_PORT:-5900}" 2>/dev/null || true
+        pkill -f "websockify.*${NOVNC_PORT:-6080}" 2>/dev/null || true
+        if ! pgrep -f "google-chrome" >/dev/null 2>&1; then
+            rm -f "$NLM_LOCAL_DIR/chrome-profiles/default/Singleton"* 2>/dev/null || true
+        fi
         echo "✅ Recursos gráficos liberados (0 MB RAM)."
     }
     trap cleanup_vnc EXIT INT TERM
 
     sleep 2
 
+    if ! kill -0 "$XVFB_PID" 2>/dev/null; then
+        echo "❌ Error: Xvfb no pudo iniciar en $DISPLAY_NUM" >&2
+        exit 1
+    fi
+    if ! kill -0 "$X11VNC_PID" 2>/dev/null; then
+        echo "❌ Error: x11vnc no pudo iniciar en el puerto $VNC_PORT" >&2
+        exit 1
+    fi
+    if ! kill -0 "$WEBSOCK_PID" 2>/dev/null; then
+        echo "❌ Error: websockify no pudo iniciar en el puerto $NOVNC_PORT" >&2
+        exit 1
+    fi
+
     echo ""
     echo "👉 INSTRUCCIONES DE ACCESO INTERACTIVO:"
-    echo "   1. En tu code-server, ve a la pestaña 'Ports' (Puertos)."
+    echo "   1. En tu code-server / navegador, ve a la pestaña 'Ports' (Puertos)."
     echo "   2. Abre o reenvía el puerto $NOVNC_PORT (URL: http://127.0.0.1:$NOVNC_PORT/vnc.html)."
-    echo "   3. En la pantalla web de noVNC haz clic en 'Connect'."
+    echo "   3. En la pantalla web de noVNC haz clic en 'Connect' (si no conecta automáticamente)."
     echo "   4. Verás la ventana de Google Chrome abriendo la autenticación de Google."
     echo "   5. Inicia sesión normalmente con tu cuenta de Google."
     echo "=================================================================="
     echo ""
 
     # Ejecutar login forzado de nlm usando el display virtual
-    DISPLAY="$DISPLAY_NUM" "$NLM_BIN" login --force
+    DISPLAY="$DISPLAY_NUM" "$NLM_BIN" login --force "$@"
 
     echo ""
     echo "🎉 Autenticación completada en Chrome."
