@@ -170,7 +170,7 @@ echo "• Contratos arquitectónicos ZCP & Docker preservados canónicamente en 
 if command -v zcp >/dev/null 2>&1; then
     echo "• Aprovisionando packs nativos de la plataforma Zerops (zcp skills en vivo)..."
     # Limpiar posibles colisiones de skills no gestionadas antes de que zcp skills tome el control
-    for sk in brainstorming dispatching-parallel-agents executing-plans finishing-a-development-branch receiving-code-review requesting-code-review subagent-driven-development systematic-debugging test-driven-development using-git-worktrees using-superpowers verification-before-completion writing-plans writing-skills karpathy-guidelines ask-matt diagnosing-bugs grill-with-docs triage improve-codebase-architecture setup-matt-pocock-skills to-spec to-tickets prototype domain-modeling codebase-design code-review grilling handoff teach; do
+    for sk in brainstorming dispatching-parallel-agents executing-plans finishing-a-development-branch receiving-code-review requesting-code-review subagent-driven-development systematic-debugging test-driven-development using-git-worktrees using-superpowers verification-before-completion writing-plans writing-skills karpathy-guidelines ask-matt diagnosing-bugs grill-with-docs triage improve-codebase-architecture setup-matt-pocock-skills to-spec to-tickets prototype domain-modeling codebase-design code-review grilling handoff teach tdd implement; do
         if [ -d "/var/www/.agents/skills/$sk" ] && [ ! -f "/var/www/.agents/skills/$sk/.zcp-skillpack.json" ]; then
             rm -rf "/var/www/.agents/skills/$sk" "/var/www/.claude/skills/$sk" 2>/dev/null || true
         fi
@@ -181,7 +181,7 @@ if command -v zcp >/dev/null 2>&1; then
     # Matt Pocock Pack: Resolver revisión dinámica y conciliar subconjunto seguro (sin colisiones en research/wayfinder ni dependencias rotas upstream)
     POCOCK_REV=$(cd /var/www && zcp skills pack-status matt-pocock-skills --json 2>/dev/null | grep -o '"revision":"[^"]*"' | head -n1 | cut -d'"' -f4 || true)
     if [ -n "$POCOCK_REV" ]; then
-        (cd /var/www && zcp skills pack-set matt-pocock-skills --skills "ask-matt,diagnosing-bugs,grill-with-docs,triage,improve-codebase-architecture,setup-matt-pocock-skills,to-spec,to-tickets,prototype,domain-modeling,codebase-design,code-review,grilling,handoff,teach" --expected-revision "$POCOCK_REV" --json >/dev/null 2>&1 || true)
+        (cd /var/www && zcp skills pack-set matt-pocock-skills --skills "ask-matt,code-review,codebase-design,diagnosing-bugs,domain-modeling,grill-with-docs,grilling,handoff,implement,improve-codebase-architecture,prototype,setup-matt-pocock-skills,tdd,teach,to-spec,to-tickets,triage" --expected-revision "$POCOCK_REV" --json >/dev/null 2>&1 || true)
     fi
 
     # Invariante Soberano: Garantizar que la skill personalizada research NUNCA sea alterada
