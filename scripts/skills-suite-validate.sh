@@ -8,7 +8,15 @@ set -euo pipefail
 
 EXCLUDED_REGEX="^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*)$"
 
-SKILLS_DIR="${1:-/var/www/.agents/skills}"
+QUIET=false
+SKILLS_DIR="/var/www/.agents/skills"
+for arg in "$@"; do
+    case "$arg" in
+        -q|--quiet) QUIET=true ;;
+        *) [ -d "$arg" ] && SKILLS_DIR="$arg" ;;
+    esac
+done
+
 SSOT_DIR="/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills"
 TOTAL=0
 PASSED=0
@@ -71,7 +79,7 @@ for skill_name in "${TARGET_SKILLS[@]}"; do
     fi
 
     if [ "$UNI_FAIL" -eq 0 ]; then
-        echo "✓ [$skill_name]: PASSED (Universal Sensor)"
+        [ "$QUIET" = false ] && echo "✓ [$skill_name]: PASSED (Universal Sensor)"
         PASSED=$((PASSED + 1))
     else
         FAILED=$((FAILED + 1))

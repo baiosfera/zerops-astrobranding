@@ -46,11 +46,16 @@ if [ -f "$SCRIPT_DIR/zcp-sync" ]; then
 fi
 
 # 2. Despliegue de Utilidad Soberana MCV Downloader (mcv-download)
-# Asegurar dependencias de sistema y navegador para MCV en ZCP limpio
-echo "• Asegurando dependencias de sistema para MCV (ffmpeg, unrar, 7z, megatools, gdown, agent-browser)..."
-sudo apt-get update -qq
-sudo apt-get install -y -qq ffmpeg p7zip-full unrar megatools python3-pip 2>/dev/null || true
-pip3 install requests beautifulsoup4 gdown mcp --break-system-packages 2>/dev/null || pip install requests beautifulsoup4 gdown mcp 2>/dev/null || true
+# Asegurar dependencias de sistema y navegador para MCV en ZCP limpio con guardas de idempotencia
+if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v 7z >/dev/null 2>&1 || ! command -v unrar >/dev/null 2>&1 || ! command -v megatools >/dev/null 2>&1; then
+    echo "• Asegurando dependencias de sistema para MCV (ffmpeg, unrar, 7z, megatools, python3-pip)..."
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq ffmpeg p7zip-full unrar megatools python3-pip 2>/dev/null || true
+fi
+if ! python3 -c 'import requests, bs4, gdown, mcp' 2>/dev/null; then
+    echo "• Instalando paquetes Python requeridos para MCV..."
+    pip3 install requests beautifulsoup4 gdown mcp --break-system-packages 2>/dev/null || pip install requests beautifulsoup4 gdown mcp 2>/dev/null || true
+fi
 if ! command -v agent-browser >/dev/null 2>&1; then
     echo "  🌐 Instalando agent-browser para descargas Sync.com..."
     sudo npm install -g agent-browser 2>/dev/null || true

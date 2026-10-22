@@ -36,9 +36,12 @@ echo "[ZCP-BOOT] Using local core for rclone: $LOCAL_ROOT"
 
 # 3. OS DEPENDENCIES (FUSE, SSHFS & Networking Tools)
 export DEBIAN_FRONTEND=noninteractive
-sudo apt-get update -qq
-sudo apt-get install -y -qq fuse3 curl unzip python3 sshfs netcat-openbsd
-grep -q "^user_allow_other" /etc/fuse.conf || echo "user_allow_other" | sudo tee -a /etc/fuse.conf > /dev/null
+if ! command -v fusermount3 >/dev/null 2>&1 || ! command -v sshfs >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1 || ! command -v unzip >/dev/null 2>&1 || ! command -v nc >/dev/null 2>&1; then
+    echo "[ZCP-BOOT] Instalando herramientas del sistema (fuse3, curl, unzip, python3, sshfs, netcat)..."
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq fuse3 curl unzip python3 sshfs netcat-openbsd
+fi
+grep -q "^user_allow_other" /etc/fuse.conf 2>/dev/null || echo "user_allow_other" | sudo tee -a /etc/fuse.conf > /dev/null
 
 # 4. DEPENDENCY HIJACKING (Portable Rclone)
 if [ ! -x "$LOCAL_ROOT/bin/rclone" ]; then

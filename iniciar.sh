@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.8)
+# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.9)
 # Repositorio: https://github.com/baiosfera/zerops-astrobranding
 # Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash
+# Modo Actualización: curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash -s -- --update
 # ==============================================================================
 
 # 0. Auto-re-ejecución en bash si se invoca desde sh, dash o terminal sin bash interactivo
@@ -33,7 +34,7 @@ for var in $(env | grep -E '^core_' | sed 's/=.*//' || true); do
 done
 
 echo "============================================================"
-echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.8 - Persistent Storage & Stop/Start Resilient)"
+echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.9 - Fast Update & Idempotent)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
@@ -43,11 +44,15 @@ REPO_DIR="${PROJECT_ROOT}/zerops-astrobranding"
 DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
 SSOT_SCRIPTS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/scripts"
 
-# Manejo de argumentos opcionales (--keys, --project, --repo)
+# Manejo de argumentos opcionales (--update, --keys, --project, --repo)
 KEYS_FILE_ARG=""
 PROJECT_NAME_ARG=""
+UPDATE_MODE=false
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
+        --update|-u|--quick|-q)
+            UPDATE_MODE=true
+            shift ;;
         --keys|-k)
             if [ -n "${2:-}" ] && [ -f "$2" ]; then
                 echo "• Cargando archivo de credenciales externas: $2"
@@ -386,13 +391,69 @@ done
 # 2d. Garantizar paridad activa de scripts de bootstrap entre SSoT y repositorio
 if [ -f "$SSOT_SCRIPTS/iniciar.sh" ] && [ -f "$REPO_DIR/iniciar.sh" ]; then
     if ! cmp -s "$SSOT_SCRIPTS/iniciar.sh" "$REPO_DIR/iniciar.sh"; then
-        cp -f "$SSOT_SCRIPTS/iniciar.sh" "$REPO_DIR/iniciar.sh" 2>/dev/null || true
+        if [ "$REPO_DIR/iniciar.sh" -nt "$SSOT_SCRIPTS/iniciar.sh" ]; then
+            cp -f "$REPO_DIR/iniciar.sh" "$SSOT_SCRIPTS/iniciar.sh" 2>/dev/null || true
+        else
+            cp -f "$SSOT_SCRIPTS/iniciar.sh" "$REPO_DIR/iniciar.sh" 2>/dev/null || true
+        fi
     fi
 fi
 if [ -f "$SSOT_SCRIPTS/gdrive.sh" ] && [ -f "$REPO_DIR/scripts/gdrive.sh" ]; then
     if ! cmp -s "$SSOT_SCRIPTS/gdrive.sh" "$REPO_DIR/scripts/gdrive.sh"; then
-        cp -f "$SSOT_SCRIPTS/gdrive.sh" "$REPO_DIR/scripts/gdrive.sh" 2>/dev/null || true
+        if [ "$REPO_DIR/scripts/gdrive.sh" -nt "$SSOT_SCRIPTS/gdrive.sh" ]; then
+            cp -f "$REPO_DIR/scripts/gdrive.sh" "$SSOT_SCRIPTS/gdrive.sh" 2>/dev/null || true
+        else
+            cp -f "$SSOT_SCRIPTS/gdrive.sh" "$REPO_DIR/scripts/gdrive.sh" 2>/dev/null || true
+        fi
     fi
+fi
+
+# 2e. Rama de Actualización Ultrarrápida (< 3s) si se invoca con --update / -u / zcp-update
+if [ "$UPDATE_MODE" = true ]; then
+    echo "============================================================"
+    echo "  ⚡ ACTUALIZACIÓN RÁPIDA ZCP (iniciar.sh --update)"
+    echo "============================================================"
+
+    # Sincronizar scripts actualizados hacia SSoT en Google Drive si está montado
+    if [ -d "$SSOT_SCRIPTS" ]; then
+        echo "• Sincronizando scripts SSoT hacia Google Drive..."
+        for s in iniciar.sh gdrive.sh setup-zcp.sh setup-astrokey.sh unisetup.sh skills-suite-validate.sh; do
+            [ -f "$REPO_DIR/scripts/$s" ] && cp -f "$REPO_DIR/scripts/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
+            [ -f "$REPO_DIR/$s" ] && cp -f "$REPO_DIR/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
+        done
+    fi
+
+    # Refrescar memoria LTM de Engram si existe
+    if command -v engram-sync >/dev/null 2>&1; then
+        engram-sync --pull --project "$APP_IDENTITY_LOWER" 2>/dev/null || true
+    fi
+
+    # Instalar o actualizar zcp-update en PATH
+    if [ -w /usr/local/bin ] || command -v sudo >/dev/null 2>&1; then
+        cat << 'UEOF' | sudo tee /usr/local/bin/zcp-update > /dev/null
+#!/usr/bin/env bash
+if [ -f "/var/www/zerops-astrobranding/iniciar.sh" ]; then
+    exec /var/www/zerops-astrobranding/iniciar.sh --update "$@"
+elif [ -f "/var/www/iniciar.sh" ]; then
+    exec /var/www/iniciar.sh --update "$@"
+else
+    curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash -s -- --update "$@"
+fi
+UEOF
+        sudo chmod +x /usr/local/bin/zcp-update 2>/dev/null || true
+    fi
+
+    echo "• Verificando paridad SSoT..."
+    if command -v ssot-parity-check >/dev/null 2>&1; then
+        ssot-parity-check
+    elif [ -f "$SSOT_SCRIPTS/ssot-parity-check.sh" ]; then
+        bash "$SSOT_SCRIPTS/ssot-parity-check.sh"
+    fi
+
+    echo "============================================================"
+    echo "  🎉 ACTUALIZACIÓN RÁPIDA COMPLETADA CON ÉXITO (< 3s)"
+    echo "============================================================"
+    exit 0
 fi
 
 # 3. Ejecutar orquestador maestro unisetup.sh (Cascada resiliente: Repositorio local -> Drive SSoT)
@@ -620,6 +681,21 @@ if [ -f "$PROJECT_ROOT/gdrive.env" ]; then
     chmod 600 "$PROJECT_ROOT/.rclone/gdrive.env" 2>/dev/null || sudo chmod 600 "$PROJECT_ROOT/.rclone/gdrive.env"
 fi
 rm -f "$PROJECT_ROOT/.env" "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT"/key*.md "$PROJECT_ROOT"/key*.env 2>/dev/null || true
+
+# 4c. Instalar utilidad global zcp-update para actualizaciones ultrarrápidas (< 3s)
+if [ -w /usr/local/bin ] || command -v sudo >/dev/null 2>&1; then
+    cat << 'UEOF' | sudo tee /usr/local/bin/zcp-update > /dev/null
+#!/usr/bin/env bash
+if [ -f "/var/www/zerops-astrobranding/iniciar.sh" ]; then
+    exec /var/www/zerops-astrobranding/iniciar.sh --update "$@"
+elif [ -f "/var/www/iniciar.sh" ]; then
+    exec /var/www/iniciar.sh --update "$@"
+else
+    curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash -s -- --update "$@"
+fi
+UEOF
+    sudo chmod +x /usr/local/bin/zcp-update 2>/dev/null || true
+fi
 
 echo "============================================================"
 echo "  🎉 BOOTSTRAP COMPLETADO CON ÉXITO — ENTORNO LISTO"

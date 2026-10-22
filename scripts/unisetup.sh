@@ -324,7 +324,7 @@ if [ "$RUN_ALL" = true ]; then
         cp -f "$SCRIPT_DIR/skills-suite-validate.sh" "$PROJECT_ROOT/.bin/skills-suite-validate"
         chmod +x "$PROJECT_ROOT/.bin/skills-suite-validate"
         sudo ln -sf "$PROJECT_ROOT/.bin/skills-suite-validate" /usr/local/bin/skills-suite-validate 2>/dev/null || true
-        bash "$SCRIPT_DIR/skills-suite-validate.sh"
+        bash "$SCRIPT_DIR/skills-suite-validate.sh" --quiet
     fi
 
     if [ -f "$SCRIPT_DIR/harden-postgres-quotas.sh" ]; then
