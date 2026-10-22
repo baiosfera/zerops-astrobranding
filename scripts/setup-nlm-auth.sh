@@ -65,6 +65,25 @@ ensure_dependencies() {
         sudo ln -sf vnc.html /usr/share/novnc/index.html 2>/dev/null || true
     fi
 
+    if [ -f "/usr/share/novnc/app/ui.js" ] && ! grep -q "cleanPrefix" "/usr/share/novnc/app/ui.js"; then
+        echo "  🔧 Configurando soporte de proxy inverso en noVNC..."
+        sudo python3 -c '
+path = "/usr/share/novnc/app/ui.js"
+with open(path, "r", encoding="utf-8") as f:
+    content = f.read()
+target = "UI.initSetting(\x27path\x27, \x27websockify\x27);"
+if target in content:
+    replacement = """let defaultPath = "websockify";
+        let cleanPrefix = window.location.pathname.replace(/\\/vnc.*$/, "").replace(/\\/index.*$/, "").replace(/\\/$/, "").replace(/^\\//, "");
+        if (cleanPrefix) {
+            defaultPath = cleanPrefix + "/websockify";
+        }
+        UI.initSetting("path", defaultPath);"""
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content.replace(target, replacement, 1))
+' 2>/dev/null || true
+    fi
+
     if ! command -v google-chrome >/dev/null 2>&1; then
         echo "  🌐 Instalando Google Chrome Stable oficial (.deb)..."
         local chrome_deb="/tmp/google-chrome-stable_current_amd64.deb"
