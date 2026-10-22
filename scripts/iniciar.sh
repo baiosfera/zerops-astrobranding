@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.7)
+# Iniciar ZCP: Bootstrapper Soberano Autónomo (iniciar.sh v1.8)
 # Repositorio: https://github.com/baiosfera/zerops-astrobranding
 # Ejecución Mínima: curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash
 # ==============================================================================
@@ -33,7 +33,7 @@ for var in $(env | grep -E '^core_' | sed 's/=.*//' || true); do
 done
 
 echo "============================================================"
-echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.7 - Storage & Permission Resilient)"
+echo "  🚀 INICIANDO BOOTSTRAP SOBERANO ZCP (iniciar.sh v1.8 - Persistent Storage & Stop/Start Resilient)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
@@ -115,11 +115,33 @@ fi
 # 0b. Guardia Resiliente: Detección, Auto-Montaje y Fallback Local (Zero Bloqueos)
 echo "• Verificando servicio de almacenamiento persistente localstorage..."
 LOCALSTORAGE_FOUND=false
-LOCALSTORAGE_HOST="localstorage"
+LOCALSTORAGE_HOST="${LOCAL_STORAGE:-localstorage}"
 FALLBACK_DIR="${PROJECT_ROOT}/.storage_fallback"
 
+# 0b-pre. Asegurar dependencias de sistema y permisos FUSE para montaje distribuido
+if ! command -v sshfs >/dev/null 2>&1 || ! command -v fusermount3 >/dev/null 2>&1; then
+    echo "  • Instalando dependencias del sistema para almacenamiento distribuido (fuse3, sshfs)..."
+    if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y -qq fuse3 sshfs
+    elif command -v apk >/dev/null 2>&1; then
+        sudo apk add --no-cache fuse3 sshfs
+    fi
+fi
+
+# Configuración obligatoria de /etc/fuse.conf para permitir user_allow_other en FUSE
+if [ -f /etc/fuse.conf ]; then
+    sudo sed -i 's/^#\s*user_allow_other/user_allow_other/' /etc/fuse.conf 2>/dev/null || true
+    if ! grep -q "^user_allow_other" /etc/fuse.conf 2>/dev/null; then
+        echo "user_allow_other" | sudo tee -a /etc/fuse.conf >/dev/null 2>&1 || true
+    fi
+else
+    echo "user_allow_other" | sudo tee /etc/fuse.conf >/dev/null 2>&1 || true
+fi
+
+STORAGE_CANDIDATES=("${LOCAL_STORAGE:-}" "localstorage" "storage" "sharedfiles" "sharedstorage" "vol" "volume" "data" "disk")
+
 # 1. Comprobación de puntos de montaje ya existentes en /mnt/
-for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
+for cand in "${STORAGE_CANDIDATES[@]}"; do
     [ -z "$cand" ] && continue
     if [ -d "/mnt/$cand" ] && mountpoint -q "/mnt/$cand" 2>/dev/null; then
         LOCALSTORAGE_FOUND=true
@@ -128,12 +150,12 @@ for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
     fi
 done
 
-# 2. Comprobación de conectividad de red SSH al servicio Zerops (con reintentos para tolerancia de arranque)
+# 2. Comprobación de conectividad de red SSH al servicio Zerops (con reintentos para tolerancia de arranque en frío)
 if [ "$LOCALSTORAGE_FOUND" = false ]; then
-    for cand in "${LOCAL_STORAGE:-}" "localstorage" "storage" "data"; do
+    for cand in "${STORAGE_CANDIDATES[@]}"; do
         [ -z "$cand" ] && continue
-        for attempt in 1 2 3; do
-            if timeout 5s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=4 "$cand" "test -d /data" 2>/dev/null; then
+        for attempt in $(seq 1 10); do
+            if timeout 5s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=3 "$cand" "test -d /data" 2>/dev/null; then
                 LOCALSTORAGE_FOUND=true
                 LOCALSTORAGE_HOST="$cand"
                 break 2
@@ -154,13 +176,14 @@ ensure_storage_symlink() {
         fusermount3 -uz "$link_dst" 2>/dev/null || sudo fusermount3 -uz "$link_dst" 2>/dev/null || sudo umount -l "$link_dst" 2>/dev/null || true
     fi
 
-    # 2. Si link_dst es un directorio físico (no un symlink), verificar si está vacío o respaldarlo
+    # 2. Si link_dst es un directorio físico (no un symlink), migrar contenido o respaldar
     if [ -d "$link_dst" ] && [ ! -L "$link_dst" ]; then
         if [ -z "$(ls -A "$link_dst" 2>/dev/null || true)" ]; then
             sudo rmdir "$link_dst" 2>/dev/null || true
         else
-            echo "  ⚠️ Directorio existente en $link_dst; preservando respaldo..."
-            sudo mv "$link_dst" "${link_dst}_bak_$(date +%s)" 2>/dev/null || true
+            echo "  ⚠️ Directorio físico detectado en $link_dst; migrando contenido hacia $target_src..."
+            sudo cp -rn "$link_dst"/* "$target_src/" 2>/dev/null || true
+            sudo rm -rf "$link_dst" 2>/dev/null || sudo mv "$link_dst" "${link_dst}_bak_$(date +%s)" 2>/dev/null || true
         fi
     fi
 
@@ -176,16 +199,67 @@ if [ "$LOCALSTORAGE_FOUND" = true ]; then
         sudo sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" || true
     fi
 
-    # Migrar datos previos si existía un fallback local activo
-    if [ -d "$FALLBACK_DIR" ] && mountpoint -q "/mnt/$LOCALSTORAGE_HOST"; then
-        echo "  • Migrando datos temporales de fallback local hacia almacenamiento persistente remoto..."
-        sudo cp -rn "$FALLBACK_DIR"/* "/mnt/$LOCALSTORAGE_HOST/" 2>/dev/null || true
-        sudo rm -rf "$FALLBACK_DIR"
-    fi
+    # Validar que el punto de montaje esté activo y funcional
+    if mountpoint -q "/mnt/$LOCALSTORAGE_HOST"; then
+        # Instalar y habilitar unidad systemd para persistencia nativa en reinicios y stop/start
+        if command -v systemctl >/dev/null 2>&1; then
+            echo "  • Blindando persistencia en systemd (zerops-localstorage.service)..."
+            sudo tee /etc/systemd/system/zerops-localstorage.service > /dev/null << LSEOF
+[Unit]
+Description=Zerops Local Storage SSHFS Persistent Mount
+After=network-online.target
+Before=rclone-baiosfera.service
+Wants=network-online.target
 
-    ensure_storage_symlink "/mnt/$LOCALSTORAGE_HOST" "$PROJECT_ROOT/$LOCALSTORAGE_HOST"
-    echo "  ✓ Volumen persistente montado y enlazado: $PROJECT_ROOT/$LOCALSTORAGE_HOST -> /mnt/$LOCALSTORAGE_HOST"
-else
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/mkdir -p /mnt/$LOCALSTORAGE_HOST
+ExecStart=/bin/bash -c 'if ! mountpoint -q /mnt/$LOCALSTORAGE_HOST; then /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 $LOCALSTORAGE_HOST:/data /mnt/$LOCALSTORAGE_HOST; fi; if grep -q " $PROJECT_ROOT/$LOCALSTORAGE_HOST " /proc/mounts 2>/dev/null || mountpoint -q $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null; then /usr/bin/fusermount3 -uz $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; if [ -d $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ]; then rmdir $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; ln -sfn /mnt/$LOCALSTORAGE_HOST $PROJECT_ROOT/$LOCALSTORAGE_HOST'
+ExecStop=/bin/bash -c 'if mountpoint -q /mnt/$LOCALSTORAGE_HOST; then /usr/bin/fusermount3 -uz /mnt/$LOCALSTORAGE_HOST || true; fi'
+TimeoutStartSec=30
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
+LSEOF
+            sudo systemctl daemon-reload
+            sudo systemctl enable zerops-localstorage.service 2>/dev/null || true
+        fi
+
+        # Instalar guardián en profile.d para auto-sanación en aperturas de shell interactivas
+        sudo tee /etc/profile.d/zerops-localstorage.sh > /dev/null << PSEOF
+# Auto-sanación y verificación de volumen persistente localstorage
+if [ -d "/mnt/$LOCALSTORAGE_HOST" ] && ! mountpoint -q "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null; then
+    if timeout 2s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes "$LOCALSTORAGE_HOST" "test -d /data" 2>/dev/null; then
+        sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || true
+    fi
+fi
+if [ -d "/mnt/$LOCALSTORAGE_HOST" ] && mountpoint -q "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null; then
+    if [ ! -L "$PROJECT_ROOT/$LOCALSTORAGE_HOST" ] && [ -z "\$(ls -A "$PROJECT_ROOT/$LOCALSTORAGE_HOST" 2>/dev/null || true)" ]; then
+        rmdir "$PROJECT_ROOT/$LOCALSTORAGE_HOST" 2>/dev/null || true
+        ln -sfn "/mnt/$LOCALSTORAGE_HOST" "$PROJECT_ROOT/$LOCALSTORAGE_HOST" 2>/dev/null || true
+    fi
+fi
+PSEOF
+        sudo chmod 644 /etc/profile.d/zerops-localstorage.sh 2>/dev/null || true
+
+        # Migrar datos previos si existía un fallback local activo
+        if [ -d "$FALLBACK_DIR" ]; then
+            echo "  • Migrando datos temporales de fallback local hacia almacenamiento persistente remoto..."
+            sudo cp -rn "$FALLBACK_DIR"/* "/mnt/$LOCALSTORAGE_HOST/" 2>/dev/null || true
+            sudo rm -rf "$FALLBACK_DIR"
+        fi
+
+        ensure_storage_symlink "/mnt/$LOCALSTORAGE_HOST" "$PROJECT_ROOT/$LOCALSTORAGE_HOST"
+        echo "  ✓ Volumen persistente montado y enlazado: $PROJECT_ROOT/$LOCALSTORAGE_HOST -> /mnt/$LOCALSTORAGE_HOST"
+    else
+        echo "  ⚠️ No fue posible verificar el punto de montaje /mnt/$LOCALSTORAGE_HOST tras intentar SSHFS."
+        LOCALSTORAGE_FOUND=false
+    fi
+fi
+
+if [ "$LOCALSTORAGE_FOUND" = false ]; then
     echo "  ⚠️ Servicio remoto 'localstorage' no detectado aún en el proyecto Zerops."
     echo "  📦 Activando almacenamiento persistente LOCAL en $FALLBACK_DIR (MODO RESILIENTE - CERO BLOQUEOS)..."
 
