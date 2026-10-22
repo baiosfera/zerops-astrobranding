@@ -65,23 +65,53 @@ ensure_dependencies() {
         sudo ln -sf vnc.html /usr/share/novnc/index.html 2>/dev/null || true
     fi
 
-    if [ -f "/usr/share/novnc/app/ui.js" ] && ! grep -q "cleanPrefix" "/usr/share/novnc/app/ui.js"; then
-        echo "  🔧 Configurando soporte de proxy inverso en noVNC..."
+    if [ -f "/etc/nginx/nginx.conf" ] && ! grep -q "location /novnc/" "/etc/nginx/nginx.conf"; then
+        echo "  🌐 Configurando proxy directo noVNC en Nginx (puerto 8080)..."
         sudo python3 -c '
-path = "/usr/share/novnc/app/ui.js"
+path = "/etc/nginx/nginx.conf"
 with open(path, "r", encoding="utf-8") as f:
-    content = f.read()
-target = "UI.initSetting(\x27path\x27, \x27websockify\x27);"
-if target in content:
-    replacement = """let defaultPath = "websockify";
-        let cleanPrefix = window.location.pathname.replace(/\\/vnc.*$/, "").replace(/\\/index.*$/, "").replace(/\\/$/, "").replace(/^\\//, "");
-        if (cleanPrefix) {
-            defaultPath = cleanPrefix + "/websockify";
+    lines = f.readlines()
+new_lines = []
+for line in lines:
+    if line.strip().startswith("location /cockpit/"):
+        new_lines.append("""        location /novnc/ {
+            if ($zcp_cookie_ok = 0) {
+                return 302 /zcp-login;
+            }
+            proxy_pass http://127.0.0.1:6080/;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 86400s;
+            proxy_send_timeout 86400s;
         }
-        UI.initSetting("path", defaultPath);"""
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(content.replace(target, replacement, 1))
+
+        location /websockify {
+            if ($zcp_cookie_ok = 0) {
+                return 403;
+            }
+            proxy_pass http://127.0.0.1:6080/websockify;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 86400s;
+            proxy_send_timeout 86400s;
+        }
+
+""")
+    new_lines.append(line)
+with open(path, "w", encoding="utf-8") as f:
+    f.writelines(new_lines)
 ' 2>/dev/null || true
+        nginx -s reload 2>/dev/null || true
     fi
 
     if ! command -v google-chrome >/dev/null 2>&1; then
@@ -248,7 +278,7 @@ run_interactive_vnc_login() {
 
     local public_url=""
     if [ -n "${zeropsSubdomainHost:-}" ] && [ -n "${zeropsLocation:-}" ]; then
-        public_url="https://zcp-${zeropsSubdomainHost}-8080.${zeropsLocation}.zerops.app/proxy/6080/vnc.html"
+        public_url="https://zcp-${zeropsSubdomainHost}-8080.${zeropsLocation}.zerops.app/novnc/vnc.html?autoconnect=true&resize=remote"
     fi
 
     echo ""
@@ -257,9 +287,9 @@ run_interactive_vnc_login() {
         echo "   🔗 Abrí directamente esta URL en una nueva pestaña de tu navegador:"
         echo "      $public_url"
     else
-        echo "   🔗 Abrí en tu navegador: /proxy/6080/vnc.html en tu pestaña activa de code-server"
+        echo "   🔗 Abrí en tu navegador: /novnc/vnc.html?autoconnect=true&resize=remote en tu pestaña de code-server"
     fi
-    echo "   (noVNC conectará automáticamente y verás Google Chrome listo para iniciar sesión)"
+    echo "   (noVNC conectará de inmediato y verás Google Chrome listo para iniciar sesión)"
     echo "=================================================================="
     echo ""
 
