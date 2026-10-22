@@ -169,25 +169,24 @@ else
     echo "  ⚠️ No se pudo clonar Gentleman-Skills (usando SSoT local)."
 fi
 
-# 4. Matt Pocock Skills (Upstream Oficial - TypeScript & Testing Mastery)
-if timeout 15s git clone --depth 1 https://github.com/mattpocock/skills.git "$TMP_SKILLS_DIR/mp-skills" >/dev/null 2>&1; then
-    echo "  ✓ Upstream mattpocock/skills descargadas con éxito."
-    # Descartar deterministamente la skill research de Matt Pocock para blindar el motor soberano de 12 motores
-    rm -rf "$TMP_SKILLS_DIR/mp-skills/skills/research" "$TMP_SKILLS_DIR/mp-skills/skills/engineering/research" 2>/dev/null || true
-    for cat_dir in "$TMP_SKILLS_DIR/mp-skills/skills"/*/; do
-        if [ -d "$cat_dir" ]; then
-            for sk in "$cat_dir"/*/; do
-                if [ -d "$sk" ] && [ -f "$sk/SKILL.md" ]; then
-                    sk_name=$(basename "$sk")
-                    if [ "$sk_name" != "research" ]; then
-                        cp -rn "$sk" "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
+# 4. Matt Pocock Skills: Gestionadas nativamente por ZCP Platform (setup-zcp.sh)
+if ! command -v zcp >/dev/null 2>&1; then
+    if timeout 15s git clone --depth 1 https://github.com/mattpocock/skills.git "$TMP_SKILLS_DIR/mp-skills" >/dev/null 2>&1; then
+        echo "  ✓ Upstream mattpocock/skills descargadas con éxito (fallback sin ZCP)."
+        rm -rf "$TMP_SKILLS_DIR/mp-skills/skills/research" "$TMP_SKILLS_DIR/mp-skills/skills/engineering/research" 2>/dev/null || true
+        for cat_dir in "$TMP_SKILLS_DIR/mp-skills/skills"/*/; do
+            if [ -d "$cat_dir" ]; then
+                for sk in "$cat_dir"/*/; do
+                    if [ -d "$sk" ] && [ -f "$sk/SKILL.md" ]; then
+                        sk_name=$(basename "$sk")
+                        if [ "$sk_name" != "research" ]; then
+                            cp -rn "$sk" "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
+                        fi
                     fi
-                fi
-            done
-        fi
-    done
-else
-    echo "  ⚠️ No se pudo clonar mattpocock/skills (usando SSoT local)."
+                done
+            fi
+        done
+    fi
 fi
 
 # Blindaje Soberano Anti-Contaminación: Purgar carpetas ajenas upstream en core skills soberanas
