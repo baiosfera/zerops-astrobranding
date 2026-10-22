@@ -246,13 +246,20 @@ run_interactive_vnc_login() {
         exit 1
     fi
 
+    local public_url=""
+    if [ -n "${zeropsSubdomainHost:-}" ] && [ -n "${zeropsLocation:-}" ]; then
+        public_url="https://zcp-${zeropsSubdomainHost}-8080.${zeropsLocation}.zerops.app/proxy/6080/vnc.html"
+    fi
+
     echo ""
     echo "👉 INSTRUCCIONES DE ACCESO INTERACTIVO:"
-    echo "   1. En tu code-server / navegador, ve a la pestaña 'Ports' (Puertos)."
-    echo "   2. Abre o reenvía el puerto $NOVNC_PORT (URL: http://127.0.0.1:$NOVNC_PORT/vnc.html)."
-    echo "   3. En la pantalla web de noVNC haz clic en 'Connect' (si no conecta automáticamente)."
-    echo "   4. Verás la ventana de Google Chrome abriendo la autenticación de Google."
-    echo "   5. Inicia sesión normalmente con tu cuenta de Google."
+    if [ -n "$public_url" ]; then
+        echo "   🔗 Abrí directamente esta URL en una nueva pestaña de tu navegador:"
+        echo "      $public_url"
+    else
+        echo "   🔗 Abrí en tu navegador: /proxy/6080/vnc.html en tu pestaña activa de code-server"
+    fi
+    echo "   (noVNC conectará automáticamente y verás Google Chrome listo para iniciar sesión)"
     echo "=================================================================="
     echo ""
 
