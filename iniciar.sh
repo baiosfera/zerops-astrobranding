@@ -381,6 +381,19 @@ else
     git -C "$SKILLS_LOCAL_DIR" reset --hard origin/main 2>/dev/null || git -C "$SKILLS_LOCAL_DIR" pull --ff-only 2>/dev/null || true
 fi
 
+# Despliegue en vivo y directo de las skills soberanas personalizadas hacia el workspace
+if [ -d "$SKILLS_LOCAL_DIR" ]; then
+    echo "• [2b/4] Desplegando skills soberanas personalizadas hacia /var/www/.agents/skills..."
+    mkdir -p "$PROJECT_ROOT/.agents/skills" "/home/zerops/.gemini/antigravity-cli/skills" 2>/dev/null || true
+    for sk_dir in "$SKILLS_LOCAL_DIR"/*/; do
+        [ -d "$sk_dir" ] || continue
+        sk_name=$(basename "$sk_dir")
+        [[ "$sk_name" =~ ^(\.git|bak|_shared)$ ]] && continue
+        cp -rn "$sk_dir" "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
+        cp -rn "$sk_dir" "/home/zerops/.gemini/antigravity-cli/skills/" 2>/dev/null || true
+    done
+fi
+
 # 2c. Verificar disponibilidad de scripts SSoT en Google Drive (tolerancia de indexación FUSE)
 echo "• [2c/4] Verificando disponibilidad de scripts SSoT en Google Drive..."
 for i in $(seq 1 10); do

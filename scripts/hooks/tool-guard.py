@@ -51,7 +51,19 @@ UPSTREAM_SKILLS_PATTERN = re.compile(
     r'pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|'
     r'github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|'
     r'judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|'
-    r'skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*)$',
+    r'skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*|'
+    r'karpathy.*|'
+    r'using-superpowers|brainstorming|dispatching-parallel-agents|executing-plans|'
+    r'finishing-a-development-branch|receiving-code-review|requesting-code-review|'
+    r'subagent-driven-development|systematic-debugging|test-driven-development|'
+    r'using-git-worktrees|verification-before-completion|writing-plans|writing-skills|'
+    r'ask-matt|chief-of-staff|claude-handoff|code-review|codebase-design|'
+    r'diagnosing-bugs|domain-modeling|git-guardrails-claude-code|grill-me|grill-with-docs|'
+    r'grilling|handoff|implement|implement-spec|improve-codebase-architecture|'
+    r'loop-me|migrate-to-shoehorn|pr|prototype|retro|scaffold-exercises|'
+    r'setup-matt-pocock-skills|setup-pre-commit|setup-ts-deep-modules|tdd|teach|'
+    r'to-questionnaire|to-spec|to-tickets|triage|wait-what|wayfinder|wizard|'
+    r'writing-beats|writing-for-agents|writing-fragments|writing-shape)$',
     re.IGNORECASE
 )
 

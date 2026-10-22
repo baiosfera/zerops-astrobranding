@@ -166,11 +166,23 @@ fi
 # 4. Contratos ZCP & DCKR indexados canónicamente en setup-gentle.sh y .atl/skill-registry.md (Lean AGENTS.md)
 echo "• Contratos arquitectónicos ZCP & Docker preservados canónicamente en AGENTS.md y .atl/skill-registry.md."
 
-# 5. Instalación y Activación Nativa de Skill Packs de la Plataforma ZCP
+# 5. Instalación y Activación Nativa de Skill Packs de la Plataforma Zerops (zcp skills en vivo)
 if command -v zcp >/dev/null 2>&1; then
-    echo "• Aprovisionando packs nativos de la plataforma Zerops (zcp skills)..."
-    zcp skills pack-add andrej-karpathy-skills 2>/dev/null || true
-    zcp skills pack-add superpowers 2>/dev/null || true
+    echo "• Aprovisionando packs nativos de la plataforma Zerops (zcp skills en vivo)..."
+    # Limpiar posibles colisiones de skills no gestionadas antes de que zcp skills tome el control
+    for sk in brainstorming dispatching-parallel-agents executing-plans finishing-a-development-branch receiving-code-review requesting-code-review subagent-driven-development systematic-debugging test-driven-development using-git-worktrees using-superpowers verification-before-completion writing-plans writing-skills karpathy-guidelines; do
+        if [ -d "/var/www/.agents/skills/$sk" ] && [ ! -f "/var/www/.agents/skills/$sk/.zcp-skillpack.json" ]; then
+            rm -rf "/var/www/.agents/skills/$sk" "/var/www/.claude/skills/$sk" 2>/dev/null || true
+        fi
+    done
+    (cd /var/www && zcp skills pack-add superpowers --json >/dev/null 2>&1 || zcp skills pack-add superpowers 2>/dev/null || true)
+    (cd /var/www && zcp skills pack-add andrej-karpathy-skills --json >/dev/null 2>&1 || zcp skills pack-add andrej-karpathy-skills 2>/dev/null || true)
+
+    # Invariante Soberano: Garantizar que la skill personalizada research NUNCA sea alterada
+    if [ -d "$ZCP_ROOT/.agents/skills/research" ]; then
+        rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" "$ZCP_ROOT/.agents/skills/research/" "/var/www/.agents/skills/research/" 2>/dev/null || true
+    fi
+
     # Replicación simétrica hacia Antigravity CLI
     mkdir -p "/home/zerops/.gemini/antigravity-cli/skills" 2>/dev/null || true
     cp -rn /var/www/.agents/skills/* /home/zerops/.gemini/antigravity-cli/skills/ 2>/dev/null || true
