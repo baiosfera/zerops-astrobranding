@@ -68,14 +68,6 @@ cat > "$PERSISTENT_GEMINI/config/mcp_config.json" << EOF
       },
       "disabled": false
     },
-    "jina": {
-      "command": "npx",
-      "args": ["-y", "@jina-ai/mcp-server"],
-      "env": {
-        "JINA_API_KEY": "${JINA_API_KEY:-}"
-      },
-      "disabled": false
-    },
     "tavily": {
       "command": "npx",
       "args": ["-y", "tavily-mcp"],
