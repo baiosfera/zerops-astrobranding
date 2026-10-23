@@ -97,6 +97,14 @@ CORE_SYNC_PAIRS = [
         "/var/www/.bin/hooks/tool-guard.py"
     ),
     (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/hooks/tool-guard.py",
+        "/var/www/zerops-astrobranding/scripts/hooks/tool-guard.py"
+    ),
+    (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/hooks/tool-guard.py",
+        "/var/www/zerops-astrobranding/scripts/tool-guard.py"
+    ),
+    (
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/AGENTS.md",
         "/var/www/AGENTS.md"
     ),
@@ -920,12 +928,16 @@ def evaluate_hook(payload: dict) -> dict:
             prompt_lower = user_prompt.lower()
             matched_skills = [m[0] for m in detect_skills_in_prompt(user_prompt)]
 
-            # 1. Epistemic Grounding Radar (F0 Positive Guidance)
-            is_eval = any(k in prompt_lower for k in ["mejor forma", "investigar", "investiga", "benchmark", "sota", "comparar", "cual es mejor"])
-            if "research" in matched_skills or is_eval:
+            # 1. Epistemic Grounding Radar (F0 Positive Guidance & Anti-AMN)
+            is_skill_task = any(k in prompt_lower for k in ["skill", "skills", "meta-skill", "docu", "cohalo", "crear skill", "arreglar skill", "auditar skill", "actualizar skill"])
+            is_eval = any(k in prompt_lower for k in ["mejor forma", "investigar", "investiga", "benchmark", "sota", "comparar", "cual es mejor", "api", "version", "breaking change"])
+            if "research" in matched_skills or is_skill_task or is_eval:
                 ephemeral_msgs.append(
-                    "F0 Epistemic Grounding: Ante consultas de arquitectura, SOTA o benchmark, "
-                    "contrastá fuentes primarias ejecutando la skill 'research' (Exa/Context7/Tavily) antes de concluir en prosa."
+                    "🏛️ MANDATO EPISTÉMICO F0 (Supreme Directive v8.5): La skill 'research' es la compuerta sovereign "
+                    "obligatoria. Para arquitectura, diseño de APIs o saneamiento/creación de skills, es MANDATORIO "
+                    "contrastar fuentes primarias vivas fuera de la caja negra usando 'research' con subagentes dedicados "
+                    "('invoke_subagent' con typeName 'research') y la triangulación de sus 12 motores (Context7, Exa, "
+                    "Tavily, Brave, Jina Reader 'r.jina.ai', Firecrawl). Cero especulaciones con memoria pre-entrenada (AMN)."
                 )
 
             # 2. Gentle-AI Subagent Orchestrator Gate
@@ -963,6 +975,26 @@ def evaluate_hook(payload: dict) -> dict:
     tool_call = payload.get("toolCall", {})
     tool_name = tool_call.get("name", "")
     args = tool_call.get("args", {})
+
+    # 0.05 Epistemic Activity Recorder (Records live research execution)
+    if tool_name == "invoke_subagent":
+        type_name = str(args.get("TypeName", "")).lower()
+        prompt_txt = str(args.get("Prompt", "")).lower()
+        if type_name == "research" or any(k in prompt_txt for k in ["research", "investig", "benchmark", "sota", "api", "docs"]):
+            try:
+                with open("/tmp/.research_grounding_state.json", "w") as f:
+                    json.dump({"timestamp": int(time.time() * 1000), "source": "invoke_subagent", "detail": type_name}, f)
+            except Exception:
+                pass
+    elif tool_name == "call_mcp_tool":
+        server = str(args.get("ServerName", "")).lower()
+        mcp_tool = str(args.get("ToolName", "")).lower()
+        if server in ["context7", "exa", "brave", "tavily", "firecrawl", "duckduckgo"] or any(k in mcp_tool for k in ["search", "docs", "scrape", "crawl", "fetch"]):
+            try:
+                with open("/tmp/.research_grounding_state.json", "w") as f:
+                    json.dump({"timestamp": int(time.time() * 1000), "source": "call_mcp_tool", "detail": f"{server}:{mcp_tool}"}, f)
+            except Exception:
+                pass
 
     # 0. Anti-AMN & F0 Epistemic Inflow: Enrutamiento afirmativo hacia skill research
     if tool_name == "search_web":
@@ -1068,6 +1100,47 @@ def evaluate_hook(payload: dict) -> dict:
                     "generá previamente un snapshot en '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills/' o '.../bak/'."
                 )
             }
+
+        # A3.5 Epistemic Grounding First Gate (Supreme Directive F0 & Invariante 5)
+        is_target_skill = (
+            "/zerops-astro-skills/" in target_file or
+            "/.agents/skills/" in target_file
+        )
+        if is_target_skill and not payload.get("test_bypass_research"):
+            res_state_file = "/tmp/.research_grounding_state.json"
+            has_research_recent = False
+            if os.path.exists(res_state_file):
+                try:
+                    with open(res_state_file, "r") as f:
+                        r_data = json.load(f)
+                        if time.time() - (r_data.get("timestamp", 0) / 1000.0) < 7200:
+                            has_research_recent = True
+                except Exception:
+                    pass
+
+            if not has_research_recent:
+                transcript_path = payload.get("transcriptPath", "")
+                if transcript_path and os.path.exists(transcript_path):
+                    try:
+                        with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+                            for line in f.readlines():
+                                if any(k in line for k in ["web_search_exa", "tavily_search", "brave_web_search", "context7", "firecrawl", '"TypeName": "research"']):
+                                    has_research_recent = True
+                                    break
+                    except Exception:
+                        pass
+
+            if not has_research_recent:
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        f"🏛️ MANDATO EPISTÉMICO F0 (Supreme Directive Invariante 5): "
+                        f"Para mutar o crear [{os.path.basename(target_file)}], es mandatorio contrastar previamente "
+                        "la realidad técnica exterior ejecutando la skill 'research' (vía subagente 'invoke_subagent' con "
+                        "typeName 'research' o herramientas MCP: context7, exa, tavily, brave, firecrawl). "
+                        "Prohibido definir o mutar skills basándose en memoria pre-entrenada (AMN) o suposiciones."
+                    )
+                }
 
         # A4. Linear-First Epistemic Persistence Gate (Invariante 2 Soberano)
         plans_dir = "/var/www/artifacts/plans"
@@ -1969,12 +2042,22 @@ def run_tests():
         pass
     assert "injectSteps" in res_pi_fallback, f"Expected injectSteps from transcriptPath fallback, got {res_pi_fallback}"
     ephem_msg = res_pi_fallback["injectSteps"][0].get("ephemeralMessage", "")
-    assert "F0 Epistemic Grounding" in ephem_msg, f"Expected F0 Epistemic Grounding in PreInvocation fallback, got {ephem_msg}"
+    assert any(k in ephem_msg for k in ["MANDATO EPISTÉMICO F0", "F0 Epistemic Grounding"]), f"Expected F0 Epistemic Grounding in PreInvocation fallback, got {ephem_msg}"
     print("✓ Test 45 Passed: PreInvocation falls back to transcriptPath to extract userPrompt")
 
     # Test 46: Linear-First PreToolUse gate blocks skill mutation when active plan exists and no linear activity recorded
     state_file = "/tmp/.linear_activity_state.json"
     alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
+    plans_dir = "/var/www/artifacts/plans"
+    os.makedirs(plans_dir, exist_ok=True)
+    test_plan_path = os.path.join(plans_dir, "test_active_plan.md")
+    with open(test_plan_path, "w") as f:
+        f.write("# Active Test Plan\n")
+
+    res_state_file = "/tmp/.research_grounding_state.json"
+    with open(res_state_file, "w") as f:
+        json.dump({"timestamp": int(time.time() * 1000), "source": "test_research"}, f)
+
     state_backup = None
     alt_state_backup = None
     if os.path.exists(state_file):
@@ -2047,7 +2130,44 @@ def run_tests():
         assert res_stop_allowed == {}, f"Expected empty dict (allow stop) when linear activity exists, got {res_stop_allowed}"
         print("✓ Test 49 Passed: Linear-First Stop hook allows stop when linear activity exists")
 
+        # Test 50: Epistemic Grounding First Gate blocks skill mutation when no research state exists
+        if os.path.exists(res_state_file):
+            os.remove(res_state_file)
+        res_research_blocked = evaluate_hook({
+            "test_bypass_linear": True,
+            "toolCall": {
+                "name": "write_to_file",
+                "args": {
+                    "TargetFile": "/var/www/zerops-astro-skills/test-skill/SKILL.md",
+                    "CodeContent": "---\nname: test-skill\ndescription: Test\n---\n# Test\n"
+                }
+            }
+        })
+        assert res_research_blocked.get("decision") == "deny" and "MANDATO EPISTÉMICO F0" in res_research_blocked.get("reason", ""), f"Expected deny on skill mutation without research, got {res_research_blocked}"
+        print("✓ Test 50 Passed: Epistemic Grounding First Gate blocks skill mutation without research")
+
+        # Test 51: Epistemic Grounding First Gate allows skill mutation when research state is recorded
+        with open(res_state_file, "w") as f:
+            json.dump({"timestamp": int(time.time() * 1000), "source": "test_research"}, f)
+        res_research_allowed = evaluate_hook({
+            "test_bypass_linear": True,
+            "toolCall": {
+                "name": "write_to_file",
+                "args": {
+                    "TargetFile": "/var/www/zerops-astro-skills/test-skill/SKILL.md",
+                    "CodeContent": "---\nname: test-skill\ndescription: Test\n---\n# Test\n"
+                }
+            }
+        })
+        assert res_research_allowed.get("decision") == "allow", f"Expected allow on skill mutation with research state, got {res_research_allowed}"
+        print("✓ Test 51 Passed: Epistemic Grounding First Gate allows skill mutation with research state")
+
     finally:
+        if os.path.exists(test_plan_path):
+            try:
+                os.remove(test_plan_path)
+            except Exception:
+                pass
         if state_backup:
             with open(state_file, "w") as f:
                 f.write(state_backup)
