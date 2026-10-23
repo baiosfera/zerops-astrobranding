@@ -71,6 +71,21 @@ function queryGraphQL(query, variables = {}) {
   });
 }
 
+function recordLinearActivity(action, issueId) {
+  try {
+    const payload = {
+      timestamp: Date.now(),
+      iso: new Date().toISOString(),
+      action,
+      issueId: issueId || null
+    };
+    fs.writeFileSync("/tmp/.linear_activity_state.json", JSON.stringify(payload, null, 2));
+    if (fs.existsSync("/var/www/artifacts")) {
+      fs.writeFileSync("/var/www/artifacts/.linear_activity_state.json", JSON.stringify(payload, null, 2));
+    }
+  } catch (e) {}
+}
+
 async function getDefaultTeamId() {
   if (cachedDefaultTeamId) return cachedDefaultTeamId;
   try {
@@ -363,6 +378,7 @@ async function main() {
     `;
     const data = await queryGraphQL(q, { issueId: resolved.id, body });
     if (data?.commentCreate?.success) {
+      recordLinearActivity("comment", resolved.identifier || resolved.id);
       console.log(`✅ Comment added: ${data.commentCreate.comment?.url}`);
     } else {
       console.log("❌ Failed to create comment");
@@ -686,6 +702,7 @@ async function main() {
              fs.unlinkSync("/var/www/artifacts/linear_active.json");
          }
       }
+      recordLinearActivity("update-status", updated.identifier);
       console.log(`✅ Issue [${updated.identifier}] status updated to: "${updated.state?.name}"`);
     } else {
       console.error("❌ Failed to update issue status");
@@ -802,6 +819,7 @@ async function main() {
         console.error(`❌ Error updating ${rawId}:`, e.message);
       }
     }
+    recordLinearActivity("update-status-batch", issueIds.join(","));
 
     if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
       if (fs.existsSync("/var/www/artifacts/linear_active.json")) {
