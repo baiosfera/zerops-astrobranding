@@ -172,7 +172,8 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
     5. Handover assets matching HANDOVER_PATTERN are permanent and strictly skipped.
     """
     artifacts_dir = "/var/www/artifacts"
-    archive_dir = "/var/www/artifacts"
+    archive_dir = "/var/www/artifacts/archive"
+    plans_dir = "/var/www/artifacts/plans"
     purged_superseded = []
     purged_executed = []
 
@@ -181,8 +182,9 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
 
     executed_stems = set()
     scan_dirs = [artifacts_dir]
-    if os.path.exists(archive_dir):
-        scan_dirs.append(archive_dir)
+    for d in [archive_dir, plans_dir]:
+        if os.path.exists(d):
+            scan_dirs.append(d)
 
     for sdir in scan_dirs:
         try:
@@ -203,7 +205,7 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
                 if ".superseded." in fname:
                     fpath = os.path.join(sdir, fname)
                     stem = re.sub(r'_v\d+.*$', '', fname)
-                    if sdir == artifacts_dir or stem in executed_stems:
+                    if sdir in [artifacts_dir, plans_dir] or stem in executed_stems:
                         try:
                             os.remove(fpath)
                             purged_superseded.append(fpath)
@@ -212,20 +214,21 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
         except Exception:
             pass
 
-    if purge_executed and os.path.exists(archive_dir):
-        try:
-            for fname in os.listdir(archive_dir):
-                if HANDOVER_PATTERN.search(fname):
-                    continue
-                if ".executed." in fname:
-                    fpath = os.path.join(archive_dir, fname)
-                    try:
-                        os.remove(fpath)
-                        purged_executed.append(fpath)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+    if purge_executed:
+        for sdir in scan_dirs:
+            try:
+                for fname in os.listdir(sdir):
+                    if HANDOVER_PATTERN.search(fname):
+                        continue
+                    if ".executed." in fname:
+                        fpath = os.path.join(sdir, fname)
+                        try:
+                            os.remove(fpath)
+                            purged_executed.append(fpath)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
     return {"purged_superseded": purged_superseded, "purged_executed": purged_executed}
 
