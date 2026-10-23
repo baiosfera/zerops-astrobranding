@@ -51,7 +51,7 @@ def contains_relative_0zcp_leak(text: str) -> bool:
 UPSTREAM_SKILLS_PATTERN = re.compile(
     r'^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|'
     r'crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|'
-    r'pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|'
+    r'pytest|go-testing|hexagonal-architecture-layers-java|react-native|rdd-.*|'
     r'github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|'
     r'judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|'
     r'skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*|'
