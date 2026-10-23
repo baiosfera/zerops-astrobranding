@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 tool-guard.py — Native Antigravity Process-Level Gatekeeper & Anti-Sycophancy Harness
-Version: 2.4 (SSoT Parity Pre-Push Gate, Plan Inmutability & RegEx Trigger Split)
+Version: 3.2 (Antigravity Native Tools, SessionStart Recall, Safe Process Kill & Single-Node Scale Gate)
 Execution: <30ms | Zero External Dependencies | 100% Deterministic
-Intercepts PreToolUse and PreInvocation events to enforce:
+Intercepts PreToolUse, PreInvocation, and SessionStart events to enforce:
   1. Handover Immunity (Strict block against destroying or truncating handover files).
   2. Anti-Afán & Anti-AMN Inflow Gate (Enforces prior inspection/grounding before mutations).
   3. Dangerous Command Guard (Blocks blind sweeping deletes and prompts for high-risk ops).
@@ -14,6 +14,9 @@ Intercepts PreToolUse and PreInvocation events to enforce:
   8. Anti-Checklist Theater Gate (Blocks silencing errors with >/dev/null 2>&1 in validation scripts).
   9. Plan-First Gate & F4 Halt Guard (Enforced on application code AND skills, rejecting Zombie Plans).
   10. SSoT Parity Pre-Push Gate (Blocks git push on sovereign repos if ssot-parity-check detects drift).
+  11. Session Recall Gate (Enforces SessionStart mandatory discovery and memory context recall).
+  12. Process Kill Guard (Immunizes active interactive sessions and ancestor process hierarchy).
+  13. Single-Node ZCP Scale Gate (Blocks multi-container autoscaling on stateful ZCP control plane).
 """
 import sys
 import os
@@ -51,7 +54,19 @@ UPSTREAM_SKILLS_PATTERN = re.compile(
     r'pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|'
     r'github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|'
     r'judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|'
-    r'skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*)$',
+    r'skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*|'
+    r'karpathy.*|'
+    r'using-superpowers|brainstorming|dispatching-parallel-agents|executing-plans|'
+    r'finishing-a-development-branch|receiving-code-review|requesting-code-review|'
+    r'subagent-driven-development|systematic-debugging|test-driven-development|'
+    r'using-git-worktrees|verification-before-completion|writing-plans|writing-skills|'
+    r'ask-matt|chief-of-staff|claude-handoff|code-review|codebase-design|'
+    r'diagnosing-bugs|domain-modeling|git-guardrails-claude-code|grill-me|grill-with-docs|'
+    r'grilling|handoff|implement|implement-spec|improve-codebase-architecture|'
+    r'loop-me|migrate-to-shoehorn|pr|prototype|retro|scaffold-exercises|'
+    r'setup-matt-pocock-skills|setup-pre-commit|setup-ts-deep-modules|tdd|teach|'
+    r'to-questionnaire|to-spec|to-tickets|triage|wait-what|wayfinder|wizard|'
+    r'writing-beats|writing-for-agents|writing-fragments|writing-shape)$',
     re.IGNORECASE
 )
 
@@ -537,7 +552,227 @@ def detect_skills_in_prompt(prompt: str) -> list:
                 break
     return matches
 
+def glob_pids() -> list:
+    """Returns all numeric PIDs currently running in /proc."""
+    pids = []
+    try:
+        for fname in os.listdir("/proc"):
+            if fname.isdigit():
+                pids.append(int(fname))
+    except Exception:
+        pass
+    return pids
+
+def get_process_ancestors(pid: int = None) -> set:
+    """Returns the set of all ancestor PIDs up to PID 1."""
+    if pid is None:
+        pid = os.getpid()
+    ancestors = set()
+    curr = pid
+    while curr > 1:
+        ancestors.add(curr)
+        try:
+            with open(f"/proc/{curr}/status", "r", encoding="utf-8", errors="ignore") as f:
+                ppid = None
+                for line in f:
+                    if line.startswith("PPid:"):
+                        ppid = int(line.split()[1])
+                        break
+                if ppid and ppid > 0 and ppid not in ancestors:
+                    ancestors.add(ppid)
+                    curr = ppid
+                else:
+                    break
+        except Exception:
+            break
+    return ancestors
+
+def get_process_info(pid: int) -> dict:
+    """Retrieves command line, executable name, PPID, state, and TTY for a given PID from /proc."""
+    info = {"pid": pid, "cmdline": "", "comm": "", "ppid": 0, "tty": "", "state": ""}
+    proc_dir = f"/proc/{pid}"
+    if not os.path.isdir(proc_dir):
+        return info
+    try:
+        with open(f"{proc_dir}/cmdline", "rb") as f:
+            info["cmdline"] = f.read().replace(b"\x00", b" ").decode("utf-8", "ignore").strip()
+    except Exception:
+        pass
+    try:
+        with open(f"{proc_dir}/status", "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                if line.startswith("Name:"):
+                    info["comm"] = line.split()[1].strip()
+                elif line.startswith("PPid:"):
+                    info["ppid"] = int(line.split()[1])
+                elif line.startswith("State:"):
+                    info["state"] = line.split()[1].strip()
+    except Exception:
+        pass
+    try:
+        for fd in (0, 1, 2):
+            fd_path = f"{proc_dir}/fd/{fd}"
+            if os.path.exists(fd_path):
+                link = os.readlink(fd_path)
+                if link.startswith("/dev/pts/") or link.startswith("/dev/tty"):
+                    info["tty"] = link
+                    break
+        if not info["tty"]:
+            with open(f"{proc_dir}/stat", "r", encoding="utf-8", errors="ignore") as f:
+                stat_content = f.read()
+                rparen_idx = stat_content.rfind(")")
+                if rparen_idx != -1:
+                    fields = stat_content[rparen_idx + 1:].split()
+                    if len(fields) > 4 and fields[4] != "0":
+                        info["tty"] = f"tty_nr:{fields[4]}"
+    except Exception:
+        pass
+    return info
+
+def is_kill_attempt_dangerous(cmd: str) -> tuple:
+    """
+    Guard de Kill Soberano (BAI-322):
+    Deniega kill/pkill/killall cuyo objetivo sea:
+    1. Un proceso agy con TTY activo (sesión interactiva viva).
+    2. Un ancestro de la invocación actual.
+    3. Un pkill -f cuyo patrón coincida con la propia shell o un ancestro.
+    Decide en tiempo real consultando /proc (tty, ppid, cmdline), nunca por PIDs fijos.
+    """
+    if not re.search(r'\b(kill|pkill|killall)\b', cmd):
+        return False, ""
+
+    ancestors = get_process_ancestors()
+    ancestor_cmdlines = []
+    for apid in ancestors:
+        ainfo = get_process_info(apid)
+        if ainfo["cmdline"]:
+            ancestor_cmdlines.append(ainfo["cmdline"])
+
+    subcmds = re.split(r'[;&|]+', cmd)
+    for raw_sub in subcmds:
+        sub = raw_sub.strip()
+        if not sub:
+            continue
+        parts = sub.split()
+        if not parts:
+            continue
+
+        cmd_idx = 0
+        while cmd_idx < len(parts) and parts[cmd_idx] in ["sudo", "env", "nohup", "timeout", "builtin", "exec"]:
+            if parts[cmd_idx] == "timeout" and cmd_idx + 1 < len(parts):
+                cmd_idx += 2
+                continue
+            cmd_idx += 1
+        if cmd_idx >= len(parts):
+            continue
+
+        base_bin = os.path.basename(parts[cmd_idx])
+        args_list = parts[cmd_idx + 1:]
+
+        # Case 1: kill
+        if base_bin == "kill":
+            target_pids = []
+            for arg in args_list:
+                if arg.startswith("-"):
+                    continue
+                if arg.isdigit():
+                    target_pids.append(int(arg))
+
+            for tpid in target_pids:
+                if tpid in ancestors:
+                    return True, (
+                        f"ARNÉS DE PROCESOS (Guard de Kill): Se denegó 'kill' sobre el PID {tpid}. "
+                        "El proceso pertenece a la jerarquía de ancestros del hook / shell activa."
+                    )
+                pinfo = get_process_info(tpid)
+                if ("agy" in pinfo["cmdline"] or pinfo["comm"] == "agy") and pinfo["tty"]:
+                    return True, (
+                        f"ARNÉS DE PROCESOS (Guard de Kill): Se denegó 'kill' sobre el PID {tpid} ({pinfo['comm']}). "
+                        f"El proceso es una sesión interactiva viva de Antigravity con TTY asignado ({pinfo['tty']})."
+                    )
+
+        # Case 2: pkill
+        elif base_bin == "pkill":
+            pattern_parts = []
+            skip_next = False
+            for arg in args_list:
+                if skip_next:
+                    skip_next = False
+                    continue
+                if arg in ["-u", "-U", "-G", "-g", "-P", "-t"]:
+                    skip_next = True
+                    continue
+                if arg.startswith("-"):
+                    continue
+                pattern_parts.append(arg)
+            pattern = " ".join(pattern_parts).strip()
+            if not pattern:
+                continue
+
+            try:
+                pat_regex = re.compile(pattern, re.IGNORECASE)
+            except Exception:
+                pat_regex = None
+
+            # Check if pattern matches caller shell or any ancestor
+            for acmd in ancestor_cmdlines:
+                if (pat_regex and pat_regex.search(acmd)) or pattern in acmd:
+                    return True, (
+                        f"ARNÉS DE PROCESOS (Guard de Kill): Se denegó 'pkill' con patrón '{pattern}'. "
+                        "El patrón coincide con la propia shell o un proceso ancestro activo."
+                    )
+
+            # Check if pattern matches any live agy with TTY in /proc
+            for pdir in glob_pids():
+                pinfo = get_process_info(pdir)
+                if ("agy" in pinfo["cmdline"] or pinfo["comm"] == "agy") and pinfo["tty"]:
+                    if (pat_regex and (pat_regex.search(pinfo["cmdline"]) or pat_regex.search(pinfo["comm"]))) or pattern in pinfo["cmdline"] or pattern in pinfo["comm"]:
+                        return True, (
+                            f"ARNÉS DE PROCESOS (Guard de Kill): Se denegó 'pkill' con patrón '{pattern}'. "
+                            f"El patrón afectaría a la sesión viva PID {pdir} con TTY {pinfo['tty']}."
+                        )
+
+        # Case 3: killall
+        elif base_bin == "killall":
+            targets = [a for a in args_list if not a.startswith("-")]
+            for tgt in targets:
+                for apid in ancestors:
+                    ainfo = get_process_info(apid)
+                    if tgt == ainfo["comm"] or tgt in ainfo["cmdline"]:
+                        return True, (
+                            f"ARNÉS DE PROCESOS (Guard de Kill): Se denegó 'killall {tgt}'. "
+                            "El objetivo coincide con procesos ancestros de la invocación actual."
+                        )
+                if tgt == "agy" or "agy" in tgt:
+                    for pdir in glob_pids():
+                        pinfo = get_process_info(pdir)
+                        if ("agy" in pinfo["cmdline"] or pinfo["comm"] == "agy") and pinfo["tty"]:
+                            return True, (
+                                f"ARNÉS DE PROCESOS (Guard de Kill): Se denegó 'killall {tgt}'. "
+                                f"Hay sesiones interactivas vivas de agy con TTY ({pinfo['tty']})."
+                            )
+
+    return False, ""
+
 def evaluate_hook(payload: dict) -> dict:
+    # 0. SessionStart Handling (Mandatory Anti-AMN Recall)
+    if payload.get("session_start") or payload.get("event") == "SessionStart" or payload.get("hookType") == "SessionStart":
+        recall_msg = (
+            "🏛️ RECALL DE SESIÓN OBLIGATORIO (Anti-AMN v3.2): Al inicio de CADA sesión es mandatorio ejecutar "
+            "'mem_context' o 'mem_search' y 'zerops_discover' antes de emitir juicios o modificar el proyecto. "
+            "Para investigación externa, estado del arte o benchmarks, invocá la skill 'research' con subagentes "
+            "('invoke_subagent' con typeName 'research'). Prohibido arrancar ciego o desde memoria pre-entrenada."
+        )
+        return {
+            "injectSteps": [
+                {
+                    "systemMessage": {
+                        "systemMessage": recall_msg
+                    }
+                }
+            ]
+        }
+
     # 1. PostToolUse Handling
     if "stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload):
         return {}
@@ -564,12 +799,30 @@ def evaluate_hook(payload: dict) -> dict:
         except Exception:
             pass
 
-        try:
-            auto_sync_governance()
-        except Exception:
-            pass
-
+        # Zero-Hang: auto_sync_governance síncrono purgado de PreInvocation para evitar timeouts y SIGKILL por FUSE
         user_prompt = payload.get("userPrompt", "")
+        if not user_prompt:
+            transcript_path = payload.get("transcriptPath", "")
+            if transcript_path and os.path.exists(transcript_path):
+                try:
+                    with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+                        for line in reversed(f.readlines()):
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                step_data = json.loads(line)
+                                if step_data.get("type") == "USER_INPUT" or step_data.get("source") == "USER_EXPLICIT":
+                                    content = step_data.get("content", "")
+                                    if content:
+                                        m = re.search(r'<USER_REQUEST>\s*(.*?)\s*</USER_REQUEST>', content, re.DOTALL)
+                                        user_prompt = m.group(1).strip() if m else content.strip()
+                                        if user_prompt:
+                                            break
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
         halt_alert = ""
         dummy_plan = "/var/www/artifacts/test_plan_v1.md"
         if os.path.exists(dummy_plan) and user_prompt:
@@ -579,7 +832,7 @@ def evaluate_hook(payload: dict) -> dict:
                 halt_alert = "\n⏸️ F4 HALT GATE ACTIVO: Ticket en progreso."
 
         ephemeral_msgs = []
-        if "--test" in sys.argv:
+        if "--test" in sys.argv and not user_prompt:
             governance_msg = "🏛️ ARNÉS FÍSICO ZCP (v3.1): Contrato Plan-First Gate. Contrato Anti-Redundancia en Chat. F0 Grounding Epistémico (Anti-AMN con Context7/Exa/Jina). Reality Over Checklist Theater."
             ephemeral_msgs.append(f"{governance_msg}{halt_alert}".strip())
         else:
@@ -641,9 +894,32 @@ def evaluate_hook(payload: dict) -> dict:
             )
         }
 
-    # A. File writes / edits guards
-    if tool_name in ["write_to_file", "replace_file_content"]:
-        target_file = args.get("TargetFile", "")
+    # 0.2 Invariante Single-Node ZCP: Bloqueo de escalado multi-contenedor (BAI-322)
+    if tool_name == "call_mcp_tool" and args.get("ServerName") == "zerops":
+        if args.get("ToolName") == "zerops_scale":
+            scale_args = args.get("Arguments", {})
+            if scale_args.get("serviceHostname") == "zcp":
+                min_c = scale_args.get("minContainers")
+                max_c = scale_args.get("maxContainers")
+                if (min_c is not None and min_c > 1) or (max_c is not None and max_c > 1):
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            f"INVARIANTE SINGLE-NODE ZCP: Prohibido escalar zcp a múltiples contenedores "
+                            f"(minContainers={min_c}, maxContainers={max_c}). El plano de control ZCP es stateful "
+                            "y debe operar estrictamente en minContainers=1, maxContainers=1 para evitar split-brain."
+                        )
+                    }
+
+    # A. File writes / edits guards (Antigravity & Claude Code)
+    if tool_name in ["write_to_file", "replace_file_content", "write_file", "edit_file"]:
+        target_file = args.get("Path", "") or args.get("TargetFile", "")
+        content_to_check = (
+            args.get("Content", "") or
+            args.get("Replacement", "") or
+            args.get("CodeContent", "") or
+            args.get("ReplacementContent", "")
+        )
 
         # A0. SSoT Sovereign Custom Skills Anti-Pollution Shield
         polluted_skill = is_upstream_skill_pollution(target_file)
@@ -719,7 +995,7 @@ def evaluate_hook(payload: dict) -> dict:
             }
 
         # A5. CoHaLo & Skill-Improver Quality Gate
-        content_to_check = args.get("CodeContent", "") or args.get("ReplacementContent", "")
+        content_to_check = content_to_check or args.get("CodeContent", "") or args.get("ReplacementContent", "")
 
         # A5.1 Positive Guidance Guard (Blocks negative prompt dogma in governance and skills)
         is_governance = (
@@ -744,7 +1020,7 @@ def evaluate_hook(payload: dict) -> dict:
                 }
 
         # A5.2 Router Token Budget Gate (SKILL.md <= 480 words / ~550 tokens)
-        if target_file.endswith("SKILL.md") and tool_name == "write_to_file":
+        if target_file.endswith("SKILL.md") and tool_name in ["write_to_file", "write_file"]:
             word_count = len(content_to_check.split())
             if word_count > 480:
                 return {
@@ -757,7 +1033,7 @@ def evaluate_hook(payload: dict) -> dict:
                 }
 
         # A5.2.5 Macro-Visión 360 Dependency Radar
-        if "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/" in target_file and tool_name in ("write_to_file", "replace_file_content"):
+        if "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/" in target_file and tool_name in ("write_to_file", "replace_file_content", "write_file", "edit_file"):
             if os.path.basename(target_file) == "unisetup.sh":
                 for referenced_script in re.findall(r'setup-[a-zA-Z0-9_\-]+\.sh', content_to_check):
                     ref_full = os.path.join("/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts", referenced_script)
@@ -778,7 +1054,7 @@ def evaluate_hook(payload: dict) -> dict:
             "/.bin/" in target_file or
             "/.agents/rules/" in target_file
         )
-        if is_protected_code and tool_name == "write_to_file" and os.path.exists(target_file):
+        if is_protected_code and tool_name in ["write_to_file", "write_file"] and os.path.exists(target_file):
             try:
                 with open(target_file, "r", encoding="utf-8", errors="ignore") as f:
                     old_content = f.read()
@@ -858,7 +1134,7 @@ def evaluate_hook(payload: dict) -> dict:
                 pass
 
         # A5.5 Anti-Checklist Theater Guard in Validation Sensors
-        if ("validate" in target_file or "check" in target_file) and tool_name == "write_to_file" and content_to_check:
+        if ("validate" in target_file or "check" in target_file) and tool_name in ["write_to_file", "write_file"] and content_to_check:
             if re.search(r'>/dev/null\s+2>&1', content_to_check):
                 return {
                     "decision": "deny",
@@ -870,7 +1146,7 @@ def evaluate_hook(payload: dict) -> dict:
                 }
 
         # A5.4 Physical Syntax Pre-Flight Gate (Zero Syntax Errors)
-        if tool_name == "write_to_file" and content_to_check:
+        if tool_name in ["write_to_file", "write_file"] and content_to_check:
             # Python syntax validation
             if target_file.endswith(".py"):
                 try:
@@ -910,6 +1186,14 @@ def evaluate_hook(payload: dict) -> dict:
     # B. Command Guards on run_command
     if tool_name == "run_command":
         cmd = args.get("CommandLine", "")
+
+        # B-1. Kill Guard: Anti-Autoaniquilación y Protección de Sesiones Vivas (BAI-322)
+        is_dang_kill, kill_reason = is_kill_attempt_dangerous(cmd)
+        if is_dang_kill:
+            return {
+                "decision": "deny",
+                "reason": kill_reason
+            }
 
         # B0. SSoT Sovereign Custom Skills Anti-Pollution Shield
         polluted_skill = is_upstream_skill_pollution(cmd)
@@ -1415,6 +1699,130 @@ def run_tests():
     assert res_val_cmd.get("decision") == "deny" and "Soberanía del Sensor Universal" in res_val_cmd.get("reason", ""), f"Expected deny on running individual validate.sh, got {res_val_cmd}"
     print("✓ Test 36 Passed: Anti-Perros Guardianes blocks run_command on synthetic *-validate.sh")
 
+    # Test 37: Antigravity write_file with Path blocks handover file modification
+    res_ag_handover = evaluate_hook({
+        "toolCall": {
+            "name": "write_file",
+            "args": {
+                "Path": "/var/www/artifacts/curriculum_engine_v8_handover.md",
+                "Content": "tampered content"
+            }
+        }
+    })
+    assert res_ag_handover.get("decision") == "deny" and "HANDOVER IMMUNITY" in res_ag_handover.get("reason", ""), f"Expected deny on write_file handover, got {res_ag_handover}"
+    print("✓ Test 37 Passed: Antigravity write_file with Path blocks handover modification")
+
+    # Test 38: Antigravity edit_file with Path blocks blueprint modification
+    res_ag_bp = evaluate_hook({
+        "toolCall": {
+            "name": "edit_file",
+            "args": {
+                "Path": "/var/www/artifacts/proactive_critical_agent_blueprint_v1.md",
+                "Target": "old",
+                "Replacement": "new"
+            }
+        }
+    })
+    assert res_ag_bp.get("decision") == "deny" and "HANDOVER IMMUNITY" in res_ag_bp.get("reason", ""), f"Expected deny on edit_file blueprint, got {res_ag_bp}"
+    print("✓ Test 38 Passed: Antigravity edit_file with Path blocks blueprint modification")
+
+    # Test 39: Single-Node ZCP Scale Gate blocks multi-container scaling on zcp
+    res_scale_deny = evaluate_hook({
+        "toolCall": {
+            "name": "call_mcp_tool",
+            "args": {
+                "ServerName": "zerops",
+                "ToolName": "zerops_scale",
+                "Arguments": {
+                    "serviceHostname": "zcp",
+                    "minContainers": 1,
+                    "maxContainers": 2
+                }
+            }
+        }
+    })
+    assert res_scale_deny.get("decision") == "deny" and "SINGLE-NODE ZCP" in res_scale_deny.get("reason", ""), f"Expected deny on zcp multi-container scale, got {res_scale_deny}"
+    print("✓ Test 39 Passed: Single-Node ZCP Scale Gate blocks multi-container scaling on zcp")
+
+    # Test 40: Single-Node ZCP Scale Gate allows 1 container scaling on zcp
+    res_scale_allow = evaluate_hook({
+        "toolCall": {
+            "name": "call_mcp_tool",
+            "args": {
+                "ServerName": "zerops",
+                "ToolName": "zerops_scale",
+                "Arguments": {
+                    "serviceHostname": "zcp",
+                    "minContainers": 1,
+                    "maxContainers": 1
+                }
+            }
+        }
+    })
+    assert res_scale_allow.get("decision") == "allow", f"Expected allow on zcp single-node scale, got {res_scale_allow}"
+    print("✓ Test 40 Passed: Single-Node ZCP Scale Gate allows single container scale on zcp")
+
+    # Test 41: Process Kill Guard blocks kill targeting current process or ancestor
+    my_pid = os.getpid()
+    res_kill_ancestor = evaluate_hook({
+        "toolCall": {
+            "name": "run_command",
+            "args": {
+                "CommandLine": f"kill -9 {my_pid}"
+            }
+        }
+    })
+    assert res_kill_ancestor.get("decision") == "deny" and "Guard de Kill" in res_kill_ancestor.get("reason", ""), f"Expected deny on kill ancestor, got {res_kill_ancestor}"
+    print("✓ Test 41 Passed: Process Kill Guard blocks kill targeting caller/ancestor PID")
+
+    # Test 42: Process Kill Guard blocks pkill -f agy
+    res_pkill = evaluate_hook({
+        "toolCall": {
+            "name": "run_command",
+            "args": {
+                "CommandLine": "pkill -f agy"
+            }
+        }
+    })
+    assert res_pkill.get("decision") == "deny" and "Guard de Kill" in res_pkill.get("reason", ""), f"Expected deny on pkill -f agy, got {res_pkill}"
+    print("✓ Test 42 Passed: Process Kill Guard blocks pkill -f agy")
+
+    # Test 43: Process Kill Guard blocks killall agy
+    res_killall = evaluate_hook({
+        "toolCall": {
+            "name": "run_command",
+            "args": {
+                "CommandLine": "killall agy"
+            }
+        }
+    })
+    assert res_killall.get("decision") == "deny" and "Guard de Kill" in res_killall.get("reason", ""), f"Expected deny on killall agy, got {res_killall}"
+    print("✓ Test 43 Passed: Process Kill Guard blocks killall agy")
+
+    # Test 44: SessionStart injects mandatory recall notice
+    res_ss = evaluate_hook({"session_start": True})
+    assert "injectSteps" in res_ss, f"Expected injectSteps in SessionStart, got {res_ss}"
+    steps_ss = res_ss["injectSteps"]
+    assert any("RECALL DE SESIÓN OBLIGATORIO" in s.get("systemMessage", {}).get("systemMessage", "") for s in steps_ss), f"Expected recall message in SessionStart, got {res_ss}"
+    print("✓ Test 44 Passed: SessionStart injects mandatory session recall notice")
+
+    # Test 45: PreInvocation fallback to transcriptPath
+    dummy_transcript = "/tmp/test_transcript_pi_fallback.jsonl"
+    with open(dummy_transcript, "w", encoding="utf-8") as tf:
+        tf.write(json.dumps({"type": "USER_INPUT", "source": "USER_EXPLICIT", "content": "<USER_REQUEST>\ninvestigar SOTA de bases de datos vectoriales\n</USER_REQUEST>"}) + "\n")
+    res_pi_fallback = evaluate_hook({
+        "invocationNum": 100,
+        "transcriptPath": dummy_transcript
+    })
+    try:
+        os.remove(dummy_transcript)
+    except Exception:
+        pass
+    assert "injectSteps" in res_pi_fallback, f"Expected injectSteps from transcriptPath fallback, got {res_pi_fallback}"
+    ephem_msg = res_pi_fallback["injectSteps"][0].get("ephemeralMessage", "")
+    assert "F0 Epistemic Grounding" in ephem_msg, f"Expected F0 Epistemic Grounding in PreInvocation fallback, got {ephem_msg}"
+    print("✓ Test 45 Passed: PreInvocation falls back to transcriptPath to extract userPrompt")
+
     print("============================================================")
     print("✅ ALL TOOL-GUARD UNIT TESTS PASSED DETERMINISTICALLY (exit 0)")
     print("============================================================")
@@ -1422,6 +1830,24 @@ def run_tests():
 def main():
     if "--test" in sys.argv:
         run_tests()
+        sys.exit(0)
+
+    if "--session-start" in sys.argv:
+        recall_msg = (
+            "🏛️ RECALL DE SESIÓN OBLIGATORIO (Anti-AMN v3.2): Al inicio de CADA sesión es mandatorio ejecutar "
+            "'mem_context' o 'mem_search' y 'zerops_discover' antes de emitir juicios o modificar el proyecto. "
+            "Para investigación externa, estado del arte o benchmarks, invocá la skill 'research' con subagentes "
+            "('invoke_subagent' con typeName 'research'). Prohibido arrancar ciego o desde memoria pre-entrenada."
+        )
+        print(json.dumps({
+            "injectSteps": [
+                {
+                    "systemMessage": {
+                        "systemMessage": recall_msg
+                    }
+                }
+            ]
+        }))
         sys.exit(0)
 
     if "--cleanup-archive" in sys.argv:
@@ -1445,15 +1871,7 @@ def main():
 
     is_post_tool = "--post-tool" in sys.argv or ("stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload))
     if is_post_tool:
-        tool_name = payload.get("toolCall", {}).get("name", "")
-        tool_args = payload.get("toolCall", {}).get("args", {})
-        target_file = tool_args.get("TargetFile", "")
-        if not target_file and tool_name == "run_command":
-            cmd = tool_args.get("CommandLine", "")
-            if re.search(r'\b(git|skill|unisetup|iniciar|gentle-ai|\.agents|zerops-astro)\b', cmd):
-                auto_sync_governance()
-        else:
-            auto_sync_governance(target_file)
+        # Zero-Hang: auto_sync_governance síncrono purgado de PostToolUse para evitar bloqueos por FUSE
         print(json.dumps({}))
         sys.exit(0)
 

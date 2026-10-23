@@ -315,7 +315,10 @@ if [ -d "$HOME/.gemini/antigravity-cli" ]; then
     cp -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$HOME/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
     cp -f "$PROJECT_ROOT/.agents/references/"*_encyclopedia.md "$HOME/.gemini/antigravity-cli/references/" 2>/dev/null || true
 fi
-if [ -d "$HOME/.gemini/config" ] && [ -f "$ZCP_ROOT/.agents/hooks.json" ]; then
+mkdir -p "$HOME/.gemini/config" 2>/dev/null || true
+if [ -f "$PROJECT_ROOT/.agents/hooks.json" ]; then
+    cp -f "$PROJECT_ROOT/.agents/hooks.json" "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
+elif [ -f "$ZCP_ROOT/.agents/hooks.json" ]; then
     cp -f "$ZCP_ROOT/.agents/hooks.json" "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
 fi
 
@@ -399,6 +402,8 @@ fi
 
 if [ -f "$ZCP_ROOT/.agents/hooks.json" ]; then
     cp -f "$ZCP_ROOT/.agents/hooks.json" "$PROJECT_ROOT/.agents/hooks.json"
+elif [ -f "$REPO_DIR/.agents/hooks.json" ]; then
+    cp -f "$REPO_DIR/.agents/hooks.json" "$PROJECT_ROOT/.agents/hooks.json"
 fi
 
 # Desplegar Sensor Universal de Capacidades (Standard v3.3)

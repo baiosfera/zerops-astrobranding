@@ -1,25 +1,32 @@
 {
   "proactive-tool-guard": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python3 -B /var/www/.bin/hooks/tool-guard.py --session-start",
+        "timeout": 20
+      }
+    ],
     "PreToolUse": [
       {
-        "matcher": "search_web|write_to_file|replace_file_content|run_command",
+        "matcher": "search_web|run_command|write_file|edit_file|call_mcp_tool|write_to_file|replace_file_content",
         "hooks": [
           {
             "type": "command",
             "command": "python3 -B /var/www/.bin/hooks/tool-guard.py",
-            "timeout": 10
+            "timeout": 20
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "write_to_file|replace_file_content",
+        "matcher": "write_file|edit_file|write_to_file|replace_file_content",
         "hooks": [
           {
             "type": "command",
             "command": "python3 -B /var/www/.bin/hooks/tool-guard.py --post-tool",
-            "timeout": 10
+            "timeout": 20
           }
         ]
       }
@@ -28,7 +35,7 @@
       {
         "type": "command",
         "command": "python3 -B /var/www/.bin/hooks/tool-guard.py",
-        "timeout": 10
+        "timeout": 20
       }
     ]
   }
