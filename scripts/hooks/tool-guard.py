@@ -70,15 +70,27 @@ UPSTREAM_SKILLS_PATTERN = re.compile(
     re.IGNORECASE
 )
 
-def is_upstream_skill_pollution(path_or_cmd: str) -> str:
-    """Detects attempts to write, copy, or sync upstream gentle-ai/pocock skills into Drive SSoT."""
+def is_upstream_skill_pollution(path_or_cmd: str, is_write: bool = True) -> str:
+    """Detects attempts to write, copy, or mutate upstream gentle-ai/pocock skills into Drive SSoT or runtime skills dirs."""
     ssot_skills_prefix = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills"
-    if ssot_skills_prefix not in path_or_cmd:
-        return ""
-    for token in re.split(r'[/ \t\n\'"]+', path_or_cmd):
-        token_clean = token.strip()
-        if UPSTREAM_SKILLS_PATTERN.match(token_clean):
-            return token_clean
+    runtime_skills_prefixes = ("/var/www/.agents/skills", "/var/www/.claude/skills")
+
+    # 1. Any appearance in Google Drive SSoT custom skills directory is strictly forbidden
+    if ssot_skills_prefix in path_or_cmd:
+        for token in re.split(r'[/ \t\n\'"]+', path_or_cmd):
+            token_clean = token.strip()
+            if UPSTREAM_SKILLS_PATTERN.match(token_clean):
+                return token_clean
+
+    # 2. Local runtime upstream skills directories are strictly read-only
+    if any(p in path_or_cmd for p in runtime_skills_prefixes):
+        if is_write:
+            for token in re.split(r'[/ \t\n\'"]+', path_or_cmd):
+                token_clean = token.strip()
+                if UPSTREAM_SKILLS_PATTERN.match(token_clean):
+                    return token_clean
+
+    return ""
 CORE_SYNC_PAIRS = [
     (
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/hooks/tool-guard.py",
@@ -922,14 +934,14 @@ def evaluate_hook(payload: dict) -> dict:
         )
 
         # A0. SSoT Sovereign Custom Skills Anti-Pollution Shield
-        polluted_skill = is_upstream_skill_pollution(target_file)
+        polluted_skill = is_upstream_skill_pollution(target_file, is_write=True)
         if polluted_skill:
             return {
                 "decision": "deny",
                 "reason": (
-                    f"ARNÉS SSoT (Soberanía de Skills): La skill [{polluted_skill}] es upstream. "
-                    "La carpeta '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills/' en Google Drive SSoT "
-                    "aloja exclusivamente las custom skills soberanas."
+                    f"ARNÉS SSoT (Invariante de Inmutabilidad Upstream): La skill [{polluted_skill}] pertenece a suites externas "
+                    "(Gentle AI, Pocock, Anthropic, Superpowers) y está estrictamente prohibido modificarla o sincronizarla a Drive SSoT. "
+                    "Modificá exclusivamente custom skills soberanas en '/var/www/zerops-astro-skills/'."
                 )
             }
 
@@ -1196,13 +1208,15 @@ def evaluate_hook(payload: dict) -> dict:
             }
 
         # B0. SSoT Sovereign Custom Skills Anti-Pollution Shield
-        polluted_skill = is_upstream_skill_pollution(cmd)
+        is_mutating_cmd = bool(re.search(r'\b(cp|mv|rm|sed|tee|echo|cat\s*.*>|>|>>)\b', cmd))
+        polluted_skill = is_upstream_skill_pollution(cmd, is_write=is_mutating_cmd)
         if polluted_skill:
             return {
                 "decision": "deny",
                 "reason": (
-                    f"ARNÉS SSoT (Soberanía de Skills): La skill [{polluted_skill}] es upstream. "
-                    "Aloja exclusivamente custom skills soberanas en '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills/'."
+                    f"ARNÉS SSoT (Invariante de Inmutabilidad Upstream): La skill [{polluted_skill}] pertenece a suites externas. "
+                    "Está estrictamente prohibido mutarla o sincronizarla a Google Drive SSoT. "
+                    "Las suites externas son inmutables por diseño."
                 )
             }
 
@@ -1401,6 +1415,26 @@ def run_tests():
     })
     assert res.get("decision") == "deny", f"Expected deny on upstream skill pollution, got {res}"
     print("✓ Test 11 Passed: Upstream skill pollution blocked in TargetFile (react-19)")
+
+    # Test 11b: Deny modifying upstream skill in runtime dir /var/www/.agents/skills/
+    res = evaluate_hook({
+        "toolCall": {
+            "name": "edit_file",
+            "args": {"Path": "/var/www/.agents/skills/skill-creator/SKILL.md"}
+        }
+    })
+    assert res.get("decision") == "deny", f"Expected deny on runtime upstream skill edit, got {res}"
+    print("✓ Test 11b Passed: Local runtime upstream skill mutation blocked (skill-creator)")
+
+    # Test 11c: Allow read-only inspect on runtime upstream skill
+    res = evaluate_hook({
+        "toolCall": {
+            "name": "run_command",
+            "args": {"CommandLine": "cat /var/www/.agents/skills/skill-creator/SKILL.md"}
+        }
+    })
+    assert res.get("decision") == "allow", f"Expected allow on read-only upstream inspect, got {res}"
+    print("✓ Test 11c Passed: Read-only command allowed on upstream skill")
 
     # Test 12: Deny copying upstream skill into Drive SSoT via run_command
     res = evaluate_hook({
