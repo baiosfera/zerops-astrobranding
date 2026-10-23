@@ -697,11 +697,18 @@ async function main() {
     const updateRes = await queryGraphQL(qUpdate, { id: resolved.id, stateId: matchedState.id });
     const updated = updateRes?.issueUpdate?.issue;
     if (updateRes?.issueUpdate?.success && updated) {
-      if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
-         if (fs.existsSync("/var/www/artifacts/linear_active.json")) {
-             fs.unlinkSync("/var/www/artifacts/linear_active.json");
-         }
+    if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
+      const jsonFiles = [
+        "/var/www/artifacts/linear_active.json",
+        "/var/www/artifacts/linear_active_project.json",
+        "/var/www/artifacts/.linear_activity_state.json"
+      ];
+      for (const f of jsonFiles) {
+        if (fs.existsSync(f)) {
+          try { fs.unlinkSync(f); } catch (e) {}
+        }
       }
+    }
       recordLinearActivity("update-status", updated.identifier);
       console.log(`✅ Issue [${updated.identifier}] status updated to: "${updated.state?.name}"`);
     } else {
@@ -822,9 +829,15 @@ async function main() {
     recordLinearActivity("update-status-batch", issueIds.join(","));
 
     if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
-      if (fs.existsSync("/var/www/artifacts/linear_active.json")) {
-        fs.unlinkSync("/var/www/artifacts/linear_active.json");
-        console.log("✓ Unlinked /var/www/artifacts/linear_active.json");
+      const jsonFiles = [
+        "/var/www/artifacts/linear_active.json",
+        "/var/www/artifacts/linear_active_project.json",
+        "/var/www/artifacts/.linear_activity_state.json"
+      ];
+      for (const f of jsonFiles) {
+        if (fs.existsSync(f)) {
+          try { fs.unlinkSync(f); } catch (e) {}
+        }
       }
     }
   } else if (cmd === "teams") {
