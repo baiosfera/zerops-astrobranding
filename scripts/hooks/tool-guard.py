@@ -788,6 +788,72 @@ def evaluate_hook(payload: dict) -> dict:
             ]
         }
 
+    # 0.5 Stop Event Handling (Linear-First Chat Delivery Gate)
+    if "terminationReason" in payload or payload.get("is_stop_event"):
+        term_reason = payload.get("terminationReason", "NO_TOOL_CALL")
+        if term_reason == "NO_TOOL_CALL":
+            plans_dir = "/var/www/artifacts/plans"
+            has_active_plan = os.path.exists(plans_dir) and any(
+                f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide"])
+                for f in os.listdir(plans_dir)
+            )
+            if has_active_plan and not payload.get("test_bypass_linear"):
+                state_file = "/tmp/.linear_activity_state.json"
+                alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
+                has_linear_recent = False
+                for sf in [state_file, alt_state_file]:
+                    if os.path.exists(sf):
+                        try:
+                            with open(sf, "r") as f:
+                                act_data = json.load(f)
+                                if time.time() - (act_data.get("timestamp", 0) / 1000.0) < 7200:
+                                    has_linear_recent = True
+                                    break
+                        except Exception:
+                            pass
+
+                transcript_path = payload.get("transcriptPath", "")
+                has_inspection = payload.get("test_has_inspection", False)
+                if transcript_path and os.path.exists(transcript_path) and not has_inspection:
+                    try:
+                        with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+                            t_lines = f.readlines()
+                            for tl in reversed(t_lines[-20:]):
+                                if any(tk in tl for tk in ["read_file", "run_command", "write_file", "edit_file", "call_mcp_tool"]):
+                                    has_inspection = True
+                                    break
+                    except Exception:
+                        pass
+
+                if has_inspection and not has_linear_recent:
+                    stop_counter_file = "/tmp/.linear_stop_force_count"
+                    count = 0
+                    if os.path.exists(stop_counter_file):
+                        try:
+                            with open(stop_counter_file, "r") as f:
+                                count = int(f.read().strip())
+                        except Exception:
+                            count = 0
+                    if count < 1:
+                        with open(stop_counter_file, "w") as f:
+                            f.write(str(count + 1))
+                        return {
+                            "decision": "continue",
+                            "reason": (
+                                "🏛️ VIOLACIÓN LINEAR-FIRST GATE (00-SUPREME-DIRECTIVE Invariante 2): "
+                                "Hay un plan activo en /var/www/artifacts/plans/ y realizaste inspecciones/descubrimientos "
+                                "sin haber persistido tus hallazgos en Linear. Es mandatorio ejecutar 'linear-cli comment <ID>' "
+                                "antes de entregar explicaciones o cerrar el turno en el chat."
+                            )
+                        }
+                    else:
+                        if os.path.exists(stop_counter_file):
+                            try:
+                                os.remove(stop_counter_file)
+                            except Exception:
+                                pass
+        return {}
+
     # 1. PostToolUse Handling
     if "stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload):
         return {}
@@ -868,6 +934,16 @@ def evaluate_hook(payload: dict) -> dict:
                 ephemeral_msgs.append(
                     "Gentle-AI Orchestrator: Mantené el hilo padre delgado. Para tareas sustanciales o de múltiples archivos, "
                     "delegá la ejecución a subagentes acotados (invoke_subagent con 'research' o define_subagent) y sintetizá resultados."
+                )
+
+            # 3. Linear-First Epistemic Persistence Gate (Invariante 2)
+            plans_dir = "/var/www/artifacts/plans"
+            if os.path.exists(plans_dir) and any(f.endswith(".md") for f in os.listdir(plans_dir)):
+                ephemeral_msgs.append(
+                    "🏛️ INVARIANTE LINEAR-FIRST GATE (00-SUPREME-DIRECTIVE Invariante 2): "
+                    "Hay un plan activo en ejecución en /var/www/artifacts/plans/. Prohibido responder o dar explicaciones en el chat "
+                    "sin haber ejecutado 'linear-cli comment <ID>' para persistir tus hallazgos técnicos en Linear. "
+                    "Persistir en Linear es un prerequisito bloqueante antes de responder al usuario."
                 )
 
             if halt_alert:
@@ -993,8 +1069,44 @@ def evaluate_hook(payload: dict) -> dict:
                 )
             }
 
-        # A4. Epistemic Guidance & Reality: Governed by physical compiler sensors and contracts.
-        # Eradicated artificial transcript keyword grepping and synthetic linear_active gates.
+        # A4. Linear-First Epistemic Persistence Gate (Invariante 2 Soberano)
+        plans_dir = "/var/www/artifacts/plans"
+        has_active_plan = os.path.exists(plans_dir) and any(
+            f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide"])
+            for f in os.listdir(plans_dir)
+        )
+        is_target_code_or_skill = (
+            "/zerops-astro-skills/" in target_file or
+            "/.agents/skills/" in target_file or
+            ("/var/www/" in target_file and not any(p in target_file for p in [
+                "/artifacts/", "/scratch/", "/bak/", "/.bin/", "/.atl/",
+                "AGENTS.md", "00-SUPREME-DIRECTIVE.md", ".json", "hooks"
+            ]))
+        )
+        if has_active_plan and is_target_code_or_skill and not payload.get("test_bypass_linear"):
+            state_file = "/tmp/.linear_activity_state.json"
+            alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
+            has_linear_recent = False
+            for sf in [state_file, alt_state_file]:
+                if os.path.exists(sf):
+                    try:
+                        with open(sf, "r") as f:
+                            act_data = json.load(f)
+                            if time.time() - (act_data.get("timestamp", 0) / 1000.0) < 7200:
+                                has_linear_recent = True
+                                break
+                    except Exception:
+                        pass
+            if not has_linear_recent:
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        f"🏛️ INVARIANTE LINEAR-FIRST GATE (00-SUPREME-DIRECTIVE Invariante 2): "
+                        f"Hay un plan activo en /var/www/artifacts/plans/. Prohibido mutar [{os.path.basename(target_file)}] "
+                        "sin haber registrado actividad técnica previa en Linear con 'linear-cli comment <ID>' o 'linear-cli update-status'. "
+                        "Persistí tus descubrimientos y criterios en Linear antes de modificar código o skills."
+                    )
+                }
 
         # A4.1 Anti-Perros Guardianes (Eradicates Synthetic Individual Validator Scripts)
         base_target = os.path.basename(target_file)
@@ -1860,6 +1972,78 @@ def run_tests():
     assert "F0 Epistemic Grounding" in ephem_msg, f"Expected F0 Epistemic Grounding in PreInvocation fallback, got {ephem_msg}"
     print("✓ Test 45 Passed: PreInvocation falls back to transcriptPath to extract userPrompt")
 
+    # Test 46: Linear-First PreToolUse gate blocks skill mutation when active plan exists and no linear activity recorded
+    state_file = "/tmp/.linear_activity_state.json"
+    state_backup = None
+    if os.path.exists(state_file):
+        with open(state_file, "r") as f:
+            state_backup = f.read()
+        os.remove(state_file)
+
+    bak_dir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills"
+    os.makedirs(bak_dir, exist_ok=True)
+    with open(os.path.join(bak_dir, "test-skill-SKILL.md.bak"), "w") as f:
+        f.write("test backup")
+
+    try:
+        res_lf_blocked = evaluate_hook({
+            "toolCall": {
+                "name": "write_to_file",
+                "args": {
+                    "TargetFile": "/var/www/zerops-astro-skills/test-skill/SKILL.md",
+                    "CodeContent": "---\nname: test-skill\ndescription: Test\n---\n# Test\n"
+                }
+            }
+        })
+        assert res_lf_blocked.get("decision") == "deny" and "LINEAR-FIRST GATE" in res_lf_blocked.get("reason", ""), f"Expected deny on skill mutation without linear activity, got {res_lf_blocked}"
+        print("✓ Test 46 Passed: Linear-First PreToolUse gate blocks skill mutation without linear activity")
+
+        # Test 47: Linear-First PreToolUse gate allows skill mutation when linear activity is present
+        with open(state_file, "w") as f:
+            json.dump({"timestamp": int(time.time() * 1000), "action": "comment", "issueId": "test-id"}, f)
+
+        res_lf_allowed = evaluate_hook({
+            "toolCall": {
+                "name": "write_to_file",
+                "args": {
+                    "TargetFile": "/var/www/zerops-astro-skills/test-skill/SKILL.md",
+                    "CodeContent": "---\nname: test-skill\ndescription: Test\n---\n# Test\n"
+                }
+            }
+        })
+        assert res_lf_allowed.get("decision") == "allow", f"Expected allow on skill mutation with linear activity, got {res_lf_allowed}"
+        print("✓ Test 47 Passed: Linear-First PreToolUse gate allows skill mutation with linear activity")
+
+        # Test 48: Linear-First Stop hook forces continue when active plan exists and inspections occurred without linear activity
+        os.remove(state_file)
+        if os.path.exists("/tmp/.linear_stop_force_count"):
+            os.remove("/tmp/.linear_stop_force_count")
+
+        res_stop_blocked = evaluate_hook({
+            "is_stop_event": True,
+            "terminationReason": "NO_TOOL_CALL",
+            "test_has_inspection": True
+        })
+        assert res_stop_blocked.get("decision") == "continue" and "LINEAR-FIRST GATE" in res_stop_blocked.get("reason", ""), f"Expected continue in Stop hook without linear activity, got {res_stop_blocked}"
+        print("✓ Test 48 Passed: Linear-First Stop hook forces continue without linear activity")
+
+        # Test 49: Linear-First Stop hook allows stop when linear activity is present
+        with open(state_file, "w") as f:
+            json.dump({"timestamp": int(time.time() * 1000), "action": "comment", "issueId": "test-id"}, f)
+
+        res_stop_allowed = evaluate_hook({
+            "is_stop_event": True,
+            "terminationReason": "NO_TOOL_CALL",
+            "test_has_inspection": True
+        })
+        assert res_stop_allowed == {}, f"Expected empty dict (allow stop) when linear activity exists, got {res_stop_allowed}"
+        print("✓ Test 49 Passed: Linear-First Stop hook allows stop when linear activity exists")
+
+    finally:
+        if state_backup:
+            with open(state_file, "w") as f:
+                f.write(state_backup)
+
     print("============================================================")
     print("✅ ALL TOOL-GUARD UNIT TESTS PASSED DETERMINISTICALLY (exit 0)")
     print("============================================================")
@@ -1910,6 +2094,12 @@ def main():
     if is_post_tool:
         # Zero-Hang: auto_sync_governance síncrono purgado de PostToolUse para evitar bloqueos por FUSE
         print(json.dumps({}))
+        sys.exit(0)
+
+    if "--stop" in sys.argv or "terminationReason" in payload:
+        payload["is_stop_event"] = True
+        result = evaluate_hook(payload)
+        print(json.dumps(result))
         sys.exit(0)
 
     if not payload:
