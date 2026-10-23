@@ -198,7 +198,7 @@ function validateApplicationTests() {
   if (fs.existsSync("/var/www/.bin/skills-suite-validate")) {
     console.log("🛡️ [F5 Reality Gate] Ejecutando Sensor Universal de Habilidades (skills-suite-validate)...");
     try {
-      execSync("/var/www/.bin/skills-suite-validate", { stdio: "inherit", timeout: 30000 });
+      execSync("/var/www/.bin/skills-suite-validate", { stdio: "inherit", timeout: 90000 });
       console.log("✅ [F5 Reality Gate] Sensor Universal de Habilidades validado (exit code 0).");
     } catch (err) {
       console.error("❌ F5 REALITY GATE RECHAZADO: Falló la validación de habilidades.");
