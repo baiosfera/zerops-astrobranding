@@ -1974,11 +1974,17 @@ def run_tests():
 
     # Test 46: Linear-First PreToolUse gate blocks skill mutation when active plan exists and no linear activity recorded
     state_file = "/tmp/.linear_activity_state.json"
+    alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
     state_backup = None
+    alt_state_backup = None
     if os.path.exists(state_file):
         with open(state_file, "r") as f:
             state_backup = f.read()
         os.remove(state_file)
+    if os.path.exists(alt_state_file):
+        with open(alt_state_file, "r") as f:
+            alt_state_backup = f.read()
+        os.remove(alt_state_file)
 
     bak_dir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills"
     os.makedirs(bak_dir, exist_ok=True)
@@ -2016,6 +2022,8 @@ def run_tests():
 
         # Test 48: Linear-First Stop hook forces continue when active plan exists and inspections occurred without linear activity
         os.remove(state_file)
+        if os.path.exists(alt_state_file):
+            os.remove(alt_state_file)
         if os.path.exists("/tmp/.linear_stop_force_count"):
             os.remove("/tmp/.linear_stop_force_count")
 
@@ -2043,6 +2051,9 @@ def run_tests():
         if state_backup:
             with open(state_file, "w") as f:
                 f.write(state_backup)
+        if alt_state_backup:
+            with open(alt_state_file, "w") as f:
+                f.write(alt_state_backup)
 
     print("============================================================")
     print("✅ ALL TOOL-GUARD UNIT TESTS PASSED DETERMINISTICALLY (exit 0)")
