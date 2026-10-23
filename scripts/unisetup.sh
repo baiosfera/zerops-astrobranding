@@ -222,7 +222,19 @@ if [ "$RUN_ALL" = true ]; then
     echo "  [Paso 7/7] Verificación Integral de Capacidades & Registry"
     echo "------------------------------------------------------------"
     # Sincronización e Ingestión de Memoria LTM Engram (Aislamiento Soberano Multi-Proyecto)
-    ACTIVE_PROJECT="${ENGRAM_PROJECT:-${PROJECT_NAME:-zerops-astrobranding}}"
+    ACTIVE_PROJECT="${ENGRAM_PROJECT:-${PROJECT_NAME:-}}"
+    if [ -z "$ACTIVE_PROJECT" ] || [ "$ACTIVE_PROJECT" = "zerops-astrobranding" ] || [ "$ACTIVE_PROJECT" = "default" ]; then
+        ZCLI_BIN=""
+        [ -x "/opt/zerops/bin/zcli" ] && ZCLI_BIN="/opt/zerops/bin/zcli"
+        command -v zcli >/dev/null 2>&1 && ZCLI_BIN="$(command -v zcli)"
+        if [ -n "$ZCLI_BIN" ]; then
+            DETECTED_ZPROJ=$(ZEROPS_TOKEN="${ZCP_API_KEY:-${ZEROPS_TOKEN:-}}" "$ZCLI_BIN" project list 2>/dev/null | awk -F'│' 'NR>3 && $3 ~ /[a-zA-Z0-9]/ {gsub(/^[ \t]+|[ \t]+$/, "", $3); print $3; exit}' || true)
+            if [ -n "$DETECTED_ZPROJ" ] && [ "$DETECTED_ZPROJ" != "default" ]; then
+                ACTIVE_PROJECT="$(echo "$DETECTED_ZPROJ" | tr '[:upper:]' '[:lower:]')"
+            fi
+        fi
+    fi
+    ACTIVE_PROJECT="${ACTIVE_PROJECT:-zerops-astrobranding}"
     mkdir -p "$PROJECT_ROOT/.engram"
     echo "{\"project_name\": \"$ACTIVE_PROJECT\"}" > "$PROJECT_ROOT/.engram/config.json"
 

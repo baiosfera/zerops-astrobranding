@@ -118,6 +118,36 @@ if [ -f "$LOCAL_BASE/zerops-astrobranding/scripts/engram-sync" ]; then
     compare_files "engram-sync" "$LOCAL_BASE/zerops-astrobranding/scripts/engram-sync" "$DRIVE_BASE/scripts/engram-sync"
 fi
 
+# 2.0b Canonical Project Identity & Engram Anti-Split Invariant
+echo "--- Checking Canonical Project Identity & Engram Anti-Split Invariant ---"
+EXPECTED_IDENTITY="${ENGRAM_PROJECT:-${PROJECT_NAME:-}}"
+if [ -n "$EXPECTED_IDENTITY" ] && [ "$EXPECTED_IDENTITY" != "zerops-astrobranding" ]; then
+    AGENT_DB="/home/zerops/.engram/engram.db"
+    if [ -L "$AGENT_DB" ]; then
+        LINK_TARGET="$(readlink "$AGENT_DB")"
+        EXPECTED_TARGET="/var/www/localstorage/engram/${EXPECTED_IDENTITY}/engram.db"
+        if [ "$LINK_TARGET" != "$EXPECTED_TARGET" ]; then
+            echo "❌ Identity DRIFT: /home/zerops/.engram/engram.db points to '$LINK_TARGET' but active project is '$EXPECTED_IDENTITY' (expected '$EXPECTED_TARGET')"
+            ERRORS=$((ERRORS + 1))
+        else
+            echo "✓ Engram storage symlink aligned with active project: $EXPECTED_IDENTITY"
+        fi
+    else
+        echo "⚠️ /home/zerops/.engram/engram.db is not a symlink to localstorage"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    if [ -d "/var/www/localstorage/engram" ]; then
+        ORPHAN_DIRS=$(find "/var/www/localstorage/engram" -mindepth 1 -maxdepth 1 -type d ! -name "$EXPECTED_IDENTITY" -exec basename {} \; 2>/dev/null || true)
+        if [ -n "$ORPHAN_DIRS" ]; then
+            echo "❌ Orphan/split engram directories detected in localstorage: $ORPHAN_DIRS"
+            ERRORS=$((ERRORS + 1))
+        else
+            echo "✓ Zero orphan directories in /var/www/localstorage/engram (clean isolation)"
+        fi
+    fi
+fi
+
 # 2.1 Python Tooling Syntax (In-Memory AST, 0 bytes en disco) & Bytecode Hygiene
 echo "--- Checking Python Tooling Syntax & Bytecode Hygiene (Zero Disk Writes) ---"
 PYTHON_SCRIPTS=(

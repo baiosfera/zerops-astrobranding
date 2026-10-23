@@ -89,8 +89,67 @@ elif [ -f "$PROJECT_ROOT/gdrive.env" ]; then
     fi
 fi
 
-# Determinar identidad agnóstica de proyecto (prioridad: CLI > gdrive.env / env > repo name)
-TARGET_PROJECT="${PROJECT_NAME_ARG:-${PROJECT_NAME:-${CLIENT_NAME:-}}}"
+# Determinar identidad agnóstica de proyecto (prioridad determinista anti-split)
+# 1. Argumento CLI explícito (--project / -p)
+TARGET_PROJECT="${PROJECT_NAME_ARG:-}"
+
+# 2. Variable de entorno si NO es el default genérico del chasis
+if [ -z "$TARGET_PROJECT" ] && [ -n "${PROJECT_NAME:-}" ] && [ "$PROJECT_NAME" != "zerops-astrobranding" ] && [ "$PROJECT_NAME" != "default" ]; then
+    TARGET_PROJECT="$PROJECT_NAME"
+fi
+
+if [ -z "$TARGET_PROJECT" ] && [ -n "${CLIENT_NAME:-}" ] && [ "$CLIENT_NAME" != "zerops-astrobranding" ] && [ "$CLIENT_NAME" != "default" ]; then
+    TARGET_PROJECT="$CLIENT_NAME"
+fi
+
+if [ -z "$TARGET_PROJECT" ] && [ -n "${ENGRAM_PROJECT:-}" ] && [ "$ENGRAM_PROJECT" != "zerops-astrobranding" ] && [ "$ENGRAM_PROJECT" != "default" ]; then
+    TARGET_PROJECT="$ENGRAM_PROJECT"
+fi
+
+# 3. Detección física directa desde Zerops CLI si está disponible
+if [ -z "$TARGET_PROJECT" ]; then
+    ZCLI_BIN=""
+    if command -v zcli >/dev/null 2>&1; then
+        ZCLI_BIN="$(command -v zcli)"
+    elif [ -x "/opt/zerops/bin/zcli" ]; then
+        ZCLI_BIN="/opt/zerops/bin/zcli"
+    fi
+
+    if [ -n "$ZCLI_BIN" ]; then
+        DETECTED_ZPROJ=$(ZEROPS_TOKEN="${ZCP_API_KEY:-${ZEROPS_TOKEN:-}}" "$ZCLI_BIN" project list 2>/dev/null | awk -F'│' 'NR>3 && $3 ~ /[a-zA-Z0-9]/ {gsub(/^[ \t]+|[ \t]+$/, "", $3); print $3; exit}' || true)
+        if [ -n "$DETECTED_ZPROJ" ] && [ "$DETECTED_ZPROJ" != "default" ]; then
+            TARGET_PROJECT="$DETECTED_ZPROJ"
+            echo "• [iniciar.sh] Identidad canónica detectada desde Zerops CLI: $TARGET_PROJECT"
+        fi
+    fi
+fi
+
+# 4. Inferencia por metadatos del runtime Zerops
+if [ -z "$TARGET_PROJECT" ]; then
+    INFERRED_TENANT=$(env | grep -E '_EVOLUTION_CLIENT_NAME=' | head -n1 | cut -d'=' -f2 | tr -d '\"'\'' ' || true)
+    if [ -z "$INFERRED_TENANT" ]; then
+        INFERRED_DOMAIN=$(env | grep -E '^CLOUDFLARE_BASE_DOMAIN=' | head -n1 | cut -d'=' -f2 | tr -d '\"'\'' ' || true)
+        if [ -n "$INFERRED_DOMAIN" ]; then
+            INFERRED_TENANT="${INFERRED_DOMAIN%%.*}"
+        fi
+    fi
+    if [ -n "$INFERRED_TENANT" ]; then
+        TARGET_PROJECT="$INFERRED_TENANT"
+        echo "• [iniciar.sh] Identidad canónica inferida desde runtime Zerops: $TARGET_PROJECT"
+    fi
+fi
+
+# 5. Detección desde Google Drive SSoT (si existe un único proyecto tenant en /var/www/baiosfera/0ZEROPS-AGY/)
+if [ -z "$TARGET_PROJECT" ] && [ -d "$DRIVE_MOUNT/0ZEROPS-AGY" ]; then
+    CANDIDATE_TENANTS=$(find "$DRIVE_MOUNT/0ZEROPS-AGY" -mindepth 1 -maxdepth 1 -type d ! -name "0zcp-123" ! -name "users-apis" ! -name "zerops-astrobranding" -exec basename {} \; 2>/dev/null || true)
+    TENANT_COUNT=$(echo "$CANDIDATE_TENANTS" | grep -v '^$' | wc -l || true)
+    if [ "$TENANT_COUNT" -eq 1 ]; then
+        TARGET_PROJECT="$(echo "$CANDIDATE_TENANTS" | tr -d ' ')"
+        echo "• [iniciar.sh] Identidad canónica detectada desde SSoT único en Google Drive: $TARGET_PROJECT"
+    fi
+fi
+
+# 6. Fallback final controlado
 APP_IDENTITY="${TARGET_PROJECT:-$REPO_NAME}"
 APP_IDENTITY_LOWER="$(echo "$APP_IDENTITY" | tr '[:upper:]' '[:lower:]')"
 
@@ -117,7 +176,7 @@ if [ -n "${ZCP_API_KEY:-}" ]; then
     fi
 fi
 
-# 0b-scale. Blindaje Soberano Single-Node en ZCP (minContainers: 1, maxContainers: 1, cpuMode: SHARED, maxCpu: 3)
+# 0b-scale. Blindaje Soberano Single-Node en ZCP (minContainers: 1, maxContainers: 1, cpuMode: SHARED)
 if [ -x "/usr/local/bin/zcp" ] && [ -n "${ZCP_API_KEY:-}" ] && command -v python3 >/dev/null 2>&1; then
     echo "• [0b-scale] Verificando blindaje de autoescalado single-node en ZCP (min: 1, max: 1)..."
     python3 -c '
@@ -131,9 +190,13 @@ try:
     rpc({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"zcp-scale-guard","version":"1.0"}}})
     proc.stdin.write(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}) + "\n")
     proc.stdin.flush()
-    rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_scale","arguments":{"serviceHostname":"zcp","minContainers":1,"maxContainers":1,"cpuMode":"SHARED","maxCpu":3}}})
+    res = rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_scale","arguments":{"serviceHostname":"zcp","minContainers":1,"maxContainers":1,"cpuMode":"SHARED"}}})
     proc.terminate()
-    print("  ✓ ZCP blindado estrictamente a 1 contenedor (min: 1, max: 1, cpuMode: SHARED, maxCpu: 3).")
+    if res.get("error") or res.get("result", {}).get("isError"):
+        err = res.get("error") or res.get("result", {}).get("content")
+        print(f"  ⚠️ Advertencia al blindar autoescalado single-node: {err}")
+    else:
+        print("  ✓ ZCP blindado estrictamente a 1 contenedor (min: 1, max: 1, cpuMode: SHARED).")
 except Exception as e:
     print(f"  ℹ️ Verificación de autoescalado diferida ({e}).")
 ' 2>/dev/null || true

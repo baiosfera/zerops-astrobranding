@@ -138,12 +138,16 @@ function discoverServices() {
     for (const ent of entries) {
       if (ent.isDirectory() && !systemDirs.has(ent.name) && !ent.name.startsWith(".")) {
         const fullPath = path.join(baseDir, ent.name);
-        const hasManifest = [
-          "package.json", "pyproject.toml", "requirements.txt",
-          "zerops.yaml", "Cargo.toml", "go.mod", "pom.xml"
-        ].some((f) => fs.existsSync(path.join(fullPath, f)));
-        if (hasManifest) {
-          services.push(ent.name);
+        try {
+          const hasManifest = [
+            "package.json", "pyproject.toml", "requirements.txt",
+            "zerops.yaml", "Cargo.toml", "go.mod", "pom.xml"
+          ].some((f) => fs.existsSync(path.join(fullPath, f)));
+          if (hasManifest) {
+            services.push(ent.name);
+          }
+        } catch (e) {
+          // ignore broken or unmounted transport endpoints
         }
       }
     }

@@ -18,8 +18,23 @@ if [ -z "$APP_IDENTITY" ] && [ -f "$PROJECT_ROOT/.engram/config.json" ]; then
 fi
 
 if [ -z "$APP_IDENTITY" ]; then
-    APP_IDENTITY="${PROJECT_NAME:-${CLIENT_NAME:-default}}"
+    APP_IDENTITY="${PROJECT_NAME:-${CLIENT_NAME:-}}"
 fi
+
+# Auto-detección dinámica desde Zerops CLI si no hay identidad explícita o se heredó el chasis
+if [ -z "$APP_IDENTITY" ] || [ "$APP_IDENTITY" = "zerops-astrobranding" ] || [ "$APP_IDENTITY" = "default" ]; then
+    ZCLI_BIN=""
+    [ -x "/opt/zerops/bin/zcli" ] && ZCLI_BIN="/opt/zerops/bin/zcli"
+    command -v zcli >/dev/null 2>&1 && ZCLI_BIN="$(command -v zcli)"
+    if [ -n "$ZCLI_BIN" ]; then
+        DETECTED_ZPROJ=$(ZEROPS_TOKEN="${ZCP_API_KEY:-${ZEROPS_TOKEN:-}}" "$ZCLI_BIN" project list 2>/dev/null | awk -F'│' 'NR>3 && $3 ~ /[a-zA-Z0-9]/ {gsub(/^[ \t]+|[ \t]+$/, "", $3); print $3; exit}' || true)
+        if [ -n "$DETECTED_ZPROJ" ] && [ "$DETECTED_ZPROJ" != "default" ]; then
+            APP_IDENTITY="$DETECTED_ZPROJ"
+        fi
+    fi
+fi
+
+APP_IDENTITY="${APP_IDENTITY:-zerops-astrobranding}"
 
 # Normalización canónica obligatoria a minúsculas para el filesystem
 APP_IDENTITY_LOWER="$(echo "$APP_IDENTITY" | tr '[:upper:]' '[:lower:]')"

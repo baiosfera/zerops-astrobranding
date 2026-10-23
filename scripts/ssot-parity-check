@@ -118,6 +118,36 @@ if [ -f "$LOCAL_BASE/zerops-astrobranding/scripts/engram-sync" ]; then
     compare_files "engram-sync" "$LOCAL_BASE/zerops-astrobranding/scripts/engram-sync" "$DRIVE_BASE/scripts/engram-sync"
 fi
 
+# 2.0b Canonical Project Identity & Engram Anti-Split Invariant
+echo "--- Checking Canonical Project Identity & Engram Anti-Split Invariant ---"
+EXPECTED_IDENTITY="${ENGRAM_PROJECT:-${PROJECT_NAME:-}}"
+if [ -n "$EXPECTED_IDENTITY" ] && [ "$EXPECTED_IDENTITY" != "zerops-astrobranding" ]; then
+    AGENT_DB="/home/zerops/.engram/engram.db"
+    if [ -L "$AGENT_DB" ]; then
+        LINK_TARGET="$(readlink "$AGENT_DB")"
+        EXPECTED_TARGET="/var/www/localstorage/engram/${EXPECTED_IDENTITY}/engram.db"
+        if [ "$LINK_TARGET" != "$EXPECTED_TARGET" ]; then
+            echo "❌ Identity DRIFT: /home/zerops/.engram/engram.db points to '$LINK_TARGET' but active project is '$EXPECTED_IDENTITY' (expected '$EXPECTED_TARGET')"
+            ERRORS=$((ERRORS + 1))
+        else
+            echo "✓ Engram storage symlink aligned with active project: $EXPECTED_IDENTITY"
+        fi
+    else
+        echo "⚠️ /home/zerops/.engram/engram.db is not a symlink to localstorage"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    if [ -d "/var/www/localstorage/engram" ]; then
+        ORPHAN_DIRS=$(find "/var/www/localstorage/engram" -mindepth 1 -maxdepth 1 -type d ! -name "$EXPECTED_IDENTITY" -exec basename {} \; 2>/dev/null || true)
+        if [ -n "$ORPHAN_DIRS" ]; then
+            echo "❌ Orphan/split engram directories detected in localstorage: $ORPHAN_DIRS"
+            ERRORS=$((ERRORS + 1))
+        else
+            echo "✓ Zero orphan directories in /var/www/localstorage/engram (clean isolation)"
+        fi
+    fi
+fi
+
 # 2.1 Python Tooling Syntax (In-Memory AST, 0 bytes en disco) & Bytecode Hygiene
 echo "--- Checking Python Tooling Syntax & Bytecode Hygiene (Zero Disk Writes) ---"
 PYTHON_SCRIPTS=(
@@ -172,6 +202,12 @@ done
 echo "--- Checking Lifecycle Hooks & Tool-Guard Parity ---"
 compare_files "hooks/tool-guard.py" "$LOCAL_BASE/.bin/hooks/tool-guard.py" "$DRIVE_BASE/scripts/hooks/tool-guard.py"
 compare_files "hooks.json" "$LOCAL_BASE/.agents/hooks.json" "$DRIVE_BASE/.agents/hooks.json"
+if [ -f "$LOCAL_BASE/zerops-astrobranding/scripts/hooks/tool-guard.py" ]; then
+    compare_files "zerops-astrobranding/scripts/hooks/tool-guard.py" "$LOCAL_BASE/zerops-astrobranding/scripts/hooks/tool-guard.py" "$LOCAL_BASE/.bin/hooks/tool-guard.py"
+fi
+if [ -f "$LOCAL_BASE/zerops-astrobranding/.agents/hooks.json" ]; then
+    compare_files "zerops-astrobranding/.agents/hooks.json" "$LOCAL_BASE/zerops-astrobranding/.agents/hooks.json" "$LOCAL_BASE/.agents/hooks.json"
+fi
 
 # 4. Bootstrap Architecture & Zero Secret Leak Parity
 echo "--- [4/5] Checking Bootstrap & Zero Secret Leak Parity ---"
@@ -199,7 +235,7 @@ if [ -f "$FAST_PARITY_SCRIPT" ]; then
     fi
 else
     SKILL_COUNT=0
-    EXCLUDED_REGEX="^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*)$"
+    EXCLUDED_REGEX="^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*|karpathy.*|using-superpowers|brainstorming|dispatching-parallel-agents|executing-plans|finishing-a-development-branch|receiving-code-review|requesting-code-review|subagent-driven-development|systematic-debugging|test-driven-development|using-git-worktrees|verification-before-completion|writing-plans|writing-skills|ask-matt|chief-of-staff|claude-handoff|code-review|codebase-design|diagnosing-bugs|domain-modeling|git-guardrails-claude-code|grill-me|grill-with-docs|grilling|handoff|implement|implement-spec|improve-codebase-architecture|loop-me|migrate-to-shoehorn|pr|prototype|retro|scaffold-exercises|setup-matt-pocock-skills|setup-pre-commit|setup-ts-deep-modules|tdd|teach|to-questionnaire|to-spec|to-tickets|triage|wait-what|wayfinder|wizard|writing-beats|writing-for-agents|writing-fragments|writing-shape)$"
 
     for drive_skill_dir in "$DRIVE_BASE/.agents/skills"/*; do
         if [ ! -d "$drive_skill_dir" ]; then
