@@ -707,6 +707,7 @@ async function main() {
     } else {
       issueIds = args.slice(2);
     }
+    issueIds = issueIds.flatMap(id => id.split(",")).map(id => id.trim()).filter(Boolean);
 
     if (!targetStatus || issueIds.length === 0) {
       console.error('Usage: linear-cli update-status-batch "<statusName>" <issueId1> <issueId2> ... [--evidence "<text>"]');
