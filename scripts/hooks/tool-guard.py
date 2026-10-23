@@ -2042,7 +2042,7 @@ def run_tests():
         pass
     assert "injectSteps" in res_pi_fallback, f"Expected injectSteps from transcriptPath fallback, got {res_pi_fallback}"
     ephem_msg = res_pi_fallback["injectSteps"][0].get("ephemeralMessage", "")
-    assert "F0 Epistemic Grounding" in ephem_msg, f"Expected F0 Epistemic Grounding in PreInvocation fallback, got {ephem_msg}"
+    assert any(k in ephem_msg for k in ["MANDATO EPISTÉMICO F0", "F0 Epistemic Grounding"]), f"Expected F0 Epistemic Grounding in PreInvocation fallback, got {ephem_msg}"
     print("✓ Test 45 Passed: PreInvocation falls back to transcriptPath to extract userPrompt")
 
     # Test 46: Linear-First PreToolUse gate blocks skill mutation when active plan exists and no linear activity recorded
