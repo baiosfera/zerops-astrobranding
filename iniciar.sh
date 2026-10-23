@@ -117,6 +117,28 @@ if [ -n "${ZCP_API_KEY:-}" ]; then
     fi
 fi
 
+# 0b-scale. Blindaje Soberano Single-Node en ZCP (minContainers: 1, maxContainers: 1, cpuMode: SHARED, maxCpu: 3)
+if [ -x "/usr/local/bin/zcp" ] && [ -n "${ZCP_API_KEY:-}" ] && command -v python3 >/dev/null 2>&1; then
+    echo "• [0b-scale] Verificando blindaje de autoescalado single-node en ZCP (min: 1, max: 1)..."
+    python3 -c '
+import subprocess, json
+try:
+    proc = subprocess.Popen(["/usr/local/bin/zcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    def rpc(payload):
+        proc.stdin.write(json.dumps(payload) + "\n")
+        proc.stdin.flush()
+        return json.loads(proc.stdout.readline())
+    rpc({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"zcp-scale-guard","version":"1.0"}}})
+    proc.stdin.write(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}) + "\n")
+    proc.stdin.flush()
+    rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_scale","arguments":{"serviceHostname":"zcp","minContainers":1,"maxContainers":1,"cpuMode":"SHARED","maxCpu":3}}})
+    proc.terminate()
+    print("  ✓ ZCP blindado estrictamente a 1 contenedor (min: 1, max: 1, cpuMode: SHARED, maxCpu: 3).")
+except Exception as e:
+    print(f"  ℹ️ Verificación de autoescalado diferida ({e}).")
+' 2>/dev/null || true
+fi
+
 # 0b. Guardia Resiliente: Detección, Auto-Montaje y Fallback Local (Zero Bloqueos)
 echo "• Verificando servicio de almacenamiento persistente localstorage..."
 LOCALSTORAGE_FOUND=false

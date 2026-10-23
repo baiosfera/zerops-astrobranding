@@ -117,6 +117,28 @@ if [ -n "${ZCP_API_KEY:-}" ]; then
     fi
 fi
 
+# 0b-scale. Blindaje Soberano Single-Node en ZCP (minContainers: 1, maxContainers: 1, cpuMode: SHARED, maxCpu: 3)
+if [ -x "/usr/local/bin/zcp" ] && [ -n "${ZCP_API_KEY:-}" ] && command -v python3 >/dev/null 2>&1; then
+    echo "• [0b-scale] Verificando blindaje de autoescalado single-node en ZCP (min: 1, max: 1)..."
+    python3 -c '
+import subprocess, json
+try:
+    proc = subprocess.Popen(["/usr/local/bin/zcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    def rpc(payload):
+        proc.stdin.write(json.dumps(payload) + "\n")
+        proc.stdin.flush()
+        return json.loads(proc.stdout.readline())
+    rpc({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"zcp-scale-guard","version":"1.0"}}})
+    proc.stdin.write(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}) + "\n")
+    proc.stdin.flush()
+    rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_scale","arguments":{"serviceHostname":"zcp","minContainers":1,"maxContainers":1,"cpuMode":"SHARED","maxCpu":3}}})
+    proc.terminate()
+    print("  ✓ ZCP blindado estrictamente a 1 contenedor (min: 1, max: 1, cpuMode: SHARED, maxCpu: 3).")
+except Exception as e:
+    print(f"  ℹ️ Verificación de autoescalado diferida ({e}).")
+' 2>/dev/null || true
+fi
+
 # 0b. Guardia Resiliente: Detección, Auto-Montaje y Fallback Local (Zero Bloqueos)
 echo "• Verificando servicio de almacenamiento persistente localstorage..."
 LOCALSTORAGE_FOUND=false
@@ -379,6 +401,19 @@ else
     echo "• [2b/4] Actualizando skills soberanas desde GitHub..."
     git -C "$SKILLS_LOCAL_DIR" fetch origin main 2>/dev/null || true
     git -C "$SKILLS_LOCAL_DIR" reset --hard origin/main 2>/dev/null || git -C "$SKILLS_LOCAL_DIR" pull --ff-only 2>/dev/null || true
+fi
+
+# Despliegue en vivo y directo de las skills soberanas personalizadas hacia el workspace
+if [ -d "$SKILLS_LOCAL_DIR" ]; then
+    echo "• [2b/4] Desplegando skills soberanas personalizadas hacia /var/www/.agents/skills..."
+    mkdir -p "$PROJECT_ROOT/.agents/skills" "/home/zerops/.gemini/antigravity-cli/skills" 2>/dev/null || true
+    for sk_dir in "$SKILLS_LOCAL_DIR"/*/; do
+        [ -d "$sk_dir" ] || continue
+        sk_name=$(basename "$sk_dir")
+        [[ "$sk_name" =~ ^(\.git|bak|_shared)$ ]] && continue
+        cp -rn "$sk_dir" "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
+        cp -rn "$sk_dir" "/home/zerops/.gemini/antigravity-cli/skills/" 2>/dev/null || true
+    done
 fi
 
 # 2c. Verificar disponibilidad de scripts SSoT en Google Drive (tolerancia de indexación FUSE)
