@@ -78,6 +78,18 @@ for skill_name in "${TARGET_SKILLS[@]}"; do
         done
     fi
 
+    # 4. Macro-Visión 360: Validar integridad de enlaces locales file:/// (Zero Broken Links per Invariante 4)
+    if [ "$UNI_FAIL" -eq 0 ] && [ -f "$skill_path/SKILL.md" ]; then
+        for link in $(grep -oE '\(file:///[^)]+\)' "$skill_path/SKILL.md" | tr -d '()' | sed 's/#.*//' || true); do
+            link_path="${link#file://}"
+            if [ ! -e "$link_path" ]; then
+                echo "❌ [$skill_name]: Macro-Visión 360 Failed - Broken local link detected: $link_path"
+                UNI_FAIL=1
+                break
+            fi
+        done
+    fi
+
     if [ "$UNI_FAIL" -eq 0 ]; then
         [ "$QUIET" = false ] && echo "✓ [$skill_name]: PASSED (Universal Sensor)"
         PASSED=$((PASSED + 1))
