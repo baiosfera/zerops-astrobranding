@@ -117,7 +117,7 @@ if [ -n "${ZCP_API_KEY:-}" ]; then
     fi
 fi
 
-# 0b-scale. Blindaje Soberano Single-Node en ZCP (minContainers: 1, maxContainers: 1, cpuMode: SHARED, maxCpu: 3)
+# 0b-scale. Blindaje Soberano Single-Node en ZCP (minContainers: 1, maxContainers: 1, cpuMode: SHARED)
 if [ -x "/usr/local/bin/zcp" ] && [ -n "${ZCP_API_KEY:-}" ] && command -v python3 >/dev/null 2>&1; then
     echo "• [0b-scale] Verificando blindaje de autoescalado single-node en ZCP (min: 1, max: 1)..."
     python3 -c '
@@ -131,9 +131,13 @@ try:
     rpc({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"zcp-scale-guard","version":"1.0"}}})
     proc.stdin.write(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}) + "\n")
     proc.stdin.flush()
-    rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_scale","arguments":{"serviceHostname":"zcp","minContainers":1,"maxContainers":1,"cpuMode":"SHARED","maxCpu":3}}})
+    res = rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_scale","arguments":{"serviceHostname":"zcp","minContainers":1,"maxContainers":1,"cpuMode":"SHARED"}}})
     proc.terminate()
-    print("  ✓ ZCP blindado estrictamente a 1 contenedor (min: 1, max: 1, cpuMode: SHARED, maxCpu: 3).")
+    if res.get("error") or res.get("result", {}).get("isError"):
+        err = res.get("error") or res.get("result", {}).get("content")
+        print(f"  ⚠️ Advertencia al blindar autoescalado single-node: {err}")
+    else:
+        print("  ✓ ZCP blindado estrictamente a 1 contenedor (min: 1, max: 1, cpuMode: SHARED).")
 except Exception as e:
     print(f"  ℹ️ Verificación de autoescalado diferida ({e}).")
 ' 2>/dev/null || true

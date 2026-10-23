@@ -90,7 +90,7 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 ## 🧭 PROTOCOLO DE DESPLIEGUE MODULAR POR LENGUAJE NATURAL (INVARIANTE ABSOLUTO)
 1. **Frontera Sagrada del Plano de Control (`zcp`) e Invariante Single-Node**:
    - Este contenedor `zcp` es exclusivamente el orquestador de plataforma y espacio con estado (stateful). Debe permanecer **ESTRICTAMENTE configurado a 1 solo contenedor** (`minContainers: 1, maxContainers: 1`). Prohibido el autoescalado horizontal en ZCP (provoca split-brain, contenedores vacíos sin sincronizar y pérdida aparente de datos al balancear).
-   - **Frugalidad SHARED & Cuota de Cuenta**: Opera en `cpuMode: SHARED` para máxima economía de recursos sin sacrificar calidad, respetando la cuota dura de cuenta de Zerops (**máximo 3 CPU cores** en este proyecto: `minCpu: 1, maxCpu: 3`).
+   - **Frugalidad SHARED**: Opera en `cpuMode: SHARED` para máxima economía de recursos sin sacrificar calidad. La cuota de CPU/recursos de la cuenta se consulta en tiempo real vía panel o `zerops_discover`, nunca se asume ni hardcodea.
    - Los runtimes de aplicación, builds pesados y servidores de desarrollo (`bun run dev`, `bun test`, etc.) se ejecutan dentro de sus contenedores LXC dedicados en Zerops (`ssh {hostname} "cd /var/www && <cmd>"`), nunca dentro de ZCP.
 2. **Rol de `iniciar.sh`**:
    - `iniciar.sh` conecta Google Drive SSoT, clona repositorios, enlaza herramientas en `/usr/local/bin` e inyecta credenciales.
@@ -119,7 +119,7 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 1. **Jerarquía ZCP-First & SSoT Indivisible**: El desarrollo activo ocurre en ZCP (`/var/www`). Los cambios validados se reflejan indivisiblemente hacia Google Drive SSoT (`/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/`). Drive solo fluye hacia ZCP en arranques fríos (`iniciar.sh` $\to$ `unisetup.sh`).
 2. **Entorno y Secretos (Soberanía Zerops Env)**: Toda variable o secreto se gestiona en la plataforma vía `zerops_env`, se inyecta en el runtime (`/etc/environment` y shell) y se referencia exclusivamente por variable de entorno (`$VAR` o `process.env`). Los archivos `.env` o `gdrive.env` temporales se purgan tras el bootstrap.
 3. **Seguridad Nativa a Nivel de Proceso**: `tool-guard.py` intercepta en `PreToolUse`/`PreInvocation` comandos destructivos, fugas de rutas relativas (`0zcp-123/`), protege handovers, asegura backups pre-mutación y deduplica eventos para máxima eficiencia de tokens.
-4. **Higiene de Procesos & Purga de Zombies**: Comandos con `timeout 10s` y `WaitMsBeforeAsync: 10000`. Servidores continuos vía `zerops_dev_server`. Purga periódica obligatoria de procesos huérfanos/zombies (`agy` redundantes y servidores MCP secundarios en Python) para proteger los 3 cores compartidos del contenedor.
+4. **Higiene de Procesos & Purga de Zombies**: Comandos con `timeout 10s` y `WaitMsBeforeAsync: 10000`. Servidores continuos vía `zerops_dev_server`. Purga periódica obligatoria de procesos verdaderamente huérfanos/zombies (STAT Z o PPID 1 sin TTY asignado; una sesión agy viva con TTY NUNCA es zombie) para proteger los recursos compartidos del contenedor.
 5. **Grounding Epistémico & Anti-Amnesia (Session Start Recall)**: Al inicio de CADA sesión es mandatorio ejecutar `mem_context` o `mem_search` y `zerops_discover` antes de plantear hipótesis o emitir juicios sobre el proyecto. Contrasta código, límites y arquitectura contra fuentes primarias en tiempo presente mediante triangulación multi-motor en `research` (Exa, Context7, Jina Reader, Firecrawl). Prohibido operar desde memoria pre-entrenada estocástica (AMN).
 6. **Claridad Arquitectónica & Continuidad de Contexto**: Comunicación concisa, sin burocracia superficial ni checklist theater. En F4, el mensaje presenta el plan con criterios de aceptación claros en chat o Linear y solicita Go. En F5, el mensaje valida la entrega con sensores físicos (exit 0) e informa explícitamente qué quedó desplegado y probado en vivo con los siguientes pasos lógicos.
 7. **Invariante de Doble Dominio (Software vs Prompts)**:
@@ -147,6 +147,24 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
 - **Runtime:** evolution (alpine/go@1.22, simple)
 - **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2)
 - **Session:** 0a836147c72d8e6a
+
+> This is a historical record. Verify current state via `zerops_discover`.
+<!-- /ZEROPS:REFLOG -->
+
+<!-- ZEROPS:REFLOG -->
+### 2026-10-23 — Bootstrap: Adoptar todos los servicios y runtimes existentes para Catalina Glamur
+
+- **Runtime:** brand (alpine/bun@1.3, dev)
+- **Dependencies:** valkey (valkey:single@7.2), database (postgresql:single@18), nats (nats:single@2.12), localstorage (local-storage:single@1)
+- **Runtime:** webdev (ubuntu/bun@1.3, dev)
+- **Dependencies:** valkey (valkey:single@7.2), database (postgresql:single@18), nats (nats:single@2.12), localstorage (local-storage:single@1)
+- **Runtime:** webprod (ubuntu/bun@1.3, dev)
+- **Dependencies:** valkey (valkey:single@7.2), database (postgresql:single@18), nats (nats:single@2.12), localstorage (local-storage:single@1)
+- **Runtime:** evolution (alpine/go@1.22, dev)
+- **Dependencies:** valkey (valkey:single@7.2), database (postgresql:single@18), nats (nats:single@2.12), localstorage (local-storage:single@1)
+- **Runtime:** videoworker (ubuntu/nodejs@22, dev)
+- **Dependencies:** valkey (valkey:single@7.2), database (postgresql:single@18), nats (nats:single@2.12), localstorage (local-storage:single@1)
+- **Session:** ee91036594bc4646
 
 > This is a historical record. Verify current state via `zerops_discover`.
 <!-- /ZEROPS:REFLOG -->
