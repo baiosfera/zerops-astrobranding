@@ -152,18 +152,24 @@ El chat de NotebookLM no es para pedirle: *"Hazme un resumen del tema X"*. Eso p
 3. **Si te sentís bloqueado o frustrado**:
    > *"Explícame este concepto asumiendo que tengo cero experiencia previa y usando una analogía cotidiana, porque me siento bloqueado."*
 
-### Paso 4: Calendario de Repaso Espaciado (Ebbinghaus)
-Para que el conocimiento no se borre en 24 horas, programá tus repasos en la terminal:
+### Paso 4: Ruta de Asimilación y Calendario de Repaso Espaciado (Ebbinghaus)
+Para saber qué estudiar primero y cuándo repasar sin perder tiempo, ejecutá en tu terminal:
 ```bash
 nlm-tutor schedule "Nombre del Cuaderno"
 ```
-El sistema te entregará tus fechas exactas de repaso activo:
-- **Día 0 (Inmediato)**: 10 min para registrar dudas en `00_CUADERNO_DE_LAGUNAS`.
-- **Día 1 (+24h)**: 15 min de auto-explicación a libro cerrado del 20% principal.
-- **Día 3 (+72h)**: Re-evaluación con preguntas de razonamiento.
-- **Día 7 (+1 semana)**: Resolución de casos prácticos o problemas del curso.
-- **Día 14 (+2 semanas)**: Repaso exclusivo de los puntos anotados en tu nota de lagunas.
-- **Día 30 (+1 mes)**: Sesión Feynman en voz alta sin mirar notas.
+El comando te entregará tu hoja de ruta pedagógica en dos fases científicas:
+- **Fase 0 (Día de Inicio / Hoy - Estudio Integral)**:
+  1. *Inmersión Auditiva (15 min)*: Escuchá `03_AUDIO` (podcast) mientras salís a caminar o preparás tu espacio.
+  2. *Cartografía (5 min)*: Mirá el mapa `02_MAPA` para ver la taxonomía y articulación de módulos.
+  3. *Deconstrucción 80/20 (20 min)*: Estudiá la tabla `04_TABLA` y el reporte de errores `05_INFORME`.
+  4. *Sparring Socrático (45-90 min)*: Resolvé `01_DIAGNOSTICO` a libro cerrado o interactuá con `nlm-tutor session`.
+  5. *Registro de Puntos Ciegos (10 min)*: Anotá tus dudas en `00_CUADERNO_DE_LAGUNAS`.
+- **Fase 1 (Agenda de Repaso Espaciado Ebbinghaus)**:
+  - **Hito 1 (+24h)**: 15 min de auto-explicación Feynman o repaso de `00_CUADERNO_DE_LAGUNAS`.
+  - **Hito 2 (+72h)**: Re-evaluación conceptual con `01_DIAGNOSTICO` o `nlm-tutor prompt <ID> 3 --send`.
+  - **Hito 3 (+7 días)**: Sparring de casos prácticos con `nlm-tutor session <ID> --duration 45`.
+  - **Hito 4 (+14 días)**: Repaso relámpago exclusivo de tus lagunas en `00_CUADERNO_DE_LAGUNAS`.
+  - **Hito 5 (+30 días)**: Síntesis final en voz alta a libro cerrado para afianzar en memoria permanente.
 
 ---
 

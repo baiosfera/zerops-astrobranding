@@ -1631,7 +1631,7 @@ def cmd_session(args):
 # ---------------------------------------------------------------------------
 
 def cmd_schedule(args):
-    """Calcula y muestra la agenda exacta de repasos espaciados (0 tokens LLM)."""
+    """Calcula y muestra la agenda pedagógica de estudio y repasos espaciados adaptada dinámicamente a los artefactos reales (0 tokens LLM)."""
     client = get_client()
     nb = resolve_notebook(args.notebook, client)
     nb_id = nb.get("id") or nb.get("notebook_id")
@@ -1648,21 +1648,71 @@ def cmd_schedule(args):
             except ValueError:
                 print(f"{YELLOW}Formato de fecha no reconocido, usando fecha actual.{RESET}")
 
-    intervals = [
-        ("Hito 0 (Inmediato)", timedelta(minutes=90), "00_CUADERNO_DE_LAGUNAS", "Auto-revisión de puntos ciegos registrados (10 min)."),
-        ("Hito 1 (+24 horas)", timedelta(days=1), "09_FLASHCARDS_Conceptos-Clave", "15 min de Active Recall a libro cerrado. Afianzar memoria inicial."),
-        ("Hito 2 (+72 horas)", timedelta(days=3), "01_DIAGNOSTICO_Activacion-Conceptual", "Re-evaluación ágil de conceptos base y distinciones operativas."),
-        ("Hito 3 (+7 días)", timedelta(days=7), "10_SIMULACRO_Casos-Practicos", "Simulacro de maestría con dilemas prácticos reales y casos límite."),
-        ("Hito 4 (+14 días)", timedelta(days=14), "00_CUADERNO_DE_LAGUNAS & Flashcards", "Repaso relámpago exclusivo de conceptos fallados previamente."),
-        ("Hito 5 (+30 días)", timedelta(days=30), "06_SLIDES_Guia-Visual-Estrategica", "Consolidación permanente: explicar el tema completo en voz alta.")
-    ]
+    # 1. Inspección de artefactos reales existentes en Studio
+    arts = []
+    try:
+        s_data = studio.get_studio_status(client, nb_id)
+        arts = s_data.get("artifacts", []) if isinstance(s_data, dict) else (s_data or [])
+    except Exception:
+        pass
+
+    art_names = {a.get("title"): a for a in arts if a.get("title")}
+
+    # Detección dinámica de artefactos reales disponibles en el cuaderno
+    audio_art = next((t for t in art_names if "03_AUDIO" in t or "AUDIO" in t), "03_AUDIO_Inmersion-General-Podcast")
+    map_art = next((t for t in art_names if "02_MAPA" in t or "MAPA" in t), "02_MAPA_Syllabus-Estructural")
+    table_art = next((t for t in art_names if "04_TABLA" in t or "TABLA" in t), "04_TABLA_Matriz-Deconstruccion-80-20")
+    report_art = next((t for t in art_names if "05_INFORME" in t or "INFORME" in t), "05_INFORME_Plan-de-Accion-y-Errores")
+    quiz_art = next((t for t in art_names if "01_DIAGNOSTICO" in t or "DIAGNOSTICO" in t or "QUIZ" in t), "01_DIAGNOSTICO_Activacion-Conceptual")
+    flash_art = next((t for t in art_names if "FLASHCARDS" in t), None)
+    slides_art = next((t for t in art_names if "SLIDES" in t), None)
 
     print(f"\n{CYAN}========================================================================================{RESET}")
-    print(f"  📅 AGENDA MATEMÁTICA DE REPASOS (REPETICIÓN ESPACIADA CIENTÍFICA - CERO TOKENS LLM): {BOLD}{nb_title}{RESET}")
+    print(f"  🗺️ RUTA PEDAGÓGICA Y AGENDA DE REPETICIÓN ESPACIADA: {BOLD}{nb_title}{RESET}")
     print(f"  Inicio base: {BOLD}{start_time.strftime('%Y-%m-%d %H:%M')}{RESET} | Cuaderno: {CYAN}{nb_id}{RESET}")
+    print(f"  Gobernanza: {GREEN}Neurociencia del Active Recall (Make It Stick & Curva de Ebbinghaus){RESET}")
     print(f"{CYAN}========================================================================================{RESET}\n")
 
-    print(f"{'Hito':<22} | {'Fecha Programada':<16} | {'Artefacto en Studio':<36} | {'Objetivo'}")
+    print(f"{BOLD}📖 FASE 0: ASIMILACIÓN Y ESTUDIO INTEGRAL (DÍA DE INICIO / HOY){RESET}")
+    print(f"Antes de evaluar o repasar, completá la absorción activa del material en este orden lógico:\n")
+    print(f"  1. {CYAN}Inmersión Auditiva y Marco Global (15 min):{RESET}")
+    print(f"     Escuchá {BOLD}{audio_art}{RESET} mientras salís a caminar o preparás tu espacio de estudio.")
+    print(f"  2. {CYAN}Cartografía Conceptual y Jerarquías (5 min):{RESET}")
+    print(f"     Explorá {BOLD}{map_art}{RESET} para ubicar la taxonomía y cómo se articulan los módulos.")
+    print(f"  3. {CYAN}Deconstrucción 80/20 y Puntos Críticos (20 min):{RESET}")
+    print(f"     Estudiá {BOLD}{table_art}{RESET} (mecanismos nucleares vs errores) y {BOLD}{report_art}{RESET}.")
+    print(f"  4. {CYAN}Sparring Socrático y Pre-Testing Activo (30-45 min):{RESET}")
+    print(f"     Resolvé {BOLD}{quiz_art}{RESET} a libro cerrado o iniciá tu tutor interactivo:")
+    print(f"     {GREEN}nlm-tutor session {nb_id} --duration 90{RESET}")
+    print(f"  5. {CYAN}Registro de Puntos Ciegos (10 min):{RESET}")
+    print(f"     El tutor anotará tus lagunas automáticamente en {BOLD}00_CUADERNO_DE_LAGUNAS{RESET}.\n")
+
+    print(f"{BOLD}📅 FASE 1: AGENDA CIENTÍFICA DE REPASO ESPACIADO (EBBINGHAUS - CERO TOKENS LLM){RESET}")
+    print(f"Para que el 80% aprendido hoy no se evapore en 24 horas, seguí estos hitos de consolidación:\n")
+
+    intervals = [
+        ("Hito 1 (+24 horas)", timedelta(days=1),
+         flash_art or "00_CUADERNO_DE_LAGUNAS & Auto-Enseñanza",
+         "15 min de Active Recall a libro cerrado enfocado en las lagunas de ayer (o prompt 2)."),
+
+        ("Hito 2 (+72 horas)", timedelta(days=3),
+         quiz_art,
+         "Re-evaluación conceptual y contraste de los mecanismos 80/20 a libro cerrado."),
+
+        ("Hito 3 (+7 días)", timedelta(days=7),
+         f"nlm-tutor session {nb_id[:8]}.. / Casos Reales",
+         "Sesión de sparring de 45 min resolviendo situaciones prácticas y dilemas del tema."),
+
+        ("Hito 4 (+14 días)", timedelta(days=14),
+         "00_CUADERNO_DE_LAGUNAS (Auditoría)",
+         "Repaso relámpago exclusivo de las citas de las fuentes donde tuviste dudas."),
+
+        ("Hito 5 (+30 días)", timedelta(days=30),
+         slides_art or report_art or "Síntesis Feynman en Voz Alta",
+         "Consolidación permanente en memoria a largo plazo: explicar el tema completo sin mirar notas.")
+    ]
+
+    print(f"{'Hito':<22} | {'Fecha Programada':<16} | {'Recurso / Artefacto Real':<36} | {'Objetivo'}")
     print("-" * 115)
 
     for hito, delta, artifact, objetivo in intervals:
@@ -1677,17 +1727,20 @@ def cmd_schedule(args):
         notes_list = notes_data.get("notes", []) if isinstance(notes_data, dict) else []
         laguna_note = next((n for n in notes_list if "00_CUADERNO_DE_LAGUNAS" in (n.get("title") or "").upper()), None)
         if laguna_note and laguna_note.get("content"):
-            gap_lines = [l.strip() for l in laguna_note["content"].split("\n") if l.strip().startswith("- [")]
+            gap_lines = [l.strip() for l in laguna_note["content"].split("\n") if l.strip().startswith("- [") and "Concepto / Mecanismo" not in l]
             if gap_lines:
-                print(f"\n{YELLOW}📋 LAGUNAS COGNITIVAS REGISTRADAS PARA TUS PRÓXIMOS REPASOS:{RESET}")
+                print(f"\n{YELLOW}📋 LAGUNAS COGNITIVAS REGISTRADAS PARA TUS PRÓXIMOS REPASOS ({len(gap_lines)} activas):{RESET}")
                 for g in gap_lines[-8:]:
                     print(f"   {CYAN}{g}{RESET}")
-                print(f"\n  {YELLOW}💡 Consejo:{RESET} Enfoca tu sesión de repaso exclusivamente en las lagunas de arriba.")
+                print(f"\n  {YELLOW}💡 Consejo:{RESET} Enfocá tu sesión de repaso exclusivamente en las lagunas de arriba.")
+            else:
+                print(f"\n{GREEN}ℹ️ Sin lagunas pendientes registradas todavía.{RESET}")
+                print(f"   Iniciá tu sesión interactiva con {BOLD}nlm-tutor session {nb_id}{RESET} para que el tutor evalúe tu razonamiento.")
     except Exception:
         pass
 
     print(f"\n{YELLOW}💡 Regla de Oro:{RESET} Si en cualquier Hito tu precisión cae por debajo del {BOLD}80%{RESET},")
-    print(f"no releas todo el material; abrí {CYAN}00_CUADERNO_DE_LAGUNAS{RESET} y repasa SOLO lo que fallaste.\n")
+    print(f"no releas todo el material desde cero; abrí {CYAN}00_CUADERNO_DE_LAGUNAS{RESET} y atacá SOLO los puntos donde fallaste.\n")
 
 
 # ---------------------------------------------------------------------------
