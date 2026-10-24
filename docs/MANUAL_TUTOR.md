@@ -123,6 +123,13 @@ nlm-tutor setup "Nombre o ID del Cuaderno"
 ```
 El script aplicará automáticamente la directiva socrática al chat, verificará tu cuota en tiempo real y generará los 5 entregables del MVLS con pausas de seguridad (4.5s) para evitar ráfagas de peticiones.
 
+> [!TIP]
+> **Blindaje Idempotente Anti-Gasto de Cuota**:
+> Si por error volvés a ejecutar `nlm-tutor setup`, el script detecta automáticamente qué artefactos y notas ya existen en tu cuaderno, **omitiendo su creación para no consumir ni un solo byte de tu cuota de Google**. Si querés obligarlo a regenerar todo desde cero, sumá la bandera `--overwrite` o `--clean`:
+> ```bash
+> nlm-tutor setup "Nombre del Cuaderno" --overwrite
+> ```
+
 ### Paso 2: Tu Sesión de Concentración Guiada (90 o 45 min)
 Iniciá el cronómetro pedagógico en tu terminal:
 ```bash

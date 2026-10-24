@@ -1151,6 +1151,7 @@ def setup_single_notebook(client, nb_id: str, nb_title: str, args):
     # 2. Análisis Semántico de Dominio & Generación de Suite Adaptativa
     src_count, detected_tier, metrics = analyze_notebook_density(client, nb_id)
     profile_arg = getattr(args, "profile", "auto") or "auto"
+    overwrite = getattr(args, "overwrite", False)
 
     # Mapeo de perfil explícito o tier semántico
     if profile_arg == "core":
@@ -1180,12 +1181,52 @@ def setup_single_notebook(client, nb_id: str, nb_title: str, args):
     lex_info = f"diversidad léxica: {metrics.get('lexical_diversity', 1.0)}"
     conc_info = f", conc: {metrics.get('top_keyword_concentration', 0.0)}" if metrics.get('dominant_keyword') else ""
     effective_desc = f"{effective_tier.upper()} ({src_count} fuentes, {lex_info}{conc_info})"
-    print(f"\n{BOLD}[Paso 2/3]{RESET} Generando Suite Adaptativa de {total_arts} Artefactos en Studio ({CYAN}{effective_desc}{RESET})...")
+    print(f"\n{BOLD}[Paso 2/3]{RESET} Evaluando Suite Adaptativa de {total_arts} Artefactos en Studio ({CYAN}{effective_desc}{RESET})...")
+
+    # Inspección de artefactos y notas preexistentes para Idempotencia Soberana (0 tokens / 0 cuota desperdiciada)
+    existing_arts = []
+    try:
+        s_data = studio.get_studio_status(client, nb_id)
+        existing_arts = s_data.get("artifacts", []) if isinstance(s_data, dict) else (s_data or [])
+    except Exception as e_st:
+        print(f"  {YELLOW}Aviso consultando estado previo de Studio: {e_st}{RESET}")
+
+    cloud_manifest = extract_cloud_manifest(client, nb_id)
+
+    def match_existing_artifact(target_title: str, target_type: str, art_list: list, manifest: dict):
+        prefix = target_title[:3] if (len(target_title) >= 3 and target_title[:2].isdigit() and target_title[2] == "_") else ""
+        for art in art_list:
+            aid = art.get("artifact_id")
+            atitle = art.get("title") or ""
+            art_type = art.get("type")
+            # 1. Coincidencia exacta de título
+            if atitle == target_title:
+                return art
+            # 2. Coincidencia por mapeo en manifiesto SSoT de la nota de ruta
+            if aid and manifest.get(aid) == target_title:
+                return art
+            # 3. Coincidencia por prefijo numérico ('01_', '02_') y mismo tipo
+            if prefix and atitle.startswith(prefix) and art_type == target_type:
+                return art
+        return None
 
     dispatched = []
+    skipped_count = 0
+
     for idx, (title, atype, kwargs) in enumerate(artifacts_specs, 1):
-        print(f"  • [{idx}/{total_arts}] Creando artefacto nativo: {BOLD}{title}{RESET} ({atype})...")
         kwargs.setdefault("language", "es-419")
+
+        # Chequeo de Idempotencia: Si ya existe y no se forzó --overwrite, reutilizar
+        matched_art = match_existing_artifact(title, atype, existing_arts, cloud_manifest) if not overwrite else None
+        if matched_art:
+            art_id = matched_art.get("artifact_id")
+            art_status = matched_art.get("status", "completed")
+            print(f"  • [{idx}/{total_arts}] {GREEN}⏩ [IDEMPOTENTE]{RESET} Omitiendo creación de {BOLD}{title}{RESET} ({atype}): ya existe en Studio ({CYAN}{art_status}{RESET}).")
+            dispatched.append((title, art_id, atype))
+            skipped_count += 1
+            continue
+
+        print(f"  • [{idx}/{total_arts}] Creando artefacto nativo: {BOLD}{title}{RESET} ({atype})...")
 
         # Guardia en vuelo para artefactos de alto cómputo
         if atype in ("audio", "video") and skip_media_due_to_quota:
@@ -1213,8 +1254,24 @@ def setup_single_notebook(client, nb_id: str, nb_title: str, args):
         # Espaciado determinista anti-burst entre peticiones
         time.sleep(4.5)
 
-    # 3. Creación de Notas Nativas en el Cuaderno (SSoT Cloud-Native, 0 bytes en disco local)
-    print(f"\n{BOLD}[Paso 3/3]{RESET} Creando notas nativas de seguimiento y Ruta de Estudio SSoT...")
+    if skipped_count == total_arts and not overwrite:
+        print(f"\n  {GREEN}🛡️ BLINDAJE IDEMPOTENTE COMPLETO:{RESET} Los {total_arts} entregables de la suite ya existían en Studio. Se evitó 100% de gasto de cuota y peticiones duplicadas.")
+    elif skipped_count > 0:
+        print(f"\n  {GREEN}🛡️ BLINDAJE IDEMPOTENTE PARCIAL:{RESET} Se reutilizaron {skipped_count} artefactos preexistentes y solo se generaron {total_arts - skipped_count} faltantes.")
+
+    # 3. Creación/Actualización de Notas Nativas en el Cuaderno (SSoT Cloud-Native, 0 bytes en disco local)
+    print(f"\n{BOLD}[Paso 3/3]{RESET} Verificando y sincronizando notas de seguimiento y Ruta de Estudio SSoT...")
+
+    existing_notes = []
+    try:
+        res_notes = notes.list_notes(client, nb_id)
+        existing_notes = res_notes.get("notes", []) if isinstance(res_notes, dict) else (res_notes or [])
+    except Exception as e_nl:
+        print(f"  {YELLOW}Aviso consultando notas previas: {e_nl}{RESET}")
+
+    lagunas_note = next((n for n in existing_notes if "00_CUADERNO_DE_LAGUNAS" in (n.get("title") or "").upper() or "LAGUNAS" in (n.get("title") or "").upper()), None)
+    ruta_note = next((n for n in existing_notes if "00_RUTA_DE_ESTUDIO" in (n.get("title") or "").upper() or "RUTA" in (n.get("title") or "").upper()), None)
+
     lagunas_content = (
         "# 📓 Cuaderno de Lagunas Cognitivas y Puntos Ciegos\n\n"
         "Este espacio está destinado exclusivamente a registrar tus puntos ciegos y lagunas conceptuales detectadas durante el estudio.\n\n"
@@ -1225,10 +1282,15 @@ def setup_single_notebook(client, nb_id: str, nb_title: str, args):
         "## Registro de Brechas y Lagunas Detectadas:\n"
         "- [ ] (Fecha: ____) Concepto / Mecanismo a reforzar: ____________________ | Fuente: ____________________\n"
     )
-    try:
-        notes.create_note(client, nb_id, content=lagunas_content, title="00_CUADERNO_DE_LAGUNAS")
-    except Exception as e_n1:
-        print(f"    {YELLOW}Aviso creando nota de lagunas: {e_n1}{RESET}")
+
+    if not lagunas_note:
+        try:
+            notes.create_note(client, nb_id, content=lagunas_content, title="00_CUADERNO_DE_LAGUNAS")
+            print(f"  {GREEN}✓ Nota '00_CUADERNO_DE_LAGUNAS' creada en tu cuaderno.{RESET}")
+        except Exception as e_n1:
+            print(f"    {YELLOW}Aviso creando nota de lagunas: {e_n1}{RESET}")
+    else:
+        print(f"  {GREEN}✓ Nota '00_CUADERNO_DE_LAGUNAS' ya existente (preservando tus lagunas previas registradas).{RESET}")
 
     # Manifiesto estructurado embebido en el pie de la nota para reconciliación cloud-native
     manifest_items = [
@@ -1247,12 +1309,19 @@ def setup_single_notebook(client, nb_id: str, nb_title: str, args):
         f"• Consultá tu agenda matemática de repasos: `nlm-tutor schedule {nb_id}`\n\n"
         f"<!-- NLM_TUTOR_MANIFEST: {manifest_json} -->\n"
     )
-    try:
-        notes.create_note(client, nb_id, content=ruta_content, title="00_RUTA_DE_ESTUDIO")
-    except Exception as e_n2:
-        print(f"    {YELLOW}Aviso creando nota de ruta: {e_n2}{RESET}")
 
-    print(f"  {GREEN}✓ Notas '00_CUADERNO_DE_LAGUNAS' y '00_RUTA_DE_ESTUDIO' creadas en tu cuaderno (SSoT cloud-native).{RESET}")
+    if not ruta_note:
+        try:
+            notes.create_note(client, nb_id, content=ruta_content, title="00_RUTA_DE_ESTUDIO")
+            print(f"  {GREEN}✓ Nota '00_RUTA_DE_ESTUDIO' creada en tu cuaderno.{RESET}")
+        except Exception as e_n2:
+            print(f"    {YELLOW}Aviso creando nota de ruta: {e_n2}{RESET}")
+    else:
+        try:
+            notes.update_note(client, nb_id, ruta_note.get("id"), content=ruta_content)
+            print(f"  {GREEN}✓ Nota '00_RUTA_DE_ESTUDIO' actualizada con manifiesto vigente (sin duplicar notas).{RESET}")
+        except Exception as e_u2:
+            print(f"    {YELLOW}Aviso actualizando nota de ruta: {e_u2}{RESET}")
 
     # Reconciliación y renombramiento asíncrono
     wait_time = 180 if getattr(args, "wait", False) else 75
@@ -1881,6 +1950,7 @@ def main():
     p_setup.add_argument("--wait", action="store_true", help="Esperar de forma síncrona en terminal hasta que concluyan los artefactos pesados (por defecto delega a vigilancia en segundo plano).")
     p_setup.add_argument("--guide", action="store_true", help="Usar modo nativo 'learning_guide' en vez de 'custom'.")
     p_setup.add_argument("--clean", action="store_true", help="Limpia artefactos de Studio, notas 00 y chat antes de configurar (no toca fuentes).")
+    p_setup.add_argument("--overwrite", "--force", action="store_true", help="Fuerza la regeneración de los entregables en Studio aunque ya existan previamente.")
 
     # usage / quota
     subparsers.add_parser("usage", help="Consulta la telemetría en vivo de tus cuotas de cómputo en Google One (ventana rolling y semanal).")
