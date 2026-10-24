@@ -1687,21 +1687,25 @@ def cmd_schedule(args):
     print(f"  5. {CYAN}Registro de Puntos Ciegos (10 min):{RESET}")
     print(f"     El tutor anotará tus lagunas automáticamente en {BOLD}00_CUADERNO_DE_LAGUNAS{RESET}.\n")
 
-    print(f"{BOLD}📅 FASE 1: AGENDA CIENTÍFICA DE REPASO ESPACIADO (EBBINGHAUS - CERO TOKENS LLM){RESET}")
-    print(f"Para que el 80% aprendido hoy no se evapore en 24 horas, seguí estos hitos de consolidación:\n")
+    print(f"{BOLD}📅 CRONOGRAMA MATEMÁTICO INTEGRAL: ESTUDIO ACTIVO (HOY) + REPASOS ESPACIADOS (EBBINGHAUS){RESET}")
+    print(f"Seguí esta secuencia cronológica para transformar la información en comprensión permanente (0 tokens LLM):\n")
 
     intervals = [
+        ("Hito 0 (HOY - Inmediato)", timedelta(minutes=0),
+         f"nlm-tutor session {nb_id[:8]}.. (90m)",
+         "¡Tu sesión socrática principal! Responder al tutor a libro cerrado y registrar lagunas."),
+
         ("Hito 1 (+24 horas)", timedelta(days=1),
-         flash_art or "00_CUADERNO_DE_LAGUNAS & Auto-Enseñanza",
-         "15 min de Active Recall a libro cerrado enfocado en las lagunas de ayer (o prompt 2)."),
+         flash_art or "00_CUADERNO_DE_LAGUNAS (Feynman)",
+         "15 min de auto-explicación a libro cerrado atacando las lagunas de la sesión de hoy."),
 
         ("Hito 2 (+72 horas)", timedelta(days=3),
          quiz_art,
-         "Re-evaluación conceptual y contraste de los mecanismos 80/20 a libro cerrado."),
+         "10 min: Re-evaluación conceptual con el Cuestionario a libro cerrado (meta: >80%)."),
 
         ("Hito 3 (+7 días)", timedelta(days=7),
-         f"nlm-tutor session {nb_id[:8]}.. / Casos Reales",
-         "Sesión de sparring de 45 min resolviendo situaciones prácticas y dilemas del tema."),
+         f"nlm-tutor prompt {nb_id[:8]}.. 3 --send",
+         "15 min: Test de 10 preguntas de razonamiento causal y casos prácticos en el chat."),
 
         ("Hito 4 (+14 días)", timedelta(days=14),
          "00_CUADERNO_DE_LAGUNAS (Auditoría)",

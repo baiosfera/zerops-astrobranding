@@ -164,12 +164,13 @@ El comando te entregará tu hoja de ruta pedagógica en dos fases científicas:
   3. *Deconstrucción 80/20 (20 min)*: Estudiá la tabla `04_TABLA` y el reporte de errores `05_INFORME`.
   4. *Sparring Socrático (45-90 min)*: Resolvé `01_DIAGNOSTICO` a libro cerrado o interactuá con `nlm-tutor session`.
   5. *Registro de Puntos Ciegos (10 min)*: Anotá tus dudas en `00_CUADERNO_DE_LAGUNAS`.
-- **Fase 1 (Agenda de Repaso Espaciado Ebbinghaus)**:
-  - **Hito 1 (+24h)**: 15 min de auto-explicación Feynman o repaso de `00_CUADERNO_DE_LAGUNAS`.
-  - **Hito 2 (+72h)**: Re-evaluación conceptual con `01_DIAGNOSTICO` o `nlm-tutor prompt <ID> 3 --send`.
-  - **Hito 3 (+7 días)**: Sparring de casos prácticos con `nlm-tutor session <ID> --duration 45`.
+- **Cronograma Matemático Integral (Estudio Activo + Ebbinghaus)**:
+  - **Hito 0 (HOY - Inmediato tras leer artefactos)**: Tu sesión socrática interactiva (`nlm-tutor session <ID> --duration 90`) para responder al tutor a libro cerrado y registrar tus lagunas.
+  - **Hito 1 (+24h)**: 15 min de auto-explicación Feynman o repaso de `00_CUADERNO_DE_LAGUNAS` sobre los fallos de la sesión de hoy.
+  - **Hito 2 (+72h)**: Re-evaluación conceptual con `01_DIAGNOSTICO` a libro cerrado (meta: >80%).
+  - **Hito 3 (+7 días)**: 15 min de test de 10 preguntas de razonamiento causal en el chat con `nlm-tutor prompt <ID> 3 --send`.
   - **Hito 4 (+14 días)**: Repaso relámpago exclusivo de tus lagunas en `00_CUADERNO_DE_LAGUNAS`.
-  - **Hito 5 (+30 días)**: Síntesis final en voz alta a libro cerrado para afianzar en memoria permanente.
+  - **Hito 5 (+30 días)**: Síntesis final en voz alta a libro cerrado (`05_INFORME`) para afianzar en memoria permanente.
 
 ---
 
