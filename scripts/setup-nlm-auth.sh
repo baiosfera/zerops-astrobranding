@@ -43,7 +43,7 @@ ensure_dependencies() {
     echo "• Verificando dependencias de Google Chrome y stack gráfico efímero..."
     local pkgs_needed=()
 
-    for cmd_pkg in "Xvfb:xvfb" "x11vnc:x11vnc" "websockify:websockify"; do
+    for cmd_pkg in "Xvfb:xvfb" "x11vnc:x11vnc" "websockify:websockify" "openbox:openbox"; do
         cmd="${cmd_pkg%%:*}"
         pkg="${cmd_pkg##*:*}"
         if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -68,48 +68,33 @@ ensure_dependencies() {
     if [ -f "/etc/nginx/nginx.conf" ] && ! grep -q "location /novnc/" "/etc/nginx/nginx.conf"; then
         echo "  🌐 Configurando proxy directo noVNC en Nginx (puerto 8080)..."
         sudo python3 -c '
-path = "/etc/nginx/nginx.conf"
-with open(path, "r", encoding="utf-8") as f:
-    lines = f.readlines()
-new_lines = []
-for line in lines:
-    if line.strip().startswith("location /cockpit/"):
-        new_lines.append("""        location /novnc/ {
-            if ($zcp_cookie_ok = 0) {
-                return 302 /zcp-login;
-            }
+with open("/etc/nginx/nginx.conf", "r") as f:
+    text = f.read()
+target = "        location / {"
+if "location /novnc/" not in text and target in text:
+    block = """        location /novnc/ {
             proxy_pass http://127.0.0.1:6080/;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
         }
 
         location /websockify {
-            if ($zcp_cookie_ok = 0) {
-                return 403;
-            }
             proxy_pass http://127.0.0.1:6080/websockify;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
         }
 
-""")
-    new_lines.append(line)
-with open(path, "w", encoding="utf-8") as f:
-    f.writelines(new_lines)
+"""
+    with open("/etc/nginx/nginx.conf", "w") as f:
+        f.write(text.replace(target, block + target, 1))
 ' 2>/dev/null || true
         nginx -s reload 2>/dev/null || true
     fi
@@ -213,6 +198,7 @@ run_interactive_vnc_login() {
     VNC_PORT=5900
     NOVNC_PORT=6080
     XVFB_PID=""
+    OPENBOX_PID=""
     X11VNC_PID=""
     WEBSOCK_PID=""
 
@@ -224,6 +210,7 @@ run_interactive_vnc_login() {
     pkill -f "Xvfb ${DISPLAY_NUM}" 2>/dev/null || true
     pkill -f "x11vnc.*${VNC_PORT}" 2>/dev/null || true
     pkill -f "websockify.*${NOVNC_PORT}" 2>/dev/null || true
+    pkill -f "openbox" 2>/dev/null || true
     if ! pgrep -f "google-chrome" >/dev/null 2>&1; then
         rm -f "$NLM_LOCAL_DIR/chrome-profiles/default/Singleton"* 2>/dev/null || true
     fi
@@ -233,6 +220,11 @@ run_interactive_vnc_login() {
     echo "• Iniciando Xvfb en $DISPLAY_NUM (1280x800x24)..."
     Xvfb "$DISPLAY_NUM" -screen 0 1280x800x24 -nolisten tcp &
     XVFB_PID=$!
+
+    # Iniciar gestor de ventanas openbox
+    echo "• Iniciando openbox en $DISPLAY_NUM..."
+    DISPLAY="$DISPLAY_NUM" openbox --sm-disable >/dev/null 2>&1 &
+    OPENBOX_PID=$!
 
     # Iniciar servidor x11vnc
     echo "• Iniciando x11vnc en puerto $VNC_PORT..."
@@ -250,10 +242,12 @@ run_interactive_vnc_login() {
         echo "🧹 Limpiando procesos gráficos efímeros (Zero Overhead Invariant)..."
         [ -n "${WEBSOCK_PID:-}" ] && kill -15 "$WEBSOCK_PID" 2>/dev/null || true
         [ -n "${X11VNC_PID:-}" ] && kill -15 "$X11VNC_PID" 2>/dev/null || true
+        [ -n "${OPENBOX_PID:-}" ] && kill -15 "$OPENBOX_PID" 2>/dev/null || true
         [ -n "${XVFB_PID:-}" ] && kill -15 "$XVFB_PID" 2>/dev/null || true
         pkill -f "Xvfb ${DISPLAY_NUM:-:99}" 2>/dev/null || true
         pkill -f "x11vnc.*${VNC_PORT:-5900}" 2>/dev/null || true
         pkill -f "websockify.*${NOVNC_PORT:-6080}" 2>/dev/null || true
+        pkill -f "openbox" 2>/dev/null || true
         if ! pgrep -f "google-chrome" >/dev/null 2>&1; then
             rm -f "$NLM_LOCAL_DIR/chrome-profiles/default/Singleton"* 2>/dev/null || true
         fi
@@ -278,7 +272,7 @@ run_interactive_vnc_login() {
 
     local public_url=""
     if [ -n "${zeropsSubdomainHost:-}" ] && [ -n "${zeropsLocation:-}" ]; then
-        public_url="https://zcp-${zeropsSubdomainHost}-8080.${zeropsLocation}.zerops.app/novnc/vnc.html?autoconnect=true&resize=remote"
+        public_url="https://zcp-${zeropsSubdomainHost}-8080.${zeropsLocation}.zerops.app/novnc/vnc.html?autoconnect=true&resize=remote&path=websockify"
     fi
 
     echo ""
@@ -287,14 +281,14 @@ run_interactive_vnc_login() {
         echo "   🔗 Abrí directamente esta URL en una nueva pestaña de tu navegador:"
         echo "      $public_url"
     else
-        echo "   🔗 Abrí en tu navegador: /novnc/vnc.html?autoconnect=true&resize=remote en tu pestaña de code-server"
+        echo "   🔗 Abrí en tu navegador: /novnc/vnc.html?autoconnect=true&resize=remote&path=websockify en tu pestaña de code-server"
     fi
     echo "   (noVNC conectará de inmediato y verás Google Chrome listo para iniciar sesión)"
     echo "=================================================================="
     echo ""
 
     # Ejecutar login forzado de nlm usando el display virtual
-    DISPLAY="$DISPLAY_NUM" "$NLM_BIN" login --force "$@"
+    DISPLAY="$DISPLAY_NUM" "$NLM_BIN" login --force --storage file "$@"
 
     echo ""
     echo "🎉 Autenticación completada en Chrome."
