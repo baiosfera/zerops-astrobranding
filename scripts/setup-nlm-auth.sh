@@ -223,6 +223,7 @@ run_interactive_vnc_login() {
     pkill -f "x11vnc.*${VNC_PORT}" 2>/dev/null || true
     pkill -f "websockify.*${NOVNC_PORT}" 2>/dev/null || true
     pkill -f "openbox" 2>/dev/null || true
+    rm -f "/tmp/.X${DISPLAY_NUM#:}-lock" "/tmp/.X11-unix/X${DISPLAY_NUM#:}" 2>/dev/null || true
     if ! pgrep -f "google-chrome" >/dev/null 2>&1; then
         rm -f "$NLM_LOCAL_DIR/chrome-profiles/default/Singleton"* 2>/dev/null || true
     fi
@@ -232,6 +233,15 @@ run_interactive_vnc_login() {
     echo "• Iniciando Xvfb en $DISPLAY_NUM (1280x800x24)..."
     Xvfb "$DISPLAY_NUM" -screen 0 1280x800x24 -nolisten tcp &
     XVFB_PID=$!
+
+    # Esperar activamente a que el display X11 esté listo para recibir clientes
+    for i in $(seq 1 30); do
+        if [ -S "/tmp/.X11-unix/X${DISPLAY_NUM#:}" ]; then
+            break
+        fi
+        sleep 0.1
+    done
+    sleep 0.5
 
     # Iniciar gestor de ventanas openbox
     echo "• Iniciando openbox en $DISPLAY_NUM..."
@@ -260,6 +270,7 @@ run_interactive_vnc_login() {
         pkill -f "x11vnc.*${VNC_PORT:-5900}" 2>/dev/null || true
         pkill -f "websockify.*${NOVNC_PORT:-6080}" 2>/dev/null || true
         pkill -f "openbox" 2>/dev/null || true
+        rm -f "/tmp/.X${DISPLAY_NUM#:}-lock" "/tmp/.X11-unix/X${DISPLAY_NUM#:}" 2>/dev/null || true
         if ! pgrep -f "google-chrome" >/dev/null 2>&1; then
             rm -f "$NLM_LOCAL_DIR/chrome-profiles/default/Singleton"* 2>/dev/null || true
         fi
