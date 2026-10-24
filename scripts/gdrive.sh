@@ -400,10 +400,11 @@ TimeoutStopSec=15
 ExecStartPre=/bin/bash -c '(umount -l /mnt/*/baiosfera 2>/dev/null || true); (fusermount3 -uz $MOUNT_DIR 2>/dev/null || true); (umount -l $MOUNT_DIR 2>/dev/null || true)'
 ExecStart=$LOCAL_ROOT/bin/rclone mount ${GDRIVE_REMOTE_NAME}: $MOUNT_DIR \\
     --config $RCLONE_CONF \\
-    --cache-dir $LOCAL_ROOT/vault/rclone \\
+    --cache-dir /var/www/localstorage/rclone_vault \\
     --vfs-cache-mode full \\
-    --vfs-cache-max-size 25G \\
-    --vfs-cache-max-age 1h \\
+    --vfs-cache-max-size 15G \\
+    --vfs-cache-max-age 5m \\
+    --vfs-cache-poll-interval 1m \\
     --dir-cache-time 60s \\
     --buffer-size 32M \\
     --allow-other \\
