@@ -78,8 +78,17 @@ if "location /novnc/" not in text and target in text:
             proxy_set_header Host $host;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
+            error_page 502 504 = @novnc_offline;
+        }
+
+        location @novnc_offline {
+            default_type text/html;
+            return 503 "<!DOCTYPE html><html><body style=\\"background:#0f1117;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;\\"><div style=\\"text-align:center;max-width:520px;padding:2rem;background:#1a1d27;border-radius:12px;border:1px solid #2a2d3a;\\"><h2>noVNC no est\\xc3\\xa1 activo</h2><p style=\\"color:#aaa;line-height:1.5;\\">El entorno gr\\xc3\\xa1fico ef\\xc3\\xadmero para login se encuentra apagado o expir\\xc3\\xb3 su tiempo de espera. Ejecut\\xc3\\xa1 <code>nlm-vnc-login</code> para activarlo.</p></div></body></html>";
         }
 
         location /websockify {
@@ -88,6 +97,9 @@ if "location /novnc/" not in text and target in text:
             proxy_set_header Host $host;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
         }
@@ -286,6 +298,16 @@ run_interactive_vnc_login() {
     echo "   (noVNC conectará de inmediato y verás Google Chrome listo para iniciar sesión)"
     echo "=================================================================="
     echo ""
+
+    # Asegurar timeout extendido (30 minutos en vez de 5 minutos hardcodeados)
+    export NLM_LOGIN_TIMEOUT="${NLM_LOGIN_TIMEOUT:-1800}"
+    local main_py="/home/zerops/.local/share/uv/tools/notebooklm-mcp-cli/lib/python3.12/site-packages/notebooklm_tools/cli/main.py"
+    if [ ! -f "$main_py" ]; then
+        main_py="$(find /home/zerops/.local/share/uv/tools/notebooklm-mcp-cli -name "main.py" 2>/dev/null | grep "notebooklm_tools/cli/main.py" | head -n 1 || true)"
+    fi
+    if [ -f "$main_py" ]; then
+        sed -i 's/login_timeout=300,/login_timeout=int(os.environ.get("NLM_LOGIN_TIMEOUT", "1800")),/g' "$main_py" 2>/dev/null || true
+    fi
 
     # Ejecutar login forzado de nlm usando el display virtual
     DISPLAY="$DISPLAY_NUM" "$NLM_BIN" login --force --storage file "$@"
