@@ -5,13 +5,13 @@
        NLM-TUTOR: Sistema Autónomo de Aprendizaje Acelerado & Tutoría Socrática
                  para Google NotebookLM Pro (Google One 5TB)
 ===============================================================================
-Gobernanza: Supreme Directive v7.6 & Planner v3.4 (CoHaLo v7.0)
-Versión: 2.1.0
+Gobernanza: Supreme Directive v8.5 & CoHaLo Engineering
+Versión: 6.0.0 (SOTA Gemini Notebook / NotebookLM Octubre 2026)
 Cero Subprocesos Shell: Operaciones 100% nativas mediante SDK en Python
                         de notebooklm_tools.services (jacob-bd/gemini-notebook-mcp-cli).
-Integración: Neurociencia (Make It Stick, Harvard Top 1%, Roediger Testing Effect,
-             Ebbinghaus), Didáctica MIT 1972, Regla de 20 Horas de Josh Kaufman
-             y Suite Studio de 12 artefactos en 5 fases cognitivas.
+Integración: Minimal Viable Learning Stack (MVLS), Neurociencia del Active Recall
+             (Make It Stick, Harvard 5 Rs, Roediger Testing Effect, Ebbinghaus),
+             Dinámica de Sistemas MIT 1972 y Regla de 20 Horas de Josh Kaufman.
 ===============================================================================
 """
 
@@ -60,7 +60,7 @@ try:
 except ImportError as e_imp:
     sys.stderr.write(f"Error importando servicios nativos de NotebookLM ({e_imp}). Ejecuta 'nlm login' primero.\n")
 
-VERSION = "5.0.0"
+VERSION = "6.0.0"
 
 # Códigos de color ANSI para interfaz amigable en terminal
 CYAN = "\033[1;36m"
@@ -372,13 +372,20 @@ def log_cognitive_gap(client, nb_id, gap_text):
 def launch_background_watcher(nb_id: str):
     """Lanza el daemon de vigilancia autónoma en segundo plano desacoplado (0 CPU, 0 tokens)."""
     script_path = os.path.abspath(__file__)
+    uv_python = os.path.expanduser("~/.local/share/uv/tools/notebooklm-mcp-cli/bin/python")
+    py_exec = uv_python if os.path.isfile(uv_python) and os.access(uv_python, os.X_OK) else sys.executable
+    env = os.environ.copy()
+    uv_pkg_dirs = [p for p in sys.path if "site-packages" in p]
+    if uv_pkg_dirs:
+        env["PYTHONPATH"] = os.pathsep.join(uv_pkg_dirs + ([env["PYTHONPATH"]] if "PYTHONPATH" in env else []))
     try:
         subprocess.Popen(
-            [sys.executable, script_path, "_watch", nb_id],
+            [py_exec, script_path, "_watch", nb_id],
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            close_fds=True
+            close_fds=True,
+            env=env
         )
     except Exception:
         pass
@@ -417,17 +424,14 @@ def reconcile_notebook_artifacts(client, nb_id: str, verbose: bool = True) -> in
             "01_DIAGNOSTICO_Activacion-Conceptual",
             "02_MAPA_Syllabus-Estructural",
             "03_AUDIO_Inmersion-General-Podcast",
-            "04_AUDIO_The-Brief-Resumen-Ejecutivo",
-            "05_INFORME_Documento-Informativo-Briefing",
-            "06_INFORME_Sintesis-Ejecutiva-y-Modelos",
-            "07_TABLA_Matriz-Comparativa-Debates",
-            "08_SLIDES_Guia-Visual-Estrategica",
-            "09_INFOGRAFIA_Panorama-Visual-80-20",
-            "10_INFOGRAFIA_Guia-Vertical-Movil",
-            "11_FLASHCARDS_Conceptos-Clave",
-            "12_SIMULACRO_Casos-Practicos",
-            "13_INFORME_Plan-de-Accion-y-Errores",
-            "14_VIDEO_Resumen-Audiovisual"
+            "04_TABLA_Matriz-Deconstruccion-80-20",
+            "05_INFORME_Plan-de-Accion-y-Errores",
+            "06_TABLE_Comparativa-Conceptos-y-Matices",
+            "07_SLIDES_Autoensenanza-Feynman",
+            "08_FLASHCARDS_Recuperacion-Activa",
+            "09_QUIZ_Nivel-3-Razonamiento-Intermedio",
+            "10_QUIZ_Nivel-5-Casos-Criticos-Simulacro",
+            "11_REPORT_Guia-de-Estudio-Fundamentos"
         ]
         target_pool = list(route_titles) if route_titles else list(canonical_fallback)
 
@@ -663,15 +667,15 @@ def clean_notebook(client, nb_id, clean_studio=True, clean_notes=True, clean_cha
                 print(f"  {GREEN}✓ Chat ya estaba limpio (sin turnos de conversación).{RESET}")
             else:
                 try:
-                    # Payload canónico de Google DeleteChatTurns (J7Gthc): [None, conv_id, None, True]
-                    client._call_rpc(
-                        client.RPC_DELETE_CHAT_HISTORY,
-                        [None, conv_id, None, True],
-                        path=f"/notebook/{nb_id}"
-                    )
-                    with client._state_lock:
-                        client._conversation_cache.pop(conv_id, None)
-                    print(f"  {GREEN}✓ Historial de chat reseteado a cero ({len(turns)} turno(s) eliminado(s)).{RESET}")
+                    rpc_name = getattr(client, "RPC_DELETE_CHAT_HISTORY", None)
+                    if rpc_name and hasattr(client, "_call_rpc"):
+                        client._call_rpc(rpc_name, [None, conv_id, None, True], path=f"/notebook/{nb_id}")
+                        if hasattr(client, "_state_lock") and hasattr(client, "_conversation_cache"):
+                            with client._state_lock:
+                                client._conversation_cache.pop(conv_id, None)
+                        print(f"  {GREEN}✓ Historial de chat reseteado a cero ({len(turns)} turno(s) eliminado(s)).{RESET}")
+                    else:
+                        print(f"  {YELLOW}Aviso: Limpieza interna de chat no disponible directamente en esta versión del SDK.{RESET}")
                 except Exception as e_ch:
                     print(f"  {YELLOW}Aviso al limpiar chat: {e_ch}{RESET}")
 
@@ -914,7 +918,7 @@ def build_adaptive_suite(
     # AULA DE ESTUDIO TEMÁTICA
     raw_suite = []
 
-    # 1. Activación Conceptual (Quiz ágil)
+    # 1. Activación Conceptual (Quiz ágil pre-test: rompe la ilusión de familiaridad)
     raw_suite.append((
         "01_DIAGNOSTICO_Activacion-Conceptual", "quiz", {
             "question_count": 1,
@@ -929,7 +933,7 @@ def build_adaptive_suite(
         }
     ))
 
-    # 2. Mapa Estructural
+    # 2. Mapa Estructural (Mind Map: modelos mentales del MIT y visión panorámica)
     raw_suite.append((
         "02_MAPA_Syllabus-Estructural", "mind_map", {
             "title": "02_MAPA_Syllabus-Estructural"
@@ -951,87 +955,19 @@ def build_adaptive_suite(
             }
         ))
 
-    # 4. Documento Informativo / Briefing Doc
+    # 4. Matriz de Deconstrucción 80/20 (Data Table: densidad informativa pura, 0% cuota)
     raw_suite.append((
-        "INFORME_Documento-Informativo-Briefing", "report", {
-            "report_format": "Create Your Own",
+        "TABLA_Matriz-Deconstruccion-80-20", "data_table", {
             "language": "es-419",
-            "custom_prompt": (
-                "Documento Informativo y Resumen Ejecutivo (Briefing Doc) basado estrictamente en las fuentes del cuaderno. "
-                "Estructura obligatoria: 1) Resumen de situación y tesis central de los documentos, 2) Hallazgos y puntos clave prioritarios, "
-                "3) Implicaciones prácticas y factores de riesgo, 4) Citas y referencias documentales directas."
+            "description": (
+                "Matriz estructurada de deconstrucción del tema en micro-habilidades prácticas (Principio 80/20 de Kaufman). "
+                "Columnas: Micro-habilidad Crítica, Principio Causal en las Fuentes, Ejercicio Práctico Inmediato, "
+                "Trampa Común de Principiante, Criterio de Dominio Suficiente."
             )
         }
     ))
 
-    # 5. Matriz Estructurada (Adaptada al tipo de dominio)
-    if tier == "focused":
-        raw_suite.append((
-            "TABLA_Matriz-Deconstruccion-Microhabilidades", "data_table", {
-                "language": "es-419",
-                "description": (
-                    "Matriz estructurada de deconstrucción del tema en micro-habilidades prácticas (Principio 80/20). "
-                    "Columnas: Micro-habilidad Crítica, Principio Causal en las Fuentes, Ejercicio Práctico Inmediato, "
-                    "Trampa Común de Principiante, Criterio de Dominio Suficiente."
-                )
-            }
-        ))
-    else:
-        raw_suite.append((
-            "TABLA_Matriz-Comparativa-Debates", "data_table", {
-                "language": "es-419",
-                "description": (
-                    "Matriz analítica comparativa que exponga los puntos de contraste, divergencia, trade-offs o escuelas de pensamiento "
-                    "presentes en las fuentes del cuaderno. Columnas: Eje de Comparación / Tema, Enfoque A y Fundamento (con citas), "
-                    "Enfoque B y Fundamento (con citas), Implicaciones Prácticas, y Síntesis de Aplicación."
-                )
-            }
-        ))
-
-    # 6. Flashcards de Consolidación
-    raw_suite.append((
-        "FLASHCARDS_Conceptos-Clave", "flashcards", {
-            "difficulty": "medium",
-            "language": "es-419",
-            "focus_prompt": (
-                "Tarjetas de estudio para consolidación a libro cerrado de distinciones operativas, fórmulas o principios clave. "
-                "Frente: Escenario de aplicación o pregunta de razonamiento causal. "
-                "Reverso: Explicación precisa con fundamento directo en las fuentes del cuaderno y advertencia de trampas comunes."
-            )
-        }
-    ))
-
-    # 7. Infografía Horizontal 80/20
-    raw_suite.append((
-        "INFOGRAFIA_Panorama-Visual-80-20", "infographic", {
-            "orientation": "landscape",
-            "detail_level": "detailed",
-            "infographic_style": "editorial",
-            "language": "es-419",
-            "focus_prompt": (
-                "Infografía visual horizontal (16:9) de alta densidad informativa basada en el núcleo del tema: "
-                "1) Los conceptos nucleares que aportan la máxima comprensión práctica (Pareto 80/20), 2) Diagrama de flujo de causas y consecuencias, "
-                "3) Puntos críticos de apalancamiento según las fuentes del cuaderno."
-            )
-        }
-    ))
-
-    # 8. Simulacro de Casos Prácticos
-    raw_suite.append((
-        "SIMULACRO_Casos-Practicos", "quiz", {
-            "question_count": 2 if tier in ("multi_domain", "macro_curriculum") else 1,
-            "difficulty": "hard",
-            "language": "es-419",
-            "focus_prompt": (
-                f"{QUIZ_STRUCTURAL_RULE}\n\n"
-                "OBJETIVO FORMATIVO: Simulacro integral con preguntas aplicadas a casos reales y dilemas complejos del material. "
-                "Exige evaluar escenarios hipotéticos, resolver disyuntivas prácticas y demostrar dominio causal completo. "
-                "Cada opción incluye justificación analítica basada en las fuentes."
-            )
-        }
-    ))
-
-    # 9. Plan de Acción y Errores (Siempre presente por su alto valor pedagógico inmediato)
+    # 5. Plan de Acción y Catálogo de Errores (Reporte 'Create Your Own': autocorrección temprana)
     raw_suite.append((
         "INFORME_Plan-de-Accion-y-Errores", "report", {
             "report_format": "Create Your Own",
@@ -1044,52 +980,64 @@ def build_adaptive_suite(
         }
     ))
 
-    # 10. Infografía Vertical Móvil
-    raw_suite.append((
-        "INFOGRAFIA_Guia-Vertical-Movil", "infographic", {
-            "orientation": "portrait",
-            "detail_level": "standard",
-            "infographic_style": "sketch_note",
-            "language": "es-419",
-            "focus_prompt": (
-                "Infografía vertical (9:16 formato móvil) con apuntes visuales tipo sketch note: "
-                "1) Protocolo secuencial de aplicación paso a paso, 2) Árbol de decisiones clave, 3) Reglas de oro extraídas de las fuentes."
-            )
-        }
-    ))
-
-    # Entregables Adicionales para Dominios Amplios y Multidisciplinarios
-    if tier in ("standard", "multi_domain", "macro_curriculum"):
+    # SUITE EXTENDIDA 'STANDARD' (11 Artefactos Canónicos del Manual para Cursos Troncales)
+    if tier in ("standard", "exhaustive", "macro_curriculum"):
         raw_suite.extend([
-            ("INFORME_Sintesis-Ejecutiva-y-Modelos", "report", {
-                "report_format": "Create Your Own",
+            ("TABLE_Comparativa-Conceptos-y-Matices", "data_table", {
                 "language": "es-419",
-                "custom_prompt": (
-                    "Informe maestro de modelos mentales y relaciones causales basado estrictamente en las fuentes del cuaderno. "
-                    "Estructura obligatoria: 1) Modelos mentales rectores y mecanismos fundamentales, 2) Mapa causal de causas, efectos y trade-offs prácticos, "
-                    "3) Glosario de términos y distinciones operativas clave citando textualmente las fuentes."
+                "description": (
+                    "Matriz analítica comparativa que exponga los puntos de contraste, divergencia, trade-offs o escuelas de pensamiento "
+                    "presentes en las fuentes del cuaderno. Columnas: Eje de Comparación / Tema, Enfoque A y Fundamento (con citas), "
+                    "Enfoque B y Fundamento (con citas), Implicaciones Prácticas, y Síntesis de Aplicación."
                 )
             }),
-            ("SLIDES_Guia-Visual-Estrategica", "slide_deck", {
+            ("SLIDES_Autoensenanza-Feynman", "slide_deck", {
                 "slide_format": "detailed_deck",
                 "language": "es-419",
                 "focus_prompt": (
-                    "Presentación de diapositivas conceptuales de alto impacto visual y didáctico en español latinoamericano. "
+                    "Presentación de diapositivas conceptuales para auto-enseñanza Feynman en voz alta en español latinoamericano neutro. "
                     "Cada diapositiva aísla un principio rector con explicaciones claras, diagramas lógicos intuitivos y preguntas de control."
                 )
-            })
-        ])
-
-    if tier == "macro_curriculum":
-        raw_suite.append((
-            "INFORME_Preguntas-Frecuentes-FAQ", "report", {
+            }),
+            ("FLASHCARDS_Recuperacion-Activa", "flashcards", {
+                "difficulty": "medium",
+                "language": "es-419",
+                "focus_prompt": (
+                    "Tarjetas de estudio para consolidación a libro cerrado de distinciones operativas, fórmulas o principios clave. "
+                    "Frente: Escenario de aplicación o pregunta de razonamiento causal. "
+                    "Reverso: Explicación precisa con fundamento directo en las fuentes del cuaderno y advertencia de trampas comunes."
+                )
+            }),
+            ("QUIZ_Nivel-3-Razonamiento-Intermedio", "quiz", {
+                "question_count": 1,
+                "difficulty": "medium",
+                "language": "es-419",
+                "focus_prompt": (
+                    f"{QUIZ_STRUCTURAL_RULE}\n\n"
+                    "OBJETIVO FORMATIVO: Evaluación intermedia de razonamiento causal. "
+                    "Evalúa conexiones entre conceptos de diferentes módulos y requiere aplicar principios teóricos a casos prácticos."
+                )
+            }),
+            ("QUIZ_Nivel-5-Casos-Criticos-Simulacro", "quiz", {
+                "question_count": 1,
+                "difficulty": "hard",
+                "language": "es-419",
+                "focus_prompt": (
+                    f"{QUIZ_STRUCTURAL_RULE}\n\n"
+                    "OBJETIVO FORMATIVO: Simulacro integral con preguntas aplicadas a casos reales y dilemas complejos del material. "
+                    "Exige evaluar escenarios hipotéticos, resolver disyuntivas prácticas y demostrar dominio causal completo."
+                )
+            }),
+            ("REPORT_Guia-de-Estudio-Fundamentos", "report", {
                 "report_format": "Create Your Own",
                 "language": "es-419",
                 "custom_prompt": (
-                    "Documento exhaustivo de Preguntas Frecuentes (FAQ). Anticipa y responde las 10 preguntas más críticas y operativas sobre el material, fundamentando con citas textuales."
+                    "Informe maestro de fundamentos, modelos mentales y relaciones causales basado estrictamente en las fuentes del cuaderno. "
+                    "Estructura obligatoria: 1) Modelos mentales rectores y mecanismos fundamentales, 2) Mapa causal de causas, efectos y trade-offs prácticos, "
+                    "3) Glosario de términos y distinciones operativas clave citando textualmente las fuentes."
                 )
-            }
-        ))
+            })
+        ])
 
     # Entregables Multimedia Pesados (SOLO SI SE SOLICITAN EXPLÍCITAMENTE)
     if (with_video or all_media) and not no_media:
@@ -1238,7 +1186,13 @@ def setup_single_notebook(client, nb_id: str, nb_title: str, args):
     for idx, (title, atype, kwargs) in enumerate(artifacts_specs, 1):
         print(f"  • [{idx}/{total_arts}] Creando artefacto nativo: {BOLD}{title}{RESET} ({atype})...")
         kwargs.setdefault("language", "es-419")
-        max_retries = 2
+
+        # Guardia en vuelo para artefactos de alto cómputo
+        if atype in ("audio", "video") and skip_media_due_to_quota:
+            print(f"    {YELLOW}⏩ Omitiendo {title} para proteger cuota Google One (consumo crítico).{RESET}")
+            continue
+
+        max_retries = 3
         art_id = None
         for attempt in range(max_retries + 1):
             try:
@@ -1249,14 +1203,15 @@ def setup_single_notebook(client, nb_id: str, nb_title: str, args):
             except Exception as e:
                 err_str = str(e).lower()
                 if ("rate limited" in err_str or "resourceexhausted" in err_str or "429" in err_str) and attempt < max_retries:
-                    wait_time = (attempt + 1) * 6
-                    print(f"    {YELLOW}⚠️ Rate limit detectado. Reintentando en {wait_time}s...{RESET}")
+                    wait_time = 15 * (attempt + 1)
+                    print(f"    {YELLOW}⚠️ Rate limit detectado en Google Cloud. Enfriando {wait_time}s (intento {attempt + 1}/{max_retries})...{RESET}")
                     time.sleep(wait_time)
                 else:
                     print(f"    {YELLOW}⚠️ Nota al crear {title}: {e}{RESET}")
                     break
         dispatched.append((title, art_id, atype))
-        time.sleep(2.5)
+        # Espaciado determinista anti-burst entre peticiones
+        time.sleep(4.5)
 
     # 3. Creación de Notas Nativas en el Cuaderno (SSoT Cloud-Native, 0 bytes en disco local)
     print(f"\n{BOLD}[Paso 3/3]{RESET} Creando notas nativas de seguimiento y Ruta de Estudio SSoT...")
@@ -1340,8 +1295,18 @@ def cmd_setup(args):
                 print(f"\n{MAGENTA}>>> [{idx}/{len(nb_ids)}] Configurando cuaderno de colección: {BOLD}{ntitle}{RESET} ({CYAN}{nid}{RESET}) <<<")
                 setup_single_notebook(client, nid, ntitle, args)
                 if idx < len(nb_ids):
-                    print(f"  [Rate-Limiting] Pausando 3 segundos entre cuadernos de la colección...")
-                    time.sleep(3)
+                    # Chequeo dinámico de cuota entre cuadernos de colección
+                    try:
+                        u_chk = usage.get_usage(client)
+                        r_chk = next((w for w in u_chk.get("windows", []) if w.get("window") == "rolling"), None)
+                        if r_chk and r_chk.get("percent_remaining", 100.0) < 18.0:
+                            print(f"\n  {YELLOW}⚠️ AVISO DE PRE-VUELO EN COLECCIÓN: Cuota rolling baja ({r_chk.get('percent_remaining'):.1f}% restante).{RESET}")
+                            print(f"  {YELLOW}   Activando modo --no-media automático para los cuadernos restantes para evitar HTTP 429.{RESET}\n")
+                            setattr(args, "no_media", True)
+                    except Exception:
+                        pass
+                    print(f"  [Rate-Limiting Anti-Burst] Pausando 6 segundos entre cuadernos de la colección...")
+                    time.sleep(6)
             except Exception as e_nb:
                 print(f"  {RED}⚠️ Error configurando cuaderno {nid}: {e_nb}{RESET}")
 
@@ -1797,6 +1762,98 @@ def cmd_list(args):
 
 
 # ---------------------------------------------------------------------------
+# COMANDO: usage
+# Telemetría de Cuotas Google One AI Premium (Ventana Rolling ~5h y Semanal)
+# ---------------------------------------------------------------------------
+
+def cmd_usage(args):
+    """Muestra la telemetría viva de cuotas de cómputo en Google One AI Premium (Octubre 2026)."""
+    client = get_client()
+    print(f"\n{CYAN}========================================================================================{RESET}")
+    print(f"  📊 TELEMETRÍA DE CUOTA EN VIVO: GOOGLE NOTEBOOKLM PRO (GOOGLE ONE AI PREMIUM)")
+    print(f"{CYAN}========================================================================================{RESET}\n")
+    try:
+        u_info = usage.get_usage(client)
+        tier = u_info.get("tier", "NOTEBOOKLM_TIER_PRO_CONSUMER_USER")
+        windows = u_info.get("windows", [])
+
+        print(f"  • {BOLD}Nivel de Suscripción:{RESET} {GREEN}{tier}{RESET}")
+        print(f"  • {BOLD}Modelo de Cómputo:{RESET} Asignación ponderada por ráfaga (SOTA Octubre 2026)\n")
+
+        print(f"  {'Ventana de Cómputo':<26} | {'% Usado':<10} | {'% Disponible':<14} | {'Hora de Reset (UTC)':<24}")
+        print("  " + "-" * 80)
+
+        rolling_avail = 100.0
+        for w in windows:
+            w_name = w.get("window", "").capitalize()
+            p_used = w.get("percent_used", 0.0)
+            p_rem = w.get("percent_remaining", 100.0)
+            r_at = w.get("resets_at", "N/A")
+            if isinstance(r_at, str) and "T" in r_at:
+                r_at = r_at.replace("T", " ")[:19]
+
+            w_desc = "Rolling (~5 horas)" if "roll" in w_name.lower() else "Semanal (7 días)"
+            if "roll" in w_name.lower():
+                rolling_avail = p_rem
+
+            color_stat = GREEN if p_rem >= 30.0 else (YELLOW if p_rem >= 15.0 else RED)
+            print(f"  {BOLD}{w_desc:<26}{RESET} | {p_used:>7.1f}%   | {color_stat}{p_rem:>10.1f}%{RESET}   | {r_at:<24}")
+
+        print("  " + "-" * 80 + "\n")
+
+        # Semáforo de seguridad de generación
+        if rolling_avail >= 30.0:
+            print(f"  🟢 {GREEN}{BOLD}ESTADO VERDE:{RESET} Capacidad óptima. Podés generar audios y la suite completa sin riesgo de 429.")
+        elif rolling_avail >= 15.0:
+            print(f"  🟡 {YELLOW}{BOLD}ESTADO AMARILLO:{RESET} Capacidad moderada. Se recomienda usar perfil 'core' (1 solo audio) o --no-media.")
+        else:
+            print(f"  🔴 {RED}{BOLD}ESTADO ROJO:{RESET} Cuota rolling crítica (<15%). Google arrojará 429 en audios/videos. Generá solo texto/mapas.")
+        print("")
+    except Exception as e_u:
+        print(f"  {RED}[ERROR consultando cuotas]{RESET} {e_u}\n")
+
+
+# ---------------------------------------------------------------------------
+# COMANDO: manual
+# Manual del Estudiante y Guía Pedagógica MVLS Integrada en Terminal
+# ---------------------------------------------------------------------------
+
+def cmd_manual(args):
+    """Muestra el manual pedagógico del estudiante y guía de 4 fases directamente en la terminal."""
+    print(f"\n{CYAN}========================================================================================{RESET}")
+    print(f"  🎓 MANUAL DEL ESTUDIANTE: DOMINA CUALQUIER TEMA CON NLM-TUTOR (COHALO FRACTAL v{VERSION})")
+    print(f"{CYAN}========================================================================================{RESET}\n")
+    print(f"  {BOLD}Fundamentación Científica:{RESET}")
+    print(f"  • {GREEN}Make It Stick / Harvard:{RESET} Inversión 20/80 (20% andamiaje inicial, 80% Active Recall forzado).")
+    print(f"  • {GREEN}Josh Kaufman (20 Horas):{RESET} Deconstruir en 3-4 micro-habilidades y aprender lo justo para autocorregirse.")
+    print(f"  • {GREEN}MIT Dinámica de Sistemas:{RESET} Iceberg de 4 capas (Hechos -> Patrones -> Estructuras -> Modelos Mentales).")
+    print(f"  • {GREEN}Ebbinghaus / Repetición Espaciada:{RESET} Repasos algorítmicos en +24h, +3d, +7d, +14d y +30d.\n")
+
+    print(f"  {BOLD}🏛️  LAS 4 FASES DEL MINIMAL VIABLE LEARNING STACK (MVLS):{RESET}")
+    print(f"  1. {CYAN}FASE 1 (Pre-Test & Quiebre de Ilusión):{RESET} 01_DIAGNOSTICO_Activacion-Conceptual.")
+    print(f"     Rompe la falsa familiaridad antes de leer el material. Equivocarte aquí triplica la retención.")
+    print(f"  2. {CYAN}FASE 2 (Andamiaje Panorámico):{RESET} 02_MAPA_Syllabus-Estructural & 03_AUDIO_Inmersion-General.")
+    print(f"     Escucha el podcast mientras caminas o preparas tu espacio; mira el mapa 3 minutos para ver el bosque.")
+    print(f"  3. {CYAN}FASE 3 (Deconstrucción Causal & Errores):{RESET} 04_TABLA_Matriz-Deconstruccion-80-20 & 05_INFORME_Plan-de-Accion.")
+    print(f"     Hoja de una página con el catálogo de trampas típicas para saber cuándo te estás equivocando.")
+    print(f"  4. {CYAN}FASE 4 (Sparring Socrático & Repaso Espaciado):{RESET} nlm-tutor session & 00_CUADERNO_DE_LAGUNAS.")
+    print(f"     Entrenamiento interactivo en terminal con la regla de 1 sola pregunta a la vez a libro cerrado.\n")
+
+    print(f"  {BOLD}🚦 EL SEMÁFORO DE AVANCE:{RESET}")
+    print(f"  • 🟢 {GREEN}VERDE (≥ 80% aciertos):{RESET} Dominas los invariantes causales. Avanza al siguiente módulo.")
+    print(f"  • 🟡 {YELLOW}AMARILLO / ROJO (< 80%):{RESET} {BOLD}NO releas todo el material.{RESET} Abre '00_CUADERNO_DE_LAGUNAS',")
+    print(f"    revisa únicamente las citas de los conceptos fallados y haz 10 min de Active Recall.\n")
+
+    print(f"  {BOLD}⚡ COMANDOS RÁPIDOS:{RESET}")
+    print(f"  • {CYAN}nlm-tutor setup <ID>{RESET}                -> Configura el cuaderno con el MVLS hiper-efectivo (5 artefactos).")
+    print(f"  • {CYAN}nlm-tutor setup <ID> --profile standard{RESET} -> Genera la suite completa de 11 artefactos para cursos troncales.")
+    print(f"  • {CYAN}nlm-tutor session <ID> --duration 90{RESET}    -> Inicia bloque de 90 min con sparring socrático en terminal.")
+    print(f"  • {CYAN}nlm-tutor schedule <ID>{RESET}               -> Calcula tu calendario matemático de Ebbinghaus.")
+    print(f"  • {CYAN}nlm-tutor usage{RESET}                      -> Monitorea tu cuota viva de Google One.")
+    print(f"  • {CYAN}nlm-tutor prompt <ID> <1-12> --send{RESET}   -> Envía un prompt maestro directamente al chat.\n")
+
+
+# ---------------------------------------------------------------------------
 # CLI Argument Parser Principal
 # ---------------------------------------------------------------------------
 
@@ -1804,24 +1861,34 @@ def main():
     parser = argparse.ArgumentParser(
         prog="nlm-tutor",
         description="Sistema Autónomo de Aprendizaje Acelerado y Tutoría Socrática para Google NotebookLM Pro.",
-        epilog="Desarrollado bajo Supreme Directive v7.6 & CoHaLo v7.0."
+        epilog="Desarrollado bajo Supreme Directive v8.5 & CoHaLo Engineering."
     )
     parser.add_argument("--version", "-v", action="version", version=f"nlm-tutor v{VERSION}")
 
     subparsers = parser.add_subparsers(dest="command", help="Comando a ejecutar")
 
     # setup
-    p_setup = subparsers.add_parser("setup", help="Configura el Tutor Socrático y genera la suite de artefactos cognitivos.")
+    p_setup = subparsers.add_parser("setup", help="Configura el Tutor Socrático y genera la suite adaptativa (MVLS por defecto).")
     p_setup.add_argument("notebook", nargs="?", default="", help="ID, prefijo o título del cuaderno en NotebookLM.")
     p_setup.add_argument("--collection", "-c", help="Nombre o ID de la colección para configurar todos sus cuadernos en lote.")
-    p_setup.add_argument("--profile", "-p", choices=["auto", "core", "standard", "exhaustive"], default="auto", help="Perfil de suite: auto (adaptativo por análisis semántico de dominio), core (esencial enfocado), standard, exhaustive.")
+    p_setup.add_argument("--profile", "-p", choices=["auto", "core", "standard", "exhaustive"], default="auto", help="Perfil de suite: core (MVLS de 5 entregables esenciales), standard (11 artefactos del manual), auto (adaptativo por densidad).")
     p_setup.add_argument("--with-video", action="store_true", help="Genera video explicativo en Studio (por defecto omitido para proteger la cuota Google One).")
+    p_setup.add_argument("--video-style", default="auto_select", choices=["auto_select", "whiteboard", "kawaii", "anime", "watercolor", "retro_print", "heritage", "paper_craft", "classic", "custom"], help="Estilo visual del video explicativo en Studio (Octubre 2026).")
+    p_setup.add_argument("--video-format", default="explainer", choices=["explainer", "brief", "cinematic", "short"], help="Formato de video en Studio: explainer (2-4 min), brief, cinematic (veo), short.")
     p_setup.add_argument("--all-media", action="store_true", help="Genera la suite multimedia completa: 4 audios (brief, deep_dive, critique, debate) y video.")
     p_setup.add_argument("--no-media", action="store_true", help="Genera exclusivamente entregables de texto, mapas y visuales (consumo: 0%% cuota multimedia Google One).")
     p_setup.add_argument("--count", type=int, help="Límite máximo de artefactos a generar en la suite.")
     p_setup.add_argument("--wait", action="store_true", help="Esperar de forma síncrona en terminal hasta que concluyan los artefactos pesados (por defecto delega a vigilancia en segundo plano).")
     p_setup.add_argument("--guide", action="store_true", help="Usar modo nativo 'learning_guide' en vez de 'custom'.")
     p_setup.add_argument("--clean", action="store_true", help="Limpia artefactos de Studio, notas 00 y chat antes de configurar (no toca fuentes).")
+
+    # usage / quota
+    subparsers.add_parser("usage", help="Consulta la telemetría en vivo de tus cuotas de cómputo en Google One (ventana rolling y semanal).")
+    subparsers.add_parser("quota", help="Alias de 'usage'.")
+
+    # manual / guide
+    subparsers.add_parser("manual", help="Muestra el Manual del Estudiante y las 4 fases del Minimal Viable Learning Stack en terminal.")
+    subparsers.add_parser("guide", help="Alias de 'manual'.")
 
     # clean
     p_clean = subparsers.add_parser("clean", help="Limpia artefactos de Studio, notas del tutor e historial de chat (sin tocar fuentes).")
@@ -1873,6 +1940,10 @@ def main():
 
     if args.command == "setup":
         cmd_setup(args)
+    elif args.command in ("usage", "quota"):
+        cmd_usage(args)
+    elif args.command in ("manual", "guide"):
+        cmd_manual(args)
     elif args.command == "clean":
         cmd_clean(args)
     elif args.command == "rename":
