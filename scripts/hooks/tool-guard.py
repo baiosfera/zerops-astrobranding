@@ -879,8 +879,12 @@ def evaluate_hook(payload: dict) -> dict:
             except Exception:
                 pass
 
-        if payload.get("test_dedup"):
-            return {}
+        last_inv = last_state.get("invocationNum")
+        last_ts = last_state.get("ts", 0)
+        # Multi-Hook De-duplication: Suppress duplicate executions across multi-hook registrations or within 2.5 seconds
+        if not payload.get("test_bypass_dedup"):
+            if payload.get("test_dedup") or (last_inv is not None and inv_num == last_inv and (now_ts - last_ts) < 3.0) or ((now_ts - last_ts) < 2.0 and inv_num == 0):
+                return {}
 
         try:
             with open(state_file, "w") as f:
@@ -928,35 +932,54 @@ def evaluate_hook(payload: dict) -> dict:
             prompt_lower = user_prompt.lower()
             matched_skills = [m[0] for m in detect_skills_in_prompt(user_prompt)]
 
-            # 1. Epistemic Grounding Radar (F0 Positive Guidance & Anti-AMN)
-            is_skill_task = any(k in prompt_lower for k in ["skill", "skills", "meta-skill", "docu", "cohalo", "crear skill", "arreglar skill", "auditar skill", "actualizar skill"])
-            is_eval = any(k in prompt_lower for k in ["mejor forma", "investigar", "investiga", "benchmark", "sota", "comparar", "cual es mejor", "api", "version", "breaking change"])
-            if "research" in matched_skills or is_skill_task or is_eval:
-                ephemeral_msgs.append(
-                    "🏛️ MANDATO EPISTÉMICO F0 (Supreme Directive v8.5): La skill 'research' es la compuerta sovereign "
-                    "obligatoria. Para arquitectura, diseño de APIs o saneamiento/creación de skills, es MANDATORIO "
-                    "contrastar fuentes primarias vivas fuera de la caja negra usando 'research' con subagentes dedicados "
-                    "('invoke_subagent' con typeName 'research') y la triangulación de sus 12 motores (Context7, Exa, "
-                    "Tavily, Brave, Jina Reader 'r.jina.ai', Firecrawl). Cero especulaciones con memoria pre-entrenada (AMN)."
-                )
+            notice_state_file = "/tmp/.tool_guard_notice_history.json"
+            last_notice_ts = 0
+            if os.path.exists(notice_state_file):
+                try:
+                    with open(notice_state_file, "r") as f:
+                        last_notice_ts = json.load(f).get("ts", 0)
+                except Exception:
+                    pass
 
-            # 2. Gentle-AI Subagent Orchestrator Gate
-            is_heavy = any(k in prompt_lower for k in ["flujo", "refactor", "implementa", "arregla", "construye", "despliega", "crea"])
-            if is_heavy and len(prompt_lower) > 40:
-                ephemeral_msgs.append(
-                    "Gentle-AI Orchestrator: Mantené el hilo padre delgado. Para tareas sustanciales o de múltiples archivos, "
-                    "delegá la ejecución a subagentes acotados (invoke_subagent con 'research' o define_subagent) y sintetizá resultados."
-                )
+            is_notice_cooling = (now_ts - last_notice_ts) < 300 and not payload.get("test_force_notice") and "--test" not in sys.argv
 
-            # 3. Linear-First Epistemic Persistence Gate (Invariante 2)
-            plans_dir = "/var/www/artifacts/plans"
-            if os.path.exists(plans_dir) and any(f.endswith(".md") for f in os.listdir(plans_dir)):
-                ephemeral_msgs.append(
-                    "🏛️ INVARIANTE LINEAR-FIRST GATE (00-SUPREME-DIRECTIVE Invariante 2): "
-                    "Hay un plan activo en ejecución en /var/www/artifacts/plans/. Prohibido responder o dar explicaciones en el chat "
-                    "sin haber ejecutado 'linear-cli comment <ID>' para persistir tus hallazgos técnicos en Linear. "
-                    "Persistir en Linear es un prerequisito bloqueante antes de responder al usuario."
-                )
+            if not is_notice_cooling:
+                # 1. Epistemic Grounding Radar (F0 Positive Guidance & Anti-AMN)
+                is_skill_task = any(k in prompt_lower for k in ["skill", "skills", "meta-skill", "docu", "cohalo", "crear skill", "arreglar skill", "auditar skill", "actualizar skill"])
+                is_eval = any(k in prompt_lower for k in ["mejor forma", "investigar", "investiga", "benchmark", "sota", "comparar", "cual es mejor", "api", "version", "breaking change"])
+                if "research" in matched_skills or is_skill_task or is_eval:
+                    ephemeral_msgs.append(
+                        "🏛️ MANDATO EPISTÉMICO F0 (Supreme Directive v8.5): La skill 'research' es la compuerta sovereign "
+                        "obligatoria. Para arquitectura, diseño de APIs o saneamiento/creación de skills, es MANDATORIO "
+                        "contrastar fuentes primarias vivas fuera de la caja negra usando 'research' con subagentes dedicados "
+                        "('invoke_subagent' con typeName 'research') y la triangulación de sus 12 motores (Context7, Exa, "
+                        "Tavily, Brave, Jina Reader 'r.jina.ai', Firecrawl). Cero especulaciones con memoria pre-entrenada (AMN)."
+                    )
+
+                # 2. Gentle-AI Subagent Orchestrator Gate
+                is_heavy = any(k in prompt_lower for k in ["flujo", "refactor", "implementa", "arregla", "construye", "despliega", "crea"])
+                if is_heavy and len(prompt_lower) > 40:
+                    ephemeral_msgs.append(
+                        "Gentle-AI Orchestrator: Mantené el hilo padre delgado. Para tareas sustanciales o de múltiples archivos, "
+                        "delegá la ejecución a subagentes acotados (invoke_subagent con 'research' o define_subagent) y sintetizá resultados."
+                    )
+
+                # 3. Linear-First Epistemic Persistence Gate (Invariante 2)
+                plans_dir = "/var/www/artifacts/plans"
+                if os.path.exists(plans_dir) and any(f.endswith(".md") for f in os.listdir(plans_dir)):
+                    ephemeral_msgs.append(
+                        "🏛️ INVARIANTE LINEAR-FIRST GATE (00-SUPREME-DIRECTIVE Invariante 2): "
+                        "Hay un plan activo en ejecución en /var/www/artifacts/plans/. Prohibido responder o dar explicaciones en el chat "
+                        "sin haber ejecutado 'linear-cli comment <ID>' para persistir tus hallazgos técnicos en Linear. "
+                        "Persistir en Linear es un prerequisito bloqueante antes de responder al usuario."
+                    )
+
+                if ephemeral_msgs and "--test" not in sys.argv:
+                    try:
+                        with open(notice_state_file, "w") as f:
+                            json.dump({"ts": now_ts}, f)
+                    except Exception:
+                        pass
 
             if halt_alert:
                 ephemeral_msgs.append(halt_alert.strip())
@@ -1091,6 +1114,19 @@ def evaluate_hook(payload: dict) -> dict:
                 )
             }
 
+        # A2.5 Anti-Perros Guardianes (Eradicates Synthetic Individual Validator Scripts)
+        base_target = os.path.basename(target_file)
+        if base_target.endswith("-validate.sh") and base_target != "skills-suite-validate.sh":
+            return {
+                "decision": "deny",
+                "reason": (
+                    f"Soberanía del Sensor Universal: La validación de capacidades reside exclusivamente "
+                    f"en 'skills-suite-validate'. En vez de crear o editar validadores individuales como [{base_target}], "
+                    "verificá que los scripts compilen con 'bash -n' y que las pruebas residan en la suite física "
+                    "de la aplicación (bun test / pytest) o en el Sensor Universal."
+                )
+            }
+
         # A3. Skill Pre-Mutation Backup Gate
         if not has_recent_backup(target_file):
             return {
@@ -1181,18 +1217,6 @@ def evaluate_hook(payload: dict) -> dict:
                     )
                 }
 
-        # A4.1 Anti-Perros Guardianes (Eradicates Synthetic Individual Validator Scripts)
-        base_target = os.path.basename(target_file)
-        if base_target.endswith("-validate.sh") and base_target != "skills-suite-validate.sh":
-            return {
-                "decision": "deny",
-                "reason": (
-                    f"Soberanía del Sensor Universal: La validación de capacidades reside exclusivamente "
-                    f"en 'skills-suite-validate'. En vez de crear o editar validadores individuales como [{base_target}], "
-                    "verificá que los scripts compilen con 'bash -n' y que las pruebas residan en la suite física "
-                    "de la aplicación (bun test / pytest) o en el Sensor Universal."
-                )
-            }
 
         # A5. CoHaLo & Skill-Improver Quality Gate
         content_to_check = content_to_check or args.get("CodeContent", "") or args.get("ReplacementContent", "")
