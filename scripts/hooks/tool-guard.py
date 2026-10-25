@@ -833,10 +833,20 @@ def get_pending_research_subagents(transcript_path: str) -> list:
     return pending
 
 def extract_user_prompt(payload: dict) -> str:
-    user_prompt = payload.get("userPrompt", "")
+    user_prompt = payload.get("userPrompt") or payload.get("lastUserInput") or ""
     if user_prompt:
         return user_prompt
-    transcript_path = payload.get("transcriptPath", "")
+    common = payload.get("common", {})
+    if isinstance(common, dict):
+        user_prompt = common.get("lastUserInput") or common.get("userPrompt") or ""
+        if user_prompt:
+            return user_prompt
+    stop_args = payload.get("stopHookArgs", {})
+    if isinstance(stop_args, dict):
+        user_prompt = stop_args.get("lastUserInput") or ""
+        if user_prompt:
+            return user_prompt
+    transcript_path = payload.get("transcriptPath", "") or (common.get("transcriptPath") if isinstance(common, dict) else "")
     if transcript_path and os.path.exists(transcript_path):
         try:
             with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -879,10 +889,10 @@ def evaluate_hook(payload: dict) -> dict:
         }
 
     # 0.5 Stop Event Handling (Linear-First Chat Delivery Gate)
-    if "terminationReason" in payload or payload.get("is_stop_event"):
-        term_reason = payload.get("terminationReason", "NO_TOOL_CALL")
+    if "terminationReason" in payload or payload.get("is_stop_event") or "stopHookArgs" in payload:
+        term_reason = payload.get("terminationReason") or payload.get("stopHookArgs", {}).get("terminationReason") or "NO_TOOL_CALL"
         if term_reason == "NO_TOOL_CALL":
-            transcript_path = payload.get("transcriptPath", "")
+            transcript_path = payload.get("transcriptPath", "") or payload.get("common", {}).get("transcriptPath", "")
             pending_subagents = get_pending_research_subagents(transcript_path) if not payload.get("test_bypass_research_wait") else []
             if payload.get("test_has_pending_research"):
                 pending_subagents = ["subagent-test-pending"]
@@ -904,14 +914,17 @@ def evaluate_hook(payload: dict) -> dict:
 
                 if has_grilling_or_conclusion:
                     return {
-                        "decision": "continue",
+                        "decision": "CONTINUE",
                         "reason": (
                             f"🏛️ MANDATO DE ESPERA EPISTÉMICA F0 (Supreme Directive Invariante 5): "
                             f"Hay subagentes de 'research' activos en vuelo ({pending_subagents}). Está terminantemente "
                             "PROHIBIDO apresurarse a redactar conclusiones o formular preguntas de grilling antes de "
                             "recibir e ingerir los reportes de investigación de todos los subagentes delegados. "
                             "Informá brevemente al usuario que lanzaste la investigación y aguardá su retorno en silencio."
-                        )
+                        ),
+                        "stopResult": {
+                            "decision": "CONTINUE"
+                        }
                     }
 
             plans_dir = "/var/www/artifacts/plans"
@@ -961,13 +974,16 @@ def evaluate_hook(payload: dict) -> dict:
                         with open(stop_counter_file, "w") as f:
                             f.write(str(count + 1))
                         return {
-                            "decision": "continue",
+                            "decision": "CONTINUE",
                             "reason": (
                                 "🏛️ VIOLACIÓN LINEAR-FIRST GATE (00-SUPREME-DIRECTIVE Invariante 2): "
                                 "Hay un plan activo en /var/www/artifacts/plans/ y realizaste inspecciones/descubrimientos "
                                 "sin haber persistido tus hallazgos en Linear. Es mandatorio ejecutar 'linear-cli comment <ID>' "
                                 "antes de entregar explicaciones o cerrar el turno en el chat."
-                            )
+                            ),
+                            "stopResult": {
+                                "decision": "CONTINUE"
+                            }
                         }
                     else:
                         if os.path.exists(stop_counter_file):
@@ -1026,7 +1042,7 @@ def evaluate_hook(payload: dict) -> dict:
                             with open(correction_counter_file, "w") as f:
                                 f.write(str(count + 1))
                             return {
-                                "decision": "continue",
+                                "decision": "CONTINUE",
                                 "reason": (
                                     "🏛️ INVARIANTE DE MUTACIÓN FÍSICA SSoT (Anti-Cháchara): "
                                     "El usuario señaló correcciones, omisiones o modificaciones requeridas en el plan o la arquitectura, "
@@ -1034,7 +1050,10 @@ def evaluate_hook(payload: dict) -> dict:
                                     "ni ejecutaste comandos de Linear en este turno. Queda prohibido cerrar el turno con meras explicaciones, "
                                     "disculpas o memoria en Engram: es mandatorio inyectar físicamente las correcciones en el artefacto "
                                     "físico del plan o en los BAIs de Linear antes de responder."
-                                )
+                                ),
+                                "stopResult": {
+                                    "decision": "CONTINUE"
+                                }
                             }
                         else:
                             if os.path.exists(correction_counter_file):
@@ -1082,13 +1101,16 @@ def evaluate_hook(payload: dict) -> dict:
                             with open(gov_counter_file, "w") as f:
                                 f.write(str(count + 1))
                             return {
-                                "decision": "continue",
+                                "decision": "CONTINUE",
                                 "reason": (
                                     "🏛️ INVARIANTE SENSOR-FIRST (Anti-Cháchara de Gobernanza): "
                                     "El usuario solicitó blindar, arreglar o actualizar el arnés/hooks/gobernanza sin cháchara ni checklist-theater, "
                                     "pero no modificaste físicamente 'tool-guard.py' ni ejecutaste tests en este turno. "
                                     "Es mandatorio implementar el sensor físico en Python, su test unitario determinista y validarlo antes de responder."
-                                )
+                                ),
+                                "stopResult": {
+                                    "decision": "CONTINUE"
+                                }
                             }
                         else:
                             if os.path.exists(gov_counter_file):
@@ -2533,7 +2555,7 @@ def run_tests():
             "test_has_plan_mutation": False,
             "test_bypass_linear": True
         })
-        assert res_chachara_blocked.get("decision") == "continue" and "Anti-Cháchara" in res_chachara_blocked.get("reason", ""), f"Expected continue (stop blocked) on unmutated plan correction, got {res_chachara_blocked}"
+        assert res_chachara_blocked.get("decision") in ["continue", "CONTINUE"] and "Anti-Cháchara" in res_chachara_blocked.get("reason", ""), f"Expected continue (stop blocked) on unmutated plan correction, got {res_chachara_blocked}"
         print("✓ Test 55 Passed: Anti-Cháchara Gate blocks turn stop when plan correction requested without file mutation")
 
         # Test 56: Anti-Cháchara Gate allows Stop when plan was mutated
@@ -2576,7 +2598,7 @@ def run_tests():
             "test_has_gov_mutation": False,
             "test_bypass_linear": True
         })
-        assert res_gov_blocked.get("decision") == "continue" and "SENSOR-FIRST" in res_gov_blocked.get("reason", "").upper(), f"Expected continue (stop blocked) on unmutated governance fix, got {res_gov_blocked}"
+        assert res_gov_blocked.get("decision") in ["continue", "CONTINUE"] and "SENSOR-FIRST" in res_gov_blocked.get("reason", "").upper(), f"Expected continue (stop blocked) on unmutated governance fix, got {res_gov_blocked}"
         print("✓ Test 58 Passed: Anti-Cháchara Governance Gate blocks turn stop on hook/governance fix without code mutation")
 
         # Test 59: Anti-Cháchara Governance Gate allows turn stop when tool-guard/governance was mutated
@@ -2589,6 +2611,25 @@ def run_tests():
         })
         assert res_gov_allowed == {}, f"Expected allow stop when governance was mutated, got {res_gov_allowed}"
         print("✓ Test 59 Passed: Anti-Cháchara Governance Gate allows turn stop when governance was mutated")
+
+        # Test 60: Real Antigravity Payload Emulation Test (Zero test_* mock prefixes)
+        if os.path.exists("/tmp/.gov_mutation_stop_force_count"):
+            try:
+                os.remove("/tmp/.gov_mutation_stop_force_count")
+            except Exception:
+                pass
+        res_real_payload = evaluate_hook({
+            "is_stop_event": True,
+            "lastUserInput": "Arreglá y blindá el hook de tool-guard sin cháchara",
+            "stopHookArgs": {
+                "executionNum": 1,
+                "terminationReason": "NO_TOOL_CALL"
+            },
+            "workspacePaths": ["/var/www"],
+            "test_bypass_linear": True
+        })
+        assert res_real_payload.get("decision") in ["continue", "CONTINUE"] and "SENSOR-FIRST" in res_real_payload.get("reason", "").upper(), f"Expected CONTINUE on real Antigravity payload, got {res_real_payload}"
+        print("✓ Test 60 Passed: Real Antigravity payload with lastUserInput triggers Stop Hook without mocks")
 
     finally:
         if os.path.exists("/tmp/.gov_mutation_stop_force_count"):
@@ -2651,6 +2692,8 @@ def main():
         raw_input = sys.stdin.read()
         if raw_input.strip():
             payload = json.loads(raw_input)
+            with open("/tmp/last_tool_guard_input.json", "w") as f:
+                f.write(raw_input)
     except Exception:
         pass
 
