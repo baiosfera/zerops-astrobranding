@@ -2471,7 +2471,7 @@ def download_sync_link(
         GCM_PACKET_SIZE = 131072   # 128 KB encrypted packet size
         GCM_PAYLOAD_SIZE = 131036  # 131072 - 36 bytes (12B AAD + 12B IV + 12B Tag)
         OVERHEAD = 36
-        BLOCK_PACKETS = 32         # 4 MB per HTTP request
+        BLOCK_PACKETS = 8          # 1 MB per HTTP request (Sync.com API enforces 1MB maximum chunk)
 
         num_packets = (file_size + GCM_PAYLOAD_SIZE - 1) // GCM_PAYLOAD_SIZE if file_size > 0 else 1
         last_payload_len = file_size - (num_packets - 1) * GCM_PAYLOAD_SIZE if file_size > 0 else 0
@@ -2530,6 +2530,12 @@ def download_sync_link(
                         resp_dl = session.get(dl_url, params=dl_params, timeout=45)
                         if resp_dl.status_code in (200, 206) and len(resp_dl.content) == enc_len:
                             block_data = resp_dl.content
+                            break
+                        elif resp_dl.status_code in (200, 206) and len(resp_dl.content) > 0 and (len(resp_dl.content) % GCM_PACKET_SIZE == 0 or (p_end == num_packets and len(resp_dl.content) == enc_len)):
+                            block_data = resp_dl.content
+                            actual_packets = len(block_data) // GCM_PACKET_SIZE
+                            if actual_packets > 0:
+                                p_end = p_start + actual_packets
                             break
                         else:
                             logger.warning(f"Aviso descarga Sync ({filename}): HTTP {resp_dl.status_code} (len={len(resp_dl.content)}, req={enc_len}). Reintento {retry+1}/6...")
