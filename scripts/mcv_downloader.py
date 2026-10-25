@@ -7627,164 +7627,6 @@ def handle_curriculum(target: str, args) -> bool:
     return (True, ordered_all_courses)
 
 
-
-def main():
-    # Inmunidad nativa contra desconexiones de terminal web (SIGHUP) y pipes rotos (SIGPIPE)
-    try:
-        signal.signal(signal.SIGHUP, signal.SIG_IGN)
-        signal.signal(signal.SIGPIPE, signal.SIG_IGN)
-    except Exception:
-        pass
-
-    parser = argparse.ArgumentParser(
-        description=f"MCV Downloader & Optimizer v{VERSION}: Descarga Multi-Proveedor (Sync, Mega, Google Drive), reducción a 360p y audio NotebookLM"
-    )
-    parser.add_argument("url", nargs="?", help="URL del curso, categoría o autor a descargar en MisCursosVirtuales")
-    parser.add_argument("-o", "--output-dir", help="Directorio base de destino (por defecto: directorio actual)")
-    parser.add_argument("-c", "--cookies", default=DEFAULT_COOKIES_PATH, help=f"Ruta a cookies JSON (por defecto: {DEFAULT_COOKIES_PATH})")
-    parser.add_argument("-i", "--interval", type=int, default=3600, help="Intervalo de alertas de progreso en segundos (por defecto: 3600s = 1 hora)")
-    parser.add_argument("--alias", help="Alias o apellido explícito del autor (ej: Lavin, Javi) para carpetas y NotebookLM")
-    parser.add_argument("--collection", help="Nombre explícito de la Colección en Google NotebookLM (soberano, sin categorías automáticas)")
-    parser.add_argument("--metadata-only", action="store_true", help="Solo extraer enlaces y generar archivo .md sin descargar")
-    parser.add_argument("--validate-only", nargs="?", const=".", help="Validar y reportar la integridad de un directorio de curso existente (por defecto: '.')")
-    parser.add_argument("--optimize-only", nargs="?", const=".", help="Ejecutar reducción a 360p, extracción de audio y ordenamiento en carpeta existente (por defecto: '.')")
-    parser.add_argument("--upload-only", nargs="?", const=".", help="Subir únicamente audios y markdown existentes a Google NotebookLM sin tocar medios ni transcodificar (por defecto: '.')")
-    parser.add_argument("--curriculum", nargs="?", const=".", help="Analizar catálogo o directorio de autor, deducir la ruta pedagógica ascendente [P01]..[Pn] y generar RUTA_DE_APRENDIZAJE.md")
-    parser.add_argument("--download", action="store_true", help="Forzar ejecución de la cola de descarga cuando se combina con --curriculum")
-    parser.add_argument("--skip-historical", action="store_true", help="Omitir automáticamente cursos obsoletos marcados como [⚠️ Histórico] en la descarga curricular")
-    parser.add_argument("--no-extract", action="store_true", help="No descomprimir automáticamente los archivos")
-    parser.add_argument("--no-reduce", action="store_true", help="No reducir videos ni generar audios")
-    parser.add_argument(
-        "--audio-format",
-        default="aac",
-        choices=["aac", "mp3", "opus"],
-        help="Formato de audio para NotebookLM: 'aac' (24k mono, 25%% más liviano, por defecto), 'mp3' (32k CBR) u 'opus'"
-    )
-    parser.add_argument("-d", "--detach", action="store_true", help="Ejecutar como demonio en segundo plano sin conectar el visor en vivo")
-    parser.add_argument("-f", "--foreground", action="store_true", help="Ejecutar en primer plano pegado a la terminal (por defecto corre siempre en segundo plano inmune)")
-    parser.add_argument("--since", help="Filtrar cursos con vigencia mayor o igual a fecha (ej: '2024-09' o '2024-09-01')")
-    parser.add_argument("--exclude", "--skip", help="Números de cursos a excluir de la lista (ej: '1,2,5-8,14' o ruta a archivo .txt)")
-    parser.add_argument("--only", "--include", help="Descargar únicamente los números indicados (ej: '3,4,9-12' o ruta a archivo .txt)")
-    parser.add_argument("--list", "--dry-run", action="store_true", dest="list_only", help="Escanear catálogo y listar cursos detectados con fecha y estado sin descargar nada")
-    parser.add_argument("--no-date-prefix", action="store_false", dest="date_prefix", default=True, help="No agregar prefijo [YYYY-MM] al nombre de la carpeta")
-    parser.add_argument("--upload-nlm", action="store_true", help="Ingestar automáticamente audios y markdown del curso a Google NotebookLM al finalizar")
-    parser.add_argument(
-        "--audio-only", "--audio-first",
-        action="store_true",
-        dest="audio_only",
-        help="Arquitectura Audio-First: Extraer audios AAC y subir a NotebookLM dejando los videos en tamaño original sin transcodificar a 360p"
-    )
-    parser.add_argument("--status", action="store_true", help="Mostrar estado y telemetría de descargas activas")
-    parser.add_argument("-w", "--watch", action="store_true", help="Monitorizar continuamente en vivo el progreso de descargas")
-    parser.add_argument(
-        "--allow-credits", "--consume-credit",
-        action="store_true",
-        dest="allow_credits",
-        default=True,
-        help="Cerrojo soberano: Autoriza explícitamente el consumo de créditos en MisCursosVirtuales si no hay enlaces locales en SSoT"
-    )
-    parser.add_argument("-v", "--version", action="version", version=f"MCV Downloader & Optimizer v{VERSION}")
-    parser.add_argument("--force", action="store_true", help="Ignorar cerrojo singleton y permitir ejecuciones simultáneas")
-    parser.add_argument("--vip", action="store_true", help="Forzar destino a /var/www/baiosfera/CURSOS/MCV/VIP/")
-    parser.add_argument(
-        "--dest",
-        choices=["auto", "vip", "author", "categoria", "current"],
-        default="auto",
-        help="Regla de enrutamiento y carpetización: 'vip' (a VIP/), 'author' (a AUTHOR/<Alias>/), 'categoria' (a CATEGORIAS/<Cat>/), 'current' (al directorio actual), 'auto' (automático soberano)"
-    )
-    parser.add_argument("--author-dir", help="Subcarpeta explícita dentro de /var/www/baiosfera/CURSOS/MCV/AUTHOR/")
-    parser.add_argument("--category-dir", help="Subcarpeta explícita dentro de /var/www/baiosfera/CURSOS/MCV/CATEGORIAS/")
-    parser.add_argument("--category", help="Sobrescribir la categoría detectada del curso")
-
-    args = parser.parse_args()
-
-    # Si se invoca telemetría de estado, ejecutar inmediatamente y salir
-    if args.status or args.watch:
-        show_status(watch=args.watch)
-        sys.exit(0)
-
-    # Detección rigurosa de intención de descarga frente a pura inspección
-    has_download_intent = bool(
-        (bool(args.url and not os.path.isdir(args.url)) or bool(args.optimize_only))
-        and (
-            getattr(args, "audio_only", False)
-            or getattr(args, "download", False)
-            or args.detach
-            or args.foreground
-            or not getattr(args, "curriculum", None)
-        )
-        and not args.list_only
-        and not args.metadata_only
-        and not bool(args.validate_only)
-        and not bool(args.upload_only)
-    )
-
-    is_inspection = not has_download_intent
-
-    # Cerrojo Singleton: evitar descargas concurrentes accidentales si no es inspección
-    lock_fd = None
-    if not is_inspection:
-        lock_fd = acquire_singleton_lock(force=args.force)
-
-    if not is_inspection and not args.foreground:
-        pid = os.fork()
-        if pid > 0:
-            print("=" * 80)
-            print(f"🚀 DESCARGA DESATENDIDA INICIADA CON ÉXITO")
-            print(f"   PID del proceso trabajador autónomo: {pid}")
-            print("=" * 80)
-            print("🛡️  INMUNIDAD TOTAL:")
-            print("   Podés cerrar esta terminal, el navegador o apagar tu computadora con total seguridad.")
-            print("   El proceso continúa trabajando en segundo plano de forma 100% autónoma.")
-            print("--------------------------------------------------------------------------------")
-            print("💡 Para consultar el estado en cualquier momento ejecutá:")
-            print("   mcv-status")
-            print("   o en vivo continuo:")
-            print("   mcv-status -w")
-            print("=" * 80)
-            if not args.detach and sys.stdout.isatty():
-                print("\n👀 Conectando visor en vivo (podés cerrar la terminal o pulsar Ctrl+C sin frenar la descarga)...\n")
-                time.sleep(2.0)
-                try:
-                    subprocess.run(["mcv-status", "-w"])
-                except (KeyboardInterrupt, Exception):
-                    print(f"\n👋 Visor desconectado. La descarga continúa en segundo plano con PID: {pid}")
-            sys.exit(0)
-
-        # Proceso trabajador: desacoplar sesión completamente
-        os.setsid()
-        if lock_fd:
-            try:
-                lock_fd.seek(0)
-                lock_fd.truncate()
-                lock_fd.write(f"{os.getpid()}\n")
-                lock_fd.flush()
-            except Exception:
-                pass
-        try:
-            # Asignar prioridad de CPU baja (nice 10) para no saturar los 3 vCPU de Zerops
-            os.nice(10)
-        except Exception:
-            pass
-        try:
-            devnull = os.open(os.devnull, os.O_RDONLY)
-            os.dup2(devnull, 0)
-            daemon_log = os.open("/var/www/mcv_daemon.log", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-            os.dup2(daemon_log, 1)
-            os.dup2(daemon_log, 2)
-            if hasattr(sys.stdout, "reconfigure"):
-                sys.stdout.reconfigure(line_buffering=True)
-            if hasattr(sys.stderr, "reconfigure"):
-                sys.stderr.reconfigure(line_buffering=True)
-        except Exception:
-            pass
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
-
 def handle_existing_directory(cdir: str, args: argparse.Namespace):
     cdir = os.path.abspath(cdir)
     if os.path.basename(cdir).upper() == "NOTEBOOKLM_AUDIOS":
@@ -7885,6 +7727,163 @@ def handle_existing_directory(cdir: str, args: argparse.Namespace):
     except Exception as e_opt:
         logger.error(f"❌ Error durante el procesamiento de {cdir}: {e_opt}")
 
+
+def main():
+    # Inmunidad nativa contra desconexiones de terminal web (SIGHUP) y pipes rotos (SIGPIPE)
+    try:
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
+        signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+    except Exception:
+        pass
+
+    parser = argparse.ArgumentParser(
+        description=f"MCV Downloader & Optimizer v{VERSION}: Descarga Multi-Proveedor (Sync, Mega, Google Drive), reducción a 360p y audio NotebookLM"
+    )
+    parser.add_argument("url", nargs="?", help="URL del curso, categoría o autor a descargar en MisCursosVirtuales")
+    parser.add_argument("-o", "--output-dir", help="Directorio base de destino (por defecto: directorio actual)")
+    parser.add_argument("-c", "--cookies", default=DEFAULT_COOKIES_PATH, help=f"Ruta a cookies JSON (por defecto: {DEFAULT_COOKIES_PATH})")
+    parser.add_argument("-i", "--interval", type=int, default=3600, help="Intervalo de alertas de progreso en segundos (por defecto: 3600s = 1 hora)")
+    parser.add_argument("--alias", help="Alias o apellido explícito del autor (ej: Lavin, Javi) para carpetas y NotebookLM")
+    parser.add_argument("--collection", help="Nombre explícito de la Colección en Google NotebookLM (soberano, sin categorías automáticas)")
+    parser.add_argument("--metadata-only", action="store_true", help="Solo extraer enlaces y generar archivo .md sin descargar")
+    parser.add_argument("--validate-only", nargs="?", const=".", help="Validar y reportar la integridad de un directorio de curso existente (por defecto: '.')")
+    parser.add_argument("--optimize-only", nargs="?", const=".", help="Ejecutar reducción a 360p, extracción de audio y ordenamiento en carpeta existente (por defecto: '.')")
+    parser.add_argument("--upload-only", nargs="?", const=".", help="Subir únicamente audios y markdown existentes a Google NotebookLM sin tocar medios ni transcodificar (por defecto: '.')")
+    parser.add_argument("--curriculum", nargs="?", const=".", help="Analizar catálogo o directorio de autor, deducir la ruta pedagógica ascendente [P01]..[Pn] y generar RUTA_DE_APRENDIZAJE.md")
+    parser.add_argument("--download", action="store_true", help="Forzar ejecución de la cola de descarga cuando se combina con --curriculum")
+    parser.add_argument("--skip-historical", action="store_true", help="Omitir automáticamente cursos obsoletos marcados como [⚠️ Histórico] en la descarga curricular")
+    parser.add_argument("--no-extract", action="store_true", help="No descomprimir automáticamente los archivos")
+    parser.add_argument("--no-reduce", action="store_true", help="No reducir videos ni generar audios")
+    parser.add_argument(
+        "--audio-format",
+        default="aac",
+        choices=["aac", "mp3", "opus"],
+        help="Formato de audio para NotebookLM: 'aac' (24k mono, 25%% más liviano, por defecto), 'mp3' (32k CBR) u 'opus'"
+    )
+    parser.add_argument("-d", "--detach", action="store_true", help="Ejecutar como demonio en segundo plano sin conectar el visor en vivo")
+    parser.add_argument("-f", "--foreground", action="store_true", help="Ejecutar en primer plano pegado a la terminal (por defecto corre siempre en segundo plano inmune)")
+    parser.add_argument("--since", help="Filtrar cursos con vigencia mayor o igual a fecha (ej: '2024-09' o '2024-09-01')")
+    parser.add_argument("--exclude", "--skip", help="Números de cursos a excluir de la lista (ej: '1,2,5-8,14' o ruta a archivo .txt)")
+    parser.add_argument("--only", "--include", help="Descargar únicamente los números indicados (ej: '3,4,9-12' o ruta a archivo .txt)")
+    parser.add_argument("--list", "--dry-run", action="store_true", dest="list_only", help="Escanear catálogo y listar cursos detectados con fecha y estado sin descargar nada")
+    parser.add_argument("--no-date-prefix", action="store_false", dest="date_prefix", default=True, help="No agregar prefijo [YYYY-MM] al nombre de la carpeta")
+    parser.add_argument("--upload-nlm", action="store_true", help="Ingestar automáticamente audios y markdown del curso a Google NotebookLM al finalizar")
+    parser.add_argument(
+        "--audio-only", "--audio-first",
+        action="store_true",
+        dest="audio_only",
+        help="Arquitectura Audio-First: Extraer audios AAC y subir a NotebookLM dejando los videos en tamaño original sin transcodificar a 360p"
+    )
+    parser.add_argument("--status", action="store_true", help="Mostrar estado y telemetría de descargas activas")
+    parser.add_argument("-w", "--watch", action="store_true", help="Monitorizar continuamente en vivo el progreso de descargas")
+    parser.add_argument(
+        "--allow-credits", "--consume-credit",
+        action="store_true",
+        dest="allow_credits",
+        default=True,
+        help="Cerrojo soberano: Autoriza explícitamente el consumo de créditos en MisCursosVirtuales si no hay enlaces locales en SSoT"
+    )
+    parser.add_argument("-v", "--version", action="version", version=f"MCV Downloader & Optimizer v{VERSION}")
+    parser.add_argument("--force", action="store_true", help="Ignorar cerrojo singleton y permitir ejecuciones simultáneas")
+    parser.add_argument("--vip", action="store_true", help="Forzar destino a /var/www/baiosfera/CURSOS/MCV/VIP/")
+    parser.add_argument(
+        "--dest",
+        choices=["auto", "vip", "author", "categoria", "current"],
+        default="auto",
+        help="Regla de enrutamiento y carpetización: 'vip' (a VIP/), 'author' (a AUTHOR/<Alias>/), 'categoria' (a CATEGORIAS/<Cat>/), 'current' (al directorio actual), 'auto' (automático soberano)"
+    )
+    parser.add_argument("--author-dir", help="Subcarpeta explícita dentro de /var/www/baiosfera/CURSOS/MCV/AUTHOR/")
+    parser.add_argument("--category-dir", help="Subcarpeta explícita dentro de /var/www/baiosfera/CURSOS/MCV/CATEGORIAS/")
+    parser.add_argument("--category", help="Sobrescribir la categoría detectada del curso")
+
+    args = parser.parse_args()
+
+    # Si se invoca telemetría de estado, ejecutar inmediatamente y salir
+    if args.status or args.watch:
+        show_status(watch=args.watch)
+        sys.exit(0)
+
+    # Detección rigurosa de intención de descarga frente a pura inspección
+    has_download_intent = bool(
+        (bool(args.url) or bool(args.optimize_only))
+        and (
+            getattr(args, "audio_only", False)
+            or getattr(args, "download", False)
+            or args.detach
+            or args.foreground
+            or not getattr(args, "curriculum", None)
+        )
+        and not args.list_only
+        and not args.metadata_only
+        and not bool(args.validate_only)
+        and not bool(args.upload_only)
+    )
+
+    is_inspection = not has_download_intent
+
+    # Cerrojo Singleton: evitar descargas concurrentes accidentales si no es inspección
+    lock_fd = None
+    if not is_inspection:
+        lock_fd = acquire_singleton_lock(force=args.force)
+
+    if not is_inspection and not args.foreground:
+        pid = os.fork()
+        if pid > 0:
+            print("=" * 80)
+            print(f"🚀 DESCARGA DESATENDIDA INICIADA CON ÉXITO")
+            print(f"   PID del proceso trabajador autónomo: {pid}")
+            print("=" * 80)
+            print("🛡️  INMUNIDAD TOTAL:")
+            print("   Podés cerrar esta terminal, el navegador o apagar tu computadora con total seguridad.")
+            print("   El proceso continúa trabajando en segundo plano de forma 100% autónoma.")
+            print("--------------------------------------------------------------------------------")
+            print("💡 Para consultar el estado en cualquier momento ejecutá:")
+            print("   mcv-status")
+            print("   o en vivo continuo:")
+            print("   mcv-status -w")
+            print("=" * 80)
+            if not args.detach and sys.stdout.isatty():
+                print("\n👀 Conectando visor en vivo (podés cerrar la terminal o pulsar Ctrl+C sin frenar la descarga)...\n")
+                time.sleep(2.0)
+                try:
+                    subprocess.run(["mcv-status", "-w"])
+                except (KeyboardInterrupt, Exception):
+                    print(f"\n👋 Visor desconectado. La descarga continúa en segundo plano con PID: {pid}")
+            sys.exit(0)
+
+        # Proceso trabajador: desacoplar sesión completamente
+        os.setsid()
+        if lock_fd:
+            try:
+                lock_fd.seek(0)
+                lock_fd.truncate()
+                lock_fd.write(f"{os.getpid()}\n")
+                lock_fd.flush()
+            except Exception:
+                pass
+        try:
+            # Asignar prioridad de CPU baja (nice 10) para no saturar los 3 vCPU de Zerops
+            os.nice(10)
+        except Exception:
+            pass
+        try:
+            devnull = os.open(os.devnull, os.O_RDONLY)
+            os.dup2(devnull, 0)
+            daemon_log = os.open("/var/www/mcv_daemon.log", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+            os.dup2(daemon_log, 1)
+            os.dup2(daemon_log, 2)
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(line_buffering=True)
+            if hasattr(sys.stderr, "reconfigure"):
+                sys.stderr.reconfigure(line_buffering=True)
+        except Exception:
+            pass
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
 
     # Mode: Optimize existing directory
     if args.optimize_only:
