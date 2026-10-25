@@ -1077,12 +1077,20 @@ def evaluate_hook(payload: dict) -> dict:
         # Zero-Hang: auto_sync_governance síncrono purgado de PreInvocation para evitar timeouts y SIGKILL por FUSE
         user_prompt = extract_user_prompt(payload)
         halt_alert = ""
-        dummy_plan = "/var/www/artifacts/test_plan_v1.md"
-        if os.path.exists(dummy_plan) and user_prompt:
+        plans_dir = "/var/www/artifacts/plans"
+        has_active_master_plan = (
+            os.path.exists(plans_dir) and any(
+                f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide", "draft", "grilling"])
+                and not is_plan_draft(os.path.join(plans_dir, f))
+                for f in os.listdir(plans_dir)
+            )
+        ) or os.path.exists("/var/www/artifacts/test_plan_v1.md")
+
+        if has_active_master_plan and user_prompt:
             has_question = ("?" in user_prompt or "¿" in user_prompt)
             has_go = bool(re.search(r'\b(go|adelante|procede|ejecuta|ejecutá|aprobado|dale|si|sí)\b', user_prompt, re.IGNORECASE))
             if has_question or not has_go:
-                halt_alert = "\n⏸️ F4 HALT GATE ACTIVO: Ticket en progreso."
+                halt_alert = "\n⏸️ F4 HALT GATE ACTIVO: Plan maestro pendiente de aprobación ('Go'). No inicies implementación hasta confirmación explícita."
 
         ephemeral_msgs = []
         if "--test" in sys.argv and not user_prompt:
@@ -2442,6 +2450,11 @@ def run_tests():
         print("✓ Test 54 Passed: Pending research subagents block Linear issue/project creation")
 
         # Test 55: Anti-Cháchara Gate blocks Stop when user prompt demands plan correction and plan was not mutated
+        if os.path.exists("/tmp/.ssot_mutation_stop_force_count"):
+            try:
+                os.remove("/tmp/.ssot_mutation_stop_force_count")
+            except Exception:
+                pass
         res_chachara_blocked = evaluate_hook({
             "is_stop_event": True,
             "terminationReason": "NO_TOOL_CALL",
