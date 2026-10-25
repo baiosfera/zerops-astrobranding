@@ -67,7 +67,7 @@
         }
       ],
       "network_config": {
-        "base_url": "http://freellmapi:3001",
+        "base_url": "http://freellmapi:3001/v1",
         "allow_private_network": true,
         "default_request_timeout_in_seconds": 3,
         "max_retries": 1,
@@ -237,8 +237,77 @@
             "weight": 1.0
           }
         ]
+      },
+      {
+        "id": "vk-crewai",
+        "name": "CrewAI Teams Autonomous",
+        "value": "env.BIFROST_VK_CREWAI",
+        "is_active": true,
+        "rate_limits": {
+          "requests_per_minute": 120
+        },
+        "provider_configs": [
+          {
+            "provider": "freellmapi",
+            "allowed_models": ["*"],
+            "key_ids": ["*"],
+            "weight": 1.0
+          },
+          {
+            "provider": "deepseek",
+            "allowed_models": ["*"],
+            "key_ids": ["*"],
+            "weight": 1.0
+          }
+        ]
+      },
+      {
+        "id": "vk-pydanticai",
+        "name": "PydanticAI Structured Contracts",
+        "value": "env.BIFROST_VK_PYDANTICAI",
+        "is_active": true,
+        "rate_limits": {
+          "requests_per_minute": 120
+        },
+        "provider_configs": [
+          {
+            "provider": "freellmapi",
+            "allowed_models": ["*"],
+            "key_ids": ["*"],
+            "weight": 1.0
+          },
+          {
+            "provider": "deepseek",
+            "allowed_models": ["*"],
+            "key_ids": ["*"],
+            "weight": 1.0
+          }
+        ]
       }
     ],
+    "circuit_breaker_config": {
+      "policies": [
+        {
+          "name": "freellmapi-429-exhaustion-breaker",
+          "enabled": true,
+          "primary_provider": "freellmapi",
+          "primary_model": "*",
+          "fallback_provider": "deepseek",
+          "fallback_model": "deepseek-chat",
+          "condition": {
+            "operator": "OR",
+            "signals": [
+              {
+                "source": "response_header",
+                "header_name": "retry-after"
+              }
+            ]
+          },
+          "default_cooldown": "120s",
+          "cooldown_header": "retry-after"
+        }
+      ]
+    },
     "routing_rules": [
       {
         "id": "rule-coding-and-reasoning-to-deepseek",

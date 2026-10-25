@@ -164,9 +164,8 @@ zerops:
           httpSupport: true
       prepareCommands:
         - sudo apk add --no-cache ca-certificates tzdata
-        - sudo mkdir -p /mnt/localstorage/bifrost
-        - sudo chown -R zerops:zerops /mnt/localstorage/bifrost
       initCommands:
+        - sudo mkdir -p /mnt/localstorage/bifrost && sudo chown -R zerops:zerops /mnt/localstorage/bifrost
         - cp /var/www/data/config.json /mnt/localstorage/bifrost/config.json
         - chmod +x /var/www/bifrost
       start: /var/www/bifrost -app-dir /mnt/localstorage/bifrost -port 8080 -host 0.0.0.0 -log-level info -log-style json
@@ -224,10 +223,8 @@ zerops:
         FREEAPI_DB_PATH: "/mnt/localstorage/freellmapi/freellmapi.db"
         FREEAPI_CONFIG_PATH: "/var/www/apps/freellmapi/config.json"
         ENCRYPTION_KEY: ${FREELLMAPI_ENCRYPTION_KEY}
-      prepareCommands:
-        - sudo mkdir -p /mnt/localstorage/freellmapi
-        - sudo chown -R zerops:zerops /mnt/localstorage/freellmapi
       initCommands:
+        - sudo mkdir -p /mnt/localstorage/freellmapi && sudo chown -R zerops:zerops /mnt/localstorage/freellmapi
         - test -f /var/www/apps/freellmapi/config.json || cp /var/www/apps/freellmapi/config.example.json /var/www/apps/freellmapi/config.json
       start: node apps/freellmapi/server/dist/index.js
       healthCheck:
@@ -298,11 +295,13 @@ zerops:
         - port: 8000
           httpSupport: true
       prepareCommands:
-        - sudo mkdir -p /mnt/localstorage/hermes
-        - sudo chown -R zerops:zerops /mnt/localstorage/hermes
+        - sudo apt-get update && sudo apt-get install -y supervisor
+      initCommands:
+        - sudo mkdir -p /mnt/localstorage/hermes && sudo chown -R zerops:zerops /mnt/localstorage/hermes
       envVariables:
         PORT: "8000"
         PYTHONPATH: "./apps/hermes/vendor:./apps/hermes"
+        PATH: "/var/www/apps/hermes/vendor/bin:/usr/local/bin:/usr/bin:/bin"
         HERMES_MODEL_ENDPOINT: "http://bifrost:8080/v1"
         HERMES_MODEL_NAME: "hermes-3-llama-3.1-8b"
         BIFROST_VIRTUAL_KEY: "vk-hermes-agent"
@@ -311,7 +310,7 @@ zerops:
         NATS_URL: ${nats_connectionString}
         ZCP_NATS_URL: ${nats_connectionString}
         LOCAL_STORAGE_PATH: "/mnt/localstorage/hermes"
-      start: python apps/hermes/main.py
+      start: supervisord -c /var/www/apps/hermes/supervisord.conf -n
       healthCheck:
         httpGet:
           port: 8000
