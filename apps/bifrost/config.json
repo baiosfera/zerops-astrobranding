@@ -66,7 +66,7 @@
         }
       ],
       "network_config": {
-        "base_url": "http://freellmapi:3001/v1",
+        "base_url": "http://freellmapi:3001",
         "allow_private_network": true,
         "default_request_timeout_in_seconds": 3,
         "max_retries": 1,
