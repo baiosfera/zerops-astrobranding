@@ -4191,6 +4191,15 @@ def download_cursazo_file(
         try:
             media_ep = f"https://cursazo.top/api/media-url?id={quote(file_id)}&format=original&descarga=1"
             r_media = session.get(media_ep, timeout=20)
+            if r_media.status_code in [401, 403] or (r_media.status_code == 200 and not r_media.json().get("url")):
+                # Intento de re-autenticación automática si la sesión expiró
+                action_url = file_info.get("action_url")
+                pase_token = file_info.get("pase_token")
+                if action_url and pase_token:
+                    logger.info(f"⚡ [CURSAZO REFRESH] Renovando sesión Cursazo S4 para {file_name}...")
+                    session.post(action_url, data={"pase": pase_token}, allow_redirects=True, timeout=20)
+                    r_media = session.get(media_ep, timeout=20)
+
             if r_media.status_code != 200:
                 raise RuntimeError(f"Error solicitando URL de media: HTTP {r_media.status_code}")
             media_json = r_media.json()
@@ -4256,7 +4265,15 @@ def extract_cursazo_remote_audio(
     try:
         media_ep = f"https://cursazo.top/api/media-url?id={quote(file_id)}&format=original&descarga=1"
         r_media = session.get(media_ep, timeout=20)
-        s3_url = r_media.json().get("url")
+        if r_media.status_code in [401, 403] or (r_media.status_code == 200 and not r_media.json().get("url")):
+            action_url = file_info.get("action_url")
+            pase_token = file_info.get("pase_token")
+            if action_url and pase_token:
+                logger.info(f"⚡ [CURSAZO REFRESH] Sesión expirada para audio. Reautenticando en Cursazo S4...")
+                session.post(action_url, data={"pase": pase_token}, allow_redirects=True, timeout=20)
+                r_media = session.get(media_ep, timeout=20)
+
+        s3_url = r_media.json().get("url") if r_media.status_code == 200 else None
         if not s3_url:
             return False
 
@@ -4322,6 +4339,8 @@ def download_cursazo_course(
     os.makedirs(central_audio_dir, exist_ok=True)
 
     is_audio_only = getattr(args, "audio_only", False)
+    action_url = cursazo_data.get("action_url") or meta.get("action_url", "")
+    pase_token = cursazo_data.get("pase_token") or meta.get("pase_token", "")
 
     tasks = []
     mod_counter = 1
@@ -4333,6 +4352,8 @@ def download_cursazo_course(
 
         lec_counter = 1
         for f in mod.get("files", []):
+            f["action_url"] = action_url
+            f["pase_token"] = pase_token
             fname = sanitize_file_name(f.get("name", f"leccion_{lec_counter:02d}.mp4"))
             dest_file = os.path.join(mod_dir, fname)
 
@@ -4520,24 +4541,70 @@ def download_and_extract_course(
         return (output_dir, meta)
 
     # Zero-Credit Local SSoT Bypass Gate:
-    # Si la carpeta del curso ya cuenta con enlaces extraídos en INSTRUCCIONES_DESCARGA.txt o .md,
+    # Si la carpeta del curso ya cuenta con enlaces extraídos en INSTRUCCIONES_DESCARGA.txt, cursazo_tree.json o .md,
     # reutilizarlos directamente con 0 créditos consumidos.
     local_txt = os.path.join(output_dir, "INSTRUCCIONES_DESCARGA.txt")
+    local_tree_file = os.path.join(output_dir, "cursazo_tree.json")
     local_links = []
     local_all_sets = []
     local_pw = meta.get("password") or "www.miscursosvirtuales.com"
 
+    # 1. Comprobar si existe cursazo_tree.json local
+    if os.path.isfile(local_tree_file):
+        try:
+            with open(local_tree_file, "r", encoding="utf-8") as _ctf:
+                saved_tree = json.load(_ctf)
+            if saved_tree and saved_tree.get("files"):
+                meta["cursazo_data"] = saved_tree
+                meta["delivery_type"] = "cursazo"
+                meta["action_url"] = saved_tree.get("action_url", "")
+                meta["pase_token"] = saved_tree.get("pase_token", "")
+                logger.info(f"⚡ [ZERO-CREDIT SSoT] Árbol Cursazo S4 recuperado de disco ({len(saved_tree['files'])} archivos). 0 créditos consumidos.")
+        except Exception as e_ltree:
+            logger.warning(f"Aviso leyendo cursazo_tree.json: {e_ltree}")
+
+    # 2. Comprobar si existe INSTRUCCIONES_DESCARGA.txt local
     if os.path.isfile(local_txt):
         try:
             with open(local_txt, "r", encoding="utf-8", errors="replace") as _f_lt:
                 _c_lt = _f_lt.read()
-            local_links = parse_txt_links(_c_lt, session=session)
-            local_all_sets = parse_all_option_sets(_c_lt, session=session)
-            local_pw = parse_txt_password(_c_lt) or local_pw
+
+            # Verificar si contiene formulario / pase de Cursazo
+            m_pase_local = re.search(r"action=[\x22\x27]([^\x22\x27]+)[\x22\x27].*?name=[\x22\x27]pase[\x22\x27]\s+value=[\x22\x27]([^\x22\x27]+)[\x22\x27]", _c_lt, re.DOTALL)
+            if not m_pase_local:
+                m_pase_local = re.search(r"name=[\x22\x27]pase[\x22\x27]\s+value=[\x22\x27]([^\x22\x27]+)[\x22\x27].*?action=[\x22\x27]([^\x22\x27]+)[\x22\x27]", _c_lt, re.DOTALL)
+                if m_pase_local:
+                    p_val, a_val = m_pase_local.groups()
+                    m_pase_local = (a_val, p_val)
+
+            if m_pase_local and not meta.get("cursazo_data"):
+                act_url, p_tok = m_pase_local if isinstance(m_pase_local, tuple) else m_pase_local.groups()
+                if "cursazo" in act_url.lower() or "entrar" in act_url.lower():
+                    logger.info("⚡ [ZERO-CREDIT SSoT] Formulario Cursazo detectado en INSTRUCCIONES_DESCARGA.txt. Resolviendo árbol sin gastar créditos...")
+                    c_data = resolve_cursazo_course_tree(session, act_url, p_tok, course_url)
+                    if c_data:
+                        c_data["action_url"] = act_url
+                        c_data["pase_token"] = p_tok
+                        meta["cursazo_data"] = c_data
+                        meta["delivery_type"] = "cursazo"
+                        meta["action_url"] = act_url
+                        meta["pase_token"] = p_tok
+                        try:
+                            with open(local_tree_file, "w", encoding="utf-8") as _ctf:
+                                json.dump(c_data, _ctf, indent=2, ensure_ascii=False)
+                        except Exception:
+                            pass
+                        logger.info(f"   ✅ Árbol Cursazo S4 resuelto desde pase local ({len(c_data.get('files', []))} archivos). 0 créditos consumidos.")
+
+            if not meta.get("cursazo_data"):
+                local_links = parse_txt_links(_c_lt, session=session)
+                local_all_sets = parse_all_option_sets(_c_lt, session=session)
+                local_pw = parse_txt_password(_c_lt) or local_pw
         except Exception as e_lt:
             logger.warning(f"Aviso leyendo enlaces locales de {local_txt}: {e_lt}")
 
-    if not local_links and os.path.isdir(output_dir):
+    # 3. Comprobar si existe archivo Markdown en la carpeta con enlaces legacy
+    if not local_links and not meta.get("cursazo_data") and os.path.isdir(output_dir):
         for _mf in os.listdir(output_dir):
             if _mf.endswith(".md") and not _mf.startswith("RUTA_DE_APRENDIZAJE") and not _mf.startswith("MANUAL"):
                 try:
@@ -4552,15 +4619,27 @@ def download_and_extract_course(
                 except Exception:
                     pass
 
-    if local_links:
+    # 4. Decisión de bypass o consumo de crédito
+    if meta.get("cursazo_data"):
+        meta["delivery_type"] = "cursazo"
+    elif local_links:
         logger.info(f"⚡ [ZERO-CREDIT SSoT] Enlaces de descarga recuperados de archivo local ({len(local_links)} partes). Omitiendo consumo de créditos.")
         meta["cloud_links"] = local_links
         meta["all_option_sets"] = local_all_sets
         meta["password"] = local_pw
         meta["delivery_type"] = "legacy"
     else:
-        # Paso 2: Solo si NO hay enlaces locales existentes y realmente se requiere descargar, obtener el payload protegido (consume 1 crédito)
-        logger.info(f"🚀 Solicitando entrega protegida para descargar contenido faltante de: {clean_title}...")
+        # BLOQUEO DE SEGURIDAD CONTRA CONSUMO INVOLUNTARIO DE CRÉDITOS
+        if not getattr(args, "allow_credits", False):
+            logger.error("=" * 80)
+            logger.error(f"🛑 [CERROJO DE SEGURIDAD - 0 CRÉDITOS] El curso '{clean_title}' NO tiene enlaces locales en SSoT.")
+            logger.error(f"   Descargarlo requiere consumir 1 crédito en MisCursosVirtuales.")
+            logger.error(f"   Para autorizar explícitamente el consumo del crédito, ejecutá con: --allow-credits")
+            logger.error("=" * 80)
+            return None
+
+        # Paso 2: Solo si se autorizó explícitamente con --allow-credits:
+        logger.info(f"💳 [CONSUMO DE CRÉDITO AUTORIZADO] Descargando payload protegido para: {clean_title}...")
         try:
             meta = fetch_course_metadata(session, course_url, fetch_download_payload=True)
         except Exception as e:
@@ -4570,6 +4649,24 @@ def download_and_extract_course(
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(temp_download_dir, exist_ok=True)
     log_file = os.path.join(output_dir, "download_progress.log")
+
+    # RESPALDO INMEDIATO E INDELIBLE EN DISCO PARA NUNCA MÁS PERDER EL CRÉDITO
+    txt_content = meta.get("txt_content", "")
+    if txt_content:
+        try:
+            with open(local_txt, "w", encoding="utf-8") as _ltf:
+                _ltf.write(txt_content)
+            logger.info(f"💾 Payload respaldado inmediatamente en SSoT: INSTRUCCIONES_DESCARGA.txt")
+        except Exception as e_wtxt:
+            logger.warning(f"Aviso guardando INSTRUCCIONES_DESCARGA.txt: {e_wtxt}")
+
+    if meta.get("cursazo_data"):
+        try:
+            with open(local_tree_file, "w", encoding="utf-8") as _ctf:
+                json.dump(meta["cursazo_data"], _ctf, indent=2, ensure_ascii=False)
+            logger.info(f"💾 Árbol Cursazo S4 respaldado inmediatamente en SSoT: cursazo_tree.json")
+        except Exception as e_wtree:
+            logger.warning(f"Aviso guardando cursazo_tree.json: {e_wtree}")
 
     meta_save_path = os.path.join(output_dir, "metadata.json")
     clean_meta = {
@@ -4586,6 +4683,9 @@ def download_and_extract_course(
         "cursazo_course_id": meta.get("cursazo_data", {}).get("course_id", ""),
         "total_files": len(meta.get("cursazo_data", {}).get("files", [])),
         "total_size_bytes": meta.get("cursazo_data", {}).get("total_size_bytes", 0),
+        "cursazo_data": meta.get("cursazo_data", {}),
+        "action_url": meta.get("action_url", ""),
+        "pase_token": meta.get("pase_token", ""),
         "password": meta.get("password", ""),
         "cloud_links": meta.get("cloud_links", []),
         "source": "miscursosvirtuales_native_download",
@@ -7306,6 +7406,13 @@ def main():
     )
     parser.add_argument("--status", action="store_true", help="Mostrar estado y telemetría de descargas activas")
     parser.add_argument("-w", "--watch", action="store_true", help="Monitorizar continuamente en vivo el progreso de descargas")
+    parser.add_argument(
+        "--allow-credits", "--consume-credit",
+        action="store_true",
+        dest="allow_credits",
+        default=False,
+        help="Cerrojo soberano: Autoriza explícitamente el consumo de créditos en MisCursosVirtuales si no hay enlaces locales en SSoT"
+    )
     parser.add_argument("-v", "--version", action="version", version=f"MCV Downloader & Optimizer v{VERSION}")
     parser.add_argument("--force", action="store_true", help="Ignorar cerrojo singleton y permitir ejecuciones simultáneas")
     parser.add_argument("--vip", action="store_true", help="Forzar destino a /var/www/baiosfera/CURSOS/MCV/VIP/")
