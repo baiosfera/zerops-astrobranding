@@ -1441,7 +1441,7 @@ def evaluate_hook(payload: dict) -> dict:
                 r'\b(ghp_[a-zA-Z0-9]{36}|lin_api_[a-zA-Z0-9]{40}|sk-[a-zA-Z0-9_-]{20,}|AIzaSy[a-zA-Z0-9_-]{33})\b'
             )
             found_secret = secret_pattern.search(content_to_check)
-            if found_secret and not any(p in target_file for p in ["/tmp/", "test", "fixtures"]):
+            if found_secret and not any(p in target_file for p in ["/tmp/", "/fixtures/"]):
                 return {
                     "decision": "deny",
                     "reason": (
@@ -2499,7 +2499,7 @@ def run_tests():
         res_secret_blocked = evaluate_hook({
             "toolName": "write_file",
             "args": {
-                "Path": "/var/www/zerops-astrobranding/apps/test_config.ts",
+                "Path": "/var/www/zerops-astrobranding/apps/app_config.ts",
                 "Content": f"export const token = '{synthetic_token}';"
             }
         })
