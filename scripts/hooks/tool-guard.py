@@ -1042,6 +1042,60 @@ def evaluate_hook(payload: dict) -> dict:
                                     os.remove(correction_counter_file)
                                 except Exception:
                                     pass
+
+            # 0.5.3 Anti-Cháchara Governance Gate: Mandatory Tool-Guard / Sensor Mutation on Governance Fix Requests
+            if not payload.get("test_bypass_gov_gate"):
+                user_prompt = payload.get("test_user_prompt") or extract_user_prompt(payload)
+                GOVERNANCE_FIX_PATTERNS = re.compile(
+                    r'(?i)\b(blind[aá]|blindaje|arregl[aá]|correg[ií]|actualiz[aá]|modific[aá]|cambi[aá]|mejor[aá]|implement[aá]|aplic[aá]|ch[aá]chara|checklist-theater|sin aplicar)\b.*?\b(hook|hooks|tool-guard|arn[eé]s|sensor|regla|supreme|agents\.md|gobernanza|ecosistema)\b|\b(hook|hooks|tool-guard|arn[eé]s|sensor|regla|supreme|agents\.md|gobernanza|ecosistema)\b.*?\b(blind[aá]|blindaje|arregl[aá]|correg[ií]|actualiz[aá]|modific[aá]|cambi[aá]|mejor[aá]|implement[aá]|aplic[aá]|ch[aá]chara|checklist-theater|sin aplicar)\b'
+                )
+                if GOVERNANCE_FIX_PATTERNS.search(user_prompt):
+                    has_gov_mutation = payload.get("test_has_gov_mutation", False)
+                    transcript_path = payload.get("transcriptPath", "")
+                    if transcript_path and os.path.exists(transcript_path) and not has_gov_mutation:
+                        try:
+                            with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+                                t_lines = f.readlines()
+                                recent_steps = []
+                                for tl in reversed(t_lines):
+                                    if '"type":"USER_INPUT"' in tl or '"source":"USER_EXPLICIT"' in tl:
+                                        break
+                                    recent_steps.append(tl)
+
+                                for st in recent_steps:
+                                    if any(k in st for k in ["tool-guard.py", "tool-guard", "00-SUPREME-DIRECTIVE.md", "AGENTS.md", "skills-suite-validate", "ssot-parity-check"]):
+                                        has_gov_mutation = True
+                                        break
+                        except Exception:
+                            pass
+
+                    if not has_gov_mutation:
+                        gov_counter_file = "/tmp/.gov_mutation_stop_force_count"
+                        count = 0
+                        if os.path.exists(gov_counter_file):
+                            try:
+                                with open(gov_counter_file, "r") as f:
+                                    count = int(f.read().strip())
+                            except Exception:
+                                count = 0
+                        if count < 1:
+                            with open(gov_counter_file, "w") as f:
+                                f.write(str(count + 1))
+                            return {
+                                "decision": "continue",
+                                "reason": (
+                                    "🏛️ INVARIANTE SENSOR-FIRST (Anti-Cháchara de Gobernanza): "
+                                    "El usuario solicitó blindar, arreglar o actualizar el arnés/hooks/gobernanza sin cháchara ni checklist-theater, "
+                                    "pero no modificaste físicamente 'tool-guard.py' ni ejecutaste tests en este turno. "
+                                    "Es mandatorio implementar el sensor físico en Python, su test unitario determinista y validarlo antes de responder."
+                                )
+                            }
+                        else:
+                            if os.path.exists(gov_counter_file):
+                                try:
+                                    os.remove(gov_counter_file)
+                                except Exception:
+                                    pass
         return {}
 
     # 1. PostToolUse Handling
@@ -2509,7 +2563,39 @@ def run_tests():
         assert res_secret_blocked.get("decision") == "deny" and "SOBERANÍA ZEROPS ENV" in res_secret_blocked.get("reason", "").upper(), f"Expected deny on secret leak, got {res_secret_blocked}"
         print("✓ Test 57 Passed: Secret Leak Prevention Guard blocks writing hardcoded tokens")
 
+        # Test 58: Anti-Cháchara Governance Gate blocks turn stop on governance fix request without code mutation
+        if os.path.exists("/tmp/.gov_mutation_stop_force_count"):
+            try:
+                os.remove("/tmp/.gov_mutation_stop_force_count")
+            except Exception:
+                pass
+        res_gov_blocked = evaluate_hook({
+            "is_stop_event": True,
+            "terminationReason": "NO_TOOL_CALL",
+            "test_user_prompt": "Arreglá y blindá el hook de tool-guard para que no vuelva a fallar",
+            "test_has_gov_mutation": False,
+            "test_bypass_linear": True
+        })
+        assert res_gov_blocked.get("decision") == "continue" and "SENSOR-FIRST" in res_gov_blocked.get("reason", "").upper(), f"Expected continue (stop blocked) on unmutated governance fix, got {res_gov_blocked}"
+        print("✓ Test 58 Passed: Anti-Cháchara Governance Gate blocks turn stop on hook/governance fix without code mutation")
+
+        # Test 59: Anti-Cháchara Governance Gate allows turn stop when tool-guard/governance was mutated
+        res_gov_allowed = evaluate_hook({
+            "is_stop_event": True,
+            "terminationReason": "NO_TOOL_CALL",
+            "test_user_prompt": "Arreglá y blindá el hook de tool-guard",
+            "test_has_gov_mutation": True,
+            "test_bypass_linear": True
+        })
+        assert res_gov_allowed == {}, f"Expected allow stop when governance was mutated, got {res_gov_allowed}"
+        print("✓ Test 59 Passed: Anti-Cháchara Governance Gate allows turn stop when governance was mutated")
+
     finally:
+        if os.path.exists("/tmp/.gov_mutation_stop_force_count"):
+            try:
+                os.remove("/tmp/.gov_mutation_stop_force_count")
+            except Exception:
+                pass
         if os.path.exists(test_plan_path):
             try:
                 os.remove(test_plan_path)
