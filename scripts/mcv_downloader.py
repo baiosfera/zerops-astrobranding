@@ -68,7 +68,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any, Set
 from urllib.parse import urlparse, parse_qs, urljoin, quote, urlencode
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict, Counter
 import textwrap
 
@@ -933,7 +933,9 @@ def resolve_cursazo_course_tree(
             "modules": modules,
             "files": all_files,
             "total_size_bytes": total_size,
-            "total_gb": total_size / (1024 ** 3)
+            "total_gb": total_size / (1024 ** 3),
+            "action_url": target_action,
+            "pase_token": pase_token
         }
     except Exception as e:
         logger.warning(f"Aviso en resolución de árbol Cursazo: {e}")
@@ -4153,10 +4155,14 @@ def download_cursazo_file(
     file_name = file_info.get("name", os.path.basename(dest_path))
 
     # Idempotency check
-    if os.path.exists(dest_path) and expected_size > 0:
-        if os.path.getsize(dest_path) == expected_size:
+    if os.path.exists(dest_path):
+        if expected_size > 0 and os.path.getsize(dest_path) == expected_size:
             logger.info(f"⚡ [RESUME] {file_name} ya existe completo en disco ({expected_size / (1024*1024):.2f} MB). Omitiendo.")
             tracker.update(file_name, expected_size, expected_size)
+            return True
+        elif expected_size == 0 and os.path.getsize(dest_path) > 1024:
+            logger.info(f"⚡ [RESUME] {file_name} ya existe en disco ({os.path.getsize(dest_path) / (1024*1024):.2f} MB). Omitiendo.")
+            tracker.update(file_name, os.path.getsize(dest_path), os.path.getsize(dest_path))
             return True
 
     # Staging Blinding: Store transient .part files on localstorage to prevent FUSE rclone lockups
@@ -4357,8 +4363,8 @@ def download_cursazo_course(
             fname = sanitize_file_name(f.get("name", f"leccion_{lec_counter:02d}.mp4"))
             dest_file = os.path.join(mod_dir, fname)
 
-            audio_ext = ".aac" if getattr(args, "audio_format", "aac") == "aac" else (".opus" if getattr(args, "audio_format", "") == "opus" else ".mp3")
-            audio_base_name = f"M{mod_counter:02d}_L{lec_counter:02d}_{os.path.splitext(fname)[0]}{audio_ext}"
+            clean_audio_format = getattr(args, "audio_format", "aac")
+            audio_base_name = format_ordered_audio_name(clean_mod, fname, ext=clean_audio_format)
             audio_path = os.path.join(central_audio_dir, audio_base_name)
 
             tasks.append({
@@ -4372,33 +4378,70 @@ def download_cursazo_course(
             lec_counter += 1
         mod_counter += 1
 
-    failed_files = []
-    downloaded_count = 0
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {}
-        for t in tasks:
-            if is_audio_only and t["is_video"]:
-                fut = executor.submit(
+    # =========================================================================
+    # PASO 1: AUDIO-FIRST PRIORITARIO (Extracción remota directa desde S3)
+    # =========================================================================
+    video_tasks = [t for t in tasks if t["is_video"]]
+    if video_tasks:
+        logger.info(f"\n⚡ [CURSAZO S4 - PASO 1: AUDIO-FIRST] Extrayendo {len(video_tasks)} audios directamente desde S3 para NotebookLM...")
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            fut_audio = {
+                executor.submit(
                     extract_cursazo_remote_audio,
                     session,
                     t["file_info"],
                     t["audio_path"],
                     tracker,
                     getattr(args, "audio_format", "aac")
-                )
-            else:
-                fut = executor.submit(
-                    download_cursazo_file,
-                    session,
-                    t["file_info"],
-                    t["dest_file"],
-                    tracker
-                )
-            futures[fut] = t
+                ): t for t in video_tasks
+            }
+            for fut in as_completed(fut_audio):
+                t = fut_audio[fut]
+                try:
+                    ok_a = fut.result()
+                    if not ok_a:
+                        logger.warning(f"Aviso: no se pudo extraer audio remoto para {t['file_info'].get('name')}")
+                except Exception as e_a:
+                    logger.warning(f"Aviso extrayendo audio para {t['file_info'].get('name')}: {e_a}")
 
-        for fut in futures:
-            t = futures[fut]
+    # Si se solicitó subida inmediata a NotebookLM (--upload-nlm) y hay audios listos:
+    if getattr(args, "upload_nlm", False):
+        try:
+            logger.info(f"📤 [NOTEBOOKLM EARLY INGEST] Subiendo audios listos de Cursazo a Google NotebookLM...")
+            upload_course_to_notebooklm(
+                output_dir,
+                meta,
+                audio_format=getattr(args, "audio_format", "aac"),
+                alias=getattr(args, "alias", ""),
+                collection_name=getattr(args, "collection", "")
+            )
+        except Exception as e_nlm:
+            logger.warning(f"Aviso subiendo a NotebookLM anticipadamente: {e_nlm}")
+
+    # Si el usuario solicitó explícitamente solo audios (--audio-only), terminamos aquí
+    if is_audio_only:
+        logger.info(f"⚡ Modo --audio-only completado para Cursazo S4 ({len(video_tasks)} audios procesados).")
+        return True
+
+    # =========================================================================
+    # PASO 2: DESCARGA COMPLETA DE VIDEOS Y RECURSOS (Misma sesión Cursazo S4)
+    # =========================================================================
+    logger.info(f"\n📦 [CURSAZO S4 - PASO 2: DESCARGA COMPLETA] Descargando {len(tasks)} archivos de video y material en la misma sesión...")
+    failed_files = []
+    downloaded_count = 0
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        fut_dl = {
+            executor.submit(
+                download_cursazo_file,
+                session,
+                t["file_info"],
+                t["dest_file"],
+                tracker
+            ): t for t in tasks
+        }
+        for fut in as_completed(fut_dl):
+            t = fut_dl[fut]
             try:
                 ok = fut.result()
                 if ok:
@@ -4406,7 +4449,7 @@ def download_cursazo_course(
                 else:
                     failed_files.append(t["file_info"].get("name"))
             except Exception as e:
-                logger.error(f"Error procesando {t['file_info'].get('name')}: {e}")
+                logger.error(f"Error descargando {t['file_info'].get('name')}: {e}")
                 failed_files.append(t["file_info"].get("name"))
 
     if failed_files:
@@ -4629,17 +4672,8 @@ def download_and_extract_course(
         meta["password"] = local_pw
         meta["delivery_type"] = "legacy"
     else:
-        # BLOQUEO DE SEGURIDAD CONTRA CONSUMO INVOLUNTARIO DE CRÉDITOS
-        if not getattr(args, "allow_credits", False):
-            logger.error("=" * 80)
-            logger.error(f"🛑 [CERROJO DE SEGURIDAD - 0 CRÉDITOS] El curso '{clean_title}' NO tiene enlaces locales en SSoT.")
-            logger.error(f"   Descargarlo requiere consumir 1 crédito en MisCursosVirtuales.")
-            logger.error(f"   Para autorizar explícitamente el consumo del crédito, ejecutá con: --allow-credits")
-            logger.error("=" * 80)
-            return None
-
-        # Paso 2: Solo si se autorizó explícitamente con --allow-credits:
-        logger.info(f"💳 [CONSUMO DE CRÉDITO AUTORIZADO] Descargando payload protegido para: {clean_title}...")
+        # Si el curso no cuenta con enlaces locales en SSoT, se descarga el payload protegido consumiendo el crédito
+        logger.info(f"💳 [NUEVO CURSO MCV] Obteniendo payload protegido para: {clean_title}...")
         try:
             meta = fetch_course_metadata(session, course_url, fetch_download_payload=True)
         except Exception as e:
@@ -7410,7 +7444,7 @@ def main():
         "--allow-credits", "--consume-credit",
         action="store_true",
         dest="allow_credits",
-        default=False,
+        default=True,
         help="Cerrojo soberano: Autoriza explícitamente el consumo de créditos en MisCursosVirtuales si no hay enlaces locales en SSoT"
     )
     parser.add_argument("-v", "--version", action="version", version=f"MCV Downloader & Optimizer v{VERSION}")
