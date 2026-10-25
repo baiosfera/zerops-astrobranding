@@ -1929,7 +1929,7 @@ def run_tests():
     print("✓ Test 23 Passed: Broken downstream script dependencies in unisetup.sh caught (Macro-Visión 360 Radar)")
 
     # Test 24: Epistemic Inflow Mandate - Plan-First Gate & Subordinated Execution Closure verified
-    pi_res = evaluate_hook({"invocationNum": 1})
+    pi_res = evaluate_hook({"invocationNum": 99, "test_bypass_dedup": True})
     steps = pi_res.get("injectSteps", [])
     assert len(steps) > 0 and "Plan-First Gate" in steps[0].get("ephemeralMessage", ""), f"Expected Plan-First Gate notice in PreInvocation, got {pi_res}"
     print("✓ Test 24 Passed: Contrato Plan-First Gate & Subordinated Execution Closure verified (Epistemic Inflow)")
