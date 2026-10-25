@@ -1,188 +1,221 @@
-# 🎓 Manual del Estudiante: Domina Cualquier Curso con NotebookLM Pro y NLM-Tutor (v4.0.0)
+# 🎓 Manual del Estudiante: Domina Cualquier Curso con NotebookLM Pro y NLM-Tutor (v2.0.0)
 
-¡Bienvenido a tu nuevo sistema de estudio de alto rendimiento! Este sistema fue diseñado especialmente para vos: no necesitás saber nada de programación ni lidiar con configuraciones complejas.
+> **Mentor Socrático Personal, Neurociencia del Aprendizaje Activo (Harvard, MIT, Kaufman, Feynman) y Stack Mínimo Viable (MVLS) con Protección Dinámica de Cuotas en Google NotebookLM Pro.**
 
-Combina las mejores técnicas comprobadas por la ciencia del aprendizaje acelerado y la dinámica de sistemas:
-- **Recuerdo Activo (*Active Recall*)**: Práctica de recuperación a libro cerrado para quebrar la "ilusión de fluidez" (creer que sabemos algo solo porque lo leímos de forma pasiva).
-- **Indagación Causal Progresiva**: Enfoque socrático de razonamiento de causas, efectos y consecuencias de segundo orden en lugar de memorización de definiciones.
-- **Deconstrucción 80/20**: Identificación del núcleo de principios que aportan el 80% del valor práctico y funcional de la materia.
-- **Repetición Espaciada Científica**: Cronograma matemático de repasos para transferir el conocimiento a la memoria de largo plazo sin relecturas inútiles.
-- **Tutor Socrático NotebookLM**: Acompañamiento socrático riguroso y personalizado, anclado al 100% en las fuentes de tu cuaderno.
-- **Arquitectura Python Nativa**: Comunicación directa mediante el SDK de `notebooklm_tools.services` (0 subprocesos shell, 0 tokens de API externa).
-
-> [!IMPORTANT]
-> **Cero espacio en tu computadora**: Este sistema opera 100% en la nube dentro de tu cuenta de Google NotebookLM Pro (Google One 5TB). Nada se descarga en tu disco local.
+Bienvenido a tu sistema de asimilación cerebral acelerada. Este sistema no fue creado para ser una fábrica indiscriminada de resúmenes que jamás vas a leer, sino un **estratega pedagógico personal** diseñado para convertirte en un experto en cada tema con el menor esfuerzo cognitivo y protegiendo al 100% tus cuotas en Google NotebookLM.
 
 ---
 
-## 🚀 Paso 1: Configurar un Cuaderno con 1 Solo Comando
+## 🧠 1. La Ciencia del Aprendizaje: Por qué Menos es Más
 
-Cuando subas un nuevo curso o material a Google NotebookLM (mediante `mcv-download --upload-nlm` o manualmente), abrí tu terminal y ejecutá:
+La psicología cognitiva y la neurociencia de la educación han demostrado que coleccionar documentos y resaltar textos genera una **ilusión de competencia o fluidez**: el estudiante cree erróneamente que sabe algo porque el material le resulta familiar o lo tiene guardado en carpetas.
 
-```bash
-nlm-tutor setup "Nombre o ID de tu Cuaderno"
+Para lograr una verdadera asimilación cerebral a largo plazo, este sistema implementa cuatro pilares rigurosos:
+
+1. **Harvard (*Make It Stick*) & Roediger Testing Effect**:
+   - El aprendizaje duradero ocurre durante el **recuerdo activo a libro cerrado** (*Active Recall*), cuando tu cerebro se esfuerza en recuperar un concepto de la memoria en lugar de releerlo pasivamente.
+2. **Ritmo Ultradiano del MIT (1972)**:
+   - El cerebro humano no puede sostener máxima intensidad por más de 90 minutos. Las sesiones se estructuran en bloques de 15 min de activación, 60 min de esfuerzo socrático profundo y 15 min de meta-aprendizaje y registro de lagunas.
+3. **Regla de las 20 Horas de Josh Kaufman**:
+   - El 80% de los resultados prácticos de cualquier disciplina proviene del 20% de sus micro-habilidades nucleares. Desarmamos el temario para que domines ese 20% primero y superes la barrera de frustración inicial.
+4. **Técnica Feynman & Cuaderno de Lagunas**:
+   - No entendés un concepto hasta que podés explicarlo con una analogía simple a un niño de 10 años. Tus errores no se ignoran: se registran en una nota viva (`00_CUADERNO_DE_LAGUNAS`) para dirigir tu atención únicamente hacia tus puntos ciegos.
+
+---
+
+## 🏛️ 2. Arquitectura de Dos Niveles: Decano Curricular vs. Sala de Sparring
+
+Para que tu experiencia sea clara y ordenada, el ecosistema MCV y NotebookLM separa las responsabilidades en dos tipos de cuadernos:
+
+```mermaid
+flowchart TD
+    subgraph Macro [NIVEL MACRO: El Decano Curricular]
+        D["Cuaderno [00]_GUIA-DE-ESTUDIO<br/>(Generado por mcv-download --curriculum)"]
+        D -->|Orientación Curricular| R["RUTA_DE_APRENDIZAJE.md<br/>• Clasificación de 5 fases Bloom-Dreyfus (P01..Pn)<br/>• Prerrequisitos y orden sugerido<br/>• Panorama global de la carrera/autor"]
+    end
+
+    subgraph Micro [NIVEL MICRO: Salas de Entrenamiento Socrático]
+        P1["Cuaderno [P01] Curso 1<br/>(nlm-tutor setup + session)"]
+        P2["Cuaderno [P02] Curso 2<br/>(nlm-tutor setup + session)"]
+        P3["Cuaderno [P03] Curso 3<br/>(nlm-tutor setup + session)"]
+    end
+
+    Macro -->|Estudiante avanza a la materia| Micro
 ```
 
-*(Si no recordás el nombre exacto, ejecutá `nlm-tutor list` para ver todos tus cuadernos).*
+- **El Decano Curricular (`[00]` - Macro)**:
+  - Creado automáticamente con `mcv-download --curriculum --upload-nlm`.
+  - Contiene la visión holística de todo el catálogo del autor, los prerrequisitos y la secuencia de aprendizaje `[P01]..[Pn]`.
+  - **Uso**: Hablá con este cuaderno para entender qué curso tomar primero, cómo se articulan las materias o qué áreas profesionales cubre el autor. No le pidas quizzes de lecciones específicas.
+- **La Sala de Entrenamiento Socrático (`[P01]`, `[P02]`... - Micro)**:
+  - Creado por `mcv-download` al subir el curso individual.
+  - Aquí reside el contenido específico, las transcripciones de audio y los documentos de la materia.
+  - **Uso**: Aquí ejecutás `nlm-tutor setup` para habilitar el tutor socrático y `nlm-tutor session` para poner a prueba tu entendimiento activo.
 
-Podés configurar el cuaderno de forma automática (adaptación semántica de dominio) o seleccionar un perfil:
-- `nlm-tutor setup <ID>`: Detección semántica automática del dominio (monotemático enfocado vs multidominio vs macro-currículum) y protección de cuota Google One.
-- `nlm-tutor setup <ID> --profile core`: Suite esencial y rápida (8-10 artefactos nucleares).
-- `nlm-tutor setup <ID> --profile standard`: Suite completa integral de estudio.
-- `nlm-tutor setup <ID> --profile exhaustive`: Suite macro-curricular para grandes colecciones documentales.
-- `nlm-tutor setup <ID> --with-video`: Genera además video explicativo en Studio (por defecto omitido para proteger la cuota de 5 horas de Google One).
-- `nlm-tutor setup <ID> --all-media`: Genera todas las modalidades de audio (brief, deep_dive, critique, debate) y video.
-- `nlm-tutor setup <ID> --no-media`: Genera exclusivamente entregables de texto, mapas y visuales (consumo: 0% cuota multimedia).
+---
+
+## ⚡ 3. Control de Cuotas en Google NotebookLM Pro (Octubre 2026)
+
+Google NotebookLM Pro (Google One AI Premium) opera bajo **dos ventanas de cómputo móviles**:
+- **Ventana Móvil (*Rolling Window*)**: ~5 horas.
+- **Ventana Semanal (*Weekly Window*)**: 7 días.
+
+### ¿Por qué abandonamos la generación masiva de 11 artefactos de golpe?
+Investigaciones recientes de telemetría de cuotas demostraron el consumo relativo de los formatos de Studio:
+- **Video Cinemático**: Consume entre **75% y 80%** de la cuota rolling. Dos videos consecutivos provocan bloqueo inmediato por error HTTP 429 (`RESOURCE_EXHAUSTED`).
+- **Deep Dive Audio (Podcast)**: Consume entre **12% y 18%** de la cuota rolling.
+- **Quizzes, Mapas Mentales, Tablas y Reportes de Texto**: Consumen **<0.5%** (prácticamente cero impacto en la cuota de medios).
+
+Generar 11 a 14 artefactos en un solo instante agotaba la cuota de la cuenta para las siguientes 5 horas y saturaba la mente del estudiante con documentos que nunca abría.
+
+### Consulta tu Cuota en Vivo en la Terminal
+Podés verificar la salud exacta de tu cuenta en cualquier momento con:
+
+```bash
+nlm-tutor usage
+```
+
+Salida típica de telemetría:
+```text
+============================================================
+📊 TELEMETRÍA DE CUOTA GOOGLE NOTEBOOKLM (Octubre 2026)
+============================================================
+• Nivel de Cuenta: NOTEBOOKLM_TIER_PRO_CONSUMER_USER
+• Ventana Móvil (~5h): 97.7% DISPONIBLE (Consumo: 2.3%)
+• Ventana Semanal (7d): 98.1% DISPONIBLE (Consumo: 1.9%)
+• Estado Operativo: ✅ NORMAL (Capacidad plena para Audio y Texto)
+============================================================
+```
+
+---
+
+## 📦 4. El Stack Mínimo Viable de Aprendizaje (MVLS - v6.0.0)
+
+A partir de la versión 6.0.0, `nlm-tutor setup` implementa por defecto el **Stack Mínimo Viable (MVLS)**: un paquete quirúrgico de **5 entregables clave estructurados en 4 fases cognitivas**, garantizando máxima asimilación con un consumo inferior al 15% de tu cuota:
+
+| Fase | Entregable | Formato | Propósito Cognitivo |
+|---|---|---|---|
+| **Fase 1: Exploración Panorámica** | `01_DIAGNOSTICO_Evaluacion-Inicial` | Quiz / Reporte | **Pre-testing**: Intentar responder antes de estudiar prepara las redes neuronales para fijar la información. |
+| **Fase 1: Exploración Panorámica** | `02_MAPA_Syllabus-Estructural-80-20` | Mind Map / Guía | **Mapa Mental 80/20**: Ubicación espacial de los nodos centrales sin abrumarse con detalles secundarios. |
+| **Fase 2: Inmersión Auditiva** | `03_AUDIO_Inmersion-Podcast` | Deep Dive Audio | **Activación amigable**: 10-15 minutos de diálogo para asimilar ideas mientras salís a caminar o descansás de la pantalla. *(Generado solo si tu cuota móvil supera el 18%)*. |
+| **Fase 3: Comprensión 80/20 & Síntesis** | `04_TABLA_Comparativa-80-20` | Tabla de Datos | **Matices y Trade-offs**: Diferenciación clara entre conceptos parecidos para evitar confusiones comunes. |
+| **Fase 4: Meta-aprendizaje & Asimilación** | `05_INFORME_Errores-Tipicos-y-Lagunas` | Reporte Ejecutivo | **Catálogo de Errores**: Lista de las 5 trampas más comunes y cómo evitarlas en la práctica. |
+
+Además, `nlm-tutor setup` crea en tu cuaderno dos notas vivas fundamentales:
+- `00_CUADERNO_DE_LAGUNAS`: Tu diario personal de conceptos que te costaron trabajo.
+- `00_RUTA_DE_ESTUDIO`: La guía paso a paso con los tiempos de estudio y criterios de aprobación.
 
 > [!TIP]
-> **Disponibilidad Inmediata con Audio-First**: Gracias a la arquitectura Audio-First de `mcv-download` (v5.0.0) o usando la bandera `--audio-only`, los audios se extraen en Raw AAC 24k mono y se suben a NotebookLM Pro (hasta 300 fuentes) en apenas ~2 minutos. Podés ejecutar `nlm-tutor setup` de inmediato sin tener que esperar a que termine la transcodificación 360p de video.
-
-**¿Qué hace este comando automáticamente por vos?**
-1. **Verificación Previa de Cuota Google One**: Analiza tu saldo de cómputo multimedia en Google One y te alerta si queda menos del 15% para protegerte contra límites de API (`RESOURCE_EXHAUSTED`).
-2. **Configura el Chat Socrático del Tutor**: Calibra a NotebookLM como tu tutor socrático que no te da respuestas fáciles ni resúmenes complacientes, sino que te hace preguntas progresivas y te ayuda a razonar.
-3. **Genera la Suite Adaptativa de Artefactos**: Crea en tu panel de Studio toda la batería de audios en español latinoamericano (`es-419`), mapas, simulacros, tablas, diapositivas y guías ordenadas progresivamente sin saturar tu cuota multimedia.
-4. **Persiste el Manifiesto SSoT en la Nube (Cero Basura en Disco)**: Almacena los identificadores directamente en la nota `00_RUTA_DE_ESTUDIO` dentro del cuaderno, con 0 bytes en tu disco local y portabilidad total entre dispositivos.
-5. **Crea tu Cuaderno de Lagunas**: Abre una nota especial en tu cuaderno llamada `00_CUADERNO_DE_LAGUNAS` para registrar exclusivamente los puntos ciegos que necesitas reforzar.
-6. **Crea tu Ruta de Estudio**: Diseña la guía paso a paso dentro del cuaderno en la nota `00_RUTA_DE_ESTUDIO`.
+> **¿Querés la batería extendida completa?**
+> Si tenés tu cuota al 100% y deseás generar los 11 artefactos tradicionales (quizzes por niveles, flashcards, slides Feynman, etc.), podés solicitarlo explícitamente con:
+> ```bash
+> nlm-tutor setup "Nombre del Cuaderno" --profile standard
+> ```
 
 ---
 
-## 🗺️ Paso 2: La Suite de Artefactos Cognitivos (Tu Camino Paso a Paso)
+## 🚀 5. Flujo de Trabajo Paso a Paso
 
-En la columna izquierda de tu Google NotebookLM (panel de Studio) vas a encontrar los recursos numerados según tu perfil seleccionado:
+### Paso 1: Configurar el Cuaderno
+Una vez que subiste tu curso a NotebookLM:
+```bash
+nlm-tutor setup "Nombre o ID del Cuaderno"
+```
+El script aplicará automáticamente la directiva socrática al chat, verificará tu cuota en tiempo real y generará los 5 entregables del MVLS con pausas de seguridad (4.5s) para evitar ráfagas de peticiones.
 
-| # | Artefacto Generado | ¿Para qué sirve? | ¿Cómo usarlo? |
-|---|---|---|---|
-| **01** | `01_DIAGNOSTICO_Activacion-Conceptual` | Micro-evaluación ágil de preguntas de selección múltiple (A, B, C) (Pre-testing formativo). | Hacelo al empezar para activar la curiosidad sin agotarte con cuestionarios largos o preguntas abiertas. |
-| **02** | `02_MAPA_Syllabus-Estructural` | Vista panorámica de la red conceptual y jerarquías del tema. | Miralo 3 minutos para entender cómo se conectan los módulos y principios rectores. |
-| **03** | `03_AUDIO_Inmersion-General-Podcast` | Conversación estilo podcast en español latinoamericano (`es-419`, acento divulgativo natural). | Escuchalo primero mientras ordenás tu espacio o salís a caminar. Te da una visión global amena y conectada. |
-| **04** | `04_INFORME_Documento-Informativo-Briefing` | Dossier ejecutivo y briefing de fuentes con síntesis factual de alto nivel. | Tu documento de referencia rápida para ubicar qué aborda cada autor y tema. |
-| **05** | `05_INFORME_Sintesis-Ejecutiva-y-Modelos` | Documento maestro con tesis central, modelos mentales y glosario operativo. | Tu texto base de consulta cuando quieras profundizar un concepto específico. |
-| **06** | `06_TABLA_Matriz-Comparativa-Debates` | Matriz de contrastes, trade-offs y controversias entre enfoques. | Ideal para contrastar conceptos que se parecen, clarificar debates y evitar confusiones. |
-| **07** | `07_SLIDES_Guia-Visual-Estrategica` | Presentación conceptual de diapositivas en español para auto-explicación. | Pasá cada lámina e intentá explicar en voz alta el mecanismo a libro cerrado antes de ver el desarrollo. |
-| **08** | `08_INFOGRAFIA_Panorama-Visual-80-20` | Infografía visual de alta densidad con el 20% de ideas que generan el 80% de impacto. | Tu mapa visual para memorizar flujos de causa y efecto de un solo vistazo. |
-| **09** | `09_AUDIO_Analisis-Critico-y-Matices` | Audio en formato de crítica analítica profunda (límites, advertencias y casos de fallo). | Escuchalo para comprender las objeciones, los casos donde las reglas estándar fallan y los matices avanzados. |
-| **10** | `10_AUDIO_Debate-Controversias` | Debate dialéctico confrontando las distintas escuelas de pensamiento del curso. | Para entender las distintas posturas cuando no hay consenso único. |
-| **11** | `11_FLASHCARDS_Conceptos-Clave` | Tarjetas de consolidación y práctica a libro cerrado. | Dedicale 10-15 minutos para responder sin mirar la solución y afianzar distinciones operativas. |
-| **12** | `12_SIMULACRO_Casos-Practicos` | Simulacro de evaluación de razonamiento causal y dilemas reales. | Tu prueba de fuego principal. Tu meta es superar el **80% de aciertos**. |
-| **13** | `13_INFORME_Plan-de-Accion-y-Errores` | Hoja de ruta de aplicación práctica, catálogo de trampas y matriz de errores típicos. | Tu guía de ejecución práctica y catálogo de trampas para evitar equivocarte en la práctica real. |
-| **14** | `14_VIDEO_Resumen-Audiovisual` | Video explicativo dinámico de consolidación y síntesis visual. | Miralo al cierre para integrar el aprendizaje de forma multisensorial. |
+> [!TIP]
+> **Blindaje Idempotente Anti-Gasto de Cuota**:
+> Si por error volvés a ejecutar `nlm-tutor setup`, el script detecta automáticamente qué artefactos y notas ya existen en tu cuaderno, **omitiendo su creación para no consumir ni un solo byte de tu cuota de Google**. Si querés obligarlo a regenerar todo desde cero, sumá la bandera `--overwrite` o `--clean`:
+> ```bash
+> nlm-tutor setup "Nombre del Cuaderno" --overwrite
+> ```
 
----
-
-## 💬 Paso 3: Cómo Hablar con tu Tutor Socrático en el Chat
-
-El chat de NotebookLM está calibrado con el rol del Tutor Socrático y Mentor Cognitivo de NotebookLM. **No le pidas que te haga resúmenes gigantes** (eso genera aprendizaje pasivo). Usalo como tutor socrático activo:
-
-1. **Para iniciar la sesión**:
-   > *"Iniciemos la sesión. Ponme a prueba con una pregunta de razonamiento conceptual base sobre el primer módulo."*
-2. **Para someterte a Interrogación Inversa (la técnica más potente)**:
-   > *"He intentado resolver/explicar esto así: [escribe tu explicación]. Compáralo directamente con el material del cuaderno y dime: 1) ¿Qué omití? 2) ¿En qué me equivoqué citando la fuente exacta?"*
-3. **Si te sentís frustrado o bloqueado**:
-   > *"Desmonta este concepto al átomo más básico con una analogía cotidiana, porque me siento bloqueado y necesito visualizar el mecanismo antes de continuar."*
-
----
-
-## ⏱️ Paso 4: El Cronómetro de Estudio (¿Cuándo Parar?)
-
-Para estudiar con la máxima concentración sin quemar tu cerebro, ejecutá en tu terminal:
-
+### Paso 2: Tu Sesión de Concentración Guiada (90 o 45 min)
+Iniciá el cronómetro pedagógico en tu terminal:
 ```bash
 nlm-tutor session "Nombre del Cuaderno" --duration 90
 ```
+- **Minuto 0 a 15 (Activación)**: Revisá el Diagnóstico (`01`) y el Mapa Mental (`02`). Escuchá el Audio Podcast (`03`) si preferís desconectar de la pantalla.
+- **Minuto 15 a 75 (Esfuerzo Socrático Profundo)**: Entrá al chat y enfrentá las preguntas del tutor. O respondé los cuestionarios directamente en la terminal.
+- **Minuto 75 a 90 (Cierre y Registro de Lagunas)**: Anotá en tu nota `00_CUADERNO_DE_LAGUNAS` las preguntas que fallaste o los conceptos que no pudiste explicar claramente.
+- **¡Parada Estricta a los 90 min!**: Tomate 20 minutos de descanso total sin pantallas para permitir la consolidación sináptica en reposo.
 
-El script te guiará con pausas claras:
-- **Minuto 00 al 15 (Activación)**: Resolvé el Diagnóstico Inicial (`01`), mirá el Mapa Mental (`02`) y el Briefing de Fuentes (`04`).
-- **Minuto 15 al 75 (Esfuerzo Profundo)**: Hablá con el Tutor Socrático en el chat y resolvé el Simulacro de Casos Prácticos (`12`).
-- **Minuto 75 al 90 (Cierre y Lagunas)**: Revisá la nota `00_CUADERNO_DE_LAGUNAS` para verificar qué conceptos se registraron automáticamente.
-- **¡Parar estrictamente a los 90 minutos!**: El cerebro humano no puede mantener la máxima intensidad cognitiva por más tiempo. Tomate 20 minutos de descanso sin pantallas (podés salir a caminar o escuchar el Audio Inmersión `03`).
+*(Si tenés poco tiempo hoy, ejecutá `nlm-tutor session "Nombre" --duration 45` para un bloque concentrado de 45 minutos).*
 
-*(¿Tenés poco tiempo hoy? Ejecutá `nlm-tutor session "Nombre" --duration 45` para una micro-sesión rápida de 45 minutos enfocada en un solo concepto).*
+### Paso 3: Cómo Entrenar con el Tutor Socrático
+El chat de NotebookLM no es para pedirle: *"Hazme un resumen del tema X"*. Eso produce aprendizaje pasivo e inservible. Usalo con estos patrones de **Interrogación Inversa**:
 
----
+1. **Para iniciar el sparring**:
+   > *"Tutor, ponme a prueba con una pregunta de razonamiento intermedia sobre el primer módulo. No me des la respuesta, espera a que te conteste."*
+2. **Para verificar tu comprensión real (Técnica de Interrogación Inversa)**:
+   > *"He intentado resolver/explicar esto así: [escribí tu explicación con tus palabras]. Compáralo directamente con el material del cuaderno y dime: 1) ¿Qué omití? 2) ¿En qué fallé técnicamente citando la fuente exacta?"*
+3. **Si te sentís bloqueado o frustrado**:
+   > *"Explícame este concepto asumiendo que tengo cero experiencia previa y usando una analogía cotidiana, porque me siento bloqueado."*
 
-## 🚦 Paso 5: El Semáforo de Avance (¿Cuándo Avanzar o Repasar?)
-
-- 🟢 **VERDE (Acertaste el 80% o más en el Simulacro `12`)**: ¡Felicitaciones! Dominás los conceptos esenciales. Podés avanzar con tranquilidad al siguiente módulo o curso.
-- 🟡 **AMARILLO / ROJO (Menos del 80%)**: **NO vuelvas a leer todo el curso desde el principio**. Esa es la trampa de la relectura. Hacé lo siguiente:
-  1. Abrí la nota `00_CUADERNO_DE_LAGUNAS` en tu cuaderno.
-  2. Mirá los 2 o 3 conceptos específicos que fallaste.
-  3. Consultá en NotebookLM **únicamente** los párrafos o fuentes que hablan de esos 2 conceptos.
-  4. Hacé una micro-sesión de 10 minutos con las Flashcards (`11`) para cerrar la brecha.
-
----
-
-## 📅 Paso 6: Tu Calendario de Repasos Espaciados
-
-La memoria humana olvida la mayor parte de lo aprendido en las primeras 24 horas si no se consolida. Para que el conocimiento pase a tu memoria de largo plazo, ejecutá:
-
+### Paso 4: Ruta de Asimilación y Calendario de Repaso Espaciado (Ebbinghaus)
+Para saber qué estudiar primero y cuándo repasar sin perder tiempo, ejecutá en tu terminal:
 ```bash
 nlm-tutor schedule "Nombre del Cuaderno"
 ```
-
-El comando calculará tus fechas exactas de repaso basadas en la curva científica de consolidación:
-- **Hito 0 (Inmediato)**: 10 min para revisar lagunas en `00_CUADERNO_DE_LAGUNAS`.
-- **Hito 1 (+24 horas)**: 15 min de Flashcards (`11`) a libro cerrado.
-- **Hito 2 (+72 horas)**: Re-evaluación ágil con el Diagnóstico Inicial (`01`).
-- **Hito 3 (+7 días)**: Resolver el Simulacro de Casos Prácticos (`12`).
-- **Hito 4 (+14 días)**: Repasar solo los puntos registrados en `00_CUADERNO_DE_LAGUNAS`.
-- **Hito 5 (+30 días)**: Mirar las Slides (`07`) y explicar el tema completo en voz alta sin mirar apuntes.
-
----
-
-## 🤖 Paso 7: Vigilancia y Renombrado Autónomo en Segundo Plano (Cero Pasos Manuales)
-
-El sistema `nlm-tutor` gestiona automáticamente el renombramiento de todos los entregables. Cuando Google Cloud concluye el procesamiento de artefactos pesados (audio, video o slides), un daemon de vigilancia en segundo plano aplica de forma transparente los títulos canónicos numerados, sin que tengas que intervenir ni ejecutar comandos adicionales.
-
-*(Si por alguna razón quisieras forzar una reconciliación manual inmediata, podés ejecutar en cualquier momento: `nlm-tutor rename "Nombre o ID"`).*
+El comando te entregará tu hoja de ruta pedagógica en dos fases científicas:
+- **Fase 0 (Día de Inicio / Hoy - Estudio Integral)**:
+  1. *Inmersión Auditiva (15 min)*: Escuchá `03_AUDIO` (podcast) mientras salís a caminar o preparás tu espacio.
+  2. *Cartografía (5 min)*: Mirá el mapa `02_MAPA` para ver la taxonomía y articulación de módulos.
+  3. *Deconstrucción 80/20 (20 min)*: Estudiá la tabla `04_TABLA` y el reporte de errores `05_INFORME`.
+  4. *Sparring Socrático (45-90 min)*: Resolvé `01_DIAGNOSTICO` a libro cerrado o interactuá con `nlm-tutor session`.
+  5. *Registro de Puntos Ciegos (10 min)*: Anotá tus dudas en `00_CUADERNO_DE_LAGUNAS`.
+- **Cronograma Matemático Integral (Estudio Activo + Ebbinghaus)**:
+  - **Hito 0 (HOY - Inmediato tras leer artefactos)**: Tu sesión socrática interactiva (`nlm-tutor session <ID> --duration 90`) para responder al tutor a libro cerrado y registrar tus lagunas.
+  - **Hito 1 (+24h)**: 15 min de auto-explicación Feynman o repaso de `00_CUADERNO_DE_LAGUNAS` sobre los fallos de la sesión de hoy.
+  - **Hito 2 (+72h)**: Re-evaluación conceptual con `01_DIAGNOSTICO` a libro cerrado (meta: >80%).
+  - **Hito 3 (+7 días)**: 15 min de test de 10 preguntas de razonamiento causal en el chat con `nlm-tutor prompt <ID> 3 --send`.
+  - **Hito 4 (+14 días)**: Repaso relámpago exclusivo de tus lagunas en `00_CUADERNO_DE_LAGUNAS`.
+  - **Hito 5 (+30 días)**: Síntesis final en voz alta a libro cerrado (`05_INFORME`) para afianzar en memoria permanente.
 
 ---
 
-## 💡 Paso 8: Biblioteca de los 12 Prompts Maestros con 1 Toque
+## 🛠️ 6. Referencia de Comandos CLI de `nlm-tutor`
 
-Podés disparar cualquiera de los 12 prompts maestros directamente desde la terminal con:
+| Comando | Descripción |
+|---|---|
+| `nlm-tutor usage` | Muestra la telemetría en tiempo real de tu cuota móvil (~5h) y semanal en Google NotebookLM. |
+| `nlm-tutor manual` | Despliega este manual del estudiante formateado con colores ANSI directamente en tu terminal. |
+| `nlm-tutor list` | Lista todos los cuadernos disponibles en tu cuenta de Google NotebookLM con sus IDs. |
+| `nlm-tutor setup <cuaderno>` | Configura el tutor socrático y genera el paquete MVLS (o `--profile standard` para 11 artefactos). |
+| `nlm-tutor session <cuaderno>` | Inicia una sesión de estudio guiada con cronómetro pedagógico (`--duration 90` o `45`). |
+| `nlm-tutor schedule <cuaderno>` | Calcula el cronograma de repasos espaciados según la curva del olvido de Ebbinghaus. |
+| `nlm-tutor prompt <cuaderno> <1-10>` | Muestra o envía (`--send`) uno de los 10 prompts pedagógicos maestros. |
+| `nlm-tutor collections` | Inspecciona las colecciones nativas agrupadas en tu cuenta de NotebookLM. |
+| `nlm-tutor cross "<pregunta>"` | Realiza una consulta socrática cruzada entre múltiples cursos y autores simultáneamente. |
 
+---
+
+## 💡 7. Biblioteca de los 10 Prompts Pedagógicos Maestros
+
+Podés consultar o disparar cualquiera de estos prompts a tu cuaderno con:
 ```bash
-nlm-tutor prompt "Nombre del Cuaderno" <1-12> --send
+nlm-tutor prompt "Nombre del Cuaderno" <1-10> --send
 ```
 
-1. **Prompt 1**: Resumen de Máximo Detalle (Construcción del Mapa Base).
-2. **Prompt 2**: Explicación Didáctica de Primeros Principios (Enseñanza desde Cero).
-3. **Prompt 3**: Testing de 10 Preguntas de Razonamiento Causal (No Memoria).
-4. **Prompt 4**: Plan de Sesión de Alto Enfoque (Bloque de 90 Minutos).
-5. **Prompt 5**: Kit de Consolidación Final & Hoja de Errores Típicos.
-6. **Prompt 6**: Debates, Matices Críticos y Vías de Consenso.
-7. **Prompt 7**: Mapa Mental como Syllabus Estructural.
-8. **Prompt 8**: Deconstrucción 80/20 en Micro-habilidades Críticas.
-9. **Prompt 9**: Autocorrección Temprana: Los 3 Errores Más Comunes.
-10. **Prompt 10**: Anti-Bloqueo Conceptual: Analogía Inmediata de Núcleo.
-11. **Prompt 11**: Dinámica de Sistemas: El Iceberg Estructural de 4 Capas.
-12. **Prompt 12**: Dinámica de Sistemas: Bucles de Causalidad y Palancas de Alto Impacto.
+1. **Prompt 1: Síntesis Estructural 80/20**: Extrae los conceptos que generan el 80% del valor práctico.
+2. **Prompt 2: Auto-Enseñanza Feynman**: Explica el concepto central usando analogías del mundo real.
+3. **Prompt 3: Batería de Preguntas de Razonamiento**: Cuestionario socrático para medir conexiones conceptuales.
+4. **Prompt 4: Plan de Sesión MIT de 90 Minutos**: Secuencia de estudio ultradiana adaptada al cuaderno.
+5. **Prompt 5: Catálogo de Errores Típicos & Trampas**: Identifica las 5 confusiones más frecuentes del tema.
+6. **Prompt 6: Matices, Debates y Puntos de Desacuerdo**: Contrapone perspectivas dentro del material.
+7. **Prompt 7: Mapa Mental en Texto Jerárquico**: Estructura de árbol para visualizar la anatomía del tema.
+8. **Prompt 8: Desglose de Micro-Habilidades (Josh Kaufman)**: Secuencia para alcanzar competencia básica en 20 horas.
+9. **Prompt 9: Chequeo de Autocorrección y Fuentes**: Verifica si tus conclusiones están fundamentadas en las fuentes.
+10. **Prompt 10: Desbloqueo Emocional y Cambio de Perspectiva**: Supera la parálisis cognitiva con un enfoque alternativo.
 
 ---
 
-## 📁 Paso 9: Monitorear Colecciones Nativas
+## 🚦 8. Regla de Oro del Avance: El Semáforo
 
-Para ver qué colecciones tenés creadas en tu cuenta de Google NotebookLM y cuántos cuadernos contiene cada una:
+- 🟢 **VERDE (Obtuviste 80% o más en las evaluaciones de razonamiento)**:
+  - Dominás las bases nucleares. Estás listo para avanzar al siguiente curso de la ruta (`[P02]`, `[P03]`...).
+- 🟡 **AMARILLO / ROJO (Menos del 80%)**:
+  - **NO vuelvas a leer todo el curso desde cero**. Eso es una trampa.
+  - Abrí tu `00_CUADERNO_DE_LAGUNAS`, identificá exactamente los 2 o 3 conceptos donde fallaste y pedile al tutor en el chat que te interrogue únicamente sobre ellos hasta dominarlos.
 
-```bash
-nlm-tutor collections
-```
-
-*(Recordá que cuando usás `mcv-download --collection "Nombre"`, los cursos se agrupan automáticamente aquí sin pasos manuales previos).*
-
----
-
-## 🌐 Paso 10: Conectar Múltiples Cursos y Autores (Consultas Cruzadas)
-
-Si tenés varios cuadernos de diferentes autores sobre el mismo tema, podés hacerles una pregunta a todos juntos:
-
-```bash
-nlm-tutor cross "¿Qué dicen los diferentes autores sobre este tema y qué puntos de desacuerdo existen entre ellos?"
-```
-
-NotebookLM buscará en todos tus cuadernos a la vez y te entregará una respuesta consolidada citando a cada fuente.
-
----
-
-¡Disfrutá el proceso de aprendizaje acelerado! Con este sistema tenés a tu disposición un sparring socrático de clase mundial disponible las 24 horas del día.
+¡Buen entrenamiento mental! Con este sistema no acumulás información muerta: construís comprensión viva y permanente.

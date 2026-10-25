@@ -84,8 +84,8 @@ for _uv_p in [
     if os.path.isdir(_uv_p) and _uv_p not in sys.path:
         sys.path.insert(0, _uv_p)
 
-__version__ = "9.2.0"
-VERSION = "9.2.0"
+__version__ = "10.1.0"
+VERSION = "10.1.0"
 DEFAULT_COOKIES_PATH = "/var/www/baiosfera/CURSOS/MCV/mcv.json"
 PERSISTENT_COOKIES_PATH = "/var/www/baiosfera/CURSOS/MCV/mcv.json"
 LOCK_FILE_PATH = "/tmp/mcv_downloader.lock"
@@ -93,8 +93,12 @@ DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
-LOCAL_DOWNLOAD_STAGING_DIR = "/var/www/.mcv_staging"
-LOCAL_STAGING_DIR = "/tmp/mcv_transcode_staging"
+MCV_BASE_DIR = "/var/www/baiosfera/CURSOS/MCV"
+MCV_VIP_DIR = os.path.join(MCV_BASE_DIR, "VIP")
+MCV_AUTHOR_DIR = os.path.join(MCV_BASE_DIR, "AUTHOR")
+MCV_CATEGORIAS_DIR = os.path.join(MCV_BASE_DIR, "CATEGORIAS")
+LOCAL_DOWNLOAD_STAGING_DIR = "/var/www/localstorage/mcv_staging/downloads" if os.path.exists("/var/www/localstorage") else "/var/www/.mcv_staging"
+LOCAL_STAGING_DIR = "/var/www/localstorage/mcv_staging/transcode" if os.path.exists("/var/www/localstorage") else "/tmp/mcv_transcode_staging"
 PROGRESS_CARD_LOCK = threading.Lock()
 logger = logging.getLogger("mcv_downloader")
 
@@ -482,6 +486,8 @@ class MediaOptimizationTracker:
 
     def set_phase(self, phase: str):
         self.phase = phase
+        if phase == "FASE_B":
+            self.phase_b_start_time = time.time()
         if self.course_dir:
             self._render_card()
 
@@ -591,10 +597,15 @@ class MediaOptimizationTracker:
     def get_stats(self) -> Dict[str, Any]:
         now = time.time()
         elapsed = max(now - self.start_time, 0.001)
-        if self.completed_videos > 0:
-            avg_per_vid = elapsed / self.completed_videos
-            remaining_vids = max(self.total_videos - self.completed_videos, 0)
-            eta_sec = avg_per_vid * remaining_vids
+        if self.phase == "FASE_B":
+            b_start = getattr(self, "phase_b_start_time", self.start_time)
+            elapsed_b = max(now - b_start, 0.001)
+            if self.completed_videos > 0:
+                avg_per_vid = elapsed_b / self.completed_videos
+                remaining_vids = max(self.total_videos - self.completed_videos, 0)
+                eta_sec = avg_per_vid * remaining_vids
+            else:
+                eta_sec = max(self.total_videos - self.completed_videos, 0) * 360.0
         else:
             eta_sec = self.total_videos * 270.0
 
@@ -663,6 +674,7 @@ def show_status(watch: bool = False, interval: float = 2.0) -> bool:
     lock_file = LOCK_FILE_PATH
 
     def _is_worker_alive() -> bool:
+        # Check downloader singleton lock
         if os.path.exists(lock_file):
             try:
                 with open(lock_file, "r", encoding="utf-8") as lf:
@@ -675,9 +687,24 @@ def show_status(watch: bool = False, interval: float = 2.0) -> bool:
                 return False
             except Exception:
                 pass
+
+        # Check queue PID
+        q_pid_file = "/var/www/localstorage/mcv_staging/mcv_queue.pid"
+        if os.path.exists(q_pid_file):
+            try:
+                with open(q_pid_file, "r", encoding="utf-8") as qpf:
+                    qpid_str = qpf.read().strip()
+                if qpid_str.isdigit():
+                    os.kill(int(qpid_str), 0)
+                    return True
+            except OSError:
+                pass
+            except Exception:
+                pass
+
         try:
             res = subprocess.run(
-                ["pgrep", "-f", "mcv_downloader.py.*(https?://|--optimize|-d|--detach)"],
+                ["pgrep", "-f", "(mcv_downloader|mcv_queue|ffmpeg)"],
                 capture_output=True,
                 text=True
             )
@@ -688,6 +715,24 @@ def show_status(watch: bool = False, interval: float = 2.0) -> bool:
         return False
 
     def _print():
+        # Check if queue orchestrator is actively running:
+        q_file = "/var/www/localstorage/mcv_staging/mcv_queue_status.json"
+        if os.path.exists(q_file):
+            try:
+                with open(q_file, "r", encoding="utf-8") as qf:
+                    qst = json.load(qf)
+                qpid = qst.get("pid")
+                if qpid:
+                    try:
+                        os.kill(qpid, 0)
+                        import mcv_queue
+                        mcv_queue.show_queue_status(watch=False)
+                        return True
+                    except OSError:
+                        pass
+            except Exception:
+                pass
+
         # Anti-ghost validation: if progress_file exists but worker is dead, clean up
         if os.path.exists(progress_file) and not _is_worker_alive():
             try:
@@ -722,10 +767,10 @@ def show_status(watch: bool = False, interval: float = 2.0) -> bool:
     if not watch:
         return _print()
 
-    print("📺 Monitoreo en vivo continuo activado. Presiona Ctrl+C para salir.\n")
     try:
         while True:
-            os.system("clear")
+            sys.stdout.write("\033[3J\033[H\033[2J")
+            sys.stdout.flush()
             _print()
             time.sleep(interval)
     except KeyboardInterrupt:
@@ -795,10 +840,111 @@ def get_session(cookies_path: str) -> requests.Session:
     return session
 
 
-def fetch_course_metadata(session: requests.Session, course_url: str) -> Dict[str, Any]:
+def resolve_cursazo_course_tree(
+    session: requests.Session,
+    action_url: str,
+    pase_token: str,
+    course_url: str
+) -> Optional[Dict[str, Any]]:
     """
-    Scrapes product page, extracts title, category, product ID,
-    resolves the protected_file link, and fetches the WooCommerce instruction txt.
+    Submits authentication token to Cursazo, establishes session,
+    and retrieves full tree metadata from /api/arbol.
+    """
+    try:
+        target_action = action_url if action_url.startswith("http") else urljoin("https://cursazo.top", action_url)
+        session.headers.update({
+            "User-Agent": DEFAULT_USER_AGENT,
+            "Referer": "https://miscursosvirtuales.com/"
+        })
+        resp_post = session.post(target_action, data={"pase": pase_token}, allow_redirects=True, timeout=20)
+        if resp_post.status_code != 200:
+            logger.warning(f"Aviso al autenticar en Cursazo: HTTP {resp_post.status_code}")
+            return None
+
+        # Session check
+        resp_ses = session.get("https://cursazo.top/api/sesion", timeout=20)
+        if resp_ses.status_code != 200:
+            logger.warning(f"Error consultando /api/sesion en Cursazo: HTTP {resp_ses.status_code}")
+            return None
+        ses_data = resp_ses.json()
+        cid = ses_data.get("actual")
+        if not cid:
+            logger.warning("No se encontró el ID de curso activo en Cursazo /api/sesion")
+            return None
+
+        # Tree fetch
+        resp_tree = session.get(f"https://cursazo.top/api/arbol?id={quote(cid)}", timeout=25)
+        if resp_tree.status_code != 200:
+            logger.warning(f"Error consultando /api/arbol en Cursazo: HTTP {resp_tree.status_code}")
+            return None
+        tree_json = resp_tree.json()
+        carpetas = tree_json.get("carpetas", [])
+        fmap = {c["id"]: c for c in carpetas}
+        root_folder = fmap.get(cid)
+        if not root_folder:
+            logger.warning(f"No se encontró la carpeta raíz {cid} en el árbol de Cursazo")
+            return None
+
+        modules = []
+        all_files = []
+        total_size = 0
+
+        mod_idx = 1
+        for item in root_folder.get("items", []):
+            if item.get("isFolder"):
+                m_id = item["id"]
+                m_name = item.get("name", f"Módulo {mod_idx:02d}")
+                mod_idx += 1
+                folder_entry = fmap.get(m_id, {})
+                child_items = folder_entry.get("items", [])
+                m_files = []
+                for it in child_items:
+                    if not it.get("isFolder"):
+                        sz = it.get("size", 0)
+                        total_size += sz
+                        f_info = {
+                            "id": it["id"],
+                            "name": it.get("name", "archivo"),
+                            "size": sz,
+                            "mimeType": it.get("mimeType", ""),
+                            "module": m_name
+                        }
+                        m_files.append(f_info)
+                        all_files.append(f_info)
+                modules.append({
+                    "id": m_id,
+                    "name": m_name,
+                    "files": m_files
+                })
+            else:
+                sz = item.get("size", 0)
+                total_size += sz
+                f_info = {
+                    "id": item["id"],
+                    "name": item.get("name", "archivo"),
+                    "size": sz,
+                    "mimeType": item.get("mimeType", ""),
+                    "module": "Recursos"
+                }
+                all_files.append(f_info)
+
+        return {
+            "course_id": cid,
+            "modules": modules,
+            "files": all_files,
+            "total_size_bytes": total_size,
+            "total_gb": total_size / (1024 ** 3)
+        }
+    except Exception as e:
+        logger.warning(f"Aviso en resolución de árbol Cursazo: {e}")
+        return None
+
+
+def fetch_course_metadata(session: requests.Session, course_url: str, fetch_download_payload: bool = True) -> Dict[str, Any]:
+    """
+    Scrapes product page, extracts title, category, product ID.
+    If fetch_download_payload=True, consumes 1 membership credit to download protected file.
+    If fetch_download_payload=False, returns public metadata without consuming any credits.
     """
     logger.info(f"Obteniendo información del curso desde: {course_url}")
     resp = session.get(course_url, timeout=20)
@@ -837,9 +983,20 @@ def fetch_course_metadata(session: requests.Session, course_url: str) -> Dict[st
         else:
             title = raw_title
 
-    # 2. Category
-    cat_match = re.search(r"posted_in\">.*?<a[^>]*>(.*?)</a>", html, re.DOTALL)
-    category = cat_match.group(1).strip().upper() if cat_match else "PROFESIONAL"
+    # 2. Categories & VIP detection
+    all_cats = [a.get_text(strip=True) for a in soup.find_all("a", href=re.compile(r"/categoria(-producto)?/"))]
+    if not all_cats:
+        cat_match = re.search(r"posted_in\">.*?<a[^>]*>(.*?)</a>", html, re.DOTALL)
+        if cat_match:
+            all_cats = [cat_match.group(1).strip()]
+    category = all_cats[0].strip().upper() if all_cats else "PROFESIONAL"
+
+    is_vip = bool(
+        any("VIP" in c.upper() for c in all_cats)
+        or "product_cat-cursos-vip" in html
+        or "/categoria-producto/cursos-vip/" in html
+        or "VIP" in raw_title.upper()
+    )
 
     # 3. Product ID & Protected File URL
     protected_url = None
@@ -863,21 +1020,6 @@ def fetch_course_metadata(session: requests.Session, course_url: str) -> Dict[st
                     re.search(r"data-product_id=['\"](\d+)['\"]", html)
         if pid_match:
             product_id = pid_match.group(1)
-
-    if not protected_url:
-        raise RuntimeError(
-            "No se encontró el botón de descarga protegida de membresía (YITH). "
-            "Verifica que la cuenta premium en cookies tenga acceso activo al curso."
-        )
-
-    logger.info(f"Enlace protegido detectado: {protected_url} (Product ID: {product_id})")
-
-    txt_resp = session.get(protected_url, allow_redirects=True, timeout=20)
-    if txt_resp.status_code != 200:
-        raise RuntimeError(f"Error descargando archivo protegido: HTTP {txt_resp.status_code}")
-
-    txt_url = txt_resp.url
-    txt_content = txt_resp.content.decode("utf-8", errors="replace")
 
     # Extract dates from JSON-LD schema or meta tags
     pub_date = None
@@ -904,21 +1046,88 @@ def fetch_course_metadata(session: requests.Session, course_url: str) -> Dict[st
         if mod_meta and mod_meta.get("content"):
             mod_date = mod_meta["content"][:10]
 
-    if not pub_date:
-        date_match = re.search(r"/uploads/woocommerce_uploads/(\d{4}/\d{2})/", txt_url)
-        pub_date = date_match.group(1).replace("/", "-") if date_match else datetime.now().strftime("%Y-%m")
-
     effective_date = mod_date or pub_date or datetime.now().strftime("%Y-%m-%d")
 
-    cloud_links = parse_txt_links(txt_content, session=session)
-    all_option_sets = parse_all_option_sets(txt_content, session=session)
-    password = parse_txt_password(txt_content)
+    # Si NO se solicita el payload de descarga, retornar inmediatamente sin tocar el endpoint protegido (0 créditos consumidos)
+    if not fetch_download_payload:
+        return {
+            "title": title,
+            "raw_title": raw_title,
+            "author": author,
+            "category": category,
+            "categories": all_cats,
+            "is_vip": is_vip,
+            "delivery_type": "pending",
+            "cursazo_data": {},
+            "product_id": product_id or "N/A",
+            "product_url": course_url,
+            "protected_url": protected_url or "",
+            "txt_url": "",
+            "txt_content": "",
+            "pub_date": pub_date or "N/A",
+            "mod_date": mod_date or pub_date or "N/A",
+            "effective_date": effective_date,
+            "password": "www.miscursosvirtuales.com",
+            "cloud_links": [],
+            "all_option_sets": [],
+        }
+
+    if not protected_url:
+        raise RuntimeError(
+            "No se encontró el botón de descarga protegida de membresía (YITH). "
+            "Verifica que la cuenta premium en cookies tenga acceso activo al curso."
+        )
+
+    logger.info(f"💳 [CONSUMO DE CRÉDITO AUTORIZADO] Descargando enlace protegido YITH: {protected_url} (Product ID: {product_id})")
+
+    txt_resp = session.get(protected_url, allow_redirects=True, timeout=20)
+    if txt_resp.status_code != 200:
+        raise RuntimeError(f"Error descargando archivo protegido: HTTP {txt_resp.status_code}")
+
+    txt_url = txt_resp.url
+    txt_content = txt_resp.content.decode("utf-8", errors="replace")
+
+    if not pub_date:
+        date_match = re.search(r"/uploads/woocommerce_uploads/(\d{4}/\d{2})/", txt_url)
+        if date_match:
+            pub_date = date_match.group(1).replace("/", "-")
+            effective_date = mod_date or pub_date
+
+    # Detect delivery type: Cursazo vs Legacy Cloud Links
+    cursazo_data = None
+    m_pase = re.search(r"action=[\x22\x27]([^\x22\x27]+)[\x22\x27].*?name=[\x22\x27]pase[\x22\x27]\s+value=[\x22\x27]([^\x22\x27]+)[\x22\x27]", txt_content, re.DOTALL)
+    if not m_pase:
+        m_pase = re.search(r"name=[\x22\x27]pase[\x22\x27]\s+value=[\x22\x27]([^\x22\x27]+)[\x22\x27].*?action=[\x22\x27]([^\x22\x27]+)[\x22\x27]", txt_content, re.DOTALL)
+        if m_pase:
+            p_val, a_val = m_pase.groups()
+            m_pase = (a_val, p_val)
+
+    if m_pase:
+        action_url, pase_token = m_pase if isinstance(m_pase, tuple) else m_pase.groups()
+        if "cursazo" in action_url.lower() or "entrar" in action_url.lower():
+            logger.info("⚡ Entrega nativa por Cursazo S4 detectada. Resolviendo árbol de medios...")
+            cursazo_data = resolve_cursazo_course_tree(session, action_url, pase_token, course_url)
+
+    if cursazo_data:
+        delivery_type = "cursazo"
+        cloud_links = []
+        all_option_sets = []
+        password = "N/A (Entrega directa S4 Cursazo)"
+    else:
+        delivery_type = "legacy"
+        cloud_links = parse_txt_links(txt_content, session=session)
+        all_option_sets = parse_all_option_sets(txt_content, session=session)
+        password = parse_txt_password(txt_content)
 
     return {
         "title": title,
         "raw_title": raw_title,
         "author": author,
         "category": category,
+        "categories": all_cats,
+        "is_vip": is_vip,
+        "delivery_type": delivery_type,
+        "cursazo_data": cursazo_data or {},
         "product_id": product_id or "N/A",
         "product_url": course_url,
         "protected_url": protected_url,
@@ -1043,6 +1252,13 @@ def parse_txt_links(text: str, session: Optional[requests.Session] = None) -> Li
     return all_sets[0] if all_sets else []
 
 
+def sanitize_file_name(name: str) -> str:
+    """Sanitizes filename preserving spaces/extension and removing illegal filesystem characters."""
+    clean = re.sub(r"[\U00010000-\U0010ffff]", "", name)
+    clean = re.sub(r'[\/\\:*?"<>|]', "", clean).strip()
+    return clean or "archivo"
+
+
 def sanitize_folder_name(name: str) -> str:
     """Universal sanitization: strips emojis, symbols and redundant punctuation
     while strictly preserving alphanumeric characters, unicode accents, and hyphens."""
@@ -1106,6 +1322,66 @@ def resolve_author_dir(base_dest: str, alias: str) -> str:
     if os.path.basename(norm).upper() == "AUTHOR":
         return os.path.join(norm, clean_alias)
     return os.path.join(norm, "AUTHOR", clean_alias)
+
+
+def resolve_mcv_destination_base(meta: Dict[str, Any], args: argparse.Namespace) -> str:
+    """
+    Sovereign deterministic directory router:
+    - -o / --output-dir explicit -> args.output_dir
+    - --dest current -> os.getcwd()
+    - --dest vip / --vip / meta['is_vip'] -> MCV_VIP_DIR (/var/www/baiosfera/CURSOS/MCV/VIP)
+    - --dest author / --author-dir -> MCV_AUTHOR_DIR / {alias}
+    - --dest categoria / --category-dir -> MCV_CATEGORIAS_DIR / {category}
+    - auto:
+      1. is_vip -> MCV_VIP_DIR
+      2. has author collection or --alias -> MCV_AUTHOR_DIR / {author}
+      3. topic / individual -> MCV_CATEGORIAS_DIR / {category}
+    Never falls back to os.getcwd() unless explicitly requested with --dest current.
+    """
+    if getattr(args, "output_dir", None):
+        return os.path.abspath(args.output_dir)
+
+    dest_mode = getattr(args, "dest", "auto")
+    if dest_mode == "current":
+        return os.getcwd()
+
+    is_vip = getattr(args, "vip", False) or meta.get("is_vip", False)
+    if dest_mode == "vip" or is_vip:
+        os.makedirs(MCV_VIP_DIR, exist_ok=True)
+        return MCV_VIP_DIR
+
+    author_alias = getattr(args, "author_dir", None) or getattr(args, "alias", None)
+    if not author_alias:
+        raw_author = meta.get("author", "")
+        if raw_author and raw_author.upper() not in ["MCV", "UNKNOWN", "N/A", "GENERAL", "MIS CURSOS VIRTUALES"]:
+            author_alias = resolve_author_alias(raw_author)
+
+    if dest_mode == "author":
+        clean_alias = sanitize_folder_name(author_alias or "Autor_Desconocido").title()
+        target = os.path.join(MCV_AUTHOR_DIR, clean_alias)
+        os.makedirs(target, exist_ok=True)
+        return target
+
+    cat_name = getattr(args, "category_dir", None) or getattr(args, "category", None) or meta.get("category", "General")
+    clean_cat = sanitize_folder_name(cat_name).title()
+
+    if dest_mode == "categoria":
+        target = os.path.join(MCV_CATEGORIAS_DIR, clean_cat)
+        os.makedirs(target, exist_ok=True)
+        return target
+
+    # Auto mode:
+    # If explicit author alias or author curriculum:
+    if getattr(args, "alias", None) or getattr(args, "curriculum", None):
+        clean_alias = sanitize_folder_name(author_alias or "Autor_Desconocido").title()
+        target = os.path.join(MCV_AUTHOR_DIR, clean_alias)
+        os.makedirs(target, exist_ok=True)
+        return target
+
+    # Default for individual / general courses:
+    target = os.path.join(MCV_CATEGORIAS_DIR, clean_cat)
+    os.makedirs(target, exist_ok=True)
+    return target
 
 
 def compute_course_folder_name(
@@ -2823,10 +3099,13 @@ def recursive_extract_tree(
 
 def get_optimal_staging_dir() -> str:
     """
-    Returns a safe disk-backed staging directory under /tmp.
-    Avoids /dev/shm in LXC environments to prevent cgroup RAM exhaustion.
+    Returns a safe disk-backed staging directory under localstorage.
+    Avoids /dev/shm and root /tmp in LXC environments to prevent cgroup RAM exhaustion and FUSE churn.
     """
-    staging = "/tmp/mcv_transcode_staging"
+    if os.path.exists("/var/www/localstorage"):
+        staging = "/var/www/localstorage/mcv_staging/transcode"
+    else:
+        staging = "/tmp/mcv_transcode_staging"
     os.makedirs(staging, exist_ok=True)
     return staging
 
@@ -2834,13 +3113,15 @@ def get_optimal_staging_dir() -> str:
 def reduce_video_to_360p(input_file: str, output_file: str) -> bool:
     """
     Transcodes a video to minimum visible bitrate:
-    360p (640x360), H.264 CRF 28, AAC 64k, bounded to 2 threads.
+    360p (640x360), H.264 CRF 28, ultrafast preset, fastdecode tune, fast_bilinear scaler,
+    AAC 64k mono, bounded to 3 threads with idle CPU/IO scheduling.
     """
     cmd = [
-        "ffmpeg", "-y", "-threads", "2", "-i", input_file,
-        "-vf", "scale=-2:360",
-        "-c:v", "libx264", "-crf", "28", "-preset", "veryfast",
-        "-c:a", "aac", "-b:a", "64k",
+        "nice", "-n", "19", "ionice", "-c", "3",
+        "ffmpeg", "-y", "-threads", "3", "-i", input_file,
+        "-vf", "scale=-2:360:flags=fast_bilinear",
+        "-c:v", "libx264", "-crf", "28", "-preset", "ultrafast", "-tune", "fastdecode",
+        "-c:a", "aac", "-b:a", "64k", "-ac", "1",
         output_file
     ]
     proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -2857,21 +3138,24 @@ def reduce_video_to_360p(input_file: str, output_file: str) -> bool:
 
 
 def convert_to_notebooklm_audio(input_file: str, output_file: str, audio_format: str = "mp3") -> bool:
-    """Converts video/audio to NotebookLM optimal speech format (MP3 32k, AAC 24k mono, or Opus 20k) with 2 threads."""
+    """Converts video/audio to NotebookLM optimal speech format with idle CPU/IO scheduling and 2 threads."""
     if audio_format == "aac":
         cmd = [
+            "nice", "-n", "19", "ionice", "-c", "3",
             "ffmpeg", "-y", "-threads", "2", "-i", input_file,
             "-vn", "-c:a", "aac", "-b:a", "24k", "-ac", "1",
             output_file
         ]
     elif audio_format == "opus":
         cmd = [
+            "nice", "-n", "19", "ionice", "-c", "3",
             "ffmpeg", "-y", "-threads", "2", "-i", input_file,
             "-vn", "-c:a", "libopus", "-b:a", "20k", "-vbr", "on", "-application", "voip", "-ac", "1",
             output_file
         ]
     else:
         cmd = [
+            "nice", "-n", "19", "ionice", "-c", "3",
             "ffmpeg", "-y", "-threads", "2", "-i", input_file,
             "-vn", "-c:a", "libmp3lame", "-b:a", "32k", "-ac", "1", "-ar", "44100",
             output_file
@@ -2896,16 +3180,17 @@ def optimize_media_single_pass(
 ) -> Tuple[bool, bool]:
     """
     Optimizes video (360p CRF 28 veryfast) and audio in a SINGLE FFmpeg pass when both are needed,
-    demuxing and decoding the input only once to eliminate redundant disk I/O, bounded to 2 threads.
+    demuxing and decoding the input only once to eliminate redundant disk I/O, bounded to 2 threads with idle priority.
     """
     if output_video and output_audio:
-        cmd = ["ffmpeg", "-y", "-threads", "2", "-i", input_file]
-        cmd.extend([
-            "-vf", "scale=-2:360",
-            "-c:v", "libx264", "-crf", "28", "-preset", "veryfast",
-            "-c:a", "aac", "-b:a", "64k",
+        cmd = [
+            "nice", "-n", "19", "ionice", "-c", "3",
+            "ffmpeg", "-y", "-threads", "3", "-i", input_file,
+            "-vf", "scale=-2:360:flags=fast_bilinear",
+            "-c:v", "libx264", "-crf", "28", "-preset", "ultrafast", "-tune", "fastdecode",
+            "-c:a", "aac", "-b:a", "64k", "-ac", "1",
             output_video
-        ])
+        ]
         if audio_format == "aac":
             cmd.extend([
                 "-vn", "-c:a", "aac", "-b:a", "24k", "-ac", "1",
@@ -3147,7 +3432,11 @@ def process_and_optimize_course_media(
             f_lower = vf.lower()
             is_ts = f_lower.endswith(".ts")
             is_legacy = not f_lower.endswith(".mp4")
-            needs_reduction = is_ts or is_legacy or (info.get("height", 0) > 360) or (orig_sz > 80 * 1024 * 1024)
+            v_h = info.get("height", 0)
+            if v_h > 0:
+                needs_reduction = is_ts or is_legacy or (v_h > 360)
+            else:
+                needs_reduction = is_ts or is_legacy or (orig_sz > 80 * 1024 * 1024)
 
             saved = 0
             if needs_reduction:
@@ -3296,7 +3585,8 @@ def is_course_directory_complete(course_dir: str, audio_only: bool = False) -> T
                     return False, f"Video {os.path.basename(vp)} no normalizado a .mp4"
                 v_sz = os.path.getsize(vp)
                 v_info = get_media_info(vp)
-                if (v_info.get("height", 0) > 360) or (v_sz > 80 * 1024 * 1024):
+                v_h = v_info.get("height", 0)
+                if (v_h > 360) or (v_h == 0 and v_sz > 80 * 1024 * 1024):
                     return False, f"Video {os.path.basename(vp)} pendiente de reducción a 360p"
         return True, "Completado y optimizado (Video)"
 
@@ -3345,11 +3635,18 @@ def build_comprehensive_markdown_report(
     saved_gb = max(initial_size_gb - final_size_gb, 0.0)
     saved_pct = (saved_gb / initial_size_gb * 100) if initial_size_gb > 0 else 0.0
 
-    links_md = ""
-    cloud_links = meta.get("cloud_links") or []
-    for idx, item in enumerate(cloud_links, 1):
-        links_md += f"{idx}. **{item['part']} ({item['provider'].upper()}):**  \n   {item['url']}\n"
-    provider_title = cloud_links[0].get("provider", "Cloud").upper() if cloud_links else "DESCONOCIDO"
+    is_cursazo = meta.get("delivery_type") == "cursazo"
+    cursazo_data = meta.get("cursazo_data", {})
+
+    if is_cursazo:
+        provider_title = "CURSAZO S4 (STREAM & DIRECT S3)"
+        links_md = f"* **Proveedor:** Cursazo S4 (Stream & Descarga Directa Segura S3)\n* **ID de Curso Cursazo:** `{cursazo_data.get('course_id', 'N/A')}`\n* **Total de Archivos en Árbol:** {len(cursazo_data.get('files', []))}\n* **Tamaño Catálogo S4:** {cursazo_data.get('total_gb', 0.0):.2f} GB\n"
+    else:
+        links_md = ""
+        cloud_links = meta.get("cloud_links") or []
+        for idx, item in enumerate(cloud_links, 1):
+            links_md += f"{idx}. **{item['part']} ({item['provider'].upper()}):**  \n   {item['url']}\n"
+        provider_title = cloud_links[0].get("provider", "Cloud").upper() if cloud_links else "DESCONOCIDO"
 
     # Build Module Table
     raw_subdirs = [
@@ -3382,30 +3679,50 @@ def build_comprehensive_markdown_report(
     for mod in modules:
         target_mods.append((mod, mod))
 
-    for idx, (mod_dir_name, mod_label) in enumerate(target_mods, 1):
-        mp = course_dir if mod_dir_name == "." else os.path.join(course_dir, mod_dir_name)
-        if mod_dir_name == ".":
-            vids = len([f for f in os.listdir(mp) if os.path.isfile(os.path.join(mp, f)) and f.lower().endswith((".mp4", ".mkv", ".ts"))])
-            docs = len([f for f in os.listdir(mp) if os.path.isfile(os.path.join(mp, f)) and f.lower().endswith((".pdf", ".pptx", ".xlsx", ".docx", ".txt")) and not f.endswith(".log") and not f.endswith(".md")])
-            auds = len(all_central_mp3s) if not modules else len([f for f in all_central_mp3s if f.startswith("M01_")])
-            mod_bytes = sum(os.path.getsize(os.path.join(mp, f)) for f in os.listdir(mp) if os.path.isfile(os.path.join(mp, f)) and not f.endswith(".log") and not f.endswith(".md"))
-        else:
-            vids = len([f for f in os.listdir(mp) if f.lower().endswith((".mp4", ".mkv", ".ts"))])
-            mod_num = extract_mod_num(mod_label)
-            auds = len([f for f in all_central_mp3s if f.startswith(f"M{mod_num:02d}_")])
-            docs = len([f for f in os.listdir(mp) if f.lower().endswith((".pdf", ".pptx", ".xlsx", ".docx", ".txt"))])
-            mod_bytes = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(mp) for f in fs)
+    if not target_mods and is_cursazo:
+        c_mods = cursazo_data.get("modules", [])
+        for idx, mod in enumerate(c_mods, 1):
+            m_name = mod.get("name", f"Módulo {idx:02d}")
+            m_files = mod.get("files", [])
+            m_vids = len([f for f in m_files if f.get("name", "").lower().endswith((".mp4", ".mkv", ".ts"))])
+            m_docs = len([f for f in m_files if not f.get("name", "").lower().endswith((".mp4", ".mkv", ".ts"))])
+            m_sz = sum(f.get("size", 0) for f in m_files) / (1024 * 1024)
+            sz_str = f"{m_sz:.1f} MB" if m_sz < 1000 else f"{m_sz/1024:.2f} GB"
+            rows.append(f"| {idx:02d} | {m_name} | {m_vids} | 0 | {m_docs} | {sz_str} | ⏳ Árbol S4 Verificado (Pendiente) |")
+        total_modules_count = len(c_mods)
+    else:
+        for idx, (mod_dir_name, mod_label) in enumerate(target_mods, 1):
+            mp = course_dir if mod_dir_name == "." else os.path.join(course_dir, mod_dir_name)
+            if mod_dir_name == ".":
+                vids = len([f for f in os.listdir(mp) if os.path.isfile(os.path.join(mp, f)) and f.lower().endswith((".mp4", ".mkv", ".ts"))])
+                docs = len([f for f in os.listdir(mp) if os.path.isfile(os.path.join(mp, f)) and f.lower().endswith((".pdf", ".pptx", ".xlsx", ".docx", ".txt")) and not f.endswith(".log") and not f.endswith(".md")])
+                auds = len(all_central_mp3s) if not modules else len([f for f in all_central_mp3s if f.startswith("M01_")])
+                mod_bytes = sum(os.path.getsize(os.path.join(mp, f)) for f in os.listdir(mp) if os.path.isfile(os.path.join(mp, f)) and not f.endswith(".log") and not f.endswith(".md"))
+            else:
+                vids = len([f for f in os.listdir(mp) if f.lower().endswith((".mp4", ".mkv", ".ts"))])
+                mod_num = extract_mod_num(mod_label)
+                auds = len([f for f in all_central_mp3s if f.startswith(f"M{mod_num:02d}_")])
+                docs = len([f for f in os.listdir(mp) if f.lower().endswith((".pdf", ".pptx", ".xlsx", ".docx", ".txt"))])
+                mod_bytes = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(mp) for f in fs)
 
-        mb = mod_bytes / (1024 * 1024)
-        sz_str = f"{mb:.1f} MB" if mb < 1000 else f"{mb/1024:.2f} GB"
+            mb = mod_bytes / (1024 * 1024)
+            sz_str = f"{mb:.1f} MB" if mb < 1000 else f"{mb/1024:.2f} GB"
 
-        total_vids += vids
-        total_auds += auds
-        total_docs += docs
-        rows.append(f"| {idx:02d} | {mod_label} | {vids} | {auds} | {docs} | {sz_str} | ✅ 100% OK |")
+            total_vids += vids
+            total_auds += auds
+            total_docs += docs
+            rows.append(f"| {idx:02d} | {mod_label} | {vids} | {auds} | {docs} | {sz_str} | ✅ 100% OK |")
+        total_modules_count = len(target_mods)
 
     table_md = "\n".join(rows)
-    total_modules_count = len(target_mods)
+
+    if total_vids == 0 and total_auds == 0 and total_docs == 0:
+        if is_cursazo:
+            status_text = "METADATA_EXTRAIDA (Temario y Árbol S4 Verificado)"
+        else:
+            status_text = "METADATA_EXTRAIDA (Pendiente de Descarga)"
+    else:
+        status_text = "COMPLETADO, OPTIMIZADO Y VALIDADO (100% Verificado)"
 
     content = f"""# {title}
 
@@ -3415,7 +3732,7 @@ def build_comprehensive_markdown_report(
 **Fecha de Publicación:** `{meta.get('pub_date', 'N/A')}`  
 **Última Actualización:** `{meta.get('mod_date', 'N/A')}`  
 **Fecha de Vigencia:** `{meta.get('effective_date', 'N/A')}`  
-**Estado:** COMPLETADO, OPTIMIZADO Y VALIDADO (100% Verificado)  
+**Estado:** {status_text}  
 **Fecha de Verificación:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
 
 ---
@@ -3821,6 +4138,264 @@ def upload_course_to_notebooklm(
     return True
 
 
+def download_cursazo_file(
+    session: requests.Session,
+    file_info: Dict[str, Any],
+    dest_path: str,
+    tracker: ProgressTracker,
+    max_retries: int = 5
+) -> bool:
+    """
+    Downloads an individual file from Cursazo via S3 presigned URL with Range resume support.
+    """
+    file_id = file_info["id"]
+    expected_size = file_info.get("size", 0)
+    file_name = file_info.get("name", os.path.basename(dest_path))
+
+    # Idempotency check
+    if os.path.exists(dest_path) and expected_size > 0:
+        if os.path.getsize(dest_path) == expected_size:
+            logger.info(f"⚡ [RESUME] {file_name} ya existe completo en disco ({expected_size / (1024*1024):.2f} MB). Omitiendo.")
+            tracker.update(file_name, expected_size, expected_size)
+            return True
+
+    # Staging Blinding: Store transient .part files on localstorage to prevent FUSE rclone lockups
+    if os.path.exists("/var/www/localstorage"):
+        staging_parts_dir = "/var/www/localstorage/mcv_staging/parts"
+    else:
+        staging_parts_dir = "/tmp/mcv_parts"
+    os.makedirs(staging_parts_dir, exist_ok=True)
+
+    safe_stem = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", file_name)
+    temp_part_path = os.path.join(staging_parts_dir, f"{file_id}_{safe_stem}.part")
+
+    # Migrate any legacy .part in dest_path (from FUSE) into localstorage staging
+    legacy_part = dest_path + ".part"
+    if os.path.exists(legacy_part) and not os.path.exists(temp_part_path):
+        try:
+            shutil.move(legacy_part, temp_part_path)
+            logger.info(f"⚡ [STAGING] Migrado .part previo de FUSE a localstorage: {safe_stem}")
+        except Exception:
+            pass
+
+    existing_bytes = os.path.getsize(temp_part_path) if os.path.exists(temp_part_path) else 0
+
+    if existing_bytes > expected_size and expected_size > 0:
+        existing_bytes = 0
+        try:
+            os.remove(temp_part_path)
+        except Exception:
+            pass
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            media_ep = f"https://cursazo.top/api/media-url?id={quote(file_id)}&format=original&descarga=1"
+            r_media = session.get(media_ep, timeout=20)
+            if r_media.status_code != 200:
+                raise RuntimeError(f"Error solicitando URL de media: HTTP {r_media.status_code}")
+            media_json = r_media.json()
+            s3_url = media_json.get("url")
+            if not s3_url:
+                raise RuntimeError("No se recibió URL de S3 en la respuesta de media")
+
+            headers = {}
+            if existing_bytes > 0:
+                headers["Range"] = f"bytes={existing_bytes}-"
+
+            with session.get(s3_url, headers=headers, stream=True, timeout=30) as r_s3:
+                if r_s3.status_code in [200, 206]:
+                    mode = "ab" if existing_bytes > 0 and r_s3.status_code == 206 else "wb"
+                    if mode == "wb":
+                        existing_bytes = 0
+
+                    with open(temp_part_path, mode) as f_out:
+                        for chunk in r_s3.iter_content(chunk_size=1024 * 1024):
+                            if chunk:
+                                f_out.write(chunk)
+                                existing_bytes += len(chunk)
+                                tracker.update(file_name, existing_bytes, expected_size or existing_bytes)
+
+                    final_sz = os.path.getsize(temp_part_path)
+                    if expected_size > 0 and final_sz != expected_size:
+                        raise RuntimeError(f"Tamaño incompleto: {final_sz} != {expected_size}")
+
+                    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                    shutil.move(temp_part_path, dest_path)
+                    logger.info(f"✅ Descarga completada: {file_name} ({final_sz / (1024*1024):.2f} MB)")
+                    return True
+                else:
+                    raise RuntimeError(f"HTTP {r_s3.status_code} desde S3")
+
+        except Exception as e_dl:
+            if attempt < max_retries:
+                logger.warning(f"⚠️ Reintento {attempt}/{max_retries} para {file_name}: {e_dl}. Esperando 3s...")
+                time.sleep(3.0)
+            else:
+                logger.error(f"❌ Falló la descarga de {file_name} tras {max_retries} intentos: {e_dl}")
+                return False
+
+    return False
+
+
+def extract_cursazo_remote_audio(
+    session: requests.Session,
+    file_info: Dict[str, Any],
+    out_audio_path: str,
+    tracker: ProgressTracker,
+    audio_format: str = "aac"
+) -> bool:
+    """
+    Directly extracts audio from remote S3 presigned URL without downloading the full video.
+    """
+    file_name = file_info.get("name", "audio")
+    if os.path.exists(out_audio_path) and os.path.getsize(out_audio_path) > 1024:
+        logger.info(f"⚡ [RESUME] Audio ya existe: {os.path.basename(out_audio_path)}. Omitiendo.")
+        return True
+
+    file_id = file_info["id"]
+    try:
+        media_ep = f"https://cursazo.top/api/media-url?id={quote(file_id)}&format=original&descarga=1"
+        r_media = session.get(media_ep, timeout=20)
+        s3_url = r_media.json().get("url")
+        if not s3_url:
+            return False
+
+        os.makedirs(os.path.dirname(out_audio_path), exist_ok=True)
+        dir_name = os.path.dirname(out_audio_path)
+        base_name = os.path.basename(out_audio_path)
+        temp_audio = os.path.join(dir_name, f".tmp_{base_name}")
+
+        if audio_format == "aac":
+            codec_args = ["-vn", "-acodec", "aac", "-b:a", "24k", "-ac", "1", "-ar", "16000", "-f", "adts"]
+        elif audio_format == "opus":
+            codec_args = ["-vn", "-acodec", "libopus", "-b:a", "20k", "-ac", "1", "-ar", "16000", "-f", "opus"]
+        else:
+            codec_args = ["-vn", "-acodec", "libmp3lame", "-b:a", "32k", "-ac", "1", "-ar", "44100", "-f", "mp3"]
+
+        cmd = [
+            "nice", "-n", "19", "ionice", "-c", "3",
+            "ffmpeg", "-y", "-loglevel", "error", "-threads", "2",
+            "-i", s3_url,
+            *codec_args,
+            temp_audio
+        ]
+
+        proc = subprocess.run(cmd, timeout=180)
+        if proc.returncode == 0 and os.path.exists(temp_audio) and os.path.getsize(temp_audio) > 1024:
+            shutil.move(temp_audio, out_audio_path)
+            sz_mb = os.path.getsize(out_audio_path) / (1024 * 1024)
+            logger.info(f"⚡ Audio extraído directamente desde S3: {os.path.basename(out_audio_path)} ({sz_mb:.2f} MB)")
+            return True
+        else:
+            if os.path.exists(temp_audio):
+                os.remove(temp_audio)
+            return False
+    except Exception as e:
+        logger.warning(f"Aviso extrayendo audio remoto para {file_name}: {e}")
+        return False
+
+
+def download_cursazo_course(
+    session: requests.Session,
+    meta: Dict[str, Any],
+    output_dir: str,
+    tracker: ProgressTracker,
+    args: argparse.Namespace
+) -> bool:
+    """
+    Coordinates multi-threaded download of Cursazo course files directly into structured module folders.
+    """
+    cursazo_data = meta.get("cursazo_data", {})
+    modules = cursazo_data.get("modules", [])
+    all_files = cursazo_data.get("files", [])
+    total_files = len(all_files)
+    total_bytes = cursazo_data.get("total_size_bytes", 0)
+
+    logger.info(f"\n=======================================================")
+    logger.info(f"🚀 Iniciando descarga Cursazo S4: {meta['title']}")
+    logger.info(f"📦 Módulos: {len(modules)} | Archivos: {total_files} | Volumen: {total_bytes / (1024**3):.2f} GB")
+    logger.info(f"📂 Destino: {output_dir}")
+    logger.info(f"=======================================================\n")
+
+    os.makedirs(output_dir, exist_ok=True)
+    central_audio_dir = os.path.join(output_dir, "NOTEBOOKLM_AUDIOS")
+    os.makedirs(central_audio_dir, exist_ok=True)
+
+    is_audio_only = getattr(args, "audio_only", False)
+
+    tasks = []
+    mod_counter = 1
+    for mod in modules:
+        mod_name = mod.get("name", f"Módulo {mod_counter:02d}")
+        clean_mod = sanitize_folder_name(mod_name)
+        mod_dir = os.path.join(output_dir, clean_mod)
+        os.makedirs(mod_dir, exist_ok=True)
+
+        lec_counter = 1
+        for f in mod.get("files", []):
+            fname = sanitize_file_name(f.get("name", f"leccion_{lec_counter:02d}.mp4"))
+            dest_file = os.path.join(mod_dir, fname)
+
+            audio_ext = ".aac" if getattr(args, "audio_format", "aac") == "aac" else (".opus" if getattr(args, "audio_format", "") == "opus" else ".mp3")
+            audio_base_name = f"M{mod_counter:02d}_L{lec_counter:02d}_{os.path.splitext(fname)[0]}{audio_ext}"
+            audio_path = os.path.join(central_audio_dir, audio_base_name)
+
+            tasks.append({
+                "file_info": f,
+                "dest_file": dest_file,
+                "audio_path": audio_path,
+                "is_video": fname.lower().endswith((".mp4", ".mkv", ".mov", ".webm", ".avi")),
+                "mod_index": mod_counter,
+                "lec_index": lec_counter
+            })
+            lec_counter += 1
+        mod_counter += 1
+
+    failed_files = []
+    downloaded_count = 0
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {}
+        for t in tasks:
+            if is_audio_only and t["is_video"]:
+                fut = executor.submit(
+                    extract_cursazo_remote_audio,
+                    session,
+                    t["file_info"],
+                    t["audio_path"],
+                    tracker,
+                    getattr(args, "audio_format", "aac")
+                )
+            else:
+                fut = executor.submit(
+                    download_cursazo_file,
+                    session,
+                    t["file_info"],
+                    t["dest_file"],
+                    tracker
+                )
+            futures[fut] = t
+
+        for fut in futures:
+            t = futures[fut]
+            try:
+                ok = fut.result()
+                if ok:
+                    downloaded_count += 1
+                else:
+                    failed_files.append(t["file_info"].get("name"))
+            except Exception as e:
+                logger.error(f"Error procesando {t['file_info'].get('name')}: {e}")
+                failed_files.append(t["file_info"].get("name"))
+
+    if failed_files:
+        logger.warning(f"⚠️ {len(failed_files)} archivos no pudieron descargarse correctamente: {failed_files[:5]}")
+        return downloaded_count > 0
+
+    logger.info(f"🎉 Todos los {downloaded_count} archivos de Cursazo fueron procesados exitosamente.")
+    return True
+
+
 def download_and_extract_course(
     session: requests.Session,
     course_url: str,
@@ -3830,10 +4405,11 @@ def download_and_extract_course(
     """
     Stage 1: Producer worker (Network I/O & Decompression).
     Downloads all cloud parts and unpacks them into output_dir.
-    Returns (output_dir, meta) or None on failure.
+    Blinded Credit Protocol: Resolves public metadata first; only consumes 1 credit when downloading missing parts.
     """
     try:
-        meta = fetch_course_metadata(session, course_url)
+        # Paso 1: Obtener metadatos públicos (0 créditos consumidos)
+        meta = fetch_course_metadata(session, course_url, fetch_download_payload=False)
     except Exception as e:
         logger.error(f"❌ Error obteniendo metadata para {course_url}: {e}")
         return None
@@ -3853,8 +4429,11 @@ def download_and_extract_course(
         date_prefix=getattr(args, "date_prefix", True)
     )
 
+    # Sovereign directory router:
+    effective_base_dest = resolve_mcv_destination_base(meta, args)
+
     matched_folder = locate_existing_course_directory(
-        base_dest_dir,
+        effective_base_dest,
         folder_name,
         title=meta.get("title", ""),
         author_alias=effective_author,
@@ -3864,7 +4443,7 @@ def download_and_extract_course(
     if matched_folder:
         folder_name = matched_folder
 
-    output_dir = os.path.abspath(os.path.join(base_dest_dir, folder_name))
+    output_dir = os.path.abspath(os.path.join(effective_base_dest, folder_name))
 
     # Persistent staging in local NVMe to guarantee maximum I/O throughput and zero FUSE rclone cache exhaustion
     course_slug = sanitize_folder_name(folder_name)
@@ -3877,7 +4456,7 @@ def download_and_extract_course(
         except Exception:
             pass
 
-    # Instant Idempotency Skip Gate:
+    # Instant Idempotency Skip Gate (CERO CRÉDITOS SI EL CURSO YA ESTÁ COMPLETO O ES SOLO METADATA):
     central_audio_dir = os.path.join(output_dir, "NOTEBOOKLM_AUDIOS")
     if os.path.isdir(central_audio_dir):
         completed_audios = [
@@ -3892,7 +4471,10 @@ def download_and_extract_course(
             existing_videos.extend([f for f in files if f.lower().endswith(video_exts) and not f.startswith(".")])
 
         is_fully_done = False
-        has_pending_temp = os.path.exists(legacy_temp) or os.path.exists(temp_download_dir)
+        has_pending_temp = (
+            (os.path.isdir(legacy_temp) and any(not f.startswith(".") for f in os.listdir(legacy_temp)))
+            or (os.path.isdir(temp_download_dir) and any(not f.startswith(".") for f in os.listdir(temp_download_dir)))
+        )
         audio_only_mode = getattr(args, "audio_only", False)
         if completed_audios and existing_videos and len(completed_audios) >= len(existing_videos) and not has_pending_temp:
             if audio_only_mode:
@@ -3907,7 +4489,8 @@ def download_and_extract_course(
                             vp = os.path.join(r, f)
                             v_sz = os.path.getsize(vp)
                             v_info = get_media_info(vp)
-                            if (not f.lower().endswith(".mp4")) or (v_info.get("height", 0) > 360) or (v_sz > 80 * 1024 * 1024):
+                            v_h = v_info.get("height", 0)
+                            if (not f.lower().endswith(".mp4")) or (v_h > 360) or (v_h == 0 and v_sz > 80 * 1024 * 1024):
                                 videos_need_reduction = True
                                 break
                     if videos_need_reduction:
@@ -3924,20 +4507,69 @@ def download_and_extract_course(
                 is_fully_done = True
 
         if is_fully_done and not getattr(args, "force", False):
-            logger.info(f"⚡ [IDEMPOTENCY] El curso '{folder_name}' ya cuenta con {len(completed_audios)} audios y medios 100% verificados. Omitiendo descarga.")
+            logger.info(f"⚡ [IDEMPOTENCY] El curso '{folder_name}' ya cuenta con {len(completed_audios)} audios y medios 100% verificados. Omitiendo descarga (0 créditos consumidos).")
             return (output_dir, meta)
+
+        # Si ya existen videos descargados y no hay archivos temporales pendientes, NO tocar el endpoint protegido:
+        if existing_videos and not has_pending_temp and not getattr(args, "force", False):
+            logger.info(f"⚡ [IDEMPOTENCY] El curso '{folder_name}' ya cuenta con sus {len(existing_videos)} videos descargados en disco. Omitiendo descarga protegida y procediendo a optimización (0 créditos consumidos).")
+            return (output_dir, meta)
+
+    if getattr(args, "metadata_only", False):
+        logger.info(f"⚡ [METADATA-ONLY] Extraída información pública para '{folder_name}' (0 créditos consumidos).")
+        return (output_dir, meta)
+
+    # Zero-Credit Local SSoT Bypass Gate:
+    # Si la carpeta del curso ya cuenta con enlaces extraídos en INSTRUCCIONES_DESCARGA.txt o .md,
+    # reutilizarlos directamente con 0 créditos consumidos.
+    local_txt = os.path.join(output_dir, "INSTRUCCIONES_DESCARGA.txt")
+    local_links = []
+    local_all_sets = []
+    local_pw = meta.get("password") or "www.miscursosvirtuales.com"
+
+    if os.path.isfile(local_txt):
+        try:
+            with open(local_txt, "r", encoding="utf-8", errors="replace") as _f_lt:
+                _c_lt = _f_lt.read()
+            local_links = parse_txt_links(_c_lt, session=session)
+            local_all_sets = parse_all_option_sets(_c_lt, session=session)
+            local_pw = parse_txt_password(_c_lt) or local_pw
+        except Exception as e_lt:
+            logger.warning(f"Aviso leyendo enlaces locales de {local_txt}: {e_lt}")
+
+    if not local_links and os.path.isdir(output_dir):
+        for _mf in os.listdir(output_dir):
+            if _mf.endswith(".md") and not _mf.startswith("RUTA_DE_APRENDIZAJE") and not _mf.startswith("MANUAL"):
+                try:
+                    with open(os.path.join(output_dir, _mf), "r", encoding="utf-8", errors="replace") as _f_md:
+                        _c_md = _f_md.read()
+                    _parsed_links = parse_txt_links(_c_md, session=session)
+                    if _parsed_links:
+                        local_links = _parsed_links
+                        local_all_sets = parse_all_option_sets(_c_md, session=session)
+                        local_pw = parse_txt_password(_c_md) or local_pw
+                        break
+                except Exception:
+                    pass
+
+    if local_links:
+        logger.info(f"⚡ [ZERO-CREDIT SSoT] Enlaces de descarga recuperados de archivo local ({len(local_links)} partes). Omitiendo consumo de créditos.")
+        meta["cloud_links"] = local_links
+        meta["all_option_sets"] = local_all_sets
+        meta["password"] = local_pw
+        meta["delivery_type"] = "legacy"
+    else:
+        # Paso 2: Solo si NO hay enlaces locales existentes y realmente se requiere descargar, obtener el payload protegido (consume 1 crédito)
+        logger.info(f"🚀 Solicitando entrega protegida para descargar contenido faltante de: {clean_title}...")
+        try:
+            meta = fetch_course_metadata(session, course_url, fetch_download_payload=True)
+        except Exception as e:
+            logger.error(f"❌ Error al obtener enlaces protegidos: {e}")
+            return None
 
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(temp_download_dir, exist_ok=True)
     log_file = os.path.join(output_dir, "download_progress.log")
-
-    # Poda de archivo redundante INSTRUCCIONES_DESCARGA.txt (la metadata y links residen en .md y metadata.json)
-    old_txt_path = os.path.join(output_dir, "INSTRUCCIONES_DESCARGA.txt")
-    if os.path.isfile(old_txt_path):
-        try:
-            os.remove(old_txt_path)
-        except Exception:
-            pass
 
     meta_save_path = os.path.join(output_dir, "metadata.json")
     clean_meta = {
@@ -3950,6 +4582,12 @@ def download_and_extract_course(
         "product_url": meta.get("product_url", course_url),
         "protected_url": meta.get("protected_url", ""),
         "txt_url": meta.get("txt_url", ""),
+        "delivery_type": meta.get("delivery_type", ""),
+        "cursazo_course_id": meta.get("cursazo_data", {}).get("course_id", ""),
+        "total_files": len(meta.get("cursazo_data", {}).get("files", [])),
+        "total_size_bytes": meta.get("cursazo_data", {}).get("total_size_bytes", 0),
+        "password": meta.get("password", ""),
+        "cloud_links": meta.get("cloud_links", []),
         "source": "miscursosvirtuales_native_download",
         "retrieved_at": datetime.now().isoformat()
     }
@@ -3961,7 +4599,8 @@ def download_and_extract_course(
         logger.warning(f"Aviso guardando metadata.json: {e_meta}")
 
     # Step 1: Initial Reference Markdown
-    build_comprehensive_markdown_report(meta, output_dir, initial_size_gb=0.0, final_size_gb=0.0)
+    initial_gb = meta.get("cursazo_data", {}).get("total_gb", 0.0)
+    build_comprehensive_markdown_report(meta, output_dir, initial_size_gb=initial_gb, final_size_gb=0.0)
 
     if args.metadata_only:
         logger.info(f"Modo Metadata-Only completado para: {folder_name}")
@@ -3975,6 +4614,16 @@ def download_and_extract_course(
         course_title=meta["title"]
     )
     tracker.start()
+
+    # Si la entrega es por Cursazo S4:
+    if meta.get("delivery_type") == "cursazo":
+        try:
+            ok_cur = download_cursazo_course(session, meta, output_dir, tracker, args)
+            if not ok_cur:
+                raise RuntimeError(f"Falla durante la descarga de Cursazo S4 para {meta['title']}")
+            return (output_dir, meta)
+        finally:
+            tracker.stop()
 
     downloaded_archives = []
 
@@ -4260,6 +4909,8 @@ def download_and_process_course(
     if not res:
         return False
     output_dir, meta = res
+    if getattr(args, "metadata_only", False):
+        return True
     return optimize_and_finalize_course(output_dir, meta, args)
 
 
@@ -6043,6 +6694,75 @@ def _visual_pad(text: str, target_w: int) -> str:
     return f"{text}{' ' * pad_len}"
 
 
+def render_markdown_table(c_list: list, is_outliers: bool = False) -> list:
+    """Renderiza una tabla en Markdown estándar (GFM) para legibilidad perfecta y responsiva en NotebookLM."""
+    if is_outliers:
+        lines = [
+            "| Código | Curso & Autor | Área Detectada | Año Real / MCV |",
+            "| :--- | :--- | :--- | :--- |"
+        ]
+        for c in c_list:
+            code = c.get('code', 'T00')
+            safe_title = c.get('clean_title', '').replace('|', '-').replace('\n', ' ').strip()
+            safe_author = f" ({c['author'].replace('|', '-').strip()})" if c.get("author") and c["author"] != "Autor no especificado" else ""
+            area_str = c.get('divergent_area', 'Complementario').replace('|', '-')
+
+            m_raw = str(c.get('mcv_year', c.get('meta_year', ''))).strip()
+            mcv_yr = m_raw[:7] if re.match(r'^\d{4}-\d{2}', m_raw) else (m_raw[:4] if re.match(r'^\d{4}', m_raw) else "")
+            r_raw = str(c.get('real_year', c.get('year', 'S/F'))).strip()
+            real_yr = r_raw[:7] if re.match(r'^\d{4}-\d{2}', r_raw) else (r_raw[:4] if re.match(r'^\d{4}', r_raw) else "S/F")
+
+            is_verified = c.get('is_original_verified', False)
+            real_num = int(real_yr[:4]) if (real_yr and real_yr[:4].isdigit()) else 0
+            mcv_num = int(mcv_yr[:4]) if (mcv_yr and mcv_yr[:4].isdigit()) else 9999
+
+            if is_verified and real_yr and real_yr != 'S/F' and mcv_yr and mcv_yr != 'S/F' and real_yr[:4] != mcv_yr[:4] and real_num <= mcv_num:
+                yr_str = f"Real: {real_yr} / MCV: {mcv_yr}"
+            elif mcv_yr and mcv_yr != 'S/F':
+                yr_str = mcv_yr
+            elif real_yr and real_yr != 'S/F' and real_num <= mcv_num:
+                yr_str = real_yr
+            else:
+                yr_str = "S/F"
+            lines.append(f"| `{code}` | **{safe_title}**{safe_author} | {area_str} | {yr_str} |")
+        return lines
+
+    lines = [
+        "| Código | Curso & Prerrequisito | Rol | Fase Cognitiva | Año Real / MCV |",
+        "| :--- | :--- | :--- | :--- | :--- |"
+    ]
+    for c in c_list:
+        code = c.get('code', 'P00')
+        safe_title = c.get('clean_title', '').replace('|', '-').replace('\n', ' ').strip()
+        safe_author = f" ({c['author'].replace('|', '-').strip()})" if c.get("author") and c["author"] != "Autor no especificado" else ""
+        role_str = c.get('role', '')
+        p_num = c.get('phase_num', 1)
+        p_name = c.get('phase_label', '').split(':', 1)[-1].strip()
+        phase_str = f"`[F{p_num}]` {p_name}"
+        prereq = c.get('prereq', '')
+        prereq_suffix = f"<br>↳ *Prerrequisito:* {prereq}" if prereq else ""
+
+        m_raw = str(c.get('mcv_year', c.get('meta_year', ''))).strip()
+        mcv_yr = m_raw[:7] if re.match(r'^\d{4}-\d{2}', m_raw) else (m_raw[:4] if re.match(r'^\d{4}', m_raw) else "")
+        r_raw = str(c.get('real_year', c.get('year', 'S/F'))).strip()
+        real_yr = r_raw[:7] if re.match(r'^\d{4}-\d{2}', r_raw) else (r_raw[:4] if re.match(r'^\d{4}', r_raw) else "S/F")
+
+        is_verified = c.get('is_original_verified', False)
+        real_num = int(real_yr[:4]) if (real_yr and real_yr[:4].isdigit()) else 0
+        mcv_num = int(mcv_yr[:4]) if (mcv_yr and mcv_yr[:4].isdigit()) else 9999
+
+        if is_verified and real_yr and real_yr != 'S/F' and mcv_yr and mcv_yr != 'S/F' and real_yr[:4] != mcv_yr[:4] and real_num <= mcv_num:
+            yr_str = f"Real: {real_yr} / MCV: {mcv_yr}"
+        elif mcv_yr and mcv_yr != 'S/F':
+            yr_str = mcv_yr
+        elif real_yr and real_yr != 'S/F' and real_num <= mcv_num:
+            yr_str = real_yr
+        else:
+            yr_str = "S/F"
+        lines.append(f"| `{code}` | **{safe_title}**{safe_author}{prereq_suffix} | {role_str} | {phase_str} | {yr_str} |")
+    return lines
+
+
 def render_ascii_boxed_table(c_list: list, width: int = 135, is_outliers: bool = False) -> list:
     """Renderiza una tabla ASCII/Unicode con bordes limpios, nombre de curso precedido por el peldaño, doble fecha (real y MCV), wrapping automatico y espacio holgado."""
     w_year = 15
@@ -6331,13 +7051,79 @@ def handle_curriculum(target: str, args) -> bool:
         author_dir = os.path.abspath(args.output_dir) if args.output_dir else os.getcwd()
 
     if clean_alias and clean_alias not in ["MCV", "General"]:
+        ruta_md_path = os.path.join(author_dir, f"RUTA_DE_APRENDIZAJE_{clean_alias}.md")
         ruta_txt_path = os.path.join(author_dir, f"RUTA_DE_APRENDIZAJE_{clean_alias}.txt")
     else:
+        ruta_md_path = os.path.join(author_dir, "RUTA_DE_APRENDIZAJE.md")
         ruta_txt_path = os.path.join(author_dir, "RUTA_DE_APRENDIZAJE.txt")
 
+    # Documento en Markdown Nativo (GFM) para renderizado responsivo y legible en NotebookLM
+    md_lines = [
+        f"# 🗺️ Ruta de Aprendizaje Curricular: {author_name.upper()}",
+        "",
+        f"> **Catálogo / Dominio**: `{author_name}`  ",
+        f"> **Plataforma SSoT**: MisCursosVirtuales (MCV)  ",
+        f"> **Total de Cursos en Catálogo**: `{len(classified)}`  ",
+        f"> **Itinerarios Pedagógicos**: `{len(main_itineraries)}` rutas de especialización  ",
+        f"> **Estructura Curricular**: Progresión Cognitiva Universal (Bloom-Dreyfus v{VERSION})  ",
+        f"> **Criterio Temporal**: {'Priorización por Vigencia Tecnológica (Tech-Decay)' if is_volatile else 'Progresión Conceptual Atemporal (Evergreen)'}  ",
+        f"> **Fecha de Análisis**: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`  ",
+        "",
+        "---",
+        "",
+        "## 🧠 Glosario de Fases Cognitivas (Bloom-Dreyfus)",
+        "* `[F1]` **Fundamentos & Principios**: Bases teóricas, conceptos raíz y nivel inicial.",
+        "* `[F2]` **Métodos & Práctica Instrumental**: Técnicas, herramientas y protocolos paso a paso.",
+        "* `[F3]` **Integración & Proyectos Completos**: Sistemas integrales y proyectos avanzados.",
+        "* `[F4]` **Optimización & Especialización**: Arquitectura, maestría y refinamiento.",
+        "* `[F5]` **Negocio & Salida al Mercado**: Monetización, captación de clientes y venta.",
+        "",
+        "---",
+        "",
+        "## 📋 Resumen de Itinerarios Disponibles",
+    ]
+    for track_title, c_list in sorted(main_itineraries.items()):
+        md_lines.append(f"* **{track_title}**: `{len(c_list)}` cursos")
+    if outliers:
+        md_lines.append(f"* **Cursos Complementarios / Fuera del Eje Troncal**: `{len(outliers)}` cursos aislados")
+    md_lines.append("")
+    md_lines.append("---")
+    md_lines.append("")
+
+    for track_title, c_list in sorted(main_itineraries.items()):
+        md_lines.append(f"### 🏛️ {track_title} ({len(c_list)} cursos)")
+        md_lines.append("")
+        md_lines.extend(render_markdown_table(c_list, is_outliers=False))
+        md_lines.append("")
+
+    if outliers:
+        md_lines.append(f"### 📦 Cursos Complementarios / Fuera del Eje Troncal ({len(outliers)} cursos)")
+        md_lines.append("")
+        md_lines.extend(render_markdown_table(outliers, is_outliers=True))
+        md_lines.append("")
+
+    md_lines.extend([
+        "---",
+        "",
+        "## 🎯 Orientación de Estudio y Siguientes Pasos",
+        "1. **Selección de Itinerario**: Elegí el itinerario que mejor responda a tu meta actual.",
+        "2. **Cursos Troncales vs Alternativas**: Priorizá los cursos marcados con `[⭐ Troncal]`. Si ya dominás el tema o preferís otro instructor, utilizá las `[🔄 Alternativas]`.",
+        "3. **Filtro de Versiones**: Omití o dejá como consulta secundaria los cursos marcados con `[⚠️ Histórico]` si ya existe un curso actualizado.",
+        "",
+        "### Ingesta a Google NotebookLM (Opcional):",
+        "```bash",
+        f"mcv-download --curriculum \"{target}\" --upload-nlm --alias \"{clean_alias}\" --collection \"{author_name}\"",
+        "```",
+        ""
+    ])
+
+    with open(ruta_md_path, "w", encoding="utf-8") as f_md:
+        f_md.write("\n".join(md_lines))
+
+    # Espejo texto plano para terminal y compatibilidad
     txt_lines = [
         "================================================================================",
-        f"  🗺️  RUTA DE APRENDIZAJE CURRICULAR (v9.2.0): {author_name.upper()}",
+        f"  🗺️  RUTA DE APRENDIZAJE CURRICULAR (v{VERSION}): {author_name.upper()}",
         "================================================================================",
         f"Catálogo / Dominio: {author_name}",
         f"Plataforma SSoT: MisCursosVirtuales (MCV)",
@@ -6372,25 +7158,15 @@ def handle_curriculum(target: str, args) -> bool:
         txt_lines.extend(render_ascii_boxed_table(outliers, width=135, is_outliers=True))
         txt_lines.append("")
 
-    txt_lines.extend([
-        "ORIENTACIÓN DE ESTUDIO Y SIGUIENTES PASOS:",
-        "1. Selección de Itinerario: Elegí el itinerario que mejor responda a tu meta actual.",
-        "2. Cursos Troncales vs Alternativas: Priorizá los cursos marcados con [⭐ Troncal]. Si ya dominás el tema o preferís otro instructor, utilizá las [🔄 Alternativas].",
-        "3. Filtro de Versiones: Omití o dejá como consulta secundaria los cursos marcados con [⚠️ Histórico] si ya existe un curso actualizado.",
-        "",
-        "Ingesta a Google NotebookLM (Opcional):",
-        f"  mcv-download --curriculum \"{target}\" --upload-nlm --alias \"{clean_alias}\" --collection \"{author_name}\"",
-        ""
-    ])
-
     with open(ruta_txt_path, "w", encoding="utf-8") as f_txt:
         f_txt.write("\n".join(txt_lines))
 
-    logger.info(f"✅ Archivo RUTA_DE_APRENDIZAJE generado exitosamente en: {ruta_txt_path}")
+    logger.info(f"✅ Archivo RUTA_DE_APRENDIZAJE Markdown generado en: {ruta_md_path}")
+    logger.info(f"✅ Archivo RUTA_DE_APRENDIZAJE texto generado en: {ruta_txt_path}")
 
     # Impresión elegante en terminal con tablas encuadradas
     print(f"\n{CYAN}================================================================================")
-    print(f"  🗺️  RUTA DE APRENDIZAJE CURRICULAR (v8.3.0): {BOLD}{author_name}{RESET}")
+    print(f"  🗺️  RUTA DE APRENDIZAJE CURRICULAR (v{VERSION}): {BOLD}{author_name}{RESET}")
     print(f"{CYAN}================================================================================{RESET}\n")
     for track_title, c_list in sorted(main_itineraries.items()):
         print(f"\n{BOLD}🏛️  {track_title}{RESET} ({len(c_list)} cursos)")
@@ -6400,11 +7176,12 @@ def handle_curriculum(target: str, args) -> bool:
         print(f"\n{BOLD}📦 CURSOS COMPLEMENTARIOS / FUERA DEL EJE TRONCAL{RESET} ({len(outliers)} cursos)")
         print("\n".join(render_ascii_boxed_table(outliers, width=135, is_outliers=True)))
 
-    print(f"\n📄 Documento curricular guardado en: {BOLD}{ruta_txt_path}{RESET}\n")
+    print(f"\n📄 Documento curricular Markdown guardado en: {BOLD}{ruta_md_path}{RESET}")
+    print(f"📄 Resumen texto plano guardado en: {BOLD}{ruta_txt_path}{RESET}\n")
 
     # Ingesta opcional a Google NotebookLM como cuaderno [00]
     if getattr(args, "upload_nlm", False):
-        logger.info(f"🚀 Ingestando RUTA_DE_APRENDIZAJE.txt como Cuaderno Maestro [00] en NotebookLM...")
+        logger.info(f"🚀 Ingestando RUTA_DE_APRENDIZAJE.md como Cuaderno Maestro [00] en NotebookLM...")
         try:
             from notebooklm_tools.cli.utils import get_client
             from notebooklm_tools.services import notebooks, collections
@@ -6425,9 +7202,9 @@ def handle_curriculum(target: str, args) -> bool:
                 nb_id = created.get("id") or created.get("notebook_id") if isinstance(created, dict) else getattr(created, "id", None)
 
             if nb_id:
-                logger.info(f"Subiendo RUTA_DE_APRENDIZAJE.txt al cuaderno maestro ({nb_id})...")
-                client.add_file(nb_id, ruta_txt_path, wait=False)
-                logger.info(f"✅ RUTA_DE_APRENDIZAJE.txt subida con éxito.")
+                logger.info(f"Subiendo RUTA_DE_APRENDIZAJE.md al cuaderno maestro ({nb_id})...")
+                client.add_file(nb_id, ruta_md_path, wait=False)
+                logger.info(f"✅ RUTA_DE_APRENDIZAJE.md subida con éxito.")
 
                 # Asignación a colección
                 col_name = getattr(args, "collection", "") or author_name
@@ -6452,8 +7229,23 @@ def handle_curriculum(target: str, args) -> bool:
                         collections.create_collection(client, col_name, [nb_id])
 
                 print(f"{GREEN}🎉 Cuaderno maestro [00]_GUIA-DE-ESTUDIO creado y vinculado a la colección.{RESET}")
-                print(f"   Podés configurarlo como Decano Curricular ejecutando:")
-                print(f"     {BOLD}nlm-tutor setup \"{guide_title}\"{RESET}\n")
+
+                # Inicialización automática del Decano Curricular
+                logger.info(f"⚡ Inicializando Decano Curricular automáticamente en NotebookLM...")
+                try:
+                    import subprocess
+                    res = subprocess.run(["nlm-tutor", "setup", guide_title], capture_output=True, text=True, timeout=120)
+                    if res.returncode == 0:
+                        logger.info(f"✅ Decano Curricular inicializado con éxito.")
+                        print(f"{GREEN}🎓 Decano Curricular configurado e informe inicial generado con éxito.{RESET}\n")
+                    else:
+                        logger.warning(f"Aviso al inicializar Decano Curricular: {res.stderr or res.stdout}")
+                        print(f"   Podés configurarlo manualmente ejecutando:")
+                        print(f"     {BOLD}nlm-tutor setup \"{guide_title}\"{RESET}\n")
+                except Exception as e_setup:
+                    logger.warning(f"No se pudo ejecutar nlm-tutor setup automáticamente: {e_setup}")
+                    print(f"   Podés configurarlo como Decano Curricular ejecutando:")
+                    print(f"     {BOLD}nlm-tutor setup \"{guide_title}\"{RESET}\n")
         except Exception as e_nlm:
             logger.warning(f"Aviso ingestado cuaderno maestro a NotebookLM: {e_nlm}")
 
@@ -6487,8 +7279,9 @@ def main():
     parser.add_argument("--validate-only", nargs="?", const=".", help="Validar y reportar la integridad de un directorio de curso existente (por defecto: '.')")
     parser.add_argument("--optimize-only", nargs="?", const=".", help="Ejecutar reducción a 360p, extracción de audio y ordenamiento en carpeta existente (por defecto: '.')")
     parser.add_argument("--upload-only", nargs="?", const=".", help="Subir únicamente audios y markdown existentes a Google NotebookLM sin tocar medios ni transcodificar (por defecto: '.')")
-    parser.add_argument("--curriculum", nargs="?", const=".", help="Analizar catálogo o directorio de autor, deducir la ruta pedagógica ascendente [P01]..[Pn] y generar RUTA_DE_APRENDIZAJE.txt")
+    parser.add_argument("--curriculum", nargs="?", const=".", help="Analizar catálogo o directorio de autor, deducir la ruta pedagógica ascendente [P01]..[Pn] y generar RUTA_DE_APRENDIZAJE.md")
     parser.add_argument("--download", action="store_true", help="Forzar ejecución de la cola de descarga cuando se combina con --curriculum")
+    parser.add_argument("--skip-historical", action="store_true", help="Omitir automáticamente cursos obsoletos marcados como [⚠️ Histórico] en la descarga curricular")
     parser.add_argument("--no-extract", action="store_true", help="No descomprimir automáticamente los archivos")
     parser.add_argument("--no-reduce", action="store_true", help="No reducir videos ni generar audios")
     parser.add_argument(
@@ -6515,6 +7308,16 @@ def main():
     parser.add_argument("-w", "--watch", action="store_true", help="Monitorizar continuamente en vivo el progreso de descargas")
     parser.add_argument("-v", "--version", action="version", version=f"MCV Downloader & Optimizer v{VERSION}")
     parser.add_argument("--force", action="store_true", help="Ignorar cerrojo singleton y permitir ejecuciones simultáneas")
+    parser.add_argument("--vip", action="store_true", help="Forzar destino a /var/www/baiosfera/CURSOS/MCV/VIP/")
+    parser.add_argument(
+        "--dest",
+        choices=["auto", "vip", "author", "categoria", "current"],
+        default="auto",
+        help="Regla de enrutamiento y carpetización: 'vip' (a VIP/), 'author' (a AUTHOR/<Alias>/), 'categoria' (a CATEGORIAS/<Cat>/), 'current' (al directorio actual), 'auto' (automático soberano)"
+    )
+    parser.add_argument("--author-dir", help="Subcarpeta explícita dentro de /var/www/baiosfera/CURSOS/MCV/AUTHOR/")
+    parser.add_argument("--category-dir", help="Subcarpeta explícita dentro de /var/www/baiosfera/CURSOS/MCV/CATEGORIAS/")
+    parser.add_argument("--category", help="Sobrescribir la categoría detectada del curso")
 
     args = parser.parse_args()
 
@@ -6525,8 +7328,7 @@ def main():
 
     # Detección rigurosa de intención de descarga frente a pura inspección
     has_download_intent = bool(
-        args.url
-        and not os.path.isdir(args.url)
+        (bool(args.url and not os.path.isdir(args.url)) or bool(args.optimize_only))
         and (
             getattr(args, "audio_only", False)
             or getattr(args, "download", False)
@@ -6537,7 +7339,6 @@ def main():
         and not args.list_only
         and not args.metadata_only
         and not bool(args.validate_only)
-        and not bool(args.optimize_only)
         and not bool(args.upload_only)
     )
 
@@ -6667,6 +7468,21 @@ def main():
                 upload_callback=make_upload_fn(cdir) if getattr(args, "upload_nlm", False) else None
             )
             stats_after = validate_extracted_tree(cdir)
+            meta = resolve_or_lookup_course_metadata(cdir, alias=getattr(args, "alias", ""))
+            build_comprehensive_markdown_report(meta, cdir, initial_size_gb=stats_before['total_size_gb'], final_size_gb=stats_after['total_size_gb'])
+            write_progress_card(
+                course_dir=cdir,
+                title=meta.get("title", cname),
+                phase="FINALIZADO",
+                status_badge="🟢 COMPLETADO CON ÉXITO (100%)",
+                pct=100.0,
+                details={
+                    "Módulos verificados": str(stats_after['total_modules']),
+                    "Archivos finales": f"{stats_after['total_files']} ({stats_after['total_size_gb']:.2f} GB)",
+                    "Espacio total ahorrado": f"{opt_res['total_saved_gb']:.2f} GB",
+                    "Audios NotebookLM": f"Listos en {cname}/NOTEBOOKLM_AUDIOS/",
+                }
+            )
             logger.info(f"Optimización completada para {cname}. Ahorro: {opt_res['total_saved_gb']:.2f} GB")
             for f_trans in ["PROGRESO.txt", "download_progress.log"]:
                 fp = os.path.join(cdir, f_trans)
@@ -6748,7 +7564,7 @@ def main():
             args.optimize_only = target_path
 
     session = get_session(args.cookies)
-    base_dest = os.path.abspath(args.output_dir) if args.output_dir else os.getcwd()
+    base_dest = os.path.abspath(args.output_dir) if args.output_dir else MCV_BASE_DIR
 
     # Caso 1: Colección (Categoría, Autor o Búsqueda)
     if is_collection_url(args.url):
@@ -6807,6 +7623,16 @@ def main():
         exclude_indices = parse_index_selection(args.exclude)
         only_indices = parse_index_selection(args.only)
 
+        # Si se activó --skip-historical, excluir cursos obsoletos/históricos
+        if getattr(args, "skip_historical", False):
+            hist_indices = [
+                idx for idx, c in enumerate(selected_courses, 1)
+                if "histórico" in (c.get("role") or "").lower() or "historico" in (c.get("role") or "").lower()
+            ]
+            if hist_indices:
+                logger.info(f"🚫 [SKIP-HISTORICAL]: Omitiendo {len(hist_indices)} cursos obsoletos/históricos de la descarga.")
+                exclude_indices.update(hist_indices)
+
         # Determinar índices habilitados (1-based)
         runnable_indices = [
             idx for idx in range(1, len(selected_courses) + 1)
@@ -6841,14 +7667,18 @@ def main():
         logger.info(f"================================================================================\n")
 
         # Resolución limpia de directorio de autor / colección y manifiesto:
-        if args.alias or "/author/" in args.url or "/autor/" in args.url or "?s=" in args.url or "&s=" in args.url:
-            effective_alias = args.alias or resolve_author_alias(col_name)
+        if args.vip or getattr(args, "dest", "") == "vip" or "VIP" in col_name.upper():
+            col_dir = MCV_VIP_DIR
+            manifest_slug = "vip"
+            effective_alias = ""
+        elif args.alias or getattr(args, "dest", "") == "author" or "/author/" in args.url or "/autor/" in args.url or "?s=" in args.url or "&s=" in args.url:
+            effective_alias = args.alias or getattr(args, "author_dir", None) or resolve_author_alias(col_name)
             col_dir = resolve_author_dir(base_dest, effective_alias)
             manifest_slug = sanitize_folder_name(effective_alias).lower()
         else:
             effective_alias = getattr(args, "alias", "") or ""
-            clean_col = sanitize_folder_name(col_name).title()
-            col_dir = os.path.join(base_dest, clean_col)
+            clean_col = getattr(args, "category_dir", None) or getattr(args, "category", None) or sanitize_folder_name(col_name).title()
+            col_dir = os.path.join(MCV_CATEGORIAS_DIR, clean_col)
             manifest_slug = sanitize_folder_name(col_name).lower()
         os.makedirs(col_dir, exist_ok=True)
 
@@ -6952,9 +7782,6 @@ def main():
 
     # Caso 2: Curso Individual
     else:
-        if args.alias:
-            base_dest = resolve_author_dir(base_dest, args.alias)
-            os.makedirs(base_dest, exist_ok=True)
         download_and_process_course(session, args.url, base_dest, args)
         purge_runtime_transient_files()
 

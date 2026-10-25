@@ -31,7 +31,7 @@ Para que tu experiencia sea clara y ordenada, el ecosistema MCV y NotebookLM sep
 flowchart TD
     subgraph Macro [NIVEL MACRO: El Decano Curricular]
         D["Cuaderno [00]_GUIA-DE-ESTUDIO<br/>(Generado por mcv-download --curriculum)"]
-        D -->|Orientación Curricular| R["RUTA_DE_APRENDIZAJE.md<br/>• Clasificación de 4 fases (P01..Pn)<br/>• Prerrequisitos y orden sugerido<br/>• Panorama global de la carrera/autor"]
+        D -->|Orientación Curricular| R["RUTA_DE_APRENDIZAJE.md<br/>• Clasificación de 5 fases Bloom-Dreyfus (P01..Pn)<br/>• Prerrequisitos y orden sugerido<br/>• Panorama global de la carrera/autor"]
     end
 
     subgraph Micro [NIVEL MICRO: Salas de Entrenamiento Socrático]

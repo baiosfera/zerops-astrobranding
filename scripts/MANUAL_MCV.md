@@ -1,23 +1,50 @@
-# 📘 GUÍA RÁPIDA: MCV DOWNLOADER & OPTIMIZER (`mcv-download` v5.0.0)
+# 📘 GUÍA RÁPIDA: MCV DOWNLOADER & OPTIMIZER (`mcv-download` v10.1.0)
 
-> **Herramienta CLI autónoma para descargar, optimizar bajo arquitectura desacoplada Productor-Consumidor (v5.0.0), staging local en NVMe ZFS con cero bloqueos FUSE en rclone, sensores físicos anti-falsos positivos por 4 arquetipos (Video, Audio Puro, Híbrido, Documental), secuenciar rutas curriculares pedagógicas ([P01]..[Pn]), auditar lotes con manifiesto bidireccional y reanudación soberana, consultar metadatos canónicos en vivo en MisCursosVirtuales, purgar MP3 redundantes, monitorear lotes en vivo con telemetría bifásica unificada (`mcv-status`), orquestar tutores socráticos con `nlm-tutor` y sincronizar nativamente con Google NotebookLM Pro (hasta 300 fuentes).**
+> **Herramienta CLI autónoma para descargar, optimizar bajo arquitectura desacoplada Productor-Consumidor (v10.1.0), soporte nativo de entrega Cursazo S4 (S3 Directo), enrutamiento territorial soberano (`VIP`, `AUTHOR`, `CATEGORIAS`), staging local en NVMe ZFS con cero bloqueos FUSE en rclone, sensores físicos anti-falsos positivos por 4 arquetipos (Video, Audio Puro, Híbrido, Documental), secuenciar rutas curriculares pedagógicas ([P01]..[Pn]) en Markdown nativo GFM con 5 fases Bloom-Dreyfus, omisión de cursos obsoletos (`--skip-historical`), auditar lotes con manifiesto bidireccional y reanudación soberana, consultar metadatos canónicos en vivo en MisCursosVirtuales, purgar MP3 redundantes, monitorear lotes en vivo con telemetría bifásica unificada (`mcv-status`), orquestar tutores socráticos y Decano Curricular con `nlm-tutor` y sincronizar nativamente con Google NotebookLM Pro (hasta 300 fuentes).**
 
 ---
 
-## 🚀 Novedades de la Versión 5.0.0 (Arquitectura Soberana)
-1. **Staging Aislado en NVMe Local (`/var/www/.mcv_staging`)**:
-   - Todo el flujo de descarga (Sync, Mega, Drive), descompresión y transcodificación ocurre en disco NVMe ultra-rápido.
-   - Elimina de raíz los bloqueos de caché de rclone (`--vfs-cache-max-size 25G`) y errores de archivo ocupado (`EBUSY [Errno 16]`).
-   - Promoción atómica final: únicamente el árbol de archivos 100% procesado y verificado se traslada a `/var/www/baiosfera/`.
-2. **Sensor de Completitud Físico por 4 Arquetipos**:
-   - Clasificación determinista: Arquetipo V (Video 360p), Arquetipo A (Audio Puro), Arquetipo H (Híbrido) y Arquetipo D (Documental).
-   - En cursos de audio (ej. David Topi), la presencia de PDFs jamás marcará el curso como completado si faltan lecciones de audio por extraer.
-3. **Optimización de Audio para Google NotebookLM Pro**:
-   - Formato estándar Raw AAC (`.aac` ADTS 24k mono 16kHz) con 100% de transcripción ASR en Google Cloud STT/Chirp y 25% menos peso que MP3.
-   - Soporte ampliado de hasta 300 fuentes por cuaderno (tier Pro Consumer) con espaciado defensivo anti-rate-limit (HTTP 429).
-4. **Protección de Cómputo (Máximo 3 vCPUs)**:
-   - Cerrojo singleton exclusivo (`fcntl.flock`) para evitar procesos concurrentes no planificados.
-   - Transcodificación acotada a `-threads 2` con prioridad `nice -n 10`, dejando siempre libre el 65% de la CPU para el sistema.
+## 🚀 Novedades de la Versión 10.0.0 (Soberanía Cursazo S4 & Enrutamiento Territorial)
+1. **Proveedor Nativo Cursazo S4 con Detección Dual**:
+   - Detecta automáticamente el token firmado `pase` y negocia la sesión con `cursazo.top/entrar`.
+   - Consulta el árbol de carpetas (`/api/arbol`) y descarga lección por lección mediante URLs firmadas S3 (`megas4.com`).
+   - Cero necesidad de descompresión de archivos `.rar` o `.zip` al recibir directamente los módulos y archivos limpios.
+   - Mantiene fallback transparente al parser tradicional si algún curso legacy entrega un `.txt` con enlaces a Mega/Sync/Drive.
+2. **Audio-First Remoto en Tiempo Real**:
+   - Con `--audio-only` o `--audio-first`, `ffmpeg` extrae el audio `.aac`/`.mp3` directamente desde la URL de S3 en segundos por streaming HTTP Range.
+   - Cero gigabytes de video descargados a disco: audios listos para NotebookLM en menos de 2 minutos por curso.
+3. **Enrutamiento Territorial Soberano (Fin de Archivos Huérfanos en `/var/www/`)**:
+   - **`VIP/`**: Si el curso tiene membresía VIP en MCV o se pasa `--vip` $\to$ `/var/www/baiosfera/CURSOS/MCV/VIP/`.
+   - **`AUTHOR/`**: Cursos asociados a un autor o colecciones de autor $\to$ `/var/www/baiosfera/CURSOS/MCV/AUTHOR/<Alias>/`.
+   - **`CATEGORIAS/`**: Cursos individuales, nichos temáticos o generales $\to$ `/var/www/baiosfera/CURSOS/MCV/CATEGORIAS/<Categoria>/`.
+   - Erradicado el fallback ciego a `os.getcwd()`: la descarga siempre queda ordenada en su territorio canónico.
+4. **Saneamiento Epistémico Anti-Checklist Theater**:
+   - `--metadata-only` inspecciona el árbol real de Cursazo y documenta el temario completo sin disparar fases multimedia vacías sobre 0 archivos ni marcar falsamente "100% Verificado".
+
+---
+
+## 🧭 Banderas de Carpetización y Control Manual
+
+El script detecta automáticamente el territorio correcto según las etiquetas de MisCursosVirtuales, pero podés forzar la ubicación con las siguientes banderas soberanas:
+
+```bash
+# 1. Forzar que un curso vaya a la carpeta VIP (independientemente de su categoría en web):
+mcv-download "<URL>" --vip
+
+# 2. Forzar que vaya a la carpeta AUTHOR bajo un alias específico:
+mcv-download "<URL>" --dest author --author-dir "Margarita-Pasos"
+# o simplemente:
+mcv-download "<URL>" --dest author --alias "Pasos"
+
+# 3. Forzar que vaya a una categoría específica dentro de CATEGORIAS/:
+mcv-download "<URL>" --dest categoria --category-dir "Ventas"
+
+# 4. Forzar que descargue exactamente en la carpeta donde estás parado en la terminal:
+mcv-download "<URL>" --dest current
+
+# 5. Sobrescribir manualmente la ruta destino completa (prioridad máxima):
+mcv-download "<URL>" -o "/ruta/personalizada"
+```
 
 ---
 
@@ -115,7 +142,7 @@ mcv-download --optimize-only "/var/www/baiosfera/CURSOS/MCV/BASIC/Dopamine Maste
 ---
 
 ### 5. Motor Curricular Pedagógico (`--curriculum`)
-Analiza los cursos de un autor (locales o remotos), los clasifica cognitivamente por orden de dificultad y prerrequisitos en 4 fases, asigna los códigos `[P01]..[Pn]` y genera `RUTA_DE_APRENDIZAJE.md`. **No descarga nada** (es un comando de inspección).
+Analiza los cursos de un autor (locales o remotos), los clasifica cognitivamente por orden de dificultad y correlatividad en **5 fases (Bloom-Dreyfus)** (`[F1]` Fundamentos, `[F2]` Métodos, `[F3]` Integración, `[F4]` Especialización, `[F5]` Negocio), asigna los códigos `[P01]..[Pn]` y genera `RUTA_DE_APRENDIZAJE_<Alias>.md` en Markdown estándar con tablas GFM responsivas. **No descarga nada** por defecto (es un comando de inspección).
 
 #### A. Generar Ruta Pedagógica en el Directorio Actual
 El argumento de directorio es opcional (por defecto `.`), por lo que **no es necesario colocar el punto**:
@@ -129,10 +156,16 @@ mcv-download --curriculum
 mcv-download --curriculum "/var/www/baiosfera/CURSOS/MCV/AUTHOR/Topi"
 ```
 
-#### C. Crear Cuaderno Maestro `[00]` en NotebookLM
-Si sumás `--upload-nlm`, además de la ruta en disco, creará el cuaderno maestro `[00]_GUIA-DE-ESTUDIO` y lo asociará a la colección del autor:
+#### C. Crear Cuaderno Maestro `[00]` y Configurar Decano Curricular en NotebookLM
+Si sumás `--upload-nlm`, además de la ruta en disco, creará el cuaderno maestro `[00]_GUIA-DE-ESTUDIO`, subirá la `RUTA_DE_APRENDIZAJE_<Alias>.md`, lo asociará a la colección del autor y configurará automáticamente el **Decano Curricular** (`DEAN_CURRICULAR_PROMPT` e informe sintético):
 ```bash
 mcv-download --curriculum --upload-nlm
+```
+
+#### D. Descarga Masiva Curricular Omitiendo Históricos (`--download --skip-historical`)
+Para descargar secuencialmente según la ruta pedagógica `[P01]..[Pn]` y omitir automáticamente cursos desactualizados marcados como `[⚠️ Histórico]`:
+```bash
+mcv-download "https://miscursosvirtuales.com/autor/alejandro-lavin/" --curriculum --download --skip-historical
 ```
 
 ---
@@ -141,7 +174,13 @@ mcv-download --curriculum --upload-nlm
 
 | Bandera | Descripción | Ejemplo |
 |---|---|---|
-| `--curriculum [dir]` | Secuencia pedagógicamente los cursos de un autor (`[P01]..[Pn]`) y genera `RUTA_DE_APRENDIZAJE.md`. Si se omite `dir`, usa el directorio actual sin necesidad de punto. No descarga archivos. | `mcv-download --curriculum` |
+| `--vip` | Fuerza el destino a `/var/www/baiosfera/CURSOS/MCV/VIP/` (se activa automático si el curso es VIP en web). | `--vip` |
+| `--dest <modo>` | Regla de carpetización manual: `auto` (defecto), `vip`, `author`, `categoria`, o `current` (directorio actual). | `--dest author` |
+| `--author-dir <nombre>` | Define la subcarpeta específica dentro de `/var/www/baiosfera/CURSOS/MCV/AUTHOR/`. | `--author-dir "Pasos"` |
+| `--category-dir <nombre>` | Define la subcarpeta específica dentro de `/var/www/baiosfera/CURSOS/MCV/CATEGORIAS/`. | `--category-dir "Ventas"` |
+| `--category <nombre>` | Sobrescribe la etiqueta de categoría del curso en los reportes y metadatos. | `--category "Marketing"` |
+| `--curriculum [dir]` | Secuencia pedagógicamente los cursos de un autor (`[P01]..[Pn]`) y genera `RUTA_DE_APRENDIZAJE_<Alias>.md`. Si se omite `dir`, usa el directorio actual sin necesidad de punto. No descarga archivos. | `mcv-download --curriculum` |
+| `--skip-historical` | Omite automáticamente cursos desactualizados marcados como `[⚠️ Histórico]` en la descarga masiva con `--curriculum --download`. | `--skip-historical` |
 | `--collection "Nombre"` | Crea o asigna el cuaderno a la colección nativa en Google NotebookLM. | `--collection "Alejandro Lavín"` |
 | `--alias "Autor"` | Define el alias del autor para la estructura de carpetas (`AUTHOR/<Alias>`). | `--alias Lavin` |
 | `--since YYYY-MM` | Filtra cursos con vigencia `>=` a esa fecha. | `--since 2024-09` |
