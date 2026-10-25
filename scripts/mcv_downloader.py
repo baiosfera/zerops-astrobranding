@@ -3767,13 +3767,13 @@ Los audios MP3 han sido estandarizados con el prefijo jerárquico:
 ## 🔗 Enlaces del Ecosistema MCV
 
 * **URL del Producto:**  
-  {meta['product_url']}
+  {meta.get('product_url', 'N/A')}
 
 * **Endpoint Protegido YITH (Clave de Membresía):**  
-  {meta['protected_url']}
+  {meta.get('protected_url', 'N/A')}
 
 * **URL Directa de WooCommerce Uploads (.txt):**  
-  {meta['txt_url']}
+  {meta.get('txt_url', 'N/A')}
 
 ---
 
