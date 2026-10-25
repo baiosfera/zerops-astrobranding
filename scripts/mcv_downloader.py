@@ -98,9 +98,30 @@ MCV_VIP_DIR = os.path.join(MCV_BASE_DIR, "VIP")
 MCV_AUTHOR_DIR = os.path.join(MCV_BASE_DIR, "AUTHOR")
 MCV_CATEGORIAS_DIR = os.path.join(MCV_BASE_DIR, "CATEGORIAS")
 LOCAL_DOWNLOAD_STAGING_DIR = "/var/www/localstorage/mcv_staging/downloads" if os.path.exists("/var/www/localstorage") else "/var/www/.mcv_staging"
+LOCAL_WORKSPACE_STAGING_DIR = "/var/www/localstorage/mcv_staging/workspace" if os.path.exists("/var/www/localstorage") else "/var/www/.mcv_workspace"
 LOCAL_STAGING_DIR = "/var/www/localstorage/mcv_staging/transcode" if os.path.exists("/var/www/localstorage") else "/tmp/mcv_transcode_staging"
 PROGRESS_CARD_LOCK = threading.Lock()
 logger = logging.getLogger("mcv_downloader")
+
+
+def is_fuse_path(path: str) -> bool:
+    """Checks if a given path is located on a network/FUSE mount (such as /var/www/baiosfera)."""
+    if not path:
+        return False
+    abs_p = os.path.abspath(path)
+    if abs_p.startswith("/var/www/baiosfera") or abs_p.startswith("/mnt/baiosfera"):
+        return True
+    try:
+        with open("/proc/mounts", "r") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 3 and parts[2] in ("fuse", "fuse.rclone", "fuse3"):
+                    mount_point = parts[1]
+                    if abs_p == mount_point or abs_p.startswith(mount_point.rstrip("/") + "/"):
+                        return True
+    except Exception:
+        pass
+    return False
 
 
 def write_progress_card(
@@ -817,14 +838,15 @@ def purge_runtime_transient_files():
                 logger.info(f"🧹 Purgado archivo transitorio: {transient}")
             except Exception:
                 pass
-    if os.path.exists(LOCAL_DOWNLOAD_STAGING_DIR):
-        try:
-            for item in os.listdir(LOCAL_DOWNLOAD_STAGING_DIR):
-                p = os.path.join(LOCAL_DOWNLOAD_STAGING_DIR, item)
-                if os.path.isdir(p) and not os.listdir(p):
-                    os.rmdir(p)
-        except Exception:
-            pass
+    for staging_root in [LOCAL_DOWNLOAD_STAGING_DIR, LOCAL_WORKSPACE_STAGING_DIR, LOCAL_STAGING_DIR]:
+        if os.path.exists(staging_root):
+            try:
+                for item in os.listdir(staging_root):
+                    p = os.path.join(staging_root, item)
+                    if os.path.isdir(p) and not os.listdir(p):
+                        os.rmdir(p)
+            except Exception:
+                pass
 
 
 def get_session(cookies_path: str) -> requests.Session:
@@ -3118,6 +3140,50 @@ def get_optimal_staging_dir() -> str:
     return staging
 
 
+def promote_local_staging_to_destination(src_dir: str, dst_dir: str) -> bool:
+    """
+    Promotes a finalized, optimized course tree from local NVMe workspace
+    to the final destination (e.g. FUSE Google Drive) in a single sequential pass.
+    """
+    if not os.path.exists(src_dir):
+        return False
+    os.makedirs(dst_dir, exist_ok=True)
+    logger.info(f"🚀 [PROMOTION] Promoviendo curso optimizado desde staging NVMe a destino final:")
+    logger.info(f"   Origen (NVMe): {src_dir}")
+    logger.info(f"   Destino (SSoT): {dst_dir}")
+
+    total_files = sum(len(files) for _, _, files in os.walk(src_dir))
+    copied = 0
+    for root, dirs, files in os.walk(src_dir):
+        rel = os.path.relpath(root, src_dir)
+        target_root = dst_dir if rel == "." else os.path.join(dst_dir, rel)
+        os.makedirs(target_root, exist_ok=True)
+        for f in files:
+            src_f = os.path.join(root, f)
+            dst_f = os.path.join(target_root, f)
+            try:
+                if os.path.exists(dst_f):
+                    if os.path.isdir(dst_f):
+                        shutil.rmtree(dst_f, ignore_errors=True)
+                    else:
+                        os.remove(dst_f)
+                shutil.copy2(src_f, dst_f)
+            except Exception as e_cp:
+                logger.warning(f"Aviso copiando {f} a destino final: {e_cp}")
+            copied += 1
+            if copied % 25 == 0 or copied == total_files:
+                logger.info(f"   📤 [PROMOTION] {copied}/{total_files} archivos transferidos a SSoT...")
+
+    # Cleanup local staging workspace
+    try:
+        shutil.rmtree(src_dir, ignore_errors=True)
+        logger.info(f"✅ [PROMOTION] Promoción completada y workspace local liberado: {src_dir}")
+    except Exception as e_rm:
+        logger.warning(f"Aviso limpiando workspace local: {e_rm}")
+
+    return True
+
+
 def reduce_video_to_360p(input_file: str, output_file: str) -> bool:
     """
     Transcodes a video to minimum visible bitrate:
@@ -3336,16 +3402,38 @@ def process_and_optimize_course_media(
                 base_name = os.path.splitext(vf)[0]
                 stage_audio = os.path.join(staging_dir, f"{base_name}.{audio_format}")
                 logger.info(f"   🔊 Extrayendo audio ({audio_format.upper()}): [{display_mod}] {vf}...")
-                if convert_to_notebooklm_audio(vpath, stage_audio, audio_format):
-                    if os.path.exists(stage_audio):
-                        shutil.move(stage_audio, central_audio_path)
-                    audios_created += 1
-                    logger.info(f"      ✅ Audio centralizado: {audio_name} ({os.path.getsize(central_audio_path)/(1024*1024):.1f} MB)")
-                if os.path.exists(stage_audio):
+
+                # FUSE Anti-Seek Shield for Audio Extraction
+                input_for_ffmpeg = vpath
+                staged_input = None
+                if is_fuse_path(vpath) and orig_sz > 5 * 1024 * 1024:
+                    staged_input = os.path.join(staging_dir, f"in_{base_name}{os.path.splitext(vf)[1]}")
+                    logger.info(f"   🛡️ [FUSE SHIELD] Copiando audio/video secuencialmente a NVMe: {vf} ({orig_sz/(1024*1024):.1f} MB)...")
                     try:
-                        os.remove(stage_audio)
-                    except Exception:
-                        pass
+                        shutil.copyfile(vpath, staged_input)
+                        input_for_ffmpeg = staged_input
+                    except Exception as e_stage:
+                        logger.warning(f"Aviso en staging NVMe, usando ruta directa: {e_stage}")
+                        input_for_ffmpeg = vpath
+                        staged_input = None
+
+                try:
+                    if convert_to_notebooklm_audio(input_for_ffmpeg, stage_audio, audio_format):
+                        if os.path.exists(stage_audio):
+                            shutil.move(stage_audio, central_audio_path)
+                        audios_created += 1
+                        logger.info(f"      ✅ Audio centralizado: {audio_name} ({os.path.getsize(central_audio_path)/(1024*1024):.1f} MB)")
+                finally:
+                    if staged_input and os.path.exists(staged_input):
+                        try:
+                            os.remove(staged_input)
+                        except Exception:
+                            pass
+                    if os.path.exists(stage_audio):
+                        try:
+                            os.remove(stage_audio)
+                        except Exception:
+                            pass
             else:
                 logger.info(f"      ⚡ Audio ya existe: {audio_name}")
 
@@ -3451,25 +3539,47 @@ def process_and_optimize_course_media(
                 base_name = os.path.splitext(vf)[0]
                 stage_mp4 = os.path.join(staging_dir, f"{base_name}.mp4")
                 logger.info(f"   🎥 Reduciendo a 360p: [{display_mod}] {vf} ({orig_sz/(1024*1024):.1f} MB)...")
-                if reduce_video_to_360p(vpath, stage_mp4):
-                    final_mp4_path = os.path.join(root_dir, f"{base_name}.mp4")
-                    if os.path.exists(stage_mp4):
-                        shutil.move(stage_mp4, final_mp4_path)
-                    new_sz = os.path.getsize(final_mp4_path)
-                    saved = orig_sz - new_sz
-                    total_saved_bytes += saved
-                    videos_reduced += 1
-                    if (is_ts or is_legacy) and vpath != final_mp4_path and os.path.exists(vpath):
+
+                # FUSE Anti-Seek Shield for Video Reduction
+                input_for_ffmpeg = vpath
+                staged_input = None
+                if is_fuse_path(vpath) and orig_sz > 5 * 1024 * 1024:
+                    staged_input = os.path.join(staging_dir, f"in_{base_name}{os.path.splitext(vf)[1]}")
+                    logger.info(f"   🛡️ [FUSE SHIELD] Copiando video secuencialmente a NVMe: {vf} ({orig_sz/(1024*1024):.1f} MB)...")
+                    try:
+                        shutil.copyfile(vpath, staged_input)
+                        input_for_ffmpeg = staged_input
+                    except Exception as e_stage:
+                        logger.warning(f"Aviso en staging NVMe, usando ruta directa: {e_stage}")
+                        input_for_ffmpeg = vpath
+                        staged_input = None
+
+                try:
+                    if reduce_video_to_360p(input_for_ffmpeg, stage_mp4):
+                        final_mp4_path = os.path.join(root_dir, f"{base_name}.mp4")
+                        if os.path.exists(stage_mp4):
+                            shutil.move(stage_mp4, final_mp4_path)
+                        new_sz = os.path.getsize(final_mp4_path)
+                        saved = orig_sz - new_sz
+                        total_saved_bytes += saved
+                        videos_reduced += 1
+                        if (is_ts or is_legacy) and vpath != final_mp4_path and os.path.exists(vpath):
+                            try:
+                                os.remove(vpath)
+                            except Exception:
+                                pass
+                        logger.info(f"      ✅ Reducido a {new_sz/(1024*1024):.1f} MB (Ahorro: {saved/(1024*1024):.1f} MB)")
+                finally:
+                    if staged_input and os.path.exists(staged_input):
                         try:
-                            os.remove(vpath)
+                            os.remove(staged_input)
                         except Exception:
                             pass
-                    logger.info(f"      ✅ Reducido a {new_sz/(1024*1024):.1f} MB (Ahorro: {saved/(1024*1024):.1f} MB)")
-                if os.path.exists(stage_mp4):
-                    try:
-                        os.remove(stage_mp4)
-                    except Exception:
-                        pass
+                    if os.path.exists(stage_mp4):
+                        try:
+                            os.remove(stage_mp4)
+                        except Exception:
+                            pass
             else:
                 logger.info(f"   ⚡ [{display_mod}] {vf} ya está optimizado (<=360p).")
 
@@ -4885,18 +4995,30 @@ def download_and_extract_course(
             if not ok:
                 logger.warning(f"Aviso en test de integridad para {arch}: {msg}")
 
+        # Determine extraction destination: If output_dir is on FUSE, extract to local NVMe workspace first
+        if is_fuse_path(output_dir) and not getattr(args, "no_extract", False):
+            extract_target = os.path.join(LOCAL_WORKSPACE_STAGING_DIR, course_slug)
+            os.makedirs(extract_target, exist_ok=True)
+            meta["final_dest_dir"] = output_dir
+            meta["local_workspace"] = extract_target
+            logger.info(f"⚡ [HERMETIC NVMe STAGING] Extracción redirigida a NVMe local para blindar FUSE:")
+            logger.info(f"   Workspace local: {extract_target}")
+            logger.info(f"   Destino final SSoT: {output_dir}")
+        else:
+            extract_target = output_dir
+
         if not args.no_extract:
             for arch in primary_archives:
-                ok, msg = extract_archive_with_fallbacks(arch, output_dir, candidate_passwords)
+                ok, msg = extract_archive_with_fallbacks(arch, extract_target, candidate_passwords)
                 if not ok:
                     raise RuntimeError(f"Falla al descomprimir {arch}: {msg}")
 
-            nested_count = recursive_extract_tree(output_dir, candidate_passwords)
+            nested_count = recursive_extract_tree(extract_target, candidate_passwords)
             if nested_count > 0:
                 logger.info(f"✅ Se desempaquetaron exitosamente {nested_count} archivos comprimidos anidados.")
 
         for raw in raw_items:
-            dest_raw = os.path.join(output_dir, os.path.basename(raw))
+            dest_raw = os.path.join(extract_target, os.path.basename(raw))
             if raw != dest_raw and os.path.exists(raw):
                 if os.path.exists(dest_raw):
                     if os.path.isdir(dest_raw):
@@ -4923,7 +5045,7 @@ def download_and_extract_course(
         if os.path.exists(legacy_temp):
             shutil.rmtree(legacy_temp, ignore_errors=True)
 
-        return (output_dir, meta)
+        return (extract_target, meta)
 
     except Exception as e:
         logger.error(f"❌ Error descargando/extrayendo {meta.get('title', 'curso')}: {e}")
@@ -4950,17 +5072,20 @@ def optimize_and_finalize_course(
     Executes Phase A (audio extraction & NotebookLM upload) and Phase B (360p video transcode).
     """
     try:
-        clean_title = sanitize_folder_name(meta.get("title", os.path.basename(output_dir)))
-        folder_name = os.path.basename(output_dir)
+        working_dir = meta.get("local_workspace", output_dir)
+        final_dest = meta.get("final_dest_dir", output_dir)
 
-        initial_tree = validate_extracted_tree(output_dir)
+        clean_title = sanitize_folder_name(meta.get("title", os.path.basename(final_dest)))
+        folder_name = os.path.basename(final_dest)
+
+        initial_tree = validate_extracted_tree(working_dir)
         initial_size_gb = initial_tree["total_size_gb"]
 
         uploaded_early = [False]
         def early_upload_cb():
             if getattr(args, "upload_nlm", False):
                 upload_course_to_notebooklm(
-                    output_dir,
+                    working_dir,
                     meta,
                     audio_format=args.audio_format,
                     alias=getattr(args, "alias", ""),
@@ -4970,7 +5095,7 @@ def optimize_and_finalize_course(
 
         if not args.no_reduce:
             process_and_optimize_course_media(
-                output_dir,
+                working_dir,
                 preferred_audio_format=args.audio_format,
                 course_title=clean_title,
                 audio_only=getattr(args, "audio_only", False),
@@ -4980,13 +5105,26 @@ def optimize_and_finalize_course(
             early_upload_cb()
 
         # Step 8: Final Audit and Comprehensive Markdown Report
-        final_tree = validate_extracted_tree(output_dir)
+        final_tree = validate_extracted_tree(working_dir)
         final_size_gb = final_tree["total_size_gb"]
 
-        build_comprehensive_markdown_report(meta, output_dir, initial_size_gb=initial_size_gb, final_size_gb=final_size_gb)
+        build_comprehensive_markdown_report(meta, working_dir, initial_size_gb=initial_size_gb, final_size_gb=final_size_gb)
+
+        # Step 8.1: Purge transient operational telemetry inside course directory
+        for transient_file in ["PROGRESO.txt", "download_progress.log"]:
+            t_path = os.path.join(working_dir, transient_file)
+            if os.path.exists(t_path):
+                try:
+                    os.remove(t_path)
+                except Exception:
+                    pass
+
+        # Step 8.2: Promote finalized 360p course from NVMe staging workspace to SSoT (FUSE)
+        if working_dir != final_dest and os.path.exists(working_dir):
+            promote_local_staging_to_destination(working_dir, final_dest)
 
         write_progress_card(
-            course_dir=output_dir,
+            course_dir=final_dest,
             title=meta.get("title", clean_title),
             phase="FINALIZADO",
             status_badge="🟢 COMPLETADO CON ÉXITO (100%)",
@@ -4999,9 +5137,9 @@ def optimize_and_finalize_course(
             }
         )
 
-        # Step 8.1: Purge transient operational telemetry inside course directory
+        # Purge transient telemetry from final_dest if any
         for transient_file in ["PROGRESO.txt", "download_progress.log"]:
-            t_path = os.path.join(output_dir, transient_file)
+            t_path = os.path.join(final_dest, transient_file)
             if os.path.exists(t_path):
                 try:
                     os.remove(t_path)
@@ -5016,7 +5154,7 @@ def optimize_and_finalize_course(
         # Step 9: Ingesta Automática a Google NotebookLM (si no se ejecutó anticipadamente en Fase A)
         if getattr(args, "upload_nlm", False) and not uploaded_early[0]:
             upload_course_to_notebooklm(
-                output_dir,
+                final_dest,
                 meta,
                 audio_format=args.audio_format,
                 alias=getattr(args, "alias", ""),
@@ -5227,18 +5365,32 @@ def download_and_extract_from_instructions(
             primary_archives.append(arch)
 
         candidate_passwords = [meta.get("password")] if meta.get("password") else []
+
+        # Determine extraction destination: If output_dir is on FUSE, extract to local NVMe workspace first
+        course_slug = sanitize_folder_name(meta.get("title", os.path.basename(output_dir)))
+        if is_fuse_path(output_dir) and not getattr(args, "no_extract", False):
+            extract_target = os.path.join(LOCAL_WORKSPACE_STAGING_DIR, course_slug)
+            os.makedirs(extract_target, exist_ok=True)
+            meta["final_dest_dir"] = output_dir
+            meta["local_workspace"] = extract_target
+            logger.info(f"⚡ [HERMETIC NVMe STAGING] Extracción de instrucciones redirigida a NVMe local:")
+            logger.info(f"   Workspace local: {extract_target}")
+            logger.info(f"   Destino final SSoT: {output_dir}")
+        else:
+            extract_target = output_dir
+
         if not args.no_extract:
             for arch in primary_archives:
-                ok, msg = extract_archive_with_fallbacks(arch, output_dir, candidate_passwords)
+                ok, msg = extract_archive_with_fallbacks(arch, extract_target, candidate_passwords)
                 if not ok:
                     raise RuntimeError(f"Falla al descomprimir {arch}: {msg}")
 
-            nested_count = recursive_extract_tree(output_dir, candidate_passwords)
+            nested_count = recursive_extract_tree(extract_target, candidate_passwords)
             if nested_count > 0:
                 logger.info(f"✅ Se desempaquetaron exitosamente {nested_count} archivos comprimidos anidados.")
 
         for raw in raw_items:
-            dest_raw = os.path.join(output_dir, os.path.basename(raw))
+            dest_raw = os.path.join(extract_target, os.path.basename(raw))
             if raw != dest_raw and os.path.exists(raw):
                 if os.path.exists(dest_raw):
                     if os.path.isdir(dest_raw):
@@ -5257,7 +5409,7 @@ def download_and_extract_from_instructions(
         if os.path.exists(temp_download_dir):
             shutil.rmtree(temp_download_dir, ignore_errors=True)
 
-        return (output_dir, meta)
+        return (extract_target, meta)
 
     except Exception as e:
         logger.error(f"❌ Error procesando {meta.get('title', 'curso')}: {e}")
