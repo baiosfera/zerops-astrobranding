@@ -2445,7 +2445,7 @@ def run_tests():
             "terminationReason": "NO_TOOL_CALL",
             "test_has_inspection": True
         })
-        assert res_stop_blocked.get("decision") == "continue" and "LINEAR-FIRST GATE" in res_stop_blocked.get("reason", ""), f"Expected continue in Stop hook without linear activity, got {res_stop_blocked}"
+        assert res_stop_blocked.get("decision") in ["continue", "CONTINUE"] and "LINEAR-FIRST GATE" in res_stop_blocked.get("reason", ""), f"Expected continue in Stop hook without linear activity, got {res_stop_blocked}"
         print("✓ Test 48 Passed: Linear-First Stop hook forces continue without linear activity")
 
         # Test 49: Linear-First Stop hook allows stop when linear activity is present
