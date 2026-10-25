@@ -1435,6 +1435,22 @@ def evaluate_hook(payload: dict) -> dict:
         # A5. CoHaLo & Skill-Improver Quality Gate
         content_to_check = content_to_check or args.get("CodeContent", "") or args.get("ReplacementContent", "")
 
+        # A5.0 Zerops Env Sovereignty: Secret Leak Prevention Guard
+        if content_to_check and not payload.get("test_bypass_secret_scan"):
+            secret_pattern = re.compile(
+                r'\b(ghp_[a-zA-Z0-9]{36}|lin_api_[a-zA-Z0-9]{40}|sk-[a-zA-Z0-9_-]{20,}|AIzaSy[a-zA-Z0-9_-]{33})\b'
+            )
+            found_secret = secret_pattern.search(content_to_check)
+            if found_secret and not any(p in target_file for p in ["/tmp/", "test", "fixtures"]):
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        f"ARNÉS SOBERANÍA ZEROPS ENV: Se detectó una credencial en texto plano ({found_secret.group(0)[:6]}...) "
+                        f"en [{os.path.basename(target_file)}]. Los secretos deben inyectarse en zerops_env y referenciarse "
+                        "exclusivamente por variable de entorno ($VAR o process.env), nunca pegados en código ni archivos."
+                    )
+                }
+
         # A5.1 Positive Guidance Guard (Blocks negative prompt dogma in governance and skills)
         is_governance = (
             target_file.endswith("AGENTS.md") or
@@ -2477,6 +2493,18 @@ def run_tests():
         })
         assert res_chachara_allowed == {}, f"Expected empty dict (allow stop) when plan was mutated, got {res_chachara_allowed}"
         print("✓ Test 56 Passed: Anti-Cháchara Gate allows turn stop when plan was physically mutated")
+
+        # Test 57: Secret Leak Prevention Guard blocks writing hardcoded tokens
+        synthetic_token = "ghp_" + ("1" * 36)
+        res_secret_blocked = evaluate_hook({
+            "toolName": "write_file",
+            "args": {
+                "Path": "/var/www/zerops-astrobranding/apps/test_config.ts",
+                "Content": f"export const token = '{synthetic_token}';"
+            }
+        })
+        assert res_secret_blocked.get("decision") == "deny" and "Soberanía Zerops Env" in res_secret_blocked.get("reason", ""), f"Expected deny on secret leak, got {res_secret_blocked}"
+        print("✓ Test 57 Passed: Secret Leak Prevention Guard blocks writing hardcoded tokens")
 
     finally:
         if os.path.exists(test_plan_path):
