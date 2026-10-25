@@ -2506,7 +2506,7 @@ def run_tests():
                 }
             }
         })
-        assert res_secret_blocked.get("decision") == "deny" and "Soberanía Zerops Env" in res_secret_blocked.get("reason", ""), f"Expected deny on secret leak, got {res_secret_blocked}"
+        assert res_secret_blocked.get("decision") == "deny" and "SOBERANÍA ZEROPS ENV" in res_secret_blocked.get("reason", "").upper(), f"Expected deny on secret leak, got {res_secret_blocked}"
         print("✓ Test 57 Passed: Secret Leak Prevention Guard blocks writing hardcoded tokens")
 
     finally:
