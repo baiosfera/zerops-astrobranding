@@ -2497,10 +2497,12 @@ def run_tests():
         # Test 57: Secret Leak Prevention Guard blocks writing hardcoded tokens
         synthetic_token = "ghp_" + ("1" * 36)
         res_secret_blocked = evaluate_hook({
-            "toolName": "write_file",
-            "args": {
-                "Path": "/var/www/zerops-astrobranding/apps/app_config.ts",
-                "Content": f"export const token = '{synthetic_token}';"
+            "toolCall": {
+                "name": "write_file",
+                "args": {
+                    "Path": "/var/www/zerops-astrobranding/apps/app_config.ts",
+                    "Content": f"export const token = '{synthetic_token}';"
+                }
             }
         })
         assert res_secret_blocked.get("decision") == "deny" and "Soberanía Zerops Env" in res_secret_blocked.get("reason", ""), f"Expected deny on secret leak, got {res_secret_blocked}"
