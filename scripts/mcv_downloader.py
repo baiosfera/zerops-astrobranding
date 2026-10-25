@@ -5032,6 +5032,242 @@ def optimize_and_finalize_course(
         return False
 
 
+def download_and_extract_from_instructions(
+    output_dir: str,
+    args: argparse.Namespace,
+    session: Optional[requests.Session] = None
+) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """
+    Downloads and extracts a course using existing local INSTRUCCIONES_DESCARGA.txt.
+    Bypasses WooCommerce/MCV scraping completely, enabling rescue of offline or recovered SSoT links.
+    """
+    output_dir = os.path.abspath(output_dir)
+    local_txt = os.path.join(output_dir, "INSTRUCCIONES_DESCARGA.txt")
+    if not os.path.isfile(local_txt):
+        logger.error(f"❌ No se encontró INSTRUCCIONES_DESCARGA.txt en {output_dir}")
+        return None
+
+    if session is None:
+        session = get_session(getattr(args, "cookies", None))
+
+    try:
+        with open(local_txt, "r", encoding="utf-8", errors="replace") as f:
+            txt_content = f.read()
+    except Exception as e_rf:
+        logger.error(f"❌ Error leyendo {local_txt}: {e_rf}")
+        return None
+
+    meta = resolve_or_lookup_course_metadata(output_dir, alias=getattr(args, "alias", ""))
+    folder_name = os.path.basename(output_dir)
+    clean_title = sanitize_folder_name(meta.get("title", folder_name))
+    if not meta.get("title") or meta.get("title") in ["Curso MCV", "Unknown"]:
+        meta["title"] = folder_name.replace("[VIP]_", "").replace("-", " ")
+
+    local_links = parse_txt_links(txt_content, session=session)
+    local_all_sets = parse_all_option_sets(txt_content, session=session)
+    local_pw = parse_txt_password(txt_content) or meta.get("password") or "www.miscursosvirtuales.com"
+
+    if not local_links and not local_all_sets:
+        logger.error(f"❌ No se encontraron enlaces de descarga válidos en {local_txt}")
+        return None
+
+    meta["cloud_links"] = local_links
+    meta["all_option_sets"] = local_all_sets
+    meta["password"] = local_pw
+    meta["delivery_type"] = "legacy"
+
+    course_slug = sanitize_folder_name(folder_name)
+    temp_download_dir = os.path.join(LOCAL_DOWNLOAD_STAGING_DIR, course_slug, "_temp_downloads")
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(temp_download_dir, exist_ok=True)
+    log_file = os.path.join(output_dir, "download_progress.log")
+
+    meta_save_path = os.path.join(output_dir, "metadata.json")
+    clean_meta = {
+        "title": meta.get("title", clean_title),
+        "author": meta.get("author", getattr(args, "alias", "")),
+        "category": meta.get("category", "VIP"),
+        "effective_date": meta.get("effective_date", datetime.now().strftime("%Y-%m")),
+        "delivery_type": "legacy",
+        "password": meta.get("password", ""),
+        "cloud_links": meta.get("cloud_links", []),
+        "source": "mcv_instructions_rescue",
+        "retrieved_at": datetime.now().isoformat()
+    }
+    try:
+        with open(meta_save_path, "w", encoding="utf-8") as mf:
+            json.dump(clean_meta, mf, indent=2, ensure_ascii=False)
+        logger.info(f"Metadata canónica SSoT guardada en: {meta_save_path}")
+    except Exception as e_meta:
+        logger.warning(f"Aviso guardando metadata.json: {e_meta}")
+
+    build_comprehensive_markdown_report(meta, output_dir, initial_size_gb=0.0, final_size_gb=0.0)
+
+    tracker = ProgressTracker(
+        log_file=log_file,
+        alert_interval_sec=args.interval,
+        course_dir=output_dir,
+        course_title=meta["title"]
+    )
+    tracker.start()
+
+    downloaded_archives = []
+    try:
+        option_sets = meta.get("all_option_sets") or ([meta["cloud_links"]] if meta.get("cloud_links") else [])
+        success_download = False
+        for opt_idx, current_links in enumerate(option_sets, 1):
+            if len(option_sets) > 1:
+                logger.info(f"\n🔄 Evaluando opción de descarga {opt_idx}/{len(option_sets)} ({len(current_links)} enlaces)...")
+            downloaded_archives = []
+            opt_failed = False
+
+            for idx, item in enumerate(current_links, 1):
+                part_name = item["part"]
+                url = item["url"]
+                provider = item["provider"]
+
+                logger.info(f"\n=======================================================")
+                logger.info(f"Descargando {part_name} ({provider.upper()}): {url}")
+                logger.info(f"=======================================================")
+
+                part_num_match = re.search(r"(\d+)", part_name)
+                p_num = int(part_num_match.group(1)) if part_num_match else idx
+
+                existing_archive = None
+                candidate_search_dirs = [temp_download_dir, os.path.join(output_dir, "_temp_downloads")]
+                for d in candidate_search_dirs:
+                    if os.path.isdir(d):
+                        for f in os.listdir(d):
+                            if f.endswith(".crdownload") or f.startswith("_staging_"):
+                                continue
+                            if is_compressed_archive(f):
+                                if len(current_links) == 1 or re.search(rf"\.part0*{p_num}\.", f, re.IGNORECASE) or re.search(rf"parte?0*{p_num}", f, re.IGNORECASE) or re.search(rf"\.00*{p_num}$", f, re.IGNORECASE):
+                                    candidate = os.path.join(d, f)
+                                    if os.path.getsize(candidate) > 1024 * 1024:
+                                        existing_archive = candidate
+                                        break
+                    if existing_archive:
+                        break
+
+                if existing_archive:
+                    size_mb = os.path.getsize(existing_archive) / (1024 * 1024)
+                    logger.info(f"⚡ [RESUME] {part_name} ya existe en disco: {os.path.basename(existing_archive)} ({size_mb:.2f} MB). Omitiendo re-descarga.")
+                    downloaded_archives.append(existing_archive)
+                    tracker.update(os.path.basename(existing_archive), os.path.getsize(existing_archive), os.path.getsize(existing_archive))
+                    tracker.emit_alert(force=True)
+                    continue
+
+                max_part_retries = 3
+                part_downloaded = False
+                for attempt in range(1, max_part_retries + 1):
+                    try:
+                        if provider == "sync":
+                            files = download_sync_link(url, temp_download_dir, part_name, tracker, part_index=p_num)
+                            downloaded_archives.extend(files)
+                        elif provider == "mega":
+                            items = download_mega_link(url, temp_download_dir, part_name, tracker, part_index=p_num)
+                            downloaded_archives.extend(items)
+                        elif provider == "gdrive":
+                            items = download_gdrive_link(url, temp_download_dir, part_name, tracker, part_index=p_num)
+                            downloaded_archives.extend(items)
+                        elif provider == "direct" or url.startswith("http"):
+                            items = download_direct_link(url, temp_download_dir, part_name, tracker, part_index=p_num)
+                            downloaded_archives.extend(items)
+                        else:
+                            logger.warning(f"Proveedor '{provider}' no soportado. URL: {url}")
+                            opt_failed = True
+                            break
+                        part_downloaded = True
+                        break
+                    except Exception as e_down:
+                        if "CUOTA MEGA AGOTADA" in str(e_down) or "509" in str(e_down):
+                            logger.error(f"🛑 [CUOTA MEGA AGOTADA] Bloqueo de IP en Mega.nz.")
+                            opt_failed = True
+                            break
+                        if attempt < max_part_retries:
+                            logger.warning(f"⚠️ Reintento {attempt}/{max_part_retries} para {part_name}: {e_down}. Esperando 5s...")
+                            time.sleep(5.0)
+                        else:
+                            logger.error(f"❌ Fallaron los {max_part_retries} intentos para {part_name}: {e_down}")
+                            opt_failed = True
+
+                if not part_downloaded or opt_failed:
+                    break
+
+                tracker.emit_alert(force=True)
+
+            if not opt_failed and downloaded_archives:
+                success_download = True
+                break
+            elif opt_idx < len(option_sets):
+                logger.warning(f"⚠️ Opción {opt_idx} falló. Rotando a opción {opt_idx + 1}...")
+
+        if not success_download:
+            raise RuntimeError(f"Falla descargando enlaces para {meta['title']}")
+
+        # Step 3: Decompress Archives
+        compressed_archives = []
+        raw_items = []
+        for item in downloaded_archives:
+            if os.path.isfile(item) and is_compressed_archive(item):
+                compressed_archives.append(item)
+            else:
+                raw_items.append(item)
+
+        primary_archives = []
+        for arch in compressed_archives:
+            if is_secondary_volume(arch):
+                continue
+            primary_archives.append(arch)
+
+        candidate_passwords = [meta.get("password")] if meta.get("password") else []
+        if not args.no_extract:
+            for arch in primary_archives:
+                ok, msg = extract_archive_with_fallbacks(arch, output_dir, candidate_passwords)
+                if not ok:
+                    raise RuntimeError(f"Falla al descomprimir {arch}: {msg}")
+
+            nested_count = recursive_extract_tree(output_dir, candidate_passwords)
+            if nested_count > 0:
+                logger.info(f"✅ Se desempaquetaron exitosamente {nested_count} archivos comprimidos anidados.")
+
+        for raw in raw_items:
+            dest_raw = os.path.join(output_dir, os.path.basename(raw))
+            if raw != dest_raw and os.path.exists(raw):
+                if os.path.exists(dest_raw):
+                    if os.path.isdir(dest_raw):
+                        shutil.rmtree(dest_raw, ignore_errors=True)
+                    else:
+                        os.remove(dest_raw)
+                shutil.move(raw, dest_raw)
+
+        # Cleanup staging archives
+        for arch in compressed_archives:
+            if os.path.exists(arch):
+                try:
+                    os.remove(arch)
+                except Exception:
+                    pass
+        if os.path.exists(temp_download_dir):
+            shutil.rmtree(temp_download_dir, ignore_errors=True)
+
+        return (output_dir, meta)
+
+    except Exception as e:
+        logger.error(f"❌ Error procesando {meta.get('title', 'curso')}: {e}")
+        write_progress_card(
+            course_dir=output_dir,
+            title=meta.get("title", "Curso MCV"),
+            phase="ERROR",
+            status_badge=f"🔴 ERROR DESCARGA: {str(e)[:40]}",
+            pct=0.0,
+            details={"Detalle del error": str(e)}
+        )
+        return None
+    finally:
+        tracker.stop()
+
+
 def download_and_process_course(
     session: requests.Session,
     course_url: str,
@@ -7600,6 +7836,21 @@ def main():
 
             # Caso B: Curso individual
             cname = os.path.basename(cdir)
+            local_txt = os.path.join(cdir, "INSTRUCCIONES_DESCARGA.txt")
+            has_media = any(
+                f.lower().endswith((".mp4", ".ts", ".mkv", ".mov", ".avi", ".webm", ".mp3", ".m4a", ".aac"))
+                for r, _, files in os.walk(cdir)
+                if "NOTEBOOKLM_AUDIOS" not in r and "_temp_downloads" not in r
+                for f in files
+            )
+            if os.path.isfile(local_txt) and (not has_media or getattr(args, "download", False)):
+                logger.info(f"⚡ [INSTRUCCIONES DETECTADAS] Directorio {cdir} contiene instrucciones sin medios. Iniciando descarga...")
+                dl_res = download_and_extract_from_instructions(cdir, args)
+                if dl_res:
+                    out_d, d_meta = dl_res
+                    optimize_and_finalize_course(out_d, d_meta, args)
+                return
+
             stats_before = validate_extracted_tree(cdir)
             opt_res = process_and_optimize_course_media(
                 cdir,
