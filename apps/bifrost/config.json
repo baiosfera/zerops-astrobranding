@@ -1,7 +1,6 @@
 {
   "$schema": "https://www.getbifrost.ai/schema",
   "version": 2,
-  "encryption_key": "env.BIFROST_KEY_ENCRYPTION",
   "server": {
     "port": 8080,
     "host": "0.0.0.0"

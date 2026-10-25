@@ -189,7 +189,6 @@ zerops:
         BIFROST_DB_DSN: ${database_connectionString}
         FREELLMAPI_URL: "http://freellmapi:3001/v1"
         FREELLMAPI_UNIFIED_KEY: ${FREELLMAPI_UNIFIED_KEY}
-        BIFROST_KEY_ENCRYPTION: ${BIFROST_ENCRYPTION_KEY}
         DEEPSEEK_PRO_KEY: ${DEEPSEEK_API_KEY}
         BIFROST_VIRTUAL_KEY: "vk-production-main"
 
