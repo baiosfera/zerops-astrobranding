@@ -2497,6 +2497,7 @@ def run_tests():
         # Test 57: Secret Leak Prevention Guard blocks writing hardcoded tokens
         synthetic_token = "ghp_" + ("1" * 36)
         res_secret_blocked = evaluate_hook({
+            "test_bypass_linear": True,
             "toolCall": {
                 "name": "write_file",
                 "args": {
