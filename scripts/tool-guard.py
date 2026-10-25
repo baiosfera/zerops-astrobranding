@@ -832,6 +832,33 @@ def get_pending_research_subagents(transcript_path: str) -> list:
     pending = [cid for cid in launched_research if cid not in completed]
     return pending
 
+def extract_user_prompt(payload: dict) -> str:
+    user_prompt = payload.get("userPrompt", "")
+    if user_prompt:
+        return user_prompt
+    transcript_path = payload.get("transcriptPath", "")
+    if transcript_path and os.path.exists(transcript_path):
+        try:
+            with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in reversed(f.readlines()):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        step_data = json.loads(line)
+                        if step_data.get("type") == "USER_INPUT" or step_data.get("source") == "USER_EXPLICIT":
+                            content = step_data.get("content", "")
+                            if content:
+                                m = re.search(r'<USER_REQUEST>\s*(.*?)\s*</USER_REQUEST>', content, re.DOTALL)
+                                user_prompt = m.group(1).strip() if m else content.strip()
+                                if user_prompt:
+                                    return user_prompt
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    return ""
+
 def evaluate_hook(payload: dict) -> dict:
     # 0. SessionStart Handling (Mandatory Anti-AMN Recall)
     if payload.get("session_start") or payload.get("event") == "SessionStart" or payload.get("hookType") == "SessionStart":
@@ -948,6 +975,73 @@ def evaluate_hook(payload: dict) -> dict:
                                 os.remove(stop_counter_file)
                             except Exception:
                                 pass
+
+            # 0.5.2 Anti-Cháchara Physical Gate: Mandatory Plan/SSoT Mutation on Correction
+            plans_dir = "/var/www/artifacts/plans"
+            has_plans_present = (
+                os.path.exists(plans_dir) and any(
+                    f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide"])
+                    for f in os.listdir(plans_dir)
+                )
+            ) or payload.get("test_has_plans", False)
+
+            if has_plans_present and not payload.get("test_bypass_correction_gate"):
+                user_prompt = payload.get("test_user_prompt") or extract_user_prompt(payload)
+                CORRECTION_PATTERNS = re.compile(
+                    r'\b(falta|falt[oó]|olvidaste|olvid[oó]|correg[ií]|corrige|modific[aá]|cambi[aá]|agreg[aá]|quit[aá]|'
+                    r'revis[aá]|incomplet[oa]|err[oó]ne[oa]|inefica[zs]|actualiz[aá].*plan|ajust[aá]|te comiste|'
+                    r'no pusiste|no incluiste|a[ñn]ad[eí]|agrega esto|falto agregar)\b',
+                    re.IGNORECASE
+                )
+                if CORRECTION_PATTERNS.search(user_prompt):
+                    has_plan_or_linear_mutation = payload.get("test_has_plan_mutation", False)
+                    transcript_path = payload.get("transcriptPath", "")
+                    if transcript_path and os.path.exists(transcript_path) and not has_plan_or_linear_mutation:
+                        try:
+                            with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+                                t_lines = f.readlines()
+                                recent_steps = []
+                                for tl in reversed(t_lines):
+                                    if '"type":"USER_INPUT"' in tl or '"source":"USER_EXPLICIT"' in tl:
+                                        break
+                                    recent_steps.append(tl)
+
+                                for st in recent_steps:
+                                    if any(k in st for k in ["/artifacts/plans/", "artifacts/plans", "linear-cli"]):
+                                        has_plan_or_linear_mutation = True
+                                        break
+                        except Exception:
+                            pass
+
+                    if not has_plan_or_linear_mutation:
+                        correction_counter_file = "/tmp/.ssot_mutation_stop_force_count"
+                        count = 0
+                        if os.path.exists(correction_counter_file):
+                            try:
+                                with open(correction_counter_file, "r") as f:
+                                    count = int(f.read().strip())
+                            except Exception:
+                                count = 0
+                        if count < 1:
+                            with open(correction_counter_file, "w") as f:
+                                f.write(str(count + 1))
+                            return {
+                                "decision": "continue",
+                                "reason": (
+                                    "🏛️ INVARIANTE DE MUTACIÓN FÍSICA SSoT (Anti-Cháchara): "
+                                    "El usuario señaló correcciones, omisiones o modificaciones requeridas en el plan o la arquitectura, "
+                                    "pero no modificaste físicamente ningún archivo en /var/www/artifacts/plans/ (draft_*.md o plan maestro) "
+                                    "ni ejecutaste comandos de Linear en este turno. Queda prohibido cerrar el turno con meras explicaciones, "
+                                    "disculpas o memoria en Engram: es mandatorio inyectar físicamente las correcciones en el artefacto "
+                                    "físico del plan o en los BAIs de Linear antes de responder."
+                                )
+                            }
+                        else:
+                            if os.path.exists(correction_counter_file):
+                                try:
+                                    os.remove(correction_counter_file)
+                                except Exception:
+                                    pass
         return {}
 
     # 1. PostToolUse Handling
@@ -981,29 +1075,7 @@ def evaluate_hook(payload: dict) -> dict:
             pass
 
         # Zero-Hang: auto_sync_governance síncrono purgado de PreInvocation para evitar timeouts y SIGKILL por FUSE
-        user_prompt = payload.get("userPrompt", "")
-        if not user_prompt:
-            transcript_path = payload.get("transcriptPath", "")
-            if transcript_path and os.path.exists(transcript_path):
-                try:
-                    with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
-                        for line in reversed(f.readlines()):
-                            line = line.strip()
-                            if not line:
-                                continue
-                            try:
-                                step_data = json.loads(line)
-                                if step_data.get("type") == "USER_INPUT" or step_data.get("source") == "USER_EXPLICIT":
-                                    content = step_data.get("content", "")
-                                    if content:
-                                        m = re.search(r'<USER_REQUEST>\s*(.*?)\s*</USER_REQUEST>', content, re.DOTALL)
-                                        user_prompt = m.group(1).strip() if m else content.strip()
-                                        if user_prompt:
-                                            break
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
+        user_prompt = extract_user_prompt(payload)
         halt_alert = ""
         dummy_plan = "/var/www/artifacts/test_plan_v1.md"
         if os.path.exists(dummy_plan) and user_prompt:
@@ -2368,6 +2440,30 @@ def run_tests():
         })
         assert res_subagent_linear_blocked.get("decision") == "deny" and "MANDATO DE ESPERA EPISTÉMICA F0" in res_subagent_linear_blocked.get("reason", ""), f"Expected deny on premature linear creation with pending research, got {res_subagent_linear_blocked}"
         print("✓ Test 54 Passed: Pending research subagents block Linear issue/project creation")
+
+        # Test 55: Anti-Cháchara Gate blocks Stop when user prompt demands plan correction and plan was not mutated
+        res_chachara_blocked = evaluate_hook({
+            "is_stop_event": True,
+            "terminationReason": "NO_TOOL_CALL",
+            "test_has_plans": True,
+            "test_user_prompt": "Te faltó agregar el worker de video y corregir la base de datos en el plan",
+            "test_has_plan_mutation": False,
+            "test_bypass_linear": True
+        })
+        assert res_chachara_blocked.get("decision") == "continue" and "Anti-Cháchara" in res_chachara_blocked.get("reason", ""), f"Expected continue (stop blocked) on unmutated plan correction, got {res_chachara_blocked}"
+        print("✓ Test 55 Passed: Anti-Cháchara Gate blocks turn stop when plan correction requested without file mutation")
+
+        # Test 56: Anti-Cháchara Gate allows Stop when plan was mutated
+        res_chachara_allowed = evaluate_hook({
+            "is_stop_event": True,
+            "terminationReason": "NO_TOOL_CALL",
+            "test_has_plans": True,
+            "test_user_prompt": "Te faltó agregar el worker de video",
+            "test_has_plan_mutation": True,
+            "test_bypass_linear": True
+        })
+        assert res_chachara_allowed == {}, f"Expected empty dict (allow stop) when plan was mutated, got {res_chachara_allowed}"
+        print("✓ Test 56 Passed: Anti-Cháchara Gate allows turn stop when plan was physically mutated")
 
     finally:
         if os.path.exists(test_plan_path):
