@@ -7785,107 +7785,114 @@ def main():
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
+def handle_existing_directory(cdir: str, args: argparse.Namespace):
+    cdir = os.path.abspath(cdir)
+    if os.path.basename(cdir).upper() == "NOTEBOOKLM_AUDIOS":
+        cdir = os.path.dirname(cdir)
+    contained_courses = discover_contained_courses(cdir)
+
+    def make_upload_fn(target_dir):
+        def _fn():
+            if getattr(args, "upload_nlm", False):
+                meta = resolve_or_lookup_course_metadata(target_dir, alias=getattr(args, "alias", ""))
+                upload_course_to_notebooklm(
+                    target_dir,
+                    meta,
+                    audio_format=args.audio_format,
+                    alias=getattr(args, "alias", ""),
+                    collection_name=getattr(args, "collection", "")
+                )
+        return _fn
+
+    try:
+        # Caso A: Contenedor general de autor o lote con múltiples cursos
+        if contained_courses:
+            logger.info(f"📂 [CONTENEDOR DE AUTOR/LOTE DETECTADO]: {cdir}")
+            logger.info(f"   Se detectaron {len(contained_courses)} cursos contenidos. Procesando en lote...")
+            total_saved_gb = 0.0
+            for idx, c_path in enumerate(contained_courses, 1):
+                c_name = os.path.basename(c_path)
+                logger.info(f"\n================================================================================")
+                logger.info(f"▶️ [LOTE OPTIMIZE {idx:02d}/{len(contained_courses)}] Curso: {c_name}")
+                logger.info(f"================================================================================")
+                opt_res = process_and_optimize_course_media(
+                    c_path,
+                    preferred_audio_format=args.audio_format,
+                    course_title=c_name,
+                    audio_only=getattr(args, "audio_only", False),
+                    upload_callback=make_upload_fn(c_path) if getattr(args, "upload_nlm", False) else None
+                )
+                total_saved_gb += opt_res.get("total_saved_gb", 0.0)
+                for f_trans in ["PROGRESO.txt", "download_progress.log"]:
+                    fp = os.path.join(c_path, f_trans)
+                    if os.path.exists(fp):
+                        try:
+                            os.remove(fp)
+                        except Exception:
+                            pass
+            logger.info(f"\n🎉 [LOTE FINALIZADO] Se procesaron {len(contained_courses)} cursos. Ahorro acumulado: {total_saved_gb:.2f} GB")
+            return
+
+        # Caso B: Curso individual
+        cname = os.path.basename(cdir)
+        local_txt = os.path.join(cdir, "INSTRUCCIONES_DESCARGA.txt")
+        has_media = any(
+            f.lower().endswith((".mp4", ".ts", ".mkv", ".mov", ".avi", ".webm", ".mp3", ".m4a", ".aac"))
+            for r, _, files in os.walk(cdir)
+            if "NOTEBOOKLM_AUDIOS" not in r and "_temp_downloads" not in r
+            for f in files
+        )
+        if os.path.isfile(local_txt) and (not has_media or getattr(args, "download", False)):
+            logger.info(f"⚡ [INSTRUCCIONES DETECTADAS] Directorio {cdir} contiene instrucciones sin medios. Iniciando descarga...")
+            dl_res = download_and_extract_from_instructions(cdir, args)
+            if dl_res:
+                out_d, d_meta = dl_res
+                optimize_and_finalize_course(out_d, d_meta, args)
+            return
+
+        stats_before = validate_extracted_tree(cdir)
+        opt_res = process_and_optimize_course_media(
+            cdir,
+            preferred_audio_format=args.audio_format,
+            course_title=cname,
+            audio_only=getattr(args, "audio_only", False),
+            upload_callback=make_upload_fn(cdir) if getattr(args, "upload_nlm", False) else None
+        )
+        stats_after = validate_extracted_tree(cdir)
+        meta = resolve_or_lookup_course_metadata(cdir, alias=getattr(args, "alias", ""))
+        build_comprehensive_markdown_report(meta, cdir, initial_size_gb=stats_before['total_size_gb'], final_size_gb=stats_after['total_size_gb'])
+        write_progress_card(
+            course_dir=cdir,
+            title=meta.get("title", cname),
+            phase="FINALIZADO",
+            status_badge="🟢 COMPLETADO CON ÉXITO (100%)",
+            pct=100.0,
+            details={
+                "Módulos verificados": str(stats_after['total_modules']),
+                "Archivos finales": f"{stats_after['total_files']} ({stats_after['total_size_gb']:.2f} GB)",
+                "Espacio total ahorrado": f"{opt_res['total_saved_gb']:.2f} GB",
+                "Audios NotebookLM": f"Listos en {cname}/NOTEBOOKLM_AUDIOS/",
+            }
+        )
+        logger.info(f"Optimización completada para {cname}. Ahorro: {opt_res['total_saved_gb']:.2f} GB")
+        for f_trans in ["PROGRESO.txt", "download_progress.log"]:
+            fp = os.path.join(cdir, f_trans)
+            if os.path.exists(fp):
+                try:
+                    os.remove(fp)
+                except Exception:
+                    pass
+    except Exception as e_opt:
+        logger.error(f"❌ Error durante el procesamiento de {cdir}: {e_opt}")
+
+
     # Mode: Optimize existing directory
     if args.optimize_only:
-        cdir = os.path.abspath(args.optimize_only)
-        if os.path.basename(cdir).upper() == "NOTEBOOKLM_AUDIOS":
-            cdir = os.path.dirname(cdir)
-        contained_courses = discover_contained_courses(cdir)
-
-        def make_upload_fn(target_dir):
-            def _fn():
-                if getattr(args, "upload_nlm", False):
-                    meta = resolve_or_lookup_course_metadata(target_dir, alias=getattr(args, "alias", ""))
-                    upload_course_to_notebooklm(
-                        target_dir,
-                        meta,
-                        audio_format=args.audio_format,
-                        alias=getattr(args, "alias", ""),
-                        collection_name=getattr(args, "collection", "")
-                    )
-            return _fn
-
         try:
-            # Caso A: Contenedor general de autor o lote con múltiples cursos
-            if contained_courses:
-                logger.info(f"📂 [CONTENEDOR DE AUTOR/LOTE DETECTADO]: {cdir}")
-                logger.info(f"   Se detectaron {len(contained_courses)} cursos contenidos. Procesando en lote...")
-                total_saved_gb = 0.0
-                for idx, c_path in enumerate(contained_courses, 1):
-                    c_name = os.path.basename(c_path)
-                    logger.info(f"\n================================================================================")
-                    logger.info(f"▶️ [LOTE OPTIMIZE {idx:02d}/{len(contained_courses)}] Curso: {c_name}")
-                    logger.info(f"================================================================================")
-                    opt_res = process_and_optimize_course_media(
-                        c_path,
-                        preferred_audio_format=args.audio_format,
-                        course_title=c_name,
-                        audio_only=getattr(args, "audio_only", False),
-                        upload_callback=make_upload_fn(c_path) if getattr(args, "upload_nlm", False) else None
-                    )
-                    total_saved_gb += opt_res.get("total_saved_gb", 0.0)
-                    for f_trans in ["PROGRESO.txt", "download_progress.log"]:
-                        fp = os.path.join(c_path, f_trans)
-                        if os.path.exists(fp):
-                            try:
-                                os.remove(fp)
-                            except Exception:
-                                pass
-                logger.info(f"\n🎉 [LOTE FINALIZADO] Se procesaron {len(contained_courses)} cursos. Ahorro acumulado: {total_saved_gb:.2f} GB")
-                return
-
-            # Caso B: Curso individual
-            cname = os.path.basename(cdir)
-            local_txt = os.path.join(cdir, "INSTRUCCIONES_DESCARGA.txt")
-            has_media = any(
-                f.lower().endswith((".mp4", ".ts", ".mkv", ".mov", ".avi", ".webm", ".mp3", ".m4a", ".aac"))
-                for r, _, files in os.walk(cdir)
-                if "NOTEBOOKLM_AUDIOS" not in r and "_temp_downloads" not in r
-                for f in files
-            )
-            if os.path.isfile(local_txt) and (not has_media or getattr(args, "download", False)):
-                logger.info(f"⚡ [INSTRUCCIONES DETECTADAS] Directorio {cdir} contiene instrucciones sin medios. Iniciando descarga...")
-                dl_res = download_and_extract_from_instructions(cdir, args)
-                if dl_res:
-                    out_d, d_meta = dl_res
-                    optimize_and_finalize_course(out_d, d_meta, args)
-                return
-
-            stats_before = validate_extracted_tree(cdir)
-            opt_res = process_and_optimize_course_media(
-                cdir,
-                preferred_audio_format=args.audio_format,
-                course_title=cname,
-                audio_only=getattr(args, "audio_only", False),
-                upload_callback=make_upload_fn(cdir) if getattr(args, "upload_nlm", False) else None
-            )
-            stats_after = validate_extracted_tree(cdir)
-            meta = resolve_or_lookup_course_metadata(cdir, alias=getattr(args, "alias", ""))
-            build_comprehensive_markdown_report(meta, cdir, initial_size_gb=stats_before['total_size_gb'], final_size_gb=stats_after['total_size_gb'])
-            write_progress_card(
-                course_dir=cdir,
-                title=meta.get("title", cname),
-                phase="FINALIZADO",
-                status_badge="🟢 COMPLETADO CON ÉXITO (100%)",
-                pct=100.0,
-                details={
-                    "Módulos verificados": str(stats_after['total_modules']),
-                    "Archivos finales": f"{stats_after['total_files']} ({stats_after['total_size_gb']:.2f} GB)",
-                    "Espacio total ahorrado": f"{opt_res['total_saved_gb']:.2f} GB",
-                    "Audios NotebookLM": f"Listos en {cname}/NOTEBOOKLM_AUDIOS/",
-                }
-            )
-            logger.info(f"Optimización completada para {cname}. Ahorro: {opt_res['total_saved_gb']:.2f} GB")
-            for f_trans in ["PROGRESO.txt", "download_progress.log"]:
-                fp = os.path.join(cdir, f_trans)
-                if os.path.exists(fp):
-                    try:
-                        os.remove(fp)
-                    except Exception:
-                        pass
-            return
+            handle_existing_directory(args.optimize_only, args)
         finally:
             purge_runtime_transient_files()
+        return
 
     # Mode: Validate only
     if args.validate_only:
@@ -7953,7 +7960,8 @@ def main():
                 )
             return
         else:
-            args.optimize_only = target_path
+            handle_existing_directory(target_path, args)
+            return
 
     session = get_session(args.cookies)
     base_dest = os.path.abspath(args.output_dir) if args.output_dir else MCV_BASE_DIR
