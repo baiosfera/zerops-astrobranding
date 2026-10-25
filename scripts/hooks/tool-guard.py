@@ -777,6 +777,61 @@ def is_kill_attempt_dangerous(cmd: str) -> tuple:
 
     return False, ""
 
+def is_plan_draft(filepath: str) -> bool:
+    try:
+        if not filepath or not os.path.exists(filepath):
+            return False
+        base = os.path.basename(filepath).lower()
+        if base.startswith("draft_") or "draft" in base or "grilling" in base:
+            return True
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read(4096).lower()
+            if any(k in content for k in [
+                "status: draft", "status: grilling", "estado: borrador",
+                "estado: f0", "estado: f1", "fase: f0", "fase: f1",
+                "f0 epistemic grounding & grilling", "draft: true", "borrador: true"
+            ]):
+                return True
+    except Exception:
+        pass
+    return False
+
+def get_pending_research_subagents(transcript_path: str) -> list:
+    if not transcript_path or not os.path.exists(transcript_path):
+        return []
+    launched_research = {}
+    completed = set()
+    try:
+        with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    step = json.loads(line)
+                except Exception:
+                    continue
+                
+                content = step.get("content", "")
+                if "Created the following subagent:" in content:
+                    m = re.search(r"\"conversationId\":\s*\"([^\"]+)\"", content)
+                    if m:
+                        cid = m.group(1)
+                        launched_research[cid] = True
+                
+                if "sender=" in content:
+                    m = re.search(r"sender=([0-9a-fA-F\-]{36})", content)
+                    if m:
+                        completed.add(m.group(1))
+                
+                if "Successfully killed" in content:
+                    for cid in list(launched_research.keys()):
+                        completed.add(cid)
+    except Exception:
+        pass
+    
+    pending = [cid for cid in launched_research if cid not in completed]
+    return pending
+
 def evaluate_hook(payload: dict) -> dict:
     # 0. SessionStart Handling (Mandatory Anti-AMN Recall)
     if payload.get("session_start") or payload.get("event") == "SessionStart" or payload.get("hookType") == "SessionStart":
@@ -800,9 +855,42 @@ def evaluate_hook(payload: dict) -> dict:
     if "terminationReason" in payload or payload.get("is_stop_event"):
         term_reason = payload.get("terminationReason", "NO_TOOL_CALL")
         if term_reason == "NO_TOOL_CALL":
+            transcript_path = payload.get("transcriptPath", "")
+            pending_subagents = get_pending_research_subagents(transcript_path) if not payload.get("test_bypass_research_wait") else []
+            if payload.get("test_has_pending_research"):
+                pending_subagents = ["subagent-test-pending"]
+
+            if pending_subagents:
+                has_grilling_or_conclusion = False
+                if transcript_path and os.path.exists(transcript_path):
+                    try:
+                        with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+                            t_lines = f.readlines()
+                            for l in reversed(t_lines[-5:]):
+                                if any(k in l for k in ["❓ **Q", "### Ronda", "Ronda 1", "Estructura Creada", "Tickets BAI", "Master Plan:"]):
+                                    has_grilling_or_conclusion = True
+                                    break
+                    except Exception:
+                        pass
+                if payload.get("test_has_grilling_in_stop"):
+                    has_grilling_or_conclusion = True
+
+                if has_grilling_or_conclusion:
+                    return {
+                        "decision": "continue",
+                        "reason": (
+                            f"🏛️ MANDATO DE ESPERA EPISTÉMICA F0 (Supreme Directive Invariante 5): "
+                            f"Hay subagentes de 'research' activos en vuelo ({pending_subagents}). Está terminantemente "
+                            "PROHIBIDO apresurarse a redactar conclusiones o formular preguntas de grilling antes de "
+                            "recibir e ingerir los reportes de investigación de todos los subagentes delegados. "
+                            "Informá brevemente al usuario que lanzaste la investigación y aguardá su retorno en silencio."
+                        )
+                    }
+
             plans_dir = "/var/www/artifacts/plans"
             has_active_plan = os.path.exists(plans_dir) and any(
-                f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide"])
+                f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide", "draft", "grilling"])
+                and not is_plan_draft(os.path.join(plans_dir, f))
                 for f in os.listdir(plans_dir)
             )
             if has_active_plan and not payload.get("test_bypass_linear"):
@@ -966,12 +1054,25 @@ def evaluate_hook(payload: dict) -> dict:
 
                 # 3. Linear-First Epistemic Persistence Gate (Invariante 2)
                 plans_dir = "/var/www/artifacts/plans"
-                if os.path.exists(plans_dir) and any(f.endswith(".md") for f in os.listdir(plans_dir)):
+                has_active_plans_pi = os.path.exists(plans_dir) and any(
+                    f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide", "draft", "grilling"])
+                    and not is_plan_draft(os.path.join(plans_dir, f))
+                    for f in os.listdir(plans_dir)
+                )
+                if has_active_plans_pi:
                     ephemeral_msgs.append(
                         "🏛️ INVARIANTE LINEAR-FIRST GATE (00-SUPREME-DIRECTIVE Invariante 2): "
                         "Hay un plan activo en ejecución en /var/www/artifacts/plans/. Prohibido responder o dar explicaciones en el chat "
                         "sin haber ejecutado 'linear-cli comment <ID>' para persistir tus hallazgos técnicos en Linear. "
                         "Persistir en Linear es un prerequisito bloqueante antes de responder al usuario."
+                    )
+
+                # 4. Epistemic Inflow Wait for Research Subagents (Anti-Rushing Invariant)
+                if "research" in matched_skills or is_skill_task or is_eval:
+                    ephemeral_msgs.append(
+                        "🏛️ MANDATO DE ESPERA EPISTÉMICA F0 (Supreme Directive v8.5): Al despachar subagentes de 'research', "
+                        "es MANDATORIO aguardar sus reportes antes de redactar planes, crear tickets en Linear o formular preguntas de grilling definitivas. "
+                        "Cero conclusiones apresuradas sin la evidencia completa de los subagentes."
                     )
 
                 if ephemeral_msgs and "--test" not in sys.argv:
@@ -1039,6 +1140,38 @@ def evaluate_hook(payload: dict) -> dict:
                 "o Direct GraphQL API (<200ms) para evitar timeouts y procesos npx colgados."
             )
         }
+
+    # 0.2 Epistemic Inflow Wait (Anti-Rushing Gate: Wait for subagent research reports before planning/ticketing)
+    transcript_path = payload.get("transcriptPath", "")
+    pending_research = get_pending_research_subagents(transcript_path) if not payload.get("test_bypass_research_wait") else []
+    if payload.get("test_has_pending_research"):
+        pending_research = ["subagent-test-pending"]
+
+    if pending_research:
+        target_file_check = args.get("Path", "") or args.get("TargetFile", "") or args.get("target_file", "") or args.get("file_path", "")
+        if tool_name in ["write_file", "edit_file", "write_to_file", "replace_file_content"]:
+            if "/artifacts/plans/" in target_file_check or target_file_check.startswith("artifacts/plans/"):
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        f"🏛️ MANDATO DE ESPERA EPISTÉMICA F0 (Supreme Directive Invariante 5): "
+                        f"Hay subagentes de 'research' activos en vuelo ({pending_research}). Está terminantemente "
+                        "PROHIBIDO apresurarse a redactar o mutar planes antes de recibir e ingerir los reportes de investigación "
+                        "de todos los subagentes delegados. Finalizá tu turno sin tool calls para aguardar el retorno del subagente."
+                    )
+                }
+        if tool_name == "run_command":
+            cmd_check = args.get("CommandLine", "")
+            if any(k in cmd_check for k in ["linear-cli create", "linear-cli create-project"]):
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        f"🏛️ MANDATO DE ESPERA EPISTÉMICA F0 (Supreme Directive Invariante 5): "
+                        f"Hay subagentes de 'research' activos en vuelo ({pending_research}). Está terminantemente "
+                        "PROHIBIDO crear proyectos o tickets en Linear antes de recibir e ingerir sus reportes de investigación. "
+                        "Aguardá la culminación de los subagentes antes de formalizar issues."
+                    )
+                }
 
     # 0.2 Invariante Single-Node ZCP: Bloqueo de escalado multi-contenedor (BAI-322)
     if tool_name == "call_mcp_tool" and args.get("ServerName") == "zerops":
@@ -1181,7 +1314,8 @@ def evaluate_hook(payload: dict) -> dict:
         # A4. Linear-First Epistemic Persistence Gate (Invariante 2 Soberano)
         plans_dir = "/var/www/artifacts/plans"
         has_active_plan = os.path.exists(plans_dir) and any(
-            f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide"])
+            f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide", "draft", "grilling"])
+            and not is_plan_draft(os.path.join(plans_dir, f))
             for f in os.listdir(plans_dir)
         )
         is_target_code_or_skill = (
@@ -2185,6 +2319,55 @@ def run_tests():
         })
         assert res_research_allowed.get("decision") == "allow", f"Expected allow on skill mutation with research state, got {res_research_allowed}"
         print("✓ Test 51 Passed: Epistemic Grounding First Gate allows skill mutation with research state")
+
+        # Test 52: Draft plans do NOT trigger Linear-First Gate in Stop hook
+        draft_plan_path = os.path.join(plans_dir, "draft_test_plan.md")
+        with open(draft_plan_path, "w") as f:
+            f.write("# Draft Plan\nstatus: draft\n")
+        if os.path.exists(test_plan_path):
+            os.remove(test_plan_path)
+        if os.path.exists(state_file):
+            os.remove(state_file)
+        if os.path.exists(alt_state_file):
+            os.remove(alt_state_file)
+        res_draft_stop = evaluate_hook({
+            "is_stop_event": True,
+            "terminationReason": "NO_TOOL_CALL",
+            "test_has_inspection": True
+        })
+        assert res_draft_stop == {}, f"Expected empty dict (allow stop for draft plan), got {res_draft_stop}"
+        if os.path.exists(draft_plan_path):
+            os.remove(draft_plan_path)
+        with open(test_plan_path, "w") as f:
+            f.write("# Active Test Plan\n")
+        print("✓ Test 52 Passed: Draft plans do NOT trigger Linear-First Gate in Stop hook")
+
+        # Test 53: Pending research subagents block plan writing (Anti-Rushing Invariant)
+        res_subagent_plan_blocked = evaluate_hook({
+            "toolCall": {
+                "name": "write_file",
+                "args": {
+                    "Path": "/var/www/artifacts/plans/premature_plan.md",
+                    "Content": "# Premature Plan\n"
+                }
+            },
+            "test_has_pending_research": True
+        })
+        assert res_subagent_plan_blocked.get("decision") == "deny" and "MANDATO DE ESPERA EPISTÉMICA F0" in res_subagent_plan_blocked.get("reason", ""), f"Expected deny on premature plan write with pending research, got {res_subagent_plan_blocked}"
+        print("✓ Test 53 Passed: Pending research subagents block plan writing (Anti-Rushing Invariant)")
+
+        # Test 54: Pending research subagents block Linear issue/project creation
+        res_subagent_linear_blocked = evaluate_hook({
+            "toolCall": {
+                "name": "run_command",
+                "args": {
+                    "CommandLine": "linear-cli create 'Premature BAI'"
+                }
+            },
+            "test_has_pending_research": True
+        })
+        assert res_subagent_linear_blocked.get("decision") == "deny" and "MANDATO DE ESPERA EPISTÉMICA F0" in res_subagent_linear_blocked.get("reason", ""), f"Expected deny on premature linear creation with pending research, got {res_subagent_linear_blocked}"
+        print("✓ Test 54 Passed: Pending research subagents block Linear issue/project creation")
 
     finally:
         if os.path.exists(test_plan_path):
