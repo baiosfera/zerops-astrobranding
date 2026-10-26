@@ -23,26 +23,7 @@ export const contactFormAction = defineAction({
 
     let dispatched = false;
 
-    // 1. Directus Dispatch (Only if explicitly provisioned)
-    const directusUrl = process.env.DIRECTUS_URL || process.env.PUBLIC_DIRECTUS_URL;
-    const directusToken = process.env.DIRECTUS_STATIC_TOKEN;
-    if (directusUrl && directusToken) {
-      try {
-        const res = await fetch(`${directusUrl}/items/contact_leads`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${directusToken}`,
-          },
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) dispatched = true;
-      } catch (err) {
-        console.warn('[ContactAction] Directus dispatch skipped or failed:', err);
-      }
-    }
-
-    // 2. NATS JetStream / RPC Dispatch (If event bus available)
+    // 1. NATS JetStream / RPC Dispatch (If event bus available)
     const natsUrl = process.env.NATS_URL || process.env.queue_connectionString;
     if (!dispatched && natsUrl) {
       try {

@@ -89,7 +89,7 @@ if [ -d "$SKILLS_SRC" ]; then
 
             # Clasificar si es una extensión dinámica que no pertenece a las suites estándar
             case "$skill_name" in
-                alpine|astro*|automation-engine|bazi-lunar|bifrost|bknd|brandbook|bun|business-insights|checkout-funnels|chroma|cloudflare|cohalo|crmfrappe|dckr|devllm-telemetry|directus|docu|email-marketing|erpnext|fastapi|fontgen|freeastroapi|freellmapi|frnt|ghcicd|golang|growth-engine|hebcal|hermes-agent|kinetic|kundali|listmonk|local-storage|shared-storage|nasa|nats|nodejs|notebooklm|oraculo*|orchesbrand|orders-fulfillment|payment-gateways|planner|postgresql|python|qdrant|research|rust|sales-enablement|seo-aeo-geo|social-distrib|symbol|ubuntu|valkey|vedastro|whatsapp-engine|zcp|zmanim)
+                alpine|astro*|automation-engine|bazi-lunar|bifrost|bknd|brandbook|bun|business-insights|checkout-funnels|chroma|cloudflare|cohalo|crmfrappe|dckr|devllm-telemetry|docu|email-marketing|erpnext|fastapi|fontgen|freeastroapi|freellmapi|frnt|ghcicd|golang|growth-engine|hebcal|hermes-agent|kinetic|kundali|listmonk|local-storage|shared-storage|nasa|nats|nodejs|notebooklm|oraculo*|orchesbrand|orders-fulfillment|payment-gateways|planner|postgresql|python|qdrant|research|rust|sales-enablement|seo-aeo-geo|social-distrib|symbol|ubuntu|valkey|vedastro|whatsapp-engine|zcp|zmanim)
                     # Skill core / suite soberana conocida
                     ;;
                 *)
