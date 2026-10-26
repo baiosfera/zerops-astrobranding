@@ -14,8 +14,12 @@ log_warn() { echo -e "\033[1;33m[WARN]\033[0m $*"; }
 log_err()  { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; }
 
 KEYS_FILE="${1:-}"
-ADMIN_EMAIL="${FREELLMAPI_ADMIN_EMAIL:-admin@baiosfera.com}"
-ADMIN_PASSWORD="${FREELLMAPI_ADMIN_PASSWORD:-Baiosfera2026!*}"
+ADMIN_EMAIL="${FREELLMAPI_ADMIN_EMAIL:-admin@${PROJECT_NAME:-localhost}.internal}"
+if [ -z "${FREELLMAPI_ADMIN_PASSWORD:-}" ]; then
+    ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9!@#%')
+else
+    ADMIN_PASSWORD="$FREELLMAPI_ADMIN_PASSWORD"
+fi
 
 python3 - <<EOF
 import os, sys, re, json, subprocess
@@ -111,5 +115,10 @@ if [ -f "/tmp/freellmapi_generated_config.json" ]; then
         log_warn "Servicio freellmapi no alcanzable vía SSH aún. Archivo temporal listo en /tmp/freellmapi_generated_config.json."
     fi
     rm -f /tmp/freellmapi_generated_config.json
+fi
+
+if [ -x "$SCRIPT_DIR/sync-freellm-auth.sh" ]; then
+    log_info "Reconciliando credenciales en base de datos SQLite..."
+    FREELLM_ADMIN_EMAIL="$ADMIN_EMAIL" FREELLM_ADMIN_PASSWORD="$ADMIN_PASSWORD" "$SCRIPT_DIR/sync-freellm-auth.sh" || log_warn "Reconciliación de credenciales diferida."
 fi
 log_ok "Proceso de seeding de claves completado."
