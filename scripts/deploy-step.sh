@@ -33,18 +33,30 @@ Comandos:
 EOF
 }
 
+service_exists() {
+    local svc="$1"
+    if [ -d "/var/www/$svc" ] || { command -v zcli >/dev/null 2>&1 && zcli service list 2>/dev/null | grep -qw "$svc"; }; then
+        return 0
+    fi
+    return 1
+}
+
 STEP="${1:-help}"
 
 case "$STEP" in
     1)
         RECIPE="$RECIPES_DIR/01-freellmapi.yaml"
-        log_info "==> Hito 1: Aprovisionando 'localstorage' y 'freellmapi'..."
-        if command -v zcli >/dev/null 2>&1; then
-            zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
+        if service_exists "freellmapi"; then
+            log_info "Servicio 'freellmapi' ya existe en Zerops; saltando importación."
         else
-            log_info "Receta lista para importar vía ZCP MCP (zerops_import): $RECIPE"
+            log_info "==> Hito 1: Aprovisionando 'freellmapi'..."
+            if command -v zcli >/dev/null 2>&1; then
+                zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
+            else
+                log_info "Receta lista para importar vía ZCP MCP (zerops_import): $RECIPE"
+            fi
         fi
-        log_ok "Hito 1 aprovisionado."
+        log_ok "Hito 1 verificado."
         if [ -x "$SCRIPT_DIR/seed-freellmapi-keys.sh" ]; then
             log_info "Inyectando configuración y claves declarativas en freellmapi..."
             "$SCRIPT_DIR/seed-freellmapi-keys.sh" || log_warn "Inyección preliminar completada; se confirmará tras despliegue de código."
@@ -53,27 +65,35 @@ case "$STEP" in
         ;;
     2)
         RECIPE="$RECIPES_DIR/02-bifrost-postgres.yaml"
-        log_info "==> Hito 2: Aprovisionando 'database' (PostgreSQL 18), 'valkey' y 'bifrost'..."
-        if command -v zcli >/dev/null 2>&1; then
-            zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
+        if service_exists "bifrost"; then
+            log_info "Servicio 'bifrost' ya existe en Zerops; saltando importación."
         else
-            log_info "Receta lista para importar vía ZCP MCP (zerops_import): $RECIPE"
+            log_info "==> Hito 2: Aprovisionando 'bifrost'..."
+            if command -v zcli >/dev/null 2>&1; then
+                zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
+            else
+                log_info "Receta lista para importar vía ZCP MCP (zerops_import): $RECIPE"
+            fi
         fi
         if [ -x "$SCRIPT_DIR/harden-postgres-quotas.sh" ]; then
             log_info "Aplicando blindaje anti-starvation y cuotas físicas en PostgreSQL..."
             "$SCRIPT_DIR/harden-postgres-quotas.sh" || log_warn "Aviso en calibración de cuotas."
         fi
-        log_ok "Hito 2 aprovisionado. Próximo paso: verificar conexión Postgres y auditar /health de Bifrost."
+        log_ok "Hito 2 verificado. Próximo paso: verificar conexión Postgres y auditar /health de Bifrost."
         ;;
     3)
         RECIPE="$RECIPES_DIR/03-hermes-nats.yaml"
-        log_info "==> Hito 3: Aprovisionando 'nats' y 'hermes'..."
-        if command -v zcli >/dev/null 2>&1; then
-            zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
+        if service_exists "hermes"; then
+            log_info "Servicio 'hermes' ya existe en Zerops; saltando importación."
         else
-            log_info "Receta lista para importar: $RECIPE"
+            log_info "==> Hito 3: Aprovisionando 'hermes'..."
+            if command -v zcli >/dev/null 2>&1; then
+                zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
+            else
+                log_info "Receta lista para importar: $RECIPE"
+            fi
         fi
-        log_ok "Hito 3 aprovisionado. Próximo paso: auditar /healthz de Hermes y subject NATS."
+        log_ok "Hito 3 verificado. Próximo paso: auditar /healthz de Hermes y subject NATS."
         ;;
     4)
         RECIPE="$RECIPES_DIR/04-evolution.yaml"

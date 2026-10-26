@@ -1,20 +1,17 @@
-# Hito 1: Almacenamiento Local Persistente + FreeLLMAPI Multi-Provider Proxy
+# Hito 1: FreeLLMAPI Multi-Provider Proxy
+# Nota: La infraestructura base (localstorage) se aprovisiona desde recipes/services/06-localstorage.yaml
 services:
-  - hostname: localstorage
-    type: local-storage:single@1
-    priority: 10
-
   - hostname: freellmapi
     type: ubuntu/nodejs@24
     priority: 5
     startWithoutCode: true
     enableSubdomainAccess: true
     minContainers: 1
-    maxContainers: 2
+    maxContainers: 1
     verticalAutoscaling:
       cpuMode: SHARED
       minFreeRamGB: 0.25
       minFreeRamPercent: 10
     envVariables:
-      FREELLM_ADMIN_EMAIL: "admin@baiosfera.com"
-      FREELLM_ADMIN_PASSWORD: "Baiosfera2026!*"
+      FREELLM_ADMIN_EMAIL: ${FREELLM_ADMIN_EMAIL}
+      FREELLM_ADMIN_PASSWORD: ${FREELLM_ADMIN_PASSWORD}

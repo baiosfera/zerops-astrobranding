@@ -1,26 +1,13 @@
-# Hito 2: PostgreSQL 18 + Valkey 7.2 Cache + Maxim AI Bifrost Enterprise Gateway
-# Anti-Starvation Invariant:
-# - Capped database slots: 'db' (60 slots), satellite databases (15 slots each).
-# - Defensive reaping: idle_session_timeout = '2min', idle_in_transaction_session_timeout = '30s'.
-# - Enforced deterministically via scripts/harden-postgres-quotas.sh.
+# Hito 2: Maxim AI Bifrost Enterprise Gateway
+# Nota: La infraestructura base (database, valkey) se aprovisiona desde recipes/services/
 services:
-  - hostname: database
-    type: postgresql:single@18
-    profile: oltp-hobby
-    priority: 10
-
-  - hostname: valkey
-    type: valkey:single@7.2
-    profile: hobby
-    priority: 10
-
   - hostname: bifrost
     type: alpine/go@1.22
     priority: 5
     startWithoutCode: true
     enableSubdomainAccess: true
     minContainers: 1
-    maxContainers: 2
+    maxContainers: 1
     verticalAutoscaling:
       cpuMode: SHARED
       minFreeRamGB: 0.25

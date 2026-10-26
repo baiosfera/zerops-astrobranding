@@ -30,18 +30,13 @@ BEGIN
     EXECUTE format('ALTER DATABASE %I SET idle_session_timeout = ''2min''', main_db);
     EXECUTE format('ALTER DATABASE %I SET idle_in_transaction_session_timeout = ''30s''', main_db);
     
-    -- 2. Hard cap satellite databases if they exist (Evolution / whatsmeow)
-    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'evogo_auth') THEN
-        EXECUTE 'ALTER DATABASE evogo_auth WITH CONNECTION LIMIT 15';
-        EXECUTE 'ALTER DATABASE evogo_auth SET idle_session_timeout = ''2min''';
-        EXECUTE 'ALTER DATABASE evogo_auth SET idle_in_transaction_session_timeout = ''30s''';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'evogo_users') THEN
-        EXECUTE 'ALTER DATABASE evogo_users WITH CONNECTION LIMIT 15';
-        EXECUTE 'ALTER DATABASE evogo_users SET idle_session_timeout = ''2min''';
-        EXECUTE 'ALTER DATABASE evogo_users SET idle_in_transaction_session_timeout = ''30s''';
-    END IF;
+    -- 2. Dynamically cap all non-system satellite databases to 15 slots
+    FOR sat IN SELECT datname FROM pg_database WHERE datname NOT IN ('postgres', 'template0', 'template1', main_db)
+    LOOP
+        EXECUTE format('ALTER DATABASE %I WITH CONNECTION LIMIT 15', sat);
+        EXECUTE format('ALTER DATABASE %I SET idle_session_timeout = ''2min''', sat);
+        EXECUTE format('ALTER DATABASE %I SET idle_in_transaction_session_timeout = ''30s''', sat);
+    END LOOP;
 
     -- 3. Apply role-level idle timeouts for the application user
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'db') THEN
