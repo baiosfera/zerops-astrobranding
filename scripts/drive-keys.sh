@@ -131,7 +131,7 @@ print(base64.b64encode(json.dumps(data).encode('utf-8')).decode('utf-8'))
     echo ""
     echo "👉 En tu ZCP limpio, ejecutá este comando único para importar y montar:"
     echo ""
-    echo "curl -fsSL https://raw.githubusercontent.com/catalinaglamur/zerops-astrobranding/main/scripts/drive-keys.sh | bash -s -- --import \"$b64_payload\""
+    echo "curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/scripts/drive-keys.sh | bash -s -- --import \"$b64_payload\""
     echo ""
     echo "O si ya clonaste el repo:"
     echo "bash /var/www/zerops-astrobranding/scripts/drive-keys.sh --import \"$b64_payload\""
@@ -205,7 +205,7 @@ EOF
         bash "/var/www/scripts/gdrive.sh"
     else
         echo "ℹ️ gdrive.sh no encontrado localmente; descargando versión canónica..."
-        curl -fsSL https://raw.githubusercontent.com/catalinaglamur/zerops-astrobranding/main/scripts/gdrive.sh | bash
+        curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/scripts/gdrive.sh | bash
     fi
 
     cmd_status

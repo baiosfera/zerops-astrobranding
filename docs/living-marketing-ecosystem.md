@@ -1,6 +1,6 @@
 # ⚡ ECOSISTEMA VIVO DE MARKETING, VENTAS Y ATRIBUCIÓN (SOTA Octubre 2026)
 
-> **Marca Activa:** CATALINAGLAMUR (Activewear & Atelier de Novias - Envigado/Medellín).  
+> **Marca Activa:** Ecosistema dinámico gobernado por `${PROJECT_NAME}`.  
 > **Arquitectura:** NATS JetStream + Valkey 7.2 (BullMQ) + PostgreSQL 18 + Bifrost AI Gateway + Hermes-Agent + Meta CAPI.  
 > **Ubicación Canónica:** `/var/www/zerops-astrobranding/docs/living-marketing-ecosystem.md`
 
@@ -8,8 +8,8 @@
 
 ## 1. El Diagnóstico Crudo de la Realidad
 
-`webprod` está **en línea y saludable** (`https://webprod-252-3000.ny1.zerops.app` / `catalinaglamur.com`):
-- Vende: *Enterizo Escultor Blanco Studio ($80.000)*, *Conjunto Obsidiana Gold ($95.000)*, *Maquillaje de Novias ($350.000 - $450.000)*.
+`webprod` está **en línea y saludable** (`https://${hostname}-3000.ny1.zerops.app` / `${DOMAIN}`):
+- Catálogo e-commerce activo gobernado por base de datos relacional PostgreSQL 18.
 - **Falta Crítica Detectada**:
   1. **Cero Píxeles y Cero CAPI**: No hay eventos del lado del navegador ni del servidor emitiendo a Meta Conversions API ni Google Analytics 4.
   2. **Cero Remarketing Dinámico**: No se capturan carritos abandonados en el blur del checkout.

@@ -25,7 +25,7 @@ Tras inspeccionar y auditar en vivo el contenedor `zcp`, las instancias de Zerop
    - Cuenta con soporte para **FreeLLMAPI** (`http://freellmapi:3001`) para tareas ligeras y enrutamiento Pro (`x-tier: production`) para generación de copy de alta conversión, ofertas y ventas.
 
 4. **Astrobranding como Núcleo Innegociable (Oráculo)**:
-   - En `/var/www/baiosfera/PROYECTOS/CATALINAGLAMUR/dev/` ya residen los artefactos canónicos: `brandbook.json`, `astrobranding_catalinaglamur.md`, `fase0_author_psychology.md` y `system_prompt.md`.
+   - En `${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}/PROYECTOS/${PROJECT_NAME}/dev/` residen los artefactos canónicos de cada marca: `brandbook.json`, `astrobranding_${PROJECT_NAME}.md`, `fase0_author_psychology.md` y `system_prompt.md`.
    - La identidad astronumerológica (ej. Medio Cielo en Virgo, Mercurio Shadbala 7.35 rupas, autoridad emocional, prohibición de términos cliché como "hustle", "abundance", "game-changer") es la **LENTE FILTRANTE OBLIGATORIA**.
 
 ---

@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT="${1:-${PROJECT_NAME:-ELPLACERDC}}"
-SRC="/var/www/baiosfera/PROYECTOS/${PROJECT}"
-DEST="/var/www/localstorage/proyectos/${PROJECT}"
+PROJECT="${1:-${PROJECT_NAME:-}}"
+if [ -z "$PROJECT" ]; then
+    echo "❌ Error: Debe especificar un nombre de proyecto o definir PROJECT_NAME en el entorno."
+    echo "Uso: sync-project <NOMBRE_PROYECTO>"
+    exit 1
+fi
+
+SRC="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}/PROYECTOS/${PROJECT}"
+DEST="${LOCALSTORAGE_DIR:-/var/www/localstorage}/proyectos/${PROJECT}"
 
 if [ ! -d "$SRC" ]; then
     echo "❌ Error: Directorio origen no encontrado en $SRC"
