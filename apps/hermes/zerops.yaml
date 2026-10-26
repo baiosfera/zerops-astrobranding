@@ -1,0 +1,37 @@
+zerops:
+  - setup: hermes
+    build:
+      base: ubuntu/python@3.12
+      buildCommands:
+        - pip install --upgrade pip setuptools wheel && pip install --target=./vendor -r requirements.txt
+      deployFiles:
+        - .
+      cache:
+        - vendor
+    run:
+      base: ubuntu/python@3.12
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
+      ports:
+        - port: 8000
+          httpSupport: true
+      initCommands:
+        - sudo mkdir -p /mnt/localstorage/hermes && sudo chown -R zerops:zerops /mnt/localstorage/hermes
+      envVariables:
+        PORT: "8000"
+        PYTHONPATH: "/var/www/vendor:/var/www"
+        HERMES_MODEL_ENDPOINT: "http://bifrost:8080/v1"
+        HERMES_MODEL_NAME: "auto"
+        BIFROST_VIRTUAL_KEY: "vk-hermes-agent"
+        DATABASE_URL: ${database_connectionString}
+        SUPERUSER_URL: "postgresql://${database_superUser}:${database_superUserPassword}@${database_hostname}:${database_port}/${database_dbName}"
+        NATS_URL: ${nats_connectionString}
+        ZCP_NATS_URL: ${nats_connectionString}
+        LOCAL_STORAGE_PATH: "/mnt/localstorage/hermes"
+      start: python3 /var/www/main.py
+      healthCheck:
+        httpGet:
+          port: 8000
+          path: /healthz

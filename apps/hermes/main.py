@@ -14,6 +14,14 @@ try:
 except (ImportError, ValueError):
     from .agent import HermesAgent
 
+try:
+    from telegram_gateway import run_bot as run_telegram_bot
+except (ImportError, ValueError):
+    try:
+        from .telegram_gateway import run_bot as run_telegram_bot
+    except Exception:
+        run_telegram_bot = None
+
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/health", "/healthz", "/"):
@@ -77,15 +85,22 @@ async def run_nats_bridge():
     while True:
         await asyncio.sleep(60)
 
+async def run_services():
+    tasks = [asyncio.create_task(run_nats_bridge())]
+    if run_telegram_bot:
+        print("[Hermes-Agent] Initializing Telegram gateway...")
+        tasks.append(asyncio.create_task(run_telegram_bot()))
+    await asyncio.gather(*tasks)
+
 def main():
     port = int(os.getenv("PORT", "8000"))
     # Start health server in background daemon thread
     server_thread = threading.Thread(target=run_health_server, args=(port,), daemon=True)
     server_thread.start()
 
-    # Run primary async agent loop
+    # Run primary async agent loops
     try:
-        asyncio.run(run_nats_bridge())
+        asyncio.run(run_services())
     except KeyboardInterrupt:
         print("[Hermes-Agent] Shutting down gracefully.")
 

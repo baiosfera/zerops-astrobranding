@@ -27,7 +27,7 @@ def get_bifrost_llm(tier: str = "free"):
         model_name = "openai/deepseek-chat"
         extra_headers = {"x-routing-tier": "pro", "x-tier": "production"}
     else:
-        model_name = "openai/hermes-3-llama-3.1-8b"
+        model_name = "openai/auto"
         extra_headers = {"x-routing-tier": "free"}
 
     return LLM(
