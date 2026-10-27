@@ -477,20 +477,21 @@ if [ -d "$SKILLS_LOCAL_DIR" ]; then
         if command -v rsync >/dev/null 2>&1; then
             rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
             rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
-            if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
-                mkdir -p "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk_name" 2>/dev/null || true
-                rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk_name/" 2>/dev/null || true
-            fi
         else
             mkdir -p "$PROJECT_ROOT/.agents/skills/$sk_name" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
             cp -rf "$sk_dir"* "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
             cp -rf "$sk_dir"* "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
-            if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
-                mkdir -p "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk_name" 2>/dev/null || true
-                cp -rf "$sk_dir"* "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk_name/" 2>/dev/null || true
-            fi
         fi
     done
+    # Sincronizar las 4 skills core hacia Drive SSoT (acotado para evitar latencia FUSE)
+    if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
+        for sk in oraculo docu research planner; do
+            if [ -d "$SKILLS_LOCAL_DIR/$sk" ]; then
+                mkdir -p "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk" 2>/dev/null || true
+                rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$SKILLS_LOCAL_DIR/$sk/" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk/" 2>/dev/null || true
+            fi
+        done
+    fi
 fi
 
 # 2b-bis. Desplegar skills de Drive SSoT que no residen en zerops-astro-skills (ej. directus)
