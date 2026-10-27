@@ -11,6 +11,11 @@ DRIVE_BASE="/var/www/baiosfera/0ZEROPS-AGY/0zcp-123"
 
 ERRORS=0
 
+# Invariante de permisos: asegurar propiedad no-root en espacio de trabajo local
+if command -v sudo >/dev/null 2>&1; then
+    sudo chown -R "$(id -un):$(id -gn)" "$LOCAL_BASE/.agents" "$LOCAL_BASE/.bin" 2>/dev/null || true
+fi
+
 echo "============================================================"
 echo "  🔍 RUNNING SSOT PARITY & ANTI-DRIFT SENSOR (v1.4)"
 echo "============================================================"
@@ -36,11 +41,18 @@ compare_files() {
     if cmp -s "$local_file" "$drive_file"; then
         echo "✓ Parity verified: $label"
     else
-        # Auto-heal hot edits from ZCP to Drive SSoT (ZCP-First Invariant)
+        # Auto-heal hot edits between ZCP and Drive SSoT (ZCP-First & SSoT Invariant)
         if [ "${AUTO_FIX:-0}" = "1" ] || [ "${1:-}" = "--fix" ] || [ "$label" = "skill-registry.md" ]; then
             if [ -f "$local_file" ] && ([ "$local_file" -nt "$drive_file" ] || [ "$label" = "skill-registry.md" ]); then
                 echo "⚡ Auto-healing SSoT hot edit to Drive: $label"
                 cp -f "$local_file" "$drive_file" 2>/dev/null || true
+                if cmp -s "$local_file" "$drive_file"; then
+                    echo "✓ Parity verified (auto-healed): $label"
+                    return
+                fi
+            elif [ -f "$drive_file" ] && [ "$drive_file" -nt "$local_file" ]; then
+                echo "⚡ Auto-healing from Drive SSoT to local: $label"
+                cp -f "$drive_file" "$local_file" 2>/dev/null || sudo cp -f "$drive_file" "$local_file" 2>/dev/null || true
                 if cmp -s "$local_file" "$drive_file"; then
                     echo "✓ Parity verified (auto-healed): $label"
                     return

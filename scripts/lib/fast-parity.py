@@ -77,9 +77,15 @@ def check_skills_parity(drive_base: str, local_base: str, auto_fix: bool = False
 
             if has_drift:
                 # ZCP-First Invariant Auto-Healing:
-                # If local file was edited or pulled from GitHub, or auto_fix is enabled, heal Drive SSoT
-                should_heal = auto_fix or os.environ.get("AUTO_FIX") == "1" or os.path.getmtime(l_file) >= os.path.getmtime(d_file)
-                if should_heal:
+                # Bidirectional healing based on timestamp when auto_fix is enabled
+                if auto_fix or os.environ.get("AUTO_FIX") == "1":
+                    if os.path.getmtime(l_file) >= os.path.getmtime(d_file):
+                        shutil.copy2(l_file, d_file)
+                        print(f"⚡ Auto-healed parity in SKILL.md to Drive SSoT: {skill}")
+                    else:
+                        shutil.copy2(d_file, l_file)
+                        print(f"⚡ Auto-healed parity in SKILL.md from Drive SSoT: {skill}")
+                elif os.path.getmtime(l_file) >= os.path.getmtime(d_file):
                     shutil.copy2(l_file, d_file)
                     print(f"⚡ Auto-healed parity in SKILL.md for custom skill: {skill}")
                 else:

@@ -474,8 +474,42 @@ if [ -d "$SKILLS_LOCAL_DIR" ]; then
         [ -d "$sk_dir" ] || continue
         sk_name=$(basename "$sk_dir")
         [[ "$sk_name" =~ ^(\.git|bak|_shared)$ ]] && continue
-        cp -rf "$sk_dir" "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
-        cp -rf "$sk_dir" "/home/zerops/.gemini/antigravity-cli/skills/" 2>/dev/null || true
+        if command -v rsync >/dev/null 2>&1; then
+            rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
+            rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
+            if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
+                mkdir -p "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk_name" 2>/dev/null || true
+                rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk_name/" 2>/dev/null || true
+            fi
+        else
+            mkdir -p "$PROJECT_ROOT/.agents/skills/$sk_name" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
+            cp -rf "$sk_dir"* "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
+            cp -rf "$sk_dir"* "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
+            if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
+                mkdir -p "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk_name" 2>/dev/null || true
+                cp -rf "$sk_dir"* "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk_name/" 2>/dev/null || true
+            fi
+        fi
+    done
+fi
+
+# 2b-bis. Desplegar skills de Drive SSoT que no residen en zerops-astro-skills (ej. directus)
+if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
+    echo "• Sincronizando catálogo completo de custom skills desde Google Drive SSoT..."
+    for d_sk in "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills"/*/; do
+        [ -d "$d_sk" ] || continue
+        sk_name=$(basename "$d_sk")
+        [[ "$sk_name" =~ ^(\.git|bak|_shared)$ ]] && continue
+        if [ ! -d "$PROJECT_ROOT/.agents/skills/$sk_name" ] || [ ! -f "$PROJECT_ROOT/.agents/skills/$sk_name/SKILL.md" ]; then
+            mkdir -p "$PROJECT_ROOT/.agents/skills/$sk_name" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
+            if command -v rsync >/dev/null 2>&1; then
+                rsync -a --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$d_sk/" "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
+                rsync -a --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$d_sk/" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
+            else
+                cp -rf "$d_sk"* "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
+                cp -rf "$d_sk"* "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
+            fi
+        fi
     done
 fi
 
@@ -512,6 +546,12 @@ if [ "$UPDATE_MODE" = true ]; then
     echo "  ⚡ ACTUALIZACIÓN RÁPIDA ZCP (iniciar.sh --update)"
     echo "============================================================"
 
+    # Invariante de permisos: asegurar que el usuario actual posea .agents y .bin
+    if command -v sudo >/dev/null 2>&1; then
+        sudo chown -R "$(id -un):$(id -gn)" "$PROJECT_ROOT/.agents" "$PROJECT_ROOT/.bin" 2>/dev/null || true
+        [ -d "$HOME/.gemini" ] && sudo chown -R "$(id -un):$(id -gn)" "$HOME/.gemini" 2>/dev/null || true
+    fi
+
     # Sincronizar scripts actualizados hacia SSoT en Google Drive si está montado
     if [ -d "$SSOT_SCRIPTS" ]; then
         echo "• Sincronizando scripts SSoT hacia Google Drive..."
@@ -522,18 +562,30 @@ if [ "$UPDATE_MODE" = true ]; then
 
         # Asegurar tool-guard.py en SSoT y local
         mkdir -p "$SSOT_SCRIPTS/hooks" "$PROJECT_ROOT/.bin/hooks" 2>/dev/null || true
+        SRC_TOOL_GUARD=""
         if [ -f "$REPO_DIR/scripts/hooks/tool-guard.py" ]; then
-            cp -f "$REPO_DIR/scripts/hooks/tool-guard.py" "$PROJECT_ROOT/.bin/hooks/tool-guard.py" 2>/dev/null || true
-            cp -f "$REPO_DIR/scripts/hooks/tool-guard.py" "$SSOT_SCRIPTS/hooks/tool-guard.py" 2>/dev/null || true
+            SRC_TOOL_GUARD="$REPO_DIR/scripts/hooks/tool-guard.py"
+        elif [ -f "$SSOT_SCRIPTS/hooks/tool-guard.py" ]; then
+            SRC_TOOL_GUARD="$SSOT_SCRIPTS/hooks/tool-guard.py"
+        fi
+        if [ -n "$SRC_TOOL_GUARD" ]; then
+            cp -f "$SRC_TOOL_GUARD" "$PROJECT_ROOT/.bin/hooks/tool-guard.py" 2>/dev/null || sudo cp -f "$SRC_TOOL_GUARD" "$PROJECT_ROOT/.bin/hooks/tool-guard.py" 2>/dev/null || true
+            cp -f "$SRC_TOOL_GUARD" "$SSOT_SCRIPTS/hooks/tool-guard.py" 2>/dev/null || true
             chmod +x "$PROJECT_ROOT/.bin/hooks/tool-guard.py" 2>/dev/null || true
         fi
 
         # Asegurar hooks.json en SSoT, local y perfil Antigravity
         mkdir -p "$PROJECT_ROOT/.agents" "$HOME/.gemini/config" 2>/dev/null || true
+        SRC_HOOKS=""
         if [ -f "$REPO_DIR/.agents/hooks.json" ]; then
-            cp -f "$REPO_DIR/.agents/hooks.json" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || true
-            cp -f "$REPO_DIR/.agents/hooks.json" "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
-            [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents" ] && cp -f "$REPO_DIR/.agents/hooks.json" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json" 2>/dev/null || true
+            SRC_HOOKS="$REPO_DIR/.agents/hooks.json"
+        elif [ -f "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json" ]; then
+            SRC_HOOKS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json"
+        fi
+        if [ -n "$SRC_HOOKS" ]; then
+            cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || sudo cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || true
+            cp -f "$SRC_HOOKS" "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
+            [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents" ] && cp -f "$SRC_HOOKS" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json" 2>/dev/null || true
         fi
     fi
 
@@ -611,9 +663,9 @@ UEOF
 
     echo "• Verificando paridad SSoT..."
     if command -v ssot-parity-check >/dev/null 2>&1; then
-        ssot-parity-check
+        ssot-parity-check --fix
     elif [ -f "$SSOT_SCRIPTS/ssot-parity-check.sh" ]; then
-        bash "$SSOT_SCRIPTS/ssot-parity-check.sh"
+        bash "$SSOT_SCRIPTS/ssot-parity-check.sh" --fix
     fi
 
     echo "============================================================"
