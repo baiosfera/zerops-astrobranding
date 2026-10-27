@@ -256,7 +256,7 @@ def deploy_webdev_preview(commit_message: str) -> str:
         return f"❌ Error en deploy_webdev_preview: {str(e)}"
 
 def promote_to_production_webprod(commit_message: str) -> str:
-    """Merges 'dev' into 'main' and pushes to GitHub, triggering the GitHub Actions CI/CD to deploy to webprod."""
+    """Merges 'dev' into 'main' and pushes to GitHub, triggering the GitHub Actions CI/CD to deploy to webprod (catalinaglamur.com)."""
     if not os.path.exists(WEB_REPO_DIR):
         return "❌ Repositorio web no encontrado."
     try:
@@ -265,7 +265,7 @@ def promote_to_production_webprod(commit_message: str) -> str:
         merge_res = subprocess.run(["git", "merge", "dev", "-m", commit_message], cwd=WEB_REPO_DIR, capture_output=True, text=True)
         push_res = subprocess.run(["git", "push", "origin", "main"], cwd=WEB_REPO_DIR, capture_output=True, text=True)
         subprocess.run(["git", "checkout", "dev"], cwd=WEB_REPO_DIR, check=True)
-        return f"🌟 ¡Promoción a PRODUCCIÓN disparada!\nMerge: {merge_res.stdout.strip()}\nGitHub Push: {push_res.stdout.strip()}\nGitHub Actions está desplegando ahora en producción."
+        return f"🌟 ¡Promoción a PRODUCCIÓN disparada!\nMerge: {merge_res.stdout.strip()}\nGitHub Push: {push_res.stdout.strip()}\nGitHub Actions está desplegando ahora en catalinaglamur.com."
     except Exception as e:
         subprocess.run(["git", "checkout", "dev"], cwd=WEB_REPO_DIR)
         return f"❌ Error en promote_to_production_webprod: {str(e)}"
@@ -301,7 +301,7 @@ def git_web_diff_branches(base_branch: str = "main", target_branch: str = "dev")
 # --- Universal AGY-Twin Engineering & File Tools ---
 
 def read_file(path: str) -> str:
-    """Reads any file in the workspace or localstorage (e.g. '/mnt/localstorage/${PROJECT_NAME}/dev/...', '/mnt/localstorage/products/...', or '/var/www/...')."""
+    """Reads any file in the workspace or localstorage (e.g. '/mnt/localstorage/CATALINAGLAMUR/dev/...', '/mnt/localstorage/web/...', or '/var/www/...')."""
     path = os.path.normpath(path)
     if not os.path.exists(path):
         return f"❌ El archivo '{path}' no existe."
@@ -595,24 +595,30 @@ def download_file(url: str, destination_path: str, max_mb: int = 50) -> str:
 
 # --- Sovereign Agentic SQL Engine (PostgreSQL 18 Live Impact) ---
 
-async def describe_store_schema() -> str:
-    """Discovers all tables, columns, and data types in the public PostgreSQL database."""
+async def describe_store_schema(include_internal: bool = False) -> str:
+    """Discovers tables, columns, and data types in the public PostgreSQL database.
+    By default, filters to core application domain tables (products, product_variants, services,
+    site_settings, orders, order_items, bookings, users) to keep context lean and prevent truncation.
+    """
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         return "❌ Error: DATABASE_URL no está configurada."
     try:
         import asyncpg
         conn = await asyncpg.connect(db_url, timeout=5.0)
-        query = """
+        filter_clause = ""
+        if not include_internal:
+            filter_clause = "AND table_name IN ('products', 'product_variants', 'services', 'site_settings', 'orders', 'order_items', 'bookings', 'leads', 'users', 'sessions')"
+        query = f"""
         SELECT table_name, column_name, data_type
         FROM information_schema.columns
-        WHERE table_schema = 'public'
+        WHERE table_schema = 'public' {filter_clause}
         ORDER BY table_name, ordinal_position;
         """
         rows = await conn.fetch(query)
         await conn.close()
         if not rows:
-            return "No se encontraron tablas públicas en la base de datos."
+            return "No se encontraron tablas de tienda en la base de datos."
         
         tables = {}
         for r in rows:
@@ -627,6 +633,103 @@ async def describe_store_schema() -> str:
         return "\n".join(out)
     except Exception as e:
         return f"❌ Error descubriendo esquema: {str(e)}"
+
+async def create_store_product(
+    name: str,
+    base_price: int,
+    stock: int = 1,
+    image_filename_or_url: str = "",
+    category: str = "activewear",
+    description: str = ""
+) -> str:
+    """Crea o actualiza un producto en la base de datos PostgreSQL 18.
+    Normaliza automáticamente la URL de la imagen en Astro (/images/products/<filename>).
+    """
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return "❌ Error: DATABASE_URL no está configurada."
+    try:
+        import asyncpg, re
+        
+        clean_name = name.strip() if name else "Nuevo Producto"
+        slug = re.sub(r'[^a-z0-9]+', '-', clean_name.lower()).strip('-')
+        if not slug:
+            slug = f"producto-{int(base_price)}"
+            
+        img_url = ""
+        if image_filename_or_url:
+            raw = str(image_filename_or_url).strip()
+            filename = os.path.basename(raw)
+            img_url = f"/images/products/{filename}" if not filename.startswith("/images/") else filename
+                
+        images_json = json.dumps([img_url]) if img_url else "[]"
+        desc = description.strip() or f"{clean_name} — Activewear de alta compresión y elegancia anatómica."
+
+        conn = await asyncpg.connect(db_url, timeout=5.0)
+        query = """
+        INSERT INTO products (slug, name, description, category, base_price, stock, images, is_active, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 1, NOW())
+        ON CONFLICT (slug) DO UPDATE SET
+            name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            base_price = EXCLUDED.base_price,
+            stock = EXCLUDED.stock,
+            images = CASE WHEN EXCLUDED.images = '[]'::jsonb THEN products.images ELSE EXCLUDED.images END,
+            is_active = 1,
+            updated_at = NOW()
+        RETURNING id, slug, name, base_price, stock, images;
+        """
+        row = await conn.fetchrow(query, slug, clean_name, desc, category, int(base_price), int(stock), images_json)
+        await conn.close()
+        return f"✅ Producto '{row['name']}' registrado exitosamente en la tienda (Slug: {row['slug']}, Precio: ${row['base_price']:,} COP, Stock: {row['stock']}, Imagen: {img_url})."
+    except Exception as e:
+        return f"❌ Error creando producto: {str(e)}"
+
+async def set_site_image(
+    key: str,
+    image_filename_or_url: str,
+    alt: str = "",
+    title: str = "",
+    badge: str = "",
+    price: str = ""
+) -> str:
+    """Configura o actualiza una imagen de sección de la web en site_settings (ej: 'hero_image', 'hero_secondary_image').
+    Se refleja en vivo vía SSR sin necesidad de redeploy.
+    """
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return "❌ Error: DATABASE_URL no está configurada."
+    try:
+        import asyncpg
+        target_key = key.strip() if key in ("hero_image", "hero_secondary_image") else "hero_image"
+        raw = str(image_filename_or_url).strip()
+        filename = os.path.basename(raw)
+        img_url = f"/images/products/{filename}" if not filename.startswith("/images/") else filename
+        
+        val_obj = {"url": img_url}
+        if alt:
+            val_obj["alt"] = alt
+        if title:
+            val_obj["title"] = title
+        if badge:
+            val_obj["badge"] = badge
+        if price:
+            val_obj["price"] = price
+
+        conn = await asyncpg.connect(db_url, timeout=5.0)
+        query = """
+        INSERT INTO site_settings (key, value, description, updated_at)
+        VALUES ($1, $2::jsonb, 'Visual web SSR', NOW())
+        ON CONFLICT (key) DO UPDATE SET
+            value = site_settings.value || EXCLUDED.value,
+            updated_at = NOW()
+        RETURNING key, value;
+        """
+        row = await conn.fetchrow(query, target_key, json.dumps(val_obj))
+        await conn.close()
+        return f"✅ Imagen visual '{row['key']}' actualizada exitosamente en la portada web: {img_url}"
+    except Exception as e:
+        return f"❌ Error configurando imagen de sitio: {str(e)}"
 
 async def execute_store_query(query: str, explanation: str = "") -> str:
     """Executes arbitrary SQL queries or mutations on PostgreSQL 18.
@@ -690,7 +793,7 @@ async def get_store_products(category: str = "") -> str:
         await conn.close()
         if not rows:
             return "No hay productos activos en el catálogo."
-        out = ["🛍️ **Catálogo de Productos Activos en Producción:**"]
+        out = ["🛍️ **Catálogo de Prendas Activas (catalinaglamur.com):**"]
         for r in rows:
             out.append(f"• **{r['name']}**: ${r['base_price']:,} COP")
         return "\n".join(out)
@@ -698,7 +801,7 @@ async def get_store_products(category: str = "") -> str:
         return f"❌ Error consultando catálogo: {str(e)}"
 
 async def update_product_price(product_name: str, new_price: int) -> str:
-    """Updates the price of a product in the live store database."""
+    """Updates the price of a product in the live store database. Impacts catalinaglamur.com in real-time."""
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         return "❌ Error: DATABASE_URL no está configurada."
@@ -712,13 +815,13 @@ async def update_product_price(product_name: str, new_price: int) -> str:
         row = await conn.fetchrow("SELECT name, base_price FROM products WHERE name ILIKE $1 LIMIT 1", f"%{product_name.strip()}%")
         await conn.close()
         if row:
-            return f"✅ Precio actualizado con éxito en vivo:\n• **{row['name']}**: ${row['base_price']:,} COP\nEl cambio ya es visible en producción (SSR en tiempo real)."
+            return f"✅ Precio actualizado con éxito en vivo:\n• **{row['name']}**: ${row['base_price']:,} COP\nEl cambio ya es visible en catalinaglamur.com (SSR en tiempo real)."
         return f"❌ No se encontró ningún producto que coincida con '{product_name}'."
     except Exception as e:
         return f"❌ Error actualizando precio: {str(e)}"
 
 async def get_makeup_services() -> str:
-    """Lists active professional services and pricing."""
+    """Lists active professional makeup services and pricing."""
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         return "❌ Error: DATABASE_URL no está configurada."
@@ -728,16 +831,16 @@ async def get_makeup_services() -> str:
         rows = await conn.fetch("SELECT name, price, is_active FROM services WHERE is_active = 1 ORDER BY price ASC")
         await conn.close()
         if not rows:
-            return "No hay servicios activos."
-        out = ["💄 **Servicios Profesionales Activos en Producción:**"]
+            return "No hay servicios de maquillaje activos."
+        out = ["💄 **Atelier de Maquillaje Profesional (catalinaglamur.com):**"]
         for r in rows:
             out.append(f"• **{r['name']}**: ${r['price']:,} COP")
         return "\n".join(out)
     except Exception as e:
-        return f"❌ Error consultando servicios: {str(e)}"
+        return f"❌ Error consultando servicios de maquillaje: {str(e)}"
 
 async def update_service_price(service_name: str, new_price: int) -> str:
-    """Updates the price of a service in the live database."""
+    """Updates the price of a makeup service in the live database."""
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         return "❌ Error: DATABASE_URL no está configurada."
@@ -751,7 +854,7 @@ async def update_service_price(service_name: str, new_price: int) -> str:
         row = await conn.fetchrow("SELECT name, price FROM services WHERE name ILIKE $1 LIMIT 1", f"%{service_name.strip()}%")
         await conn.close()
         if row:
-            return f"✅ Servicio actualizado con éxito en vivo:\n• **{row['name']}**: ${row['price']:,} COP\nEl cambio ya es visible en producción."
+            return f"✅ Servicio de maquillaje actualizado en vivo:\n• **{row['name']}**: ${row['price']:,} COP\nEl cambio ya es visible en catalinaglamur.com/servicios."
         return f"❌ No se encontró ningún servicio que coincida con '{service_name}'."
     except Exception as e:
         return f"❌ Error actualizando servicio: {str(e)}"

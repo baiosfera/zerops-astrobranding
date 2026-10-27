@@ -17,6 +17,7 @@ try:
         read_file, write_file, edit_file, list_directory, run_command,
         search_web, fetch_web_page, download_file,
         describe_store_schema, execute_store_query,
+        create_store_product, set_site_image,
         get_store_products, update_product_price, get_makeup_services,
         update_service_price, get_recent_orders, get_makeup_bookings,
         run_crew_ai, extract_structured_data
@@ -32,13 +33,14 @@ except (ImportError, ValueError):
         read_file, write_file, edit_file, list_directory, run_command,
         search_web, fetch_web_page, download_file,
         describe_store_schema, execute_store_query,
+        create_store_product, set_site_image,
         get_store_products, update_product_price, get_makeup_services,
         update_service_price, get_recent_orders, get_makeup_bookings,
         run_crew_ai, extract_structured_data
     )
 
 BIFROST_URL = os.getenv("HERMES_MODEL_ENDPOINT", "http://bifrost:8080/v1")
-MODEL_NAME = os.getenv("HERMES_MODEL_OVERRIDE") or ("auto" if os.getenv("HERMES_MODEL_NAME") in (None, "", "deepseek-chat") else os.getenv("HERMES_MODEL_NAME"))
+MODEL_NAME = os.getenv("HERMES_MODEL_OVERRIDE") or os.getenv("HERMES_MODEL_NAME") or "deepseek-chat"
 BIFROST_KEY = os.getenv("BIFROST_VIRTUAL_KEY", "vk-hermes-agent")
 
 ECOMMERCE_TOOLS = [
@@ -71,6 +73,44 @@ ECOMMERCE_TOOLS = [
                     }
                 },
                 "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_store_product",
+            "description": "Crea o actualiza un producto en el catálogo de la tienda en PostgreSQL 18. Recibe el nombre comercial, precio en COP, stock y la foto adjunta. Normaliza automáticamente la URL en Astro.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Nombre comercial elegante del producto (ej: 'Enterizo Escultor Zafiro')"},
+                    "base_price": {"type": "integer", "description": "Precio numérico en COP (ej: 120000)"},
+                    "stock": {"type": "integer", "description": "Cantidad de unidades en inventario (ej: 2)"},
+                    "image_filename_or_url": {"type": "string", "description": "Nombre de archivo de la foto guardada en localstorage (ej: 'telegram_116_AQADaw1rG5KL-UZ-.jpg') o ruta relativa '/images/products/...'"},
+                    "category": {"type": "string", "description": "Categoría (por defecto 'activewear')"},
+                    "description": {"type": "string", "description": "Descripción del producto"}
+                },
+                "required": ["name", "base_price", "stock", "image_filename_or_url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_site_image",
+            "description": "Actualiza la imagen principal o secundaria del sitio web en PostgreSQL 18 (tabla site_settings, clave 'hero_image' para la portada principal). Se refleja en vivo vía SSR.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "enum": ["hero_image", "hero_secondary_image"], "description": "Clave visual a actualizar ('hero_image' para la portada principal)"},
+                    "image_filename_or_url": {"type": "string", "description": "Nombre de archivo de la foto (ej: 'telegram_108_AQADaw1rG5KL-UZ-.jpg')"},
+                    "alt": {"type": "string", "description": "Texto alternativo descriptivo de la imagen"},
+                    "title": {"type": "string", "description": "Título opcional en el card visual"},
+                    "badge": {"type": "string", "description": "Etiqueta opcional (ej: 'Estructura Seamless')"},
+                    "price": {"type": "string", "description": "Precio opcional mostrado en el hero"}
+                },
+                "required": ["key", "image_filename_or_url"]
             }
         }
     }
@@ -333,6 +373,24 @@ async def execute_tool(fn_name: str, fn_args: dict) -> str:
     try:
         if fn_name == "describe_store_schema":
             raw_res = await describe_store_schema()
+        elif fn_name == "create_store_product":
+            raw_res = await create_store_product(
+                fn_args.get("name", ""),
+                int(fn_args.get("base_price", 0)),
+                int(fn_args.get("stock", 1)),
+                fn_args.get("image_filename_or_url", ""),
+                fn_args.get("category", "activewear"),
+                fn_args.get("description", "")
+            )
+        elif fn_name == "set_site_image":
+            raw_res = await set_site_image(
+                fn_args.get("key", "hero_image"),
+                fn_args.get("image_filename_or_url", ""),
+                fn_args.get("alt", ""),
+                fn_args.get("title", ""),
+                fn_args.get("badge", ""),
+                fn_args.get("price", "")
+            )
         elif fn_name == "execute_store_query":
             raw_res = await execute_store_query(fn_args.get("query", ""), fn_args.get("explanation", ""))
         elif fn_name == "get_store_products":
