@@ -870,8 +870,27 @@ def extract_user_prompt(payload: dict) -> str:
     return ""
 
 def evaluate_hook(payload: dict) -> dict:
-    # 0. SessionStart Handling (Mandatory Anti-AMN Recall)
+    # 0. SessionStart Handling (Mandatory Anti-AMN Recall with Multi-Hook Deduplication)
     if payload.get("session_start") or payload.get("event") == "SessionStart" or payload.get("hookType") == "SessionStart":
+        ss_lock = "/tmp/.tool_guard_session_start.lock"
+        now_ts = time.time()
+        is_dedup = False
+        if os.path.exists(ss_lock) and not payload.get("test_force_session_start") and "--test" not in sys.argv:
+            try:
+                with open(ss_lock, "r") as f:
+                    last_ss = float(f.read().strip())
+                    if (now_ts - last_ss) < 10.0:
+                        is_dedup = True
+            except Exception:
+                pass
+        if is_dedup:
+            return {}
+        try:
+            with open(ss_lock, "w") as f:
+                f.write(str(now_ts))
+        except Exception:
+            pass
+
         recall_msg = (
             "🏛️ RECALL DE SESIÓN OBLIGATORIO (Anti-AMN v3.2): Al inicio de CADA sesión es mandatorio ejecutar "
             "'mem_context' o 'mem_search' y 'zerops_discover' antes de emitir juicios o modificar el proyecto. "
@@ -1193,19 +1212,14 @@ def evaluate_hook(payload: dict) -> dict:
                 is_eval = any(k in prompt_lower for k in ["mejor forma", "investigar", "investiga", "benchmark", "sota", "comparar", "cual es mejor", "api", "version", "breaking change"])
                 if "research" in matched_skills or is_skill_task or is_eval:
                     ephemeral_msgs.append(
-                        "🏛️ MANDATO EPISTÉMICO F0 (Supreme Directive v8.5): La skill 'research' es la compuerta sovereign "
-                        "obligatoria. Para arquitectura, diseño de APIs o saneamiento/creación de skills, es MANDATORIO "
-                        "contrastar fuentes primarias vivas fuera de la caja negra usando 'research' con subagentes dedicados "
-                        "('invoke_subagent' con typeName 'research') y la triangulación de sus 12 motores (Context7, Exa, "
-                        "Tavily, Brave, Jina Reader 'r.jina.ai', Firecrawl). Cero especulaciones con memoria pre-entrenada (AMN)."
+                        "🏛️ MANDATO EPISTÉMICO F0 (Supreme Directive v8.5): Para arquitectura, diseño de APIs o skills, contrastá fuentes primarias vivas usando 'research' con subagentes dedicados (Context7, Exa, Brave, Jina). Cero especulaciones (AMN)."
                     )
 
                 # 2. Gentle-AI Subagent Orchestrator Gate
                 is_heavy = any(k in prompt_lower for k in ["flujo", "refactor", "implementa", "arregla", "construye", "despliega", "crea"])
                 if is_heavy and len(prompt_lower) > 40:
                     ephemeral_msgs.append(
-                        "Gentle-AI Orchestrator: Mantené el hilo padre delgado. Para tareas sustanciales o de múltiples archivos, "
-                        "delegá la ejecución a subagentes acotados (invoke_subagent con 'research' o define_subagent) y sintetizá resultados."
+                        "Gentle-AI Orchestrator: Mantené el hilo padre delgado; delegá tareas pesadas o de múltiples archivos a subagentes acotados y sintetizá resultados."
                     )
 
                 # 3. Linear-First Epistemic Persistence Gate (Invariante 2)
@@ -1217,18 +1231,13 @@ def evaluate_hook(payload: dict) -> dict:
                 )
                 if has_active_plans_pi:
                     ephemeral_msgs.append(
-                        "🏛️ INVARIANTE LINEAR-FIRST GATE (00-SUPREME-DIRECTIVE Invariante 2): "
-                        "Hay un plan activo en ejecución en /var/www/artifacts/plans/. Prohibido responder o dar explicaciones en el chat "
-                        "sin haber ejecutado 'linear-cli comment <ID>' para persistir tus hallazgos técnicos en Linear. "
-                        "Persistir en Linear es un prerequisito bloqueante antes de responder al usuario."
+                        "🏛️ INVARIANTE LINEAR-FIRST GATE: Plan activo en plans/. Persistí hallazgos técnicos en Linear ('linear-cli comment') antes de responder."
                     )
 
                 # 4. Epistemic Inflow Wait for Research Subagents (Anti-Rushing Invariant)
                 if "research" in matched_skills or is_skill_task or is_eval:
                     ephemeral_msgs.append(
-                        "🏛️ MANDATO DE ESPERA EPISTÉMICA F0 (Supreme Directive v8.5): Al despachar subagentes de 'research', "
-                        "es MANDATORIO aguardar sus reportes antes de redactar planes, crear tickets en Linear o formular preguntas de grilling definitivas. "
-                        "Cero conclusiones apresuradas sin la evidencia completa de los subagentes."
+                        "🏛️ MANDATO DE ESPERA EPISTÉMICA F0: Al despachar subagentes de 'research', aguardá sus reportes antes de redactar planes o tickets."
                     )
 
                 if ephemeral_msgs and "--test" not in sys.argv:

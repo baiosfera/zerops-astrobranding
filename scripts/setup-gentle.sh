@@ -248,32 +248,39 @@ if os.path.isfile(gemini_path):
     with open(gemini_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    start_marker = "<!-- gentle-ai:sdd-orchestrator -->"
-    end_marker = "<!-- /gentle-ai:sdd-orchestrator -->"
+    start_marker = None
+    end_marker = None
+    if "<!-- gentle-ai:orchestrator -->" in content and "<!-- /gentle-ai:agent-routing -->" in content:
+        start_marker = "<!-- gentle-ai:orchestrator -->"
+        end_marker = "<!-- /gentle-ai:agent-routing -->"
+    elif "<!-- gentle-ai:sdd-orchestrator -->" in content and "<!-- /gentle-ai:sdd-orchestrator -->" in content:
+        start_marker = "<!-- gentle-ai:sdd-orchestrator -->"
+        end_marker = "<!-- /gentle-ai:sdd-orchestrator -->"
 
-    start_idx = content.find(start_marker)
-    end_idx = content.find(end_marker)
+    if start_marker and end_marker:
+        start_idx = content.find(start_marker)
+        end_idx = content.find(end_marker)
 
-    if start_idx != -1 and end_idx != -1 and (end_idx - start_idx) > 1000:
-        extracted = content[start_idx:end_idx + len(end_marker)]
-        os.makedirs(os.path.dirname(dest_local), exist_ok=True)
-        with open(dest_local, "w", encoding="utf-8") as f:
-            f.write(extracted)
-        os.makedirs(os.path.dirname(dest_drive), exist_ok=True)
-        with open(dest_drive, "w", encoding="utf-8") as f:
-            f.write(extracted)
+        if start_idx != -1 and end_idx != -1 and (end_idx - start_idx) > 1000:
+            extracted = content[start_idx:end_idx + len(end_marker)]
+            os.makedirs(os.path.dirname(dest_local), exist_ok=True)
+            with open(dest_local, "w", encoding="utf-8") as f:
+                f.write(extracted)
+            os.makedirs(os.path.dirname(dest_drive), exist_ok=True)
+            with open(dest_drive, "w", encoding="utf-8") as f:
+                f.write(extracted)
 
-        replacement = """<!-- gentle-ai:sdd-orchestrator -->
+            replacement = f"""{start_marker}
 ## Agent Teams Lite — Orchestrator (Dual-RAG JIT Mode)
 
-Spec-Driven Development (SDD) orchestrator protocol is offloaded to conserve token budget.
-When the user requests an SDD change, phase agent delegation, or Agent Teams workflow, read:
+Spec-Driven Development (SDD) & ODD orchestrator protocol is offloaded to conserve token budget.
+When the user requests an SDD/ODD change, phase agent delegation, or Agent Teams workflow, read:
 file:///home/zerops/.gemini/antigravity-cli/skills/_shared/sdd-orchestrator-full.md
-<!-- /gentle-ai:sdd-orchestrator -->"""
-        new_content = content[:start_idx] + replacement + content[end_idx + len(end_marker):]
-        with open(gemini_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
-        print("  ✓ GEMINI.md optimizado: sdd-orchestrator offloaded a Dual-RAG JIT (-11.000 tokens).")
+{end_marker}"""
+            new_content = content[:start_idx] + replacement + content[end_idx + len(end_marker):]
+            with open(gemini_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+            print("  ✓ GEMINI.md optimizado: orchestrator offloaded a Dual-RAG JIT (-14.000 tokens).")
 EOF_OPT
     fi
 fi
