@@ -45,7 +45,7 @@ ensure_dependencies() {
 
     for cmd_pkg in "Xvfb:xvfb" "x11vnc:x11vnc" "websockify:websockify" "openbox:openbox"; do
         cmd="${cmd_pkg%%:*}"
-        pkg="${cmd_pkg##*:*}"
+        pkg="${cmd_pkg##*:}"
         if ! command -v "$cmd" >/dev/null 2>&1; then
             pkgs_needed+=("$pkg")
         fi
