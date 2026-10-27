@@ -13,4 +13,5 @@ export * from "./frappe";
 export * from "./clients";
 export * from "./native";
 export * from "./dtcg";
+export * from "./meta-capi";
 

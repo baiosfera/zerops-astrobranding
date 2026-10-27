@@ -9,3 +9,4 @@ export * from "./whatsapp";
 export * from "./outbox";
 export * from "./payments";
 export * from "./frappe";
+export * from "./meta";
