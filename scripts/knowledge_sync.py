@@ -323,72 +323,72 @@ class CourseScanner:
         if not os.path.exists(base_dir):
             return resources
 
-        # Primer pase: recolectar estructura por directorio para detectar huérfanos
-        dir_contents: Dict[str, List[os.DirEntry]] = {}
         queue = [(base_dir, 0)]
 
         while queue:
             current_dir, depth = queue.pop(0)
             try:
-                entries = []
+                subdirs = []
+                files = []
                 with os.scandir(current_dir) as it:
                     for entry in it:
                         if entry.name.startswith("."):
                             continue
                         if entry.is_dir(follow_symlinks=False):
                             if entry.name not in cls.EXCLUDE_DIRS and depth + 1 < max_depth:
-                                queue.append((entry.path, depth + 1))
+                                subdirs.append((entry.path, depth + 1))
                         elif entry.is_file(follow_symlinks=False):
-                            entries.append(entry)
-                dir_contents[current_dir] = entries
+                            files.append(entry)
+
+                queue.extend(subdirs)
+
+                if not files:
+                    continue
+
+                has_subtitles = any(
+                    os.path.splitext(e.name)[1].lower() in (".srt", ".vtt")
+                    for e in files
+                )
+                has_docs = any(
+                    os.path.splitext(e.name)[1].lower() in (".docx", ".pdf", ".md", ".txt")
+                    for e in files
+                )
+
+                for entry in files:
+                    ext = os.path.splitext(entry.name)[1].lower()
+                    tier = None
+                    if ext in (".docx", ".md", ".txt", ".pdf"):
+                        tier = "direct_document"
+                    elif ext in (".srt", ".vtt"):
+                        tier = "subtitle_text"
+                    elif ext in (".aac", ".m4a", ".mp3"):
+                        tier = "direct_audio"
+                    elif ext == ".mp4":
+                        if not has_subtitles and not has_docs:
+                            tier = "orphan_video"
+                        else:
+                            tier = "video_residual"
+
+                    if tier:
+                        try:
+                            st = entry.stat(follow_symlinks=False)
+                            cluster = cls.classify_cluster(entry.path)
+                            resources.append({
+                                "path": entry.path,
+                                "filename": entry.name,
+                                "ext": ext,
+                                "tier": tier,
+                                "size_bytes": st.st_size,
+                                "mtime": int(st.st_mtime),
+                                "cluster": cluster,
+                                "target_notebook": cls.CLUSTER_NOTEBOOK_TITLES.get(
+                                    cluster, f"[ESPECIALIDAD_{cluster.upper()}]"
+                                ),
+                            })
+                        except Exception:
+                            continue
             except Exception:
                 continue
-
-        # Segundo pase: clasificar recursos y detectar videos huérfanos
-        for d_path, entries in dir_contents.items():
-            has_subtitles = any(
-                os.path.splitext(e.name)[1].lower() in (".srt", ".vtt")
-                for e in entries
-            )
-            has_docs = any(
-                os.path.splitext(e.name)[1].lower() in (".docx", ".pdf", ".md", ".txt")
-                for e in entries
-            )
-
-            for entry in entries:
-                ext = os.path.splitext(entry.name)[1].lower()
-                tier = None
-                if ext in (".docx", ".md", ".txt", ".pdf"):
-                    tier = "direct_document"
-                elif ext in (".srt", ".vtt"):
-                    tier = "subtitle_text"
-                elif ext in (".aac", ".m4a", ".mp3"):
-                    tier = "direct_audio"
-                elif ext == ".mp4":
-                    # Si no hay subtítulos ni documentos en el directorio, es un video huérfano
-                    if not has_subtitles and not has_docs:
-                        tier = "orphan_video"
-                    else:
-                        tier = "video_residual"
-
-                if tier:
-                    try:
-                        st = entry.stat(follow_symlinks=False)
-                        cluster = cls.classify_cluster(entry.path)
-                        resources.append({
-                            "path": entry.path,
-                            "filename": entry.name,
-                            "ext": ext,
-                            "tier": tier,
-                            "size_bytes": st.st_size,
-                            "mtime": int(st.st_mtime),
-                            "cluster": cluster,
-                            "target_notebook": cls.CLUSTER_NOTEBOOK_TITLES.get(
-                                cluster, f"[ESPECIALIDAD_{cluster.upper()}]"
-                            ),
-                        })
-                    except Exception:
-                        continue
 
         return resources
 
