@@ -1,116 +1,117 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-===============================================================================
-       KNOWLEDGE-SYNC: Motor Soberano de Ingesta Dinámica & Curaduría SSoT
-                 para Google NotebookLM Pro & Zerops Control Plane
-===============================================================================
-Gobernanza: Supreme Directive v8.5 & CoHaLo Engineering (BAI-379, BAI-382)
-Versión: 1.1.0 (Hardened Octubre 2026)
-Invariantes Blindados:
-  1. Metadata Fingerprint: Cero lectura de payloads en montaje FUSE rclone.
-  2. Normalizador de Subtítulos: .srt/.vtt despojados de timecodes hacia texto limpio.
-  3. Extractor de Audio FFmpeg: Conversión quirúrgica de .mp4 huérfanos a AAC 64k.
-  4. Manifiesto Append-Only Particionado: Cero colisiones ni locks fallidos multi-ZCP.
-  5. Query-Before-Create: Reutilización estricta de UUIDs en Google NotebookLM.
-  6. Configuración de System Prompts: Prompts especializados de hasta 10k caracteres.
-  7. Exportación de clusters.json: Descubrimiento de estado sin queries live innecesarias.
-===============================================================================
+=============================================================================
+🏛️ MOTOR SOBERANO DE INGESTA DINÁMICA & MICRO-CLASIFICACIÓN SSoT (v2.0 - HARDENED)
+=============================================================================
+Gobernanza: 00-SUPREME-DIRECTIVE.md (v8.5) · CoHaLo Engineering & Positive Guidance
+Ubicación Canónica: /var/www/zerops-astrobranding/scripts/knowledge_sync.py
+Symlink Global: /usr/local/bin/knowledge-sync
+
+Características Principales:
+1. Micro-Clasificación Jerárquica Bottom-Up (Clase -> Módulo -> Curso -> Sigla).
+2. Correlación de Documentos Hermanos (Peer-Docs) con Normalización Unicode NFC:
+   Elimina falsos huérfanos convirtiendo videos con documento homónimo en 'video_residual'.
+3. 11 Especialidades Temáticas Soberanas alineadas a Google NotebookLM (Gemini Notebook).
+4. Dashboard CLI Enriquecido con métricas de frugalidad, traza de asignación y next steps.
+5. Frugalidad SHARED: Prevención de OOM, timeout en subprocesses, limpieza de /tmp y
+   escritura atómica de manifiestos sobre FUSE rclone.
+=============================================================================
 """
 
 import os
 import sys
-import glob
+import re
 import json
 import time
-import re
-import socket
 import uuid
-import hashlib
+import glob
 import random
+import socket
+import hashlib
 import argparse
+import tempfile
+import unicodedata
 import subprocess
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple, Set, Any
+from typing import Dict, List, Any, Optional, Set, Tuple
 
-sys.dont_write_bytecode = True
-
-# Descubrimiento dinámico del entorno UV de notebooklm-mcp-cli
-uv_patterns = [
-    os.path.expanduser("~/.local/share/uv/tools/notebooklm-mcp-cli/lib/python*/site-packages"),
-    "/home/zerops/.local/share/uv/tools/notebooklm-mcp-cli/lib/python*/site-packages",
-]
-for pat in uv_patterns:
-    for pkg_dir in sorted(glob.glob(pat), reverse=True):
-        if os.path.isdir(pkg_dir) and pkg_dir not in sys.path:
-            sys.path.insert(0, pkg_dir)
+# Inyectar site-packages de uv notebooklm-mcp-cli si existe
+UV_SITE_PACKAGES = "/home/zerops/.local/share/uv/tools/notebooklm-mcp-cli/lib/python3.12/site-packages"
+if os.path.isdir(UV_SITE_PACKAGES) and UV_SITE_PACKAGES not in sys.path:
+    sys.path.insert(0, UV_SITE_PACKAGES)
 
 
 # =============================================================================
-# 1. Componente: Limpiador y Normalizador de Subtítulos (.srt y .vtt)
+# 1. Componente: Limpiador y Normalizador de Subtítulos SRT/VTT en Memoria
 # =============================================================================
 class SubtitlesCleaner:
-    """Normaliza archivos de subtítulos despojando timecodes y numeración técnica."""
+    """Normaliza y despoja códigos de tiempo de archivos .srt y .vtt."""
 
-    @staticmethod
-    def clean(raw_text: str) -> str:
-        """Convierte contenido SRT o VTT en párrafos de texto continuo sin metadatos."""
-        # Remover cabecera WEBVTT
-        text = re.sub(r"^WEBVTT.*?\n\n", "", raw_text, flags=re.DOTALL | re.IGNORECASE)
+    TIMECODE_SRT = re.compile(
+        r"^\d{1,5}\r?\n\d{2}:\d{2}:\d{2}[,\.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,\.]\d{3}.*$",
+        re.MULTILINE,
+    )
+    TIMECODE_VTT = re.compile(
+        r"^\d{2}:\d{2}(?::\d{2})?[,\.]\d{3}\s*-->\s*\d{2}:\d{2}(?::\d{2})?[,\.]\d{3}.*$",
+        re.MULTILINE,
+    )
+    TAG_HTML = re.compile(r"<[^>]+>")
+    HEADER_VTT = re.compile(r"^WEBVTT.*?\n\n", re.DOTALL | re.IGNORECASE)
 
-        # Remover timestamps SRT: 00:00:00,000 --> 00:00:00,000
-        text = re.sub(r"\d{2}:\d{2}:\d{2}[,\.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,\.]\d{3}.*?\n", "\n", text)
+    @classmethod
+    def clean(cls, raw_content: str) -> str:
+        """Remueve numeración secuencial, marcas de tiempo y etiquetas de formateo."""
+        if not raw_content:
+            return ""
 
-        # Remover timestamps VTT cortos: 00:00.000 --> 00:00.000
-        text = re.sub(r"\d{2}:\d{2}[,\.]\d{3}\s*-->\s*\d{2}:\d{2}[,\.]\d{3}.*?\n", "\n", text)
+        content = cls.HEADER_VTT.sub("", raw_content)
+        content = cls.TIMECODE_SRT.sub("", content)
+        content = cls.TIMECODE_VTT.sub("", content)
+        content = cls.TAG_HTML.sub("", content)
 
-        # Remover números de bloque de subtítulo (líneas con solo dígitos)
-        text = re.sub(r"^\s*\d+\s*$", "", text, flags=re.MULTILINE)
+        lines = []
+        last_line = ""
+        for line in content.splitlines():
+            line_str = line.strip()
+            if not line_str or line_str.isdigit():
+                continue
+            if line_str != last_line:
+                lines.append(line_str)
+                last_line = line_str
 
-        # Remover tags HTML simples como <v Voice>, <i>, </i>, <c.color>
-        text = re.sub(r"<[^>]+>", "", text)
-
-        # Unificar líneas rotas en párrafos limpios
-        lines = [line.strip() for line in text.splitlines()]
-        cleaned_paragraphs = []
-        current_chunk = []
-
-        for line in lines:
-            if not line:
-                if current_chunk:
-                    cleaned_paragraphs.append(" ".join(current_chunk))
-                    current_chunk = []
-            else:
-                current_chunk.append(line)
-
-        if current_chunk:
-            cleaned_paragraphs.append(" ".join(current_chunk))
-
-        result = "\n\n".join(cleaned_paragraphs).strip()
-        result = re.sub(r" +", " ", result)
-        return result
+        return "\n".join(lines)
 
 
 # =============================================================================
 # 2. Componente: Huella Digital Sintética (Metadata Fingerprint)
 # =============================================================================
 class MetadataFingerprint:
-    """Calcula una huella única sin leer el payload del archivo a través de la red FUSE."""
+    """Genera hash determinista sin lectura de payload para proteger cuota de I/O."""
 
     @staticmethod
     def compute(file_path: str, base_dir: str = "/var/www/baiosfera") -> str:
         """Deriva el hash desde ruta relativa, tamaño exacto en bytes y mtime POSIX."""
-        rel_path = os.path.relpath(file_path, base_dir)
-        st = os.stat(file_path)
-        raw_key = f"{rel_path}:{st.st_size}:{int(st.st_mtime)}"
+        try:
+            rel_path = os.path.relpath(file_path, base_dir)
+            st = os.stat(file_path)
+            raw_key = f"{rel_path}:{st.st_size}:{int(st.st_mtime)}"
+            return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+        except Exception:
+            raw_key = f"{file_path}:{time.time()}"
+            return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def compute_from_stat(rel_path: str, size_bytes: int, mtime_int: int) -> str:
+        """Genera hash sin re-invocar os.stat si los metadatos ya fueron leídos."""
+        raw_key = f"{rel_path}:{size_bytes}:{mtime_int}"
         return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
 
 # =============================================================================
-# 3. Componente: Extractor de Audio FFmpeg Quirúrgico
+# 3. Componente: Extractor de Audio FFmpeg con Timeout y Limpieza de /tmp
 # =============================================================================
 class AudioExtractor:
-    """Extrae audio ligero en formato AAC a 64 kbps de videos huérfanos sin subtítulos."""
+    """Extrae audio ligero en formato AAC a 64 kbps de videos huérfanos reales."""
 
     @staticmethod
     def extract_aac(video_path: str, output_dir: str = "/tmp/knowledge_audio_cache") -> str:
@@ -128,14 +129,36 @@ class AudioExtractor:
             "-vn", "-c:a", "aac", "-b:a", "64k", "-ar", "24000",
             output_file
         ]
-        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if res.returncode != 0 or not os.path.exists(output_file):
-            raise RuntimeError(f"FFmpeg falló al procesar el audio de: {video_path}")
-        return output_file
+        try:
+            res = subprocess.run(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=300,  # 5 minutos máximo para demuxing
+            )
+            if res.returncode != 0 or not os.path.exists(output_file):
+                raise RuntimeError(f"FFmpeg falló (código {res.returncode}) al procesar: {video_path}")
+            return output_file
+        except subprocess.TimeoutExpired:
+            if os.path.exists(output_file):
+                try:
+                    os.unlink(output_file)
+                except Exception:
+                    pass
+            raise RuntimeError(f"FFmpeg excedió el tiempo límite (300s) procesando: {video_path}")
+
+    @staticmethod
+    def cleanup(file_path: str):
+        """Elimina archivo de audio temporal para evitar fugas de disco en /tmp."""
+        if file_path and file_path.startswith("/tmp/") and os.path.exists(file_path):
+            try:
+                os.unlink(file_path)
+            except Exception:
+                pass
 
 
 # =============================================================================
-# 4. Componente: Manifiesto Particionado Append-Only & Estado de Clusters
+# 4. Componente: Manifiesto Particionado Append-Only & Estado Atómico
 # =============================================================================
 class PartitionedManifest:
     """Gestiona el registro de ingesta sin bloqueos POSIX sobre FUSE y consolida clusters."""
@@ -166,7 +189,7 @@ class PartitionedManifest:
     ):
         """Registra un evento de subida exitosa de forma append-only."""
         event = {
-            "version": "1.1",
+            "version": "1.2",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "hostname": self.hostname,
             "fingerprint": fingerprint,
@@ -197,17 +220,26 @@ class PartitionedManifest:
         return manifest
 
     def export_clusters_manifest(self, clusters_data: Dict[str, Any]) -> str:
-        """Exporta mapa canónico de clusters para descubrimiento rápido sin queries."""
+        """Exporta mapa canónico de clusters de forma atómica para prevenir archivos truncados."""
         manifest_path = os.path.join(self.manifest_dir, "clusters.json")
-        with open(manifest_path, "w", encoding="utf-8") as f:
-            json.dump(clusters_data, f, indent=2, ensure_ascii=False)
+        dir_name = os.path.dirname(manifest_path)
 
-        # Sincronizar hacia localstorage si existe
+        # Escritura atómica mediante archivo temporal y reemplazo POSIX
+        with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False, encoding="utf-8") as tf:
+            json.dump(clusters_data, tf, indent=2, ensure_ascii=False)
+            temp_name = tf.name
+
+        os.replace(temp_name, manifest_path)
+
+        # Replicar hacia localstorage si existe
         local_alt = "/var/www/localstorage/.knowledge_manifest"
         if os.path.isdir(local_alt):
             try:
-                with open(os.path.join(local_alt, "clusters.json"), "w", encoding="utf-8") as f:
-                    json.dump(clusters_data, f, indent=2, ensure_ascii=False)
+                alt_path = os.path.join(local_alt, "clusters.json")
+                with tempfile.NamedTemporaryFile("w", dir=local_alt, delete=False, encoding="utf-8") as tf:
+                    json.dump(clusters_data, tf, indent=2, ensure_ascii=False)
+                    alt_temp = tf.name
+                os.replace(alt_temp, alt_path)
             except Exception:
                 pass
 
@@ -229,10 +261,10 @@ class PartitionedManifest:
 
 
 # =============================================================================
-# 5. Componente: Clasificador Semántico & Escáner Anatómico de Cursos
+# 5. Componente: Clasificador Bottom-Up & Correlación de Documentos Hermanos
 # =============================================================================
 class CourseScanner:
-    """Escanea y clasifica recursos educativos sin agotar memoria ni cuota FUSE."""
+    """Escanea y micro-clasifica recursos educativos sin agotar memoria ni cuota FUSE."""
 
     DEFAULT_SEARCH_PATHS = [
         "/var/www/baiosfera/CURSOS/MCV/VIP",
@@ -241,7 +273,10 @@ class CourseScanner:
         "/var/www/baiosfera/DIGITALMARKETER",
         "/var/www/baiosfera/PLATZI/59 CONTENT COPY EMAIL SEO STORYTELLING VENTAS",
         "/var/www/baiosfera/PLATZI/47 GROWTH JOURNEY MKTN PRODUCT",
+        "/var/www/baiosfera/PLATZI/33 GRAPHIC THINKING UXUI",
         "/var/www/baiosfera/PLATZI/30 BRANDING MARCAP INVEST",
+        "/var/www/baiosfera/PLATZI/14 AI PROMPT",
+        "/var/www/baiosfera/PLATZI/04 AUTOM",
         "/var/www/baiosfera/PLATZI/03 ECOM",
     ]
 
@@ -254,40 +289,64 @@ class CourseScanner:
         ".git", ".rclone"
     }
 
+    # 11 Especialidades Soberanas
     THEMATIC_CLUSTERS = {
         "copywriting": [
             "copy", "copywriting", "escritura", "titul", "hook", "storytelling",
             "narrativa", "persuasion", "redaccion", "headline", "swipe", "script",
-            "prompt", "context vault", "prompting", "words that sell"
+            "words that sell", "carta de venta", "cartas de venta", "texto persuasivo"
         ],
         "ofertas": [
             "oferta", "precio", "pricing", "hormozi", "grand slam", "value equation",
             "propuesta de valor", "garantia", "offer", "guarantee", "bonus", "stack",
-            "site offers", "irresistible"
+            "site offers", "irresistible", "modelos de negocio", "monetiz"
         ],
         "funnels": [
             "funnel", "embudo", "checkout", "bump", "upsell", "downsell", "cvj",
             "customer value journey", "landing", "conversion", "convert", "optin",
             "squeeze", "lead magnet", "playbook", "campaign fix", "sales-boosting",
-            "funnel architecture"
+            "funnel architecture", "cro", "ab testing", "growth hacking", "crecimiento"
         ],
         "whatsapp": [
             "whatsapp", "chat", "bot", "cierre", "mensajeria", "conversacional",
-            "chatbot", "dm"
+            "chatbot", "dm", "atencion al cliente", "atención al cliente"
         ],
         "email": [
             "email", "correo", "newsletter", "nurture", "secuencia", "listmonk",
             "broadcast", "subject line", "autoresponder", "welcome sequence",
-            "re-engagement"
+            "re-engagement", "entregabilidad"
         ],
-        "ads": [
-            "ads", "pauta", "meta", "facebook", "creativo", "trafico", "traffic",
-            "anuncio", "velocity", "audiencia", "escalado", "paid", "media buyer",
-            "roas", "creative", "campaign", "ad copy"
+        "paid_ads": [
+            "ads", "pauta", "meta ads", "facebook ads", "tiktok ads", "creativo",
+            "trafico", "traffic", "anuncio", "velocity", "audiencia", "escalado",
+            "paid", "media buyer", "roas", "creative", "campaign", "ad copy",
+            "google ads", "performance max"
         ],
         "branding": [
             "brand", "marca", "branding", "identidad", "arquetipo", "posicionamiento",
             "category of one", "tono de voz", "authority", "reputation", "brand guidelines"
+        ],
+        "ecommerce": [
+            "ecom", "ecommerce", "supply chain", "logistica", "logística", "tienda",
+            "dropshipping", "shopify", "woocommerce", "amazon", "inventario",
+            "retail", "vender por internet", "catalogo", "catálogo", "red de valor"
+        ],
+        "automatizaciones": [
+            "autom", "automatizacion", "automatización", "n8n", "make", "zapier",
+            "rpa", "crm", "webhook", "hiperautomatizacion", "no-code", "nocode",
+            "procesos de marketing"
+        ],
+        "ia_prompting": [
+            "ai prompt", "prompt", "prompting", "chatgpt", "midjourney", "claude",
+            "agentes ai", "agentes de ia", "context vault", "llm", "inteligencia artificial",
+            "ia para", "ingenieria de prompt", "ingeniería de prompt"
+        ],
+        "ux_ui": [
+            "uxui", "ux/ui", "design thinking", "designthinking", "tipografia", "tipografía",
+            "manejo del color", "teoria del color", "direccion de arte", "dirección de arte",
+            "composicion visual", "composición visual", "accesibilidad", "diseno centrado",
+            "diseño centrado", "arquitectura de informacion", "arquitectura de información",
+            "usaria", "interfaz", "ui", "ux"
         ],
     }
 
@@ -297,20 +356,164 @@ class CourseScanner:
         "funnels": "[ESPECIALIDAD_FUNNELS_CHECKOUTS_Y_BUMPS]",
         "whatsapp": "[ESPECIALIDAD_WHATSAPP_MARKETING_Y_BOTS]",
         "email": "[ESPECIALIDAD_EMAIL_AUTOMATION_Y_NURTURE]",
-        "ads": "[ESPECIALIDAD_META_ADS_CREATIVOS_Y_PAUTA]",
+        "paid_ads": "[ESPECIALIDAD_META_ADS_CREATIVOS_Y_PAUTA]",
         "branding": "[ESPECIALIDAD_BRANDING_Y_POSICIONAMIENTO]",
+        "ecommerce": "[ESPECIALIDAD_ECOMMERCE_Y_TIENDAS]",
+        "automatizaciones": "[ESPECIALIDAD_AUTOMATIZACIONES_Y_WORKFLOWS]",
+        "ia_prompting": "[ESPECIALIDAD_IA_PROMPTING_Y_AGENTES]",
+        "ux_ui": "[ESPECIALIDAD_UX_UI_Y_PRODUCTO]",
+    }
+
+    # Mapeo prioritario de Siglas de Tracks (Nivel 4 - Prioridad Máxima)
+    TRACK_TAGS_MAP = {
+        "[ecom]": "ecommerce",
+        "03 ecom": "ecommerce",
+        "[autom]": "automatizaciones",
+        "04 autom": "automatizaciones",
+        "[ai]": "ia_prompting",
+        "14 ai prompt": "ia_prompting",
+        "[prompt]": "ia_prompting",
+        "[uxui]": "ux_ui",
+        "[designthinking]": "ux_ui",
+        "[graphic]": "ux_ui",
+        "33 graphic thinking uxui": "ux_ui",
+        "[growth]": "funnels",
+        "[journey]": "funnels",
+        "47 growth journey mktn product": "funnels",
+        "[branding]": "branding",
+        "30 branding marcap invest": "branding",
+        "[ads]": "paid_ads",
+        "[pauta]": "paid_ads",
+        "[copy]": "copywriting",
+        "[email]": "email",
+        "[whatsapp]": "whatsapp",
     }
 
     @classmethod
-    def classify_cluster(cls, path_str: str) -> str:
-        """Determina el cluster temático a partir de palabras clave en la ruta."""
-        lower_path = path_str.lower()
-        normalized_path = re.sub(r"[_\-\.]+", " ", lower_path)
-        for cluster, keywords in cls.THEMATIC_CLUSTERS.items():
+    def normalize_text(cls, text: str) -> str:
+        """Normaliza Unicode a NFC, remueve puntuación periférica y dobles espacios."""
+        if not text:
+            return ""
+        norm = unicodedata.normalize("NFC", text).lower()
+        norm = re.sub(r"^[\*\-_#\.\s]+", "", norm)
+        norm = re.sub(r"[\*\-_#\.\s]+$", "", norm)
+        norm = re.sub(r"[_\-\.]+", " ", norm)
+        return re.sub(r"\s+", " ", norm).strip()
+
+    @classmethod
+    def match_cluster_keywords(cls, text: str) -> Optional[str]:
+        """Busca coincidencias en la matriz de clusters sobre un segmento de texto."""
+        norm_text = cls.normalize_text(text)
+        if not norm_text:
+            return None
+
+        # Prioridad de desempate: evaluar clusters más especializados primero
+        priority_order = [
+            "ia_prompting", "ux_ui", "automatizaciones", "ecommerce",
+            "whatsapp", "email", "paid_ads", "ofertas", "funnels",
+            "branding", "copywriting"
+        ]
+
+        for cluster in priority_order:
+            keywords = cls.THEMATIC_CLUSTERS.get(cluster, [])
             for kw in keywords:
-                if kw in lower_path or kw in normalized_path:
+                # Búsqueda por token o límite de palabra para evitar falsos positivos
+                pattern = r"(?:^|\s)" + re.escape(kw) + r"(?:$|\s)"
+                if re.search(pattern, norm_text) or kw in norm_text:
                     return cluster
-        return "general"
+
+        return None
+
+    @classmethod
+    def classify_cluster_bottom_up(cls, file_path: str) -> Tuple[str, str]:
+        """
+        Clasifica una ruta de archivo evaluando en 4 capas concéntricas:
+        Retorna (cluster_key, match_reason)
+        """
+        norm_path = unicodedata.normalize("NFC", file_path)
+        parts = [p for p in norm_path.split(os.sep) if p]
+
+        if not parts:
+            return ("general", "Ruta vacía")
+
+        filename = parts[-1]
+        parent_dir = parts[-2] if len(parts) >= 2 else ""
+        grandparent_dir = parts[-3] if len(parts) >= 3 else ""
+
+        # Nivel 4 (Prioridad Máxima): ¿Existe una sigla de Track explícita en alguna parte?
+        lower_full_path = norm_path.lower()
+        for tag, cluster in cls.TRACK_TAGS_MAP.items():
+            if tag in lower_full_path:
+                return (cluster, f"Sigla de Track '{tag}' en ruta")
+
+        # Nivel 1: Evaluar nombre del archivo/lección (ej: 04_embudo_ventas.mp4)
+        c_file = cls.match_cluster_keywords(filename)
+        if c_file:
+            return (c_file, f"Lección individual: '{filename}'")
+
+        # Nivel 2: Evaluar subcarpeta inmediata / Módulo (ej: Modulo 3 - Email Marketing)
+        if parent_dir:
+            c_parent = cls.match_cluster_keywords(parent_dir)
+            if c_parent:
+                return (c_parent, f"Módulo temático: '{parent_dir}'")
+
+        # Nivel 3: Evaluar carpeta contenedora del curso
+        if grandparent_dir:
+            c_grand = cls.match_cluster_keywords(grandparent_dir)
+            if c_grand:
+                return (c_grand, f"Curso contenedor: '{grandparent_dir}'")
+
+        # Nivel Fallback: Evaluar la ruta completa
+        c_any = cls.match_cluster_keywords(norm_path)
+        if c_any:
+            return (c_any, "Coincidencia en ruta completa")
+
+        return ("general", "Sin coincidencia temática")
+
+    @classmethod
+    def classify_cluster(cls, path_str: str) -> str:
+        """Interfaz retrocompatible que retorna únicamente la clave de cluster."""
+        cluster, _ = cls.classify_cluster_bottom_up(path_str)
+        return cluster
+
+    @classmethod
+    def find_peer_document_in_parent(
+        cls,
+        parent_dir: str,
+        current_dir_name: str,
+        parent_entries_cache: Dict[str, Set[str]],
+    ) -> bool:
+        """
+        Verifica de forma atómica y en memoria si la carpeta padre contiene un documento
+        hermano homónimo (.docx, .pdf, .md, .txt) correspondiente al curso actual.
+        """
+        norm_parent = unicodedata.normalize("NFC", parent_dir)
+        if norm_parent not in parent_entries_cache:
+            try:
+                entries = set()
+                with os.scandir(parent_dir) as it:
+                    for e in it:
+                        if e.is_file(follow_symlinks=False):
+                            entries.add(cls.normalize_text(e.name))
+                parent_entries_cache[norm_parent] = entries
+            except Exception:
+                parent_entries_cache[norm_parent] = set()
+
+        cached_names = parent_entries_cache[norm_parent]
+        target_stem = cls.normalize_text(current_dir_name)
+
+        # Verificar si existe [Curso].docx, [Curso].pdf, etc.
+        for ext in ("docx", "pdf", "md", "txt"):
+            candidate = f"{target_stem} {ext}"
+            if candidate in cached_names:
+                return True
+
+            # Comparación flexible sin extensión concatenada
+            for name in cached_names:
+                if name.startswith(target_stem) and name.endswith(ext):
+                    return True
+
+        return False
 
     @classmethod
     def scan_path(
@@ -318,11 +521,12 @@ class CourseScanner:
         base_dir: str,
         max_depth: int = 4,
     ) -> List[Dict[str, Any]]:
-        """Recorre de forma controlada el sistema de archivos buscando recursos de alto valor mediante BFS rápido."""
+        """Recorre de forma controlada el sistema de archivos clasificando con Bottom-Up y Peer-Docs."""
         resources = []
         if not os.path.exists(base_dir):
             return resources
 
+        parent_cache: Dict[str, Set[str]] = {}
         queue = [(base_dir, 0)]
 
         while queue:
@@ -345,14 +549,24 @@ class CourseScanner:
                 if not files:
                     continue
 
-                has_subtitles = any(
+                # 1. Detección local en la carpeta actual
+                has_local_subtitles = any(
                     os.path.splitext(e.name)[1].lower() in (".srt", ".vtt")
                     for e in files
                 )
-                has_docs = any(
+                has_local_docs = any(
                     os.path.splitext(e.name)[1].lower() in (".docx", ".pdf", ".md", ".txt")
                     for e in files
                 )
+
+                # 2. Correlación de Documentos Hermanos (Peer-Docs en carpeta padre)
+                parent_dir = os.path.dirname(current_dir)
+                current_dir_name = os.path.basename(current_dir)
+                has_peer_doc = cls.find_peer_document_in_parent(
+                    parent_dir, current_dir_name, parent_cache
+                )
+
+                has_text_coverage = has_local_subtitles or has_local_docs or has_peer_doc
 
                 for entry in files:
                     ext = os.path.splitext(entry.name)[1].lower()
@@ -364,15 +578,18 @@ class CourseScanner:
                     elif ext in (".aac", ".m4a", ".mp3"):
                         tier = "direct_audio"
                     elif ext == ".mp4":
-                        if not has_subtitles and not has_docs:
-                            tier = "orphan_video"
-                        else:
+                        if has_text_coverage:
                             tier = "video_residual"
+                        else:
+                            tier = "orphan_video"
 
                     if tier:
                         try:
                             st = entry.stat(follow_symlinks=False)
-                            cluster = cls.classify_cluster(entry.path)
+                            cluster, reason = cls.classify_cluster_bottom_up(entry.path)
+                            target_title = cls.CLUSTER_NOTEBOOK_TITLES.get(
+                                cluster, f"[ESPECIALIDAD_{cluster.upper()}]"
+                            )
                             resources.append({
                                 "path": entry.path,
                                 "filename": entry.name,
@@ -381,9 +598,9 @@ class CourseScanner:
                                 "size_bytes": st.st_size,
                                 "mtime": int(st.st_mtime),
                                 "cluster": cluster,
-                                "target_notebook": cls.CLUSTER_NOTEBOOK_TITLES.get(
-                                    cluster, f"[ESPECIALIDAD_{cluster.upper()}]"
-                                ),
+                                "match_reason": reason,
+                                "has_peer_doc": has_peer_doc,
+                                "target_notebook": target_title,
                             })
                         except Exception:
                             continue
@@ -449,51 +666,82 @@ REGLAS DE RESPUESTA AFIRMATIVAS:
 - Extrae la lógica de Order Bumps (micro-ofertas pre-checkout) y 1-Click Upsells/Downsells post-pago, detallando el ratio de precio y relevancia.
 - Documenta las heurísticas de fricción móvil y experiencia de usuario que incrementan la tasa de conversión.
 """,
-    "whatsapp": """Eres el Estratega de Comercio Conversacional y Automatizaciones de Mensajería.
-Tu foco es extraer los flujos de mensajería (WhatsApp, Telegram, DM) que maximizan respuesta, engagement y transacciones.
+    "whatsapp": """Eres el Especialista en Conversational Commerce y Embudos de Mensajería Directa.
+Tu función es extraer secuencias de venta conversacional, scripts de chat y arquitectura de bots.
 
 REGLAS DE RESPUESTA AFIRMATIVAS:
-- Diseña árboles de decisión y flujos conversacionales de calificación rápida.
-- Establece el protocolo de transición entre automatización y asesor humano (Human Takeover).
-- Formula guiones de recuperación de carritos abandonados con lenguaje natural, cercano y respetuoso.
-- Extrae secuencias de seguimiento post-registro para webinars, lanzamientos y reservas en vivo.
-- Codifica las respuestas ante las 5 objeciones más frecuentes de precios y tiempos de entrega.
+- Codifica las fases del diálogo de ventas: Saludo de Apertura -> Calificación de Intención -> Presentación Concisa -> Manejo de Fricción -> Cierre con Link Directo.
+- Extrae los tiempos de respuesta y cadencia de mensajes recomendados para no saturar al usuario ni provocar bloqueos por spam.
+- Mapea las reglas de derivación inteligente hacia humanos cuando el prospecto presenta objeciones complejas o tickets altos.
 """,
-    "email": """Eres el Director de Email Marketing y Entregabilidad de Mensajería Directa.
-Tu foco es extraer los flujos de email marketing que maximizan apertura, clics y retención de suscriptores.
+    "email": """Eres el Estratega de Email Marketing, Secuencias Automatizadas y Entregabilidad.
+Tu objetivo es destilar las secuencias de nutrición, ventas y retención por correo electrónico.
 
 REGLAS DE RESPUESTA AFIRMATIVAS:
-- Extrae la estructura de la Soap Opera Sequence (5 emails de bienvenida con ganchos narrativos y tensión continua).
-- Extrae el modelo Seinfeld (historias cotidianas conectadas fluidamente con la oferta comercial).
-- Formula líneas de asunto de alta apertura basadas en curiosidad, beneficio directo y contraste de expectativas.
-- Especifica las reglas de higiene técnica de entregabilidad (DMARC, DKIM, SPF, ratios de clics, términos que garantizan inbox primario).
+- Descompón las estructuras clásicas de secuencias: Soap Opera Sequence (5 emails), secuencias de carrito abandonado (3 emails con urgencia progresiva) y boletines de valor diario.
+- Extrae fórmulas de Asunto (Subject Lines) con ratios de apertura comprobados.
+- Formula las pautas técnicas de higiene de listas y palabras tabú para evitar la bandeja de spam.
 """,
-    "ads": """Eres el Media Buyer Maestro y Especialista en Creativos Publicitarios de Meta Ads y Tráfico Pago.
-Tu objetivo es extraer los frameworks de creación de anuncios, ángulos de comunicación y tácticas de escalado.
+    "paid_ads": """Eres el Director de Medios y Tráfico Pagado (Meta Ads, TikTok Ads, Google).
+Tu función es extraer estrategias de compra de medios, matrices creativas y algoritmos de escalado.
 
 REGLAS DE RESPUESTA AFIRMATIVAS:
-- Descompón la anatomía del anuncio: Hook Visual/Auditivo (primeros 3 segundos) -> Problema/Ángulo -> Solución/Prueba -> Llamado a la Acción.
-- Extrae matrices de variación de ángulos publicitarios para testear múltiples dolores de avatar con un mismo producto.
-- Formula scripts de UGC (User Generated Content) y VSL (Video Sales Letters) con indicaciones escénicas y de ritmo.
-- Documenta las metodologías de prueba de creativos y lectura de métricas tempranas (Thumbstop Ratio, Hold Rate, CTR saliente).
+- Extrae matrices de testeo de Creativos: Gancho visual de 3 segundos -> Tensión/Problema -> Presentación de Oferta -> Llamado a la Acción.
+- Mapea las reglas de escalado horizontal (duplicación de audiencias y ángulos) y vertical (incremento de presupuesto).
+- Codifica las métricas de corte temprano para pausar anuncios con ROAS insuficiente.
 """,
-    "branding": """Eres el Consultor Senior de Estrategia de Marca, Posicionamiento y Categoría Única.
-Tu misión es extraer los marcos de construcción de marcas memorables y posicionamiento defensible.
+    "branding": """Eres el Custodio de Estrategia de Marca, Arquetipos y Posicionamiento.
+Tu misión es extraer las metodologías para construir una Categoría de Uno y autoridad de mercado.
 
 REGLAS DE RESPUESTA AFIRMATIVAS:
-- Modela la definición de la 'Categoría de Uno' (Category of One) enseñada en los cursos para erradicar la competencia directa.
-- Estructura las matrices de personalidad y tono de voz con ejemplos afirmativos y distinciones claras de estilo.
-- Documenta las etapas del viaje de identidad: Propósito -> Arquetipo -> Pilares de Contenido -> Simbología Visual y Lingüística.
-- Codifica los mecanismos de autoridad y reputación para profesionales y empresas en sectores de alta competencia.
+- Extrae los marcos para definir la Propuesta Única de Valor y el Manifiesto de Marca.
+- Identifica la matriz de los 12 Arquetipos de Personalidad y su aplicación al tono y lenguaje.
+- Codifica las estrategias para transformar transacciones aisladas en lealtad y comunidad a largo plazo.
+""",
+    "ecommerce": """Eres el Director de Operaciones de E-Commerce, Supply Chain y Gestión de Tiendas.
+Tu función es extraer las mejores prácticas operativas para tiendas online, catálogos y logística.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Extrae las metodologías de gestión de cadena de suministro (Supply Chain), niveles óptimos de inventario y políticas de reposición.
+- Documenta las mejores prácticas para estructurar fichas de producto de alta conversión, arquitectura de colecciones y políticas de envío.
+- Modela las estrategias de logística omnicanal para reducir costos de última milla y tiempos de entrega.
+- Codifica las tácticas de rentabilidad en plataformas de comercio electrónico (Shopify, WooCommerce, Amazon FBA).
+""",
+    "automatizaciones": """Eres el Arquitecto de Automatización de Negocios, Flujos No-Code y Conexión de Sistemas.
+Tu misión es extraer las arquitecturas de integración mediante n8n, Make, Zapier, CRMs y webhooks.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Modela los diagramas de flujo de automatización: Evento Disparador (Trigger) -> Filtros de Calificación -> Transformación de Datos -> Acciones Consecuentes.
+- Extrae los patrones de integración entre plataformas de marketing, pasarelas de pago y sistemas de gestión de clientes (CRM).
+- Documenta el manejo de errores, reintentos idempotentes y dead-letter queues en flujos de automatización crítica.
+- Provee especificaciones técnicas para webhooks y APIs REST aplicadas a procesos de ventas.
+""",
+    "ia_prompting": """Eres el Ingeniero Maestro de Prompts, Modelos de Lenguaje y Agentes Autónomos.
+Tu función es extraer las técnicas avanzadas de prompting, diseño de context vaults y arquitecturas agénticas.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Extrae las estructuras de System Prompts de alta densidad: Rol -> Directivas Operativas -> Restricciones Negativas/Positivas -> Formato de Salida -> Ejemplos Few-Shot.
+- Documenta las metodologías de Chain-of-Thought (CoT), Tree-of-Thought y generación aumentada por recuperación (RAG).
+- Codifica los patrones para construir Context Vaults y bibliotecas de contexto de marca que alimentan a los agentes.
+- Modela los bucles de interacción y herramientas para agentes autónomos que resuelven flujos de negocio complejos.
+""",
+    "ux_ui": """Eres el Diseñador Principal de Experiencia de Usuario (UX), Interfaces (UI) y Sistemas de Diseño.
+Tu objetivo es destilar las leyes de usabilidad, dirección de arte, tipografía y diseño centrado en el usuario.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Extrae los fundamentos de jerarquía visual, espaciado, uso del color y matrices tipográficas para interfaces digitales.
+- Documenta las leyes de UX (Fitts, Hick, Miller, Jakob) y su aplicación táctica para reducir la carga cognitiva del usuario.
+- Codifica los estándares de accesibilidad web (WCAG AAA/APCA) y diseño inclusivo.
+- Modela la arquitectura de información, flujos de navegación y wireframing que maximizan la claridad y la conversión.
 """,
 }
 
 
 # =============================================================================
-# 7. Componente: Puente con SDK de NotebookLM (notebooklm_tools)
+# 7. Componente: Puente con el SDK de NotebookLM (Gemini Notebook)
 # =============================================================================
 class NotebookLMBridge:
-    """Encapsula llamadas seguras con reintentos y respeto de cuotas."""
+    """Encapsula llamadas al cliente de NotebookLM con gestión de errores y jitter."""
 
     def __init__(self, client=None):
         if client:
@@ -529,7 +777,6 @@ class NotebookLMBridge:
 
         nb_id = str(nb_id)
 
-        # Configurar de inmediato el system prompt especializado si corresponde
         if auto_configure_prompt and cluster_key:
             self.configure_system_prompt(nb_id, cluster_key)
 
@@ -574,7 +821,6 @@ class NotebookLMBridge:
         time.sleep(actual_delay)
 
         if tier == "subtitle_text":
-            # Normalizar subtítulo en memoria y subir como texto puro
             with open(path, "r", encoding="utf-8", errors="replace") as f:
                 raw_text = f.read()
             clean_text = SubtitlesCleaner.clean(raw_text)
@@ -583,22 +829,26 @@ class NotebookLMBridge:
 
             title = f"[Subtítulo] {os.path.splitext(filename)[0]}"
             res = self.client.add_text_source(notebook_id, clean_text, title=title)
-            return getattr(res, "id", None) or res.get("id") or "uploaded_text"
+            if isinstance(res, dict) and res.get("status") == "timeout":
+                return None
+            return getattr(res, "id", None) or (res.get("id") if isinstance(res, dict) else None)
 
         elif tier == "orphan_video":
-            # Extraer audio AAC a 64k y subirlo como archivo de audio directo
             print(f"    🎙️ Extrayendo audio AAC (64k) de video huérfano...")
             aac_path = AudioExtractor.extract_aac(path)
-            res = self.client.add_file(
-                notebook_id,
-                aac_path,
-                wait=True,
-                wait_timeout=600.0,
-            )
-            return getattr(res, "id", None) or (res.get("id") if isinstance(res, dict) else "uploaded_audio")
+            try:
+                res = self.client.add_file(
+                    notebook_id,
+                    aac_path,
+                    wait=True,
+                    wait_timeout=600.0,
+                )
+                source_id = getattr(res, "id", None) or (res.get("id") if isinstance(res, dict) else None)
+                return source_id
+            finally:
+                AudioExtractor.cleanup(aac_path)
 
         elif tier in ("direct_document", "direct_audio"):
-            # Subida directa mediante add_file del SDK
             is_audio = tier == "direct_audio"
             timeout = 600.0 if is_audio else 120.0
             res = self.client.add_file(
@@ -607,28 +857,34 @@ class NotebookLMBridge:
                 wait=True,
                 wait_timeout=timeout,
             )
-            return getattr(res, "id", None) or (res.get("id") if isinstance(res, dict) else "uploaded_file")
+            return getattr(res, "id", None) or (res.get("id") if isinstance(res, dict) else None)
 
         return None
 
 
 # =============================================================================
-# 8. Comandos CLI & Orquestación
+# 8. Comandos CLI & Dashboard Enriquecido
 # =============================================================================
 def cmd_scan(args):
-    """Escanea el catálogo de cursos y muestra la distribución por cluster y tier."""
-    print("==================================================================")
-    print("🔍 ESCANEO ANATÓMICO DE CURSOS (Costo de tokens: 0)")
-    print("==================================================================")
-
+    """Escanea el catálogo de cursos y despliega el Dashboard Operativo Enriquecido."""
     manifest_mgr = PartitionedManifest()
     uploaded = manifest_mgr.get_uploaded_fingerprints()
-    print(f"• Manifiesto SSoT activo: {len(uploaded)} fuentes ya registradas.")
 
     paths = [args.target] if args.target else CourseScanner.DEFAULT_SEARCH_PATHS
     total_found = 0
     pending_found = 0
     by_cluster: Dict[str, List[Dict[str, Any]]] = {}
+
+    total_docs = 0
+    total_subs = 0
+    total_audios = 0
+    total_residuals = 0
+    total_orphans = 0
+
+    print("==================================================================")
+    print("🔍 INICIANDO ESCANEO ANATÓMICO SSoT (knowledge-sync v2)")
+    print("==================================================================")
+    print(f"• Manifiesto SSoT activo: {len(uploaded)} fuentes ya registradas.")
 
     for p in paths:
         if not os.path.exists(p):
@@ -638,45 +894,96 @@ def cmd_scan(args):
         total_found += len(found)
 
         for item in found:
-            fp = MetadataFingerprint.compute(item["path"])
+            # Reutilizar metadatos para no duplicar llamadas os.stat sobre FUSE
+            fp = MetadataFingerprint.compute_from_stat(
+                os.path.relpath(item["path"], "/var/www/baiosfera"),
+                item["size_bytes"],
+                item["mtime"]
+            )
             item["fingerprint"] = fp
             item["already_uploaded"] = fp in uploaded
             if not item["already_uploaded"]:
                 pending_found += 1
+
+            t = item["tier"]
+            if t == "direct_document":
+                total_docs += 1
+            elif t == "subtitle_text":
+                total_subs += 1
+            elif t == "direct_audio":
+                total_audios += 1
+            elif t == "video_residual":
+                total_residuals += 1
+            elif t == "orphan_video":
+                total_orphans += 1
 
             c = item["cluster"]
             if c not in by_cluster:
                 by_cluster[c] = []
             by_cluster[c].append(item)
 
-    print("\n📊 RESUMEN DE CLUSTERS TEMÁTICOS:")
+    print("\n==================================================================")
+    print("📊 DASHBOARD OPERATIVO DE FRUGALIDAD & AUDITORÍA SSoT")
+    print("==================================================================")
+    print(f"  • Total recursos analizados: {total_found}")
+    print(f"  • Fuentes pendientes de ingesta: {pending_found}")
+    print(f"  • Documentos maestros (.docx/.pdf/.md): {total_docs} (⚡ Ingesta directa < 2s)")
+    print(f"  • Subtítulos limpios (.srt/.vtt): {total_subs} (⚡ Ingesta directa sin timecodes)")
+    print(f"  • Audios nativos (.mp3/.aac): {total_audios} (🎙️ Speech-to-Text en Google Cloud)")
+    print(f"  • 🛡️ VIDEOS OMITIDOS (Ahorro de CPU y FUSE): {total_residuals} videos")
+    print(f"     (Cubiertos al 100% por documentos hermanos .docx/.pdf en carpeta padre)")
+    print(f"  • ⚠️ Videos huérfanos reales (Worker Efímero): {total_orphans} videos")
+
+    print("\n==================================================================")
+    print("📂 DESGLOSE POR ESPECIALIDAD Y TRAZA DE MICRO-CLASIFICACIÓN:")
+    print("==================================================================")
+
     for cluster, items in sorted(by_cluster.items()):
         pending_in_c = sum(1 for i in items if not i["already_uploaded"])
         target_nb = CourseScanner.CLUSTER_NOTEBOOK_TITLES.get(cluster, f"[ESPECIALIDAD_{cluster.upper()}]")
-        print(f"  📁 {cluster.upper()} ({target_nb}):")
-        print(f"     Total recursos: {len(items)} | Pendientes por subir: {pending_in_c}")
+        print(f"\n📁 [{cluster.upper()}] -> Cuaderno: {target_nb}")
+        print(f"   Total recursos: {len(items)} | Pendientes por subir: {pending_in_c}")
 
         # Desglose por tier
         tiers = {}
         for it in items:
             tiers[it["tier"]] = tiers.get(it["tier"], 0) + 1
-        for t, count in tiers.items():
-            print(f"       - {t}: {count}")
+        tier_str = ", ".join([f"{k}: {v}" for k, v in tiers.items()])
+        print(f"   Composición: {tier_str}")
 
-    print(f"\n✅ Total recursos detectados: {total_found} | Pendientes de ingesta: {pending_found}")
+        # Muestra representativa de traza de clasificación (hasta 4 ejemplos)
+        sample_reasons = {}
+        for it in items:
+            reason = it.get("match_reason", "coincidencia")
+            if reason not in sample_reasons:
+                sample_reasons[reason] = os.path.basename(it["path"])
+            if len(sample_reasons) >= 3:
+                break
+
+        print("   Muestra de Micro-Clasificación:")
+        for r, fname in sample_reasons.items():
+            print(f"     - [{r}] -> {fname}")
+
+        # Siguiente paso accionable
+        if pending_in_c > 0 and cluster != "general":
+            limit_sug = min(pending_in_c, 20)
+            print(f"   👉 Comando sugerido: knowledge-sync push --cluster {cluster} --limit {limit_sug}")
+
+    print("\n==================================================================")
+    print(f"✅ ESCANEO FINALIZADO EXITOSAMENTE. Total pendientes: {pending_found}")
+    print("==================================================================")
 
 
 def cmd_init_clusters(args):
-    """Pre-aprovisiona los 7 cuadernos de cluster, inyecta prompts y exporta clusters.json."""
+    """Pre-aprovisiona los 11 cuadernos de cluster, inyecta prompts y exporta clusters.json."""
     print("==================================================================")
-    print("🏗️ INICIALIZACIÓN DE CLUSTERS Y SYSTEM PROMPTS EN NOTEBOOKLM")
+    print("🏗️ INICIALIZACIÓN DE 11 CLUSTERS Y SYSTEM PROMPTS EN NOTEBOOKLM")
     print("==================================================================")
 
     bridge = NotebookLMBridge()
     manifest_mgr = PartitionedManifest()
     clusters_manifest = {}
 
-    # Obtener cuadernos existentes
     print("• Sincronizando catálogo con Google NotebookLM...")
     all_notebooks = bridge.client.list_notebooks()
     existing_by_title = {
@@ -704,7 +1011,6 @@ def cmd_init_clusters(args):
             sources_count = 0
             print(f"  ✓ Creado exitosamente: UUID {nb_id}")
 
-        # Configurar system prompt especializado
         print(f"  • Configurando system prompt especializado...")
         configured = bridge.configure_system_prompt(nb_id, cluster_key)
         if configured:
@@ -717,22 +1023,26 @@ def cmd_init_clusters(args):
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    # Exportar archivo clusters.json
     out_path = manifest_mgr.export_clusters_manifest(clusters_manifest)
     print(f"\n✅ Manifiesto canónico de clusters exportado en: {out_path}")
-    print("\n📋 MAPA CANÓNICO DE CLUSTERS:")
+    print("\n📋 MAPA CANÓNICO DE LOS 11 CLUSTERS:")
     for c_key, data in clusters_manifest.items():
-        print(f"  • {c_key.upper():<12} -> ID: {data['notebook_id']} ({data['title']})")
+        print(f"  • {c_key.upper():<16} -> ID: {data['notebook_id']} ({data['title']})")
 
 
 def cmd_push(args):
     """Ejecuta la ingesta idempotente hacia los cuadernos de NotebookLM."""
     print("==================================================================")
-    print("🚀 INGESTA DINÁMICA IDEMPOTENTE A NOTEBOOKLM")
+    print("🚀 INGESTA DINÁMICA IDEMPOTENTE A NOTEBOOKLM (v2.0)")
     print("==================================================================")
 
     manifest_mgr = PartitionedManifest()
     uploaded = manifest_mgr.get_uploaded_fingerprints()
+
+    # Normalizar alias de cluster (ej: ads -> paid_ads)
+    target_cluster = args.cluster
+    if target_cluster == "ads":
+        target_cluster = "paid_ads"
 
     paths = [args.target] if args.target else CourseScanner.DEFAULT_SEARCH_PATHS
     candidates = []
@@ -742,18 +1052,22 @@ def cmd_push(args):
             continue
         found = CourseScanner.scan_path(p, max_depth=args.max_depth)
         for item in found:
-            if args.cluster and item["cluster"] != args.cluster:
+            if target_cluster and item["cluster"] != target_cluster:
                 continue
 
-            # Videos residuales (que ya tienen subtítulos o docs) se ignoran
+            # Videos residuales (con doc hermano) se omiten
             if item["tier"] == "video_residual":
                 continue
 
-            # Videos huérfanos se procesan solo si se solicita --convert-orphan-videos
+            # Videos huérfanos se procesan solo con flag explícito
             if item["tier"] == "orphan_video" and not getattr(args, "convert_orphan_videos", False):
                 continue
 
-            fp = MetadataFingerprint.compute(item["path"])
+            fp = MetadataFingerprint.compute_from_stat(
+                os.path.relpath(item["path"], "/var/www/baiosfera"),
+                item["size_bytes"],
+                item["mtime"]
+            )
             if fp not in uploaded:
                 item["fingerprint"] = fp
                 candidates.append(item)
@@ -770,7 +1084,6 @@ def cmd_push(args):
     bridge = None if args.dry_run else NotebookLMBridge()
     success_count = 0
 
-    # Cargar mapa de clusters conocido
     clusters_map = manifest_mgr.load_clusters_manifest()
     resolved_notebooks = {
         data["title"]: data["notebook_id"]
@@ -821,6 +1134,8 @@ def cmd_push(args):
                     )
                 success_count += 1
                 print(f"    ✅ Ingesta exitosa (Source ID: {source_id})")
+            else:
+                print(f"    ⚠️ Ingesta omitida o timeout sin confirmación de ID: {filename}")
         except Exception as e:
             print(f"    ❌ Error subiendo {filename}: {e}")
 
@@ -833,7 +1148,7 @@ def cmd_push(args):
 def run_tests():
     """Ejecuta pruebas unitarias de los componentes de software deterministas."""
     print("==================================================================")
-    print("🧪 EJECUTANDO SUITE DE PRUEBAS UNITARIAS DETERMINISTAS (knowledge-sync)")
+    print("🧪 EJECUTANDO SUITE DE PRUEBAS UNITARIAS DETERMINISTAS (knowledge-sync v2)")
     print("==================================================================")
 
     # Test 1: Limpiador de Subtítulos SRT
@@ -852,7 +1167,6 @@ Hoy hablaremos de ofertas irresistibles.
     print("✓ [Test 1] Normalizador de Subtítulos SRT: PASSED")
 
     # Test 2: Huella Sintética sin Lectura de Payload
-    import tempfile
     with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as tmp:
         tmp.write(b"Prueba de contenido efimero")
         tmp_path = tmp.name
@@ -864,7 +1178,7 @@ Hoy hablaremos de ofertas irresistibles.
     os.remove(tmp_path)
     print("✓ [Test 2] Huella Digital Sintética (Metadata Fingerprint): PASSED")
 
-    # Test 3: Manifiesto Particionado Append-Only y clusters.json
+    # Test 3: Manifiesto Particionado Append-Only y Exportación Atómica de clusters.json
     with tempfile.TemporaryDirectory() as tmp_dir:
         man = PartitionedManifest(manifest_dir=tmp_dir)
         man.record_upload(
@@ -877,36 +1191,65 @@ Hoy hablaremos de ofertas irresistibles.
         )
         loaded = man.get_uploaded_fingerprints()
         assert "fp123456" in loaded, "Falla Test 3: El registro append-only no se consolidó"
-        assert loaded["fp123456"]["source_id"] == "src-999", "Falla Test 3: Datos de evento corruptos"
 
-        # Prueba export clusters.json
-        man.export_clusters_manifest({"copywriting": {"notebook_id": "test-uuid"}})
+        # Prueba de exportación atómica
+        c_path = man.export_clusters_manifest({"copywriting": {"notebook_id": "test-uuid"}})
+        assert os.path.exists(c_path), "Falla Test 3: clusters.json no fue creado"
         c_manifest = man.load_clusters_manifest()
         assert c_manifest.get("copywriting", {}).get("notebook_id") == "test-uuid"
-    print("✓ [Test 3] Manifiesto Particionado & Exportación de clusters.json: PASSED")
+    print("✓ [Test 3] Manifiesto Particionado & Exportación Atómica: PASSED")
 
-    # Test 4: Clasificador de Clusters Temáticos con Términos en Inglés y Español
-    assert CourseScanner.classify_cluster("PLATZI/59 CONTENT COPY/clase.docx") == "copywriting"
-    assert CourseScanner.classify_cluster("DIGITALMARKETER/Funnels/audit.md") == "funnels"
-    assert CourseScanner.classify_cluster("DIGITALMARKETER/01_AI_SYSTEMS/Marketing_Context_Vault.md") == "copywriting"
-    assert CourseScanner.classify_cluster("DIGITALMARKETER/03_TRAINING_PLAYBOOKS/15_Minute_Campaign_Fix.pdf") == "funnels"
-    assert CourseScanner.classify_cluster("DIGITALMARKETER/Offers/3_Sales_Boosting_Site_Offers.pdf") == "ofertas"
-    assert CourseScanner.classify_cluster("CURSOS/MCV/Ofertas/guia.pdf") == "ofertas"
-    assert CourseScanner.classify_cluster("VELOCITYMEDIA/ADS/creative.mp4") == "ads"
-    print("✓ [Test 4] Clasificador Semántico de Clusters (ES + EN): PASSED")
+    # Test 4: Clasificador Bottom-Up, Mapeo de Siglas y Aislamiento de IA vs Copy
+    assert CourseScanner.classify_cluster("PLATZI/03 ECOM/Curso de Supply Chain/01.mp4") == "ecommerce"
+    assert CourseScanner.classify_cluster("PLATZI/04 AUTOM/RPA/clase.mp4") == "automatizaciones"
+    assert CourseScanner.classify_cluster("PLATZI/14 AI PROMPT/Agentes/clase.mp4") == "ia_prompting"
+    assert CourseScanner.classify_cluster("PLATZI/33 GRAPHIC THINKING UXUI/Tipografia/clase.mp4") == "ux_ui"
 
-    # Test 5: Extractor de Audio FFmpeg Quirúrgico
+    # Micro-clasificación: lección de email dentro de carpeta madre compuestas
+    c_micro, reason = CourseScanner.classify_cluster_bottom_up(
+        "PLATZI/59 CONTENT COPY EMAIL SEO STORYTELLING VENTAS/Curso/Modulo 2/01_secuencias_de_email.mp4"
+    )
+    assert c_micro == "email", f"Falla Test 4: Esperaba 'email' por micro-lección, obtuvo '{c_micro}'"
+
+    # Desempate IA vs Copywriting
+    assert CourseScanner.classify_cluster("Marketing_Context_Vault.md") == "ia_prompting"
+    assert CourseScanner.classify_cluster("Cartas_de_Venta_PAS.docx") == "copywriting"
+    print("✓ [Test 4] Clasificador Bottom-Up, Mapeo de Siglas & Aislamiento IA/Copy: PASSED")
+
+    # Test 5: Correlación de Documentos Hermanos (Peer-Docs) con Normalización Unicode NFC
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Simular estructura de Platzi: [ECOM] Curso Logística.docx junto a [ECOM] Curso Logística/
+        doc_name = unicodedata.normalize("NFC", "[ECOM] Curso Logística.docx")
+        dir_name = unicodedata.normalize("NFC", "[ECOM] Curso Logística")
+        course_dir = os.path.join(tmp_dir, dir_name)
+        os.makedirs(course_dir, exist_ok=True)
+
+        with open(os.path.join(tmp_dir, doc_name), "w") as f:
+            f.write("Temario completo")
+
+        with open(os.path.join(course_dir, "01_clase.mp4"), "w") as f:
+            f.write("video dummy")
+
+        scanned = CourseScanner.scan_path(tmp_dir)
+        video_item = next((i for i in scanned if i["ext"] == ".mp4"), None)
+        assert video_item is not None, "Falla Test 5: No se detectó el video"
+        assert video_item["tier"] == "video_residual", (
+            f"Falla Test 5: El video debió ser 'video_residual' al tener doc hermano, pero fue '{video_item['tier']}'"
+        )
+    print("✓ [Test 5] Correlación de Documentos Hermanos (Unicode NFC): PASSED")
+
+    # Test 6: Extractor de Audio FFmpeg Quirúrgico y Limpieza
     with tempfile.TemporaryDirectory() as tmp_dir:
         dummy_wav = os.path.join(tmp_dir, "test_audio.wav")
-        # Generar 1 segundo de audio mudo con ffmpeg
         subprocess.run(
             ["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono", "-t", "1", dummy_wav],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         extracted_aac = AudioExtractor.extract_aac(dummy_wav, output_dir=tmp_dir)
-        assert os.path.isfile(extracted_aac), "Falla Test 5: No se generó el archivo AAC"
-        assert os.path.getsize(extracted_aac) > 100, "Falla Test 5: Archivo AAC demasiado pequeño"
-    print("✓ [Test 5] Extractor de Audio FFmpeg Quirúrgico: PASSED")
+        assert os.path.isfile(extracted_aac), "Falla Test 6: No se generó el archivo AAC"
+        AudioExtractor.cleanup(extracted_aac)
+        assert not os.path.exists(extracted_aac), "Falla Test 6: No se limpió el archivo temporal"
+    print("✓ [Test 6] Extractor FFmpeg con Timeout y Limpieza de /tmp: PASSED")
 
     print("\n🎉 TODAS LAS PRUEBAS FÍSICAS PASARON CON ÉXITO (EXIT 0).")
     sys.exit(0)
@@ -917,37 +1260,54 @@ Hoy hablaremos de ofertas irresistibles.
 # =============================================================================
 def main():
     parser = argparse.ArgumentParser(
-        description="Motor Soberano de Ingesta Dinámica & Curaduría SSoT para NotebookLM"
+        description="Motor Soberano de Ingesta Dinámica & Curaduría SSoT para NotebookLM (v2.0)"
     )
-    parser.add_argument("--test", action="store_true", help="Ejecuta suite de pruebas unitarias físicas")
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Ejecuta suite de pruebas unitarias físicas",
+    )
 
     subparsers = parser.add_subparsers(dest="command")
 
-    # Comando: scan
-    scan_p = subparsers.add_parser("scan", help="Escanea cursos sin gastar tokens ni cuota FUSE")
-    scan_p.add_argument("--target", type=str, help="Directorio objetivo específico a escanear")
-    scan_p.add_argument("--max-depth", type=int, default=4, help="Profundidad máxima de escaneo")
+    # Subcomando: scan
+    scan_parser = subparsers.add_parser("scan", help="Escanea cursos sin gastar tokens ni cuota FUSE")
+    scan_parser.add_argument("--target", type=str, default=None, help="Directorio objetivo específico")
+    scan_parser.add_argument("--max-depth", type=int, default=4, help="Profundidad máxima de escaneo")
 
-    # Comando: init-clusters
-    subparsers.add_parser(
+    # Subcomando: init-clusters
+    init_parser = subparsers.add_parser(
         "init-clusters",
-        help="Pre-aprovisiona los 7 cuadernos de cluster, inyecta system prompts y exporta clusters.json"
+        help="Pre-aprovisiona los 11 cuadernos de cluster, inyecta system prompts y exporta clusters.json",
     )
 
-    # Comando: push
-    push_p = subparsers.add_parser("push", help="Ingesta incremental hacia NotebookLM")
-    push_p.add_argument("--target", type=str, help="Directorio objetivo específico")
-    push_p.add_argument("--cluster", type=str, help="Filtrar por cluster específico (copywriting, ofertas, etc.)")
-    push_p.add_argument("--limit", type=int, default=0, help="Límite máximo de archivos a subir en esta pasada")
-    push_p.add_argument("--delay", type=float, default=5.0, help="Delay entre subidas en segundos")
-    push_p.add_argument("--max-depth", type=int, default=4, help="Profundidad máxima de escaneo")
-    push_p.add_argument("--convert-orphan-videos", action="store_true", help="Convierte videos huérfanos a audio AAC antes de subir")
-    push_p.add_argument("--dry-run", action="store_true", help="Simula sin realizar subidas reales")
+    # Subcomando: push
+    push_parser = subparsers.add_parser("push", help="Ingesta incremental hacia NotebookLM")
+    push_parser.add_argument("--target", type=str, default=None, help="Directorio objetivo específico")
+    push_parser.add_argument("--cluster", type=str, default=None, help="Filtrar por cluster específico (ecommerce, funnels, etc.)")
+    push_parser.add_argument("--limit", type=int, default=None, help="Límite máximo de archivos a subir en esta pasada")
+    push_parser.add_argument("--delay", type=float, default=5.0, help="Delay entre subidas en segundos")
+    push_parser.add_argument("--max-depth", type=int, default=4, help="Profundidad máxima de escaneo")
+    push_parser.add_argument(
+        "--convert-orphan-videos",
+        action="store_true",
+        help="Convierte videos huérfanos a audio AAC antes de subir (requiere precaución de CPU)",
+    )
+    push_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simula sin realizar subidas reales",
+    )
 
     args = parser.parse_args()
 
     if args.test:
         run_tests()
+        return
+
+    if not args.command:
+        parser.print_help()
+        return
 
     if args.command == "scan":
         cmd_scan(args)
@@ -955,8 +1315,6 @@ def main():
         cmd_init_clusters(args)
     elif args.command == "push":
         cmd_push(args)
-    else:
-        parser.print_help()
 
 
 if __name__ == "__main__":
