@@ -47,10 +47,10 @@ fi
 
 # 2. Despliegue de Utilidad Soberana MCV Downloader (mcv-download)
 # Asegurar dependencias de sistema y navegador para MCV en ZCP limpio con guardas de idempotencia
-if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v 7z >/dev/null 2>&1 || ! command -v unrar >/dev/null 2>&1 || ! command -v megatools >/dev/null 2>&1; then
-    echo "• Asegurando dependencias de sistema para MCV (ffmpeg, unrar, 7z, megatools, python3-pip)..."
+if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v 7z >/dev/null 2>&1 || ! command -v unrar >/dev/null 2>&1 || ! command -v megatools >/dev/null 2>&1 || ! command -v pdftotext >/dev/null 2>&1; then
+    echo "• Asegurando dependencias de sistema para MCV y Knowledge Engine (ffmpeg, unrar, 7z, megatools, python3-pip, poppler-utils)..."
     sudo apt-get update -qq
-    sudo apt-get install -y -qq ffmpeg p7zip-full unrar megatools python3-pip 2>/dev/null || true
+    sudo apt-get install -y -qq ffmpeg p7zip-full unrar megatools python3-pip poppler-utils 2>/dev/null || true
 fi
 if ! python3 -c 'import requests, bs4, gdown, mcp' 2>/dev/null; then
     echo "• Instalando paquetes Python requeridos para MCV..."

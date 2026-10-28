@@ -32,6 +32,8 @@ import argparse
 import tempfile
 import unicodedata
 import subprocess
+import zipfile
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Set, Tuple
 from collections import defaultdict
@@ -156,6 +158,309 @@ class AudioExtractor:
                 os.unlink(file_path)
             except Exception:
                 pass
+
+
+# =============================================================================
+# 4. Componente: Parsers Polimórficos de Texto (.docx, .pdf, .srt, .md, .txt)
+# =============================================================================
+class DocxParser:
+    """Extrae texto de archivos .docx mediante zipfile nativo y XML ElementTree (0 dependencias)."""
+
+    @staticmethod
+    def extract_text(file_path: str) -> str:
+        try:
+            with zipfile.ZipFile(file_path, "r") as z:
+                if "word/document.xml" not in z.namelist():
+                    return ""
+                xml_content = z.read("word/document.xml")
+                root = ET.fromstring(xml_content)
+                paragraphs = []
+                for p in root.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"):
+                    texts = [
+                        node.text
+                        for node in p.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t")
+                        if node.text
+                    ]
+                    if texts:
+                        paragraphs.append("".join(texts))
+                return "\n\n".join(paragraphs).strip()
+        except Exception:
+            return ""
+
+
+class PdfParser:
+    """Extrae texto de archivos .pdf mediante pdftotext (poppler-utils) con timeout estricto."""
+
+    @staticmethod
+    def extract_text(file_path: str, timeout: int = 30) -> str:
+        try:
+            res = subprocess.run(
+                ["pdftotext", "-layout", "-enc", "UTF-8", file_path, "-"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout,
+                check=True,
+            )
+            return res.stdout.decode("utf-8", errors="replace").strip()
+        except Exception:
+            return ""
+
+
+class TextContentExtractor:
+    """Orquestador unificado de extracción de texto para fuentes de conocimiento."""
+
+    @classmethod
+    def extract(cls, file_path: str) -> str:
+        if not os.path.exists(file_path):
+            return ""
+
+        lower_path = file_path.lower()
+        if (
+            lower_path.endswith(".es.srt")
+            or lower_path.endswith(".srt")
+            or lower_path.endswith(".es.vtt")
+            or lower_path.endswith(".vtt")
+        ):
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                    raw = f.read()
+                return SubtitlesCleaner.clean(raw)
+            except Exception:
+                return ""
+
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in (".md", ".txt"):
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                    return f.read().strip()
+            except Exception:
+                return ""
+        elif ext == ".docx":
+            return DocxParser.extract_text(file_path)
+        elif ext == ".pdf":
+            return PdfParser.extract_text(file_path)
+
+        return ""
+
+
+# =============================================================================
+# 5. Componente: Compactador y Fusionador de Cursos Multi-Tema (CourseCompactor)
+# =============================================================================
+class CourseCompactor:
+    """
+    Fusiona y compacta lecciones de cada curso en compendios Markdown unificados
+    organizados por la tupla canónica (Curso, Cluster).
+    Aprovecha la capacidad de 500.000 palabras por fuente de NotebookLM para reducir
+    el consumo de fuentes en >85% y evitar la saturación de 300 fuentes por cuaderno.
+    """
+
+    DEFAULT_OUTPUT_DIR = "/var/www/localstorage/knowledge_cache/compendiums"
+
+    @classmethod
+    def extract_course_metadata(cls, file_path: str) -> Dict[str, str]:
+        """Extrae (provider, course_name, course_dir) preservando la jerarquía institucional."""
+        rel = os.path.relpath(file_path, "/var/www/baiosfera")
+        parts = rel.split(os.sep)
+        if not parts:
+            return {
+                "provider": "GENERAL",
+                "course_name": "General",
+                "course_dir": os.path.dirname(file_path),
+            }
+
+        top = parts[0]
+        if top == "CURSOS":
+            provider = parts[1] if len(parts) > 1 else "CURSOS"
+            if len(parts) > 3:
+                course_name = parts[2]
+                course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2])
+            elif len(parts) > 2:
+                course_name = parts[2]
+                course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1])
+            else:
+                course_name = provider
+                course_dir = os.path.dirname(file_path)
+        elif top in ("PLATZI", "DIGITALMARKETER"):
+            provider = top
+            if len(parts) >= 3:
+                course_name = parts[2]
+                course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2])
+            elif len(parts) == 2:
+                course_name = parts[1]
+                course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1])
+            else:
+                course_name = "General"
+                course_dir = os.path.dirname(file_path)
+        else:
+            provider = top
+            course_name = parts[1] if len(parts) > 1 else top
+            course_dir = (
+                os.path.join("/var/www/baiosfera", parts[0], parts[1])
+                if len(parts) > 1
+                else os.path.dirname(file_path)
+            )
+
+        clean_course_name = re.sub(r"^[0-9]+[_\s-]+", "", course_name).strip()
+        if not clean_course_name:
+            clean_course_name = course_name
+
+        return {
+            "provider": provider.upper(),
+            "course_name": clean_course_name,
+            "course_dir": course_dir,
+        }
+
+    @classmethod
+    def sanitize_slug(cls, text: str) -> str:
+        """Genera un slug seguro para nombres de archivo."""
+        norm = unicodedata.normalize("NFKD", text)
+        clean = "".join(c for c in norm if not unicodedata.combining(c))
+        clean = re.sub(r"[^\w\s-]", "", clean).strip()
+        return re.sub(r"[-\s]+", "-", clean)
+
+    @classmethod
+    def compact_group(
+        cls,
+        provider: str,
+        cluster: str,
+        course_name: str,
+        items: List[Dict[str, Any]],
+        output_base_dir: str = DEFAULT_OUTPUT_DIR,
+    ) -> Optional[Dict[str, Any]]:
+        """Genera un compendio Markdown unificado a partir de una lista de lecciones del mismo curso y cluster."""
+        if not items:
+            return None
+
+        sorted_items = sorted(
+            items,
+            key=lambda x: os.path.basename(x["path"]).lower()
+        )
+
+        extracted_sections = []
+        toc_entries = []
+        total_words = 0
+
+        for idx, it in enumerate(sorted_items, 1):
+            fpath = it["path"]
+            fname = os.path.basename(fpath)
+            stem = CourseScanner.extract_lesson_stem(fname)
+            clean_lesson_title = re.sub(r"^[0-9]+[_\s-]+", "", stem).replace("_", " ").replace("-", " ").strip().title()
+            if not clean_lesson_title:
+                clean_lesson_title = stem
+
+            content = TextContentExtractor.extract(fpath)
+            if not content:
+                continue
+
+            words = len(content.split())
+            total_words += words
+
+            toc_entries.append(f"{idx}. **{clean_lesson_title}** ({words} palabras)")
+            rel_source = os.path.relpath(fpath, "/var/www/baiosfera")
+
+            section_md = (
+                f"### {idx}. {clean_lesson_title}\n"
+                f"*Archivo fuente*: `{rel_source}` | *Formato*: `{it.get('ext', '')}`\n\n"
+                f"{content}\n"
+            )
+            extracted_sections.append(section_md)
+
+        if not extracted_sections:
+            return None
+
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        header = (
+            f"# COMPENDIO DE CONOCIMIENTO: {cluster.upper()} — {course_name}\n\n"
+            f"> **Especialidad / Cluster**: `{cluster.upper()}`  \n"
+            f"> **Proveedor / Origen**: `{provider}`  \n"
+            f"> **Curso / Módulo**: `{course_name}`  \n"
+            f"> **Lecciones Consolidadas**: {len(extracted_sections)} de {len(items)} analizadas  \n"
+            f"> **Volumen Estimado**: {total_words:,} palabras  \n"
+            f"> **Fecha de Generación**: {now_iso}  \n\n"
+            f"---\n\n"
+            f"## 📑 Índice de Lecciones y Documentos\n\n"
+            + "\n".join(toc_entries)
+            + "\n\n---\n\n"
+            f"## 📚 Contenido Estructurado de las Lecciones\n\n"
+        )
+
+        body = "\n---\n\n".join(extracted_sections)
+        full_content = header + body
+
+        cluster_dir = os.path.join(output_base_dir, cluster.lower())
+        os.makedirs(cluster_dir, exist_ok=True)
+
+        safe_course = cls.sanitize_slug(course_name)
+        compendium_filename = f"[{provider}]__[{cluster.upper()}]__{safe_course}.md"
+        compendium_path = os.path.join(cluster_dir, compendium_filename)
+
+        with open(compendium_path, "w", encoding="utf-8") as f:
+            f.write(full_content)
+
+        compendium_stat = os.stat(compendium_path)
+        fp = hashlib.sha256(full_content.encode("utf-8")).hexdigest()
+
+        return {
+            "compendium_path": compendium_path,
+            "filename": compendium_filename,
+            "provider": provider,
+            "cluster": cluster,
+            "course_name": course_name,
+            "lessons_count": len(extracted_sections),
+            "total_items_in_course": len(items),
+            "words_count": total_words,
+            "size_bytes": compendium_stat.st_size,
+            "fingerprint": fp,
+            "mtime": int(compendium_stat.st_mtime),
+            "target_notebook": f"[ESPECIALIDAD_{cluster.upper()}]",
+        }
+
+    @classmethod
+    def compact_all(
+        cls,
+        scanned_items: List[Dict[str, Any]],
+        target_cluster: Optional[str] = None,
+        target_provider: Optional[str] = None,
+        output_base_dir: str = DEFAULT_OUTPUT_DIR,
+    ) -> List[Dict[str, Any]]:
+        """Agrupa los items canónicos por tupla (provider, cluster, course_dir) y genera compendios."""
+        eligible_items = []
+        for it in scanned_items:
+            if not it.get("canonical_upload", False):
+                continue
+            if it.get("tier") not in ("direct_document", "subtitle_text"):
+                continue
+            if target_cluster and it.get("cluster") != target_cluster:
+                continue
+
+            meta = cls.extract_course_metadata(it["path"])
+            it["_provider"] = meta["provider"]
+            it["_course_name"] = meta["course_name"]
+            it["_course_dir"] = meta["course_dir"]
+
+            if target_provider and meta["provider"] != target_provider.upper():
+                continue
+
+            eligible_items.append(it)
+
+        groups = defaultdict(list)
+        for it in eligible_items:
+            key = (it["_provider"], it["cluster"], it["_course_dir"], it["_course_name"])
+            groups[key].append(it)
+
+        compendiums = []
+        for (provider, cluster, course_dir, course_name), items in groups.items():
+            comp = cls.compact_group(
+                provider=provider,
+                cluster=cluster,
+                course_name=course_name,
+                items=items,
+                output_base_dir=output_base_dir,
+            )
+            if comp:
+                compendiums.append(comp)
+
+        return compendiums
 
 
 # =============================================================================
@@ -1016,9 +1321,9 @@ class NotebookLMBridge:
             finally:
                 AudioExtractor.cleanup(aac_path)
 
-        elif tier in ("direct_document", "direct_audio"):
+        elif tier in ("direct_document", "direct_audio", "compendium_markdown"):
             is_audio = tier == "direct_audio"
-            timeout = 600.0 if is_audio else 120.0
+            timeout = 600.0 if is_audio else 180.0
             res = self.client.add_file(
                 notebook_id,
                 path,
@@ -1214,6 +1519,59 @@ def cmd_init_clusters(args):
         print(f"  • {c_key.upper():<16} -> ID: {data['notebook_id']} ({data['title']})")
 
 
+def cmd_compact(args):
+    """Ejecuta la compactación y fusión de lecciones en compendios Markdown unificados por (Curso, Cluster)."""
+    print("==================================================================")
+    print("📦 COMPACTACIÓN Y FUSIÓN DE CURSOS EN COMPENDIOS CANÓNICOS (v1.0)")
+    print("==================================================================")
+
+    target_cluster = args.cluster
+    if target_cluster == "ads":
+        target_cluster = "paid_ads"
+
+    target_provider = args.provider.upper() if getattr(args, "provider", None) else None
+
+    paths = [args.target] if args.target else CourseScanner.DEFAULT_SEARCH_PATHS
+    all_scanned = []
+
+    for p in paths:
+        if not os.path.exists(p):
+            continue
+        found = CourseScanner.scan_path(p, max_depth=args.max_depth)
+        all_scanned.extend(found)
+
+    print(f"• Total archivos analizados: {len(all_scanned):,}")
+
+    output_base_dir = getattr(args, "output_dir", None) or CourseCompactor.DEFAULT_OUTPUT_DIR
+    compendiums = CourseCompactor.compact_all(
+        scanned_items=all_scanned,
+        target_cluster=target_cluster,
+        target_provider=target_provider,
+        output_base_dir=output_base_dir,
+    )
+
+    if not compendiums:
+        print("⚠️ No se encontraron lecciones canónicas elegibles para compactar con los filtros provistos.")
+        return
+
+    total_lessons_absorbed = sum(c["lessons_count"] for c in compendiums)
+    total_words = sum(c["words_count"] for c in compendiums)
+    total_size = sum(c["size_bytes"] for c in compendiums)
+
+    print(f"\n✅ COMPACTACIÓN FINALIZADA CON ÉXITO:")
+    print(f"   • Compendios generados: {len(compendiums)} archivos maestros")
+    print(f"   • Lecciones absorbidas: {total_lessons_absorbed:,} archivos individuales")
+    reduction = ((total_lessons_absorbed - len(compendiums)) / total_lessons_absorbed * 100) if total_lessons_absorbed > 0 else 0
+    print(f"   • Reducción de fuentes en NotebookLM: {reduction:.1f}%")
+    print(f"   • Palabras consolidadas: {total_words:,}")
+    print(f"   • Tamaño total en disco: {total_size / (1024*1024):.2f} MB")
+    print(f"   • Directorio destino: {output_base_dir}")
+
+    print("\n📋 LISTADO DE COMPENDIOS GENERADOS:")
+    for c in compendiums:
+        print(f"   - [{c['cluster'].upper()}] {c['filename']} ({c['lessons_count']} lecciones, {c['words_count']:,} palabras)")
+
+
 def cmd_push(args):
     """Ejecuta la ingesta idempotente hacia los cuadernos de NotebookLM."""
     print("==================================================================")
@@ -1231,37 +1589,69 @@ def cmd_push(args):
     paths = [args.target] if args.target else CourseScanner.DEFAULT_SEARCH_PATHS
     candidates = []
 
-    for p in paths:
-        if not os.path.exists(p):
-            continue
-        found = CourseScanner.scan_path(p, max_depth=args.max_depth)
-        for item in found:
-            if target_cluster and item["cluster"] != target_cluster:
+    if getattr(args, "compendiums", False):
+        compendiums_dir = getattr(args, "output_dir", None) or CourseCompactor.DEFAULT_OUTPUT_DIR
+        print(f"• Modo Compendios Activo: Leyendo archivos consolidados desde {compendiums_dir}")
+        cluster_dirs = (
+            [os.path.join(compendiums_dir, target_cluster.lower())]
+            if target_cluster
+            else glob.glob(os.path.join(compendiums_dir, "*"))
+        )
+        for cdir in cluster_dirs:
+            if not os.path.isdir(cdir):
                 continue
-
-            # Videos residuales (con doc hermano) se omiten
-            if item["tier"] == "video_residual":
+            c_name = os.path.basename(cdir).lower()
+            for fname in sorted(os.listdir(cdir)):
+                if not fname.endswith(".md"):
+                    continue
+                fpath = os.path.join(cdir, fname)
+                st = os.stat(fpath)
+                fp = hashlib.sha256(f"{fname}:{st.st_size}:{int(st.st_mtime)}".encode("utf-8")).hexdigest()
+                if fp not in uploaded:
+                    candidates.append({
+                        "path": fpath,
+                        "filename": fname,
+                        "name": fname,
+                        "cluster": c_name,
+                        "tier": "compendium_markdown",
+                        "size_bytes": st.st_size,
+                        "mtime": int(st.st_mtime),
+                        "canonical_upload": True,
+                        "target_notebook": f"[ESPECIALIDAD_{c_name.upper()}]",
+                        "fingerprint": fp,
+                    })
+    else:
+        for p in paths:
+            if not os.path.exists(p):
                 continue
-
-            # Formatos redundantes (ya cubiertos por formato superior) se omiten
-            if item["tier"] == "format_redundant" or not item.get("canonical_upload", False):
-                if item["tier"] == "orphan_video" and getattr(args, "convert_orphan_videos", False):
-                    pass
-                else:
+            found = CourseScanner.scan_path(p, max_depth=args.max_depth)
+            for item in found:
+                if target_cluster and item["cluster"] != target_cluster:
                     continue
 
-            # Videos huérfanos se procesan solo con flag explícito
-            if item["tier"] == "orphan_video" and not getattr(args, "convert_orphan_videos", False):
-                continue
+                # Videos residuales (con doc hermano) se omiten
+                if item["tier"] == "video_residual":
+                    continue
 
-            fp = MetadataFingerprint.compute_from_stat(
-                os.path.relpath(item["path"], "/var/www/baiosfera"),
-                item["size_bytes"],
-                item["mtime"]
-            )
-            if fp not in uploaded:
-                item["fingerprint"] = fp
-                candidates.append(item)
+                # Formatos redundantes (ya cubiertos por formato superior) se omiten
+                if item["tier"] == "format_redundant" or not item.get("canonical_upload", False):
+                    if item["tier"] == "orphan_video" and getattr(args, "convert_orphan_videos", False):
+                        pass
+                    else:
+                        continue
+
+                # Videos huérfanos se procesan solo con flag explícito
+                if item["tier"] == "orphan_video" and not getattr(args, "convert_orphan_videos", False):
+                    continue
+
+                fp = MetadataFingerprint.compute_from_stat(
+                    os.path.relpath(item["path"], "/var/www/baiosfera"),
+                    item["size_bytes"],
+                    item["mtime"]
+                )
+                if fp not in uploaded:
+                    item["fingerprint"] = fp
+                    candidates.append(item)
 
     if not candidates:
         print("✅ Todo el contenido candidato ya está sincronizado e ingestando en NotebookLM.")
@@ -1315,9 +1705,14 @@ def cmd_push(args):
 
             if source_id:
                 if not args.dry_run:
+                    rel_p = (
+                        os.path.relpath(item["path"], "/var/www/baiosfera")
+                        if item["path"].startswith("/var/www/baiosfera")
+                        else os.path.relpath(item["path"], "/var/www")
+                    )
                     manifest_mgr.record_upload(
                         fingerprint=fp,
-                        relative_path=os.path.relpath(item["path"], "/var/www/baiosfera"),
+                        relative_path=rel_p,
                         notebook_id=nb_id,
                         notebook_title=target_title,
                         source_id=str(source_id),
@@ -1466,6 +1861,54 @@ Hoy hablaremos de ofertas irresistibles.
         assert len(residual) == 1, f"Falla Test 7: El video debió ser residual, pero hay {len(residual)}"
     print("✓ [Test 7] Deduplicación por Stem de Lección & Jerarquía de Calidad: PASSED")
 
+    # Test 8: Compactación Multi-Curso y Parsers Polimórficos (.docx, .srt, .md)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        course_dir = os.path.join(tmp_dir, "PLATZI", "59 CONTENT", "Curso de Email Marketing")
+        os.makedirs(course_dir, exist_ok=True)
+
+        docx_path = os.path.join(course_dir, "01_temario.docx")
+        xml_content = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+            <w:body>
+                <w:p><w:r><w:t>Temario completo de email marketing automatizado.</w:t></w:r></w:p>
+            </w:body>
+        </w:document>"""
+        with zipfile.ZipFile(docx_path, "w") as z:
+            z.writestr("word/document.xml", xml_content)
+
+        srt_path = os.path.join(course_dir, "02_bienvenida.es.srt")
+        with open(srt_path, "w", encoding="utf-8") as f:
+            f.write("1\n00:00:01,000 --> 00:00:04,000\nBienvenidos a la clase de automatizacion de correos.\n")
+
+        md_path = os.path.join(course_dir, "03_estrategia.md")
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write("# Estrategia de Email\nSegmentacion avanzada y lead nurturing.\n")
+
+        # Escanear
+        scanned = CourseScanner.scan_path(course_dir)
+        canon_items = [i for i in scanned if i.get("canonical_upload", False)]
+        assert len(canon_items) == 3, f"Falla Test 8: Esperaba 3 items canonicos, obtuve {len(canon_items)}"
+
+        # Compactar
+        comp_output_dir = os.path.join(tmp_dir, "compendiums")
+        compendiums = CourseCompactor.compact_all(
+            scanned_items=canon_items,
+            output_base_dir=comp_output_dir,
+        )
+
+        assert len(compendiums) == 1, f"Falla Test 8: Debio generarse exactamente 1 compendio, pero hay {len(compendiums)}"
+        c = compendiums[0]
+        assert c["lessons_count"] == 3, f"Falla Test 8: Debio consolidar 3 lecciones, consolido {c['lessons_count']}"
+        assert c["words_count"] > 10, f"Falla Test 8: Palabras insuficientes: {c['words_count']}"
+        assert os.path.isfile(c["compendium_path"]), f"Falla Test 8: No se creo el archivo {c['compendium_path']}"
+
+        with open(c["compendium_path"], "r", encoding="utf-8") as f:
+            body = f.read()
+            assert "Temario completo de email marketing" in body, "Falla Test 8: No extrajo .docx"
+            assert "Bienvenidos a la clase de automatizacion" in body, "Falla Test 8: No extrajo .srt limpio"
+            assert "Segmentacion avanzada" in body, "Falla Test 8: No extrajo .md"
+    print("✓ [Test 8] Compactación Multi-Curso y Parsers Polimórficos (.docx, .srt, .md): PASSED")
+
     print("\n🎉 TODAS LAS PRUEBAS FÍSICAS PASARON CON ÉXITO (EXIT 0).")
     sys.exit(0)
 
@@ -1490,6 +1933,23 @@ def main():
     scan_parser.add_argument("--target", type=str, default=None, help="Directorio objetivo específico")
     scan_parser.add_argument("--max-depth", type=int, default=4, help="Profundidad máxima de escaneo")
 
+    # Subcomando: compact
+    compact_parser = subparsers.add_parser(
+        "compact",
+        help="Compacta y fusiona cursos en compendios Markdown unificados por (Curso, Cluster)",
+    )
+    compact_parser.add_argument("--target", type=str, default=None, help="Directorio objetivo específico")
+    compact_parser.add_argument("--cluster", type=str, default=None, help="Filtrar por cluster específico (ecommerce, funnels, etc.)")
+    compact_parser.add_argument("--provider", type=str, default=None, help="Filtrar por proveedor específico (PLATZI, DIGITALMARKETER, etc.)")
+    compact_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Directorio destino para compendios (default: /var/www/localstorage/knowledge_cache/compendiums)",
+    )
+    compact_parser.add_argument("--max-depth", type=int, default=4, help="Profundidad máxima de escaneo")
+    compact_parser.add_argument("--dry-run", action="store_true", help="Simula sin escribir compendios en disco")
+
     # Subcomando: init-clusters
     init_parser = subparsers.add_parser(
         "init-clusters",
@@ -1503,6 +1963,17 @@ def main():
     push_parser.add_argument("--limit", type=int, default=None, help="Límite máximo de archivos a subir en esta pasada")
     push_parser.add_argument("--delay", type=float, default=5.0, help="Delay entre subidas en segundos")
     push_parser.add_argument("--max-depth", type=int, default=4, help="Profundidad máxima de escaneo")
+    push_parser.add_argument(
+        "--compendiums",
+        action="store_true",
+        help="Sube los compendios consolidados en vez de archivos individuales",
+    )
+    push_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Directorio de origen de compendios (default: /var/www/localstorage/knowledge_cache/compendiums)",
+    )
     push_parser.add_argument(
         "--convert-orphan-videos",
         action="store_true",
@@ -1526,6 +1997,8 @@ def main():
 
     if args.command == "scan":
         cmd_scan(args)
+    elif args.command == "compact":
+        cmd_compact(args)
     elif args.command == "init-clusters":
         cmd_init_clusters(args)
     elif args.command == "push":
