@@ -374,6 +374,45 @@ Un cliente que intenta pagar jamás debe recibir un error `500 Internal Server E
    - **Solo** actualizar el campo `email` o `whatsapp` si el nuevo valor no pertenece a otra fila de la base de datos. Si ya está ocupado por otro registro, conservar el valor original sin forzar un `UPDATE` que dispararía la restricción `UNIQUE`.
 4. **Fallback Transaccional en Inserciones:** Si por concurrencia un `INSERT` captura el error `23505` (unique violation), capturar la excepción y re-consultar el registro existente en lugar de colapsar la respuesta HTTP.
 
+### 8.1 Contrato Soberano de Coexistencia: GitOps CI/CD vs. Mutaciones en Caliente en E-Commerce (Telegram / Hermes)
+
+Para prevenir el **Split-Brain / Overwrite Hazard** entre cambios del comerciante desde el celular y despliegues formales de código:
+
+1. **PostgreSQL es el Único System of Record (SoR)**:
+   - Los datos comerciales (precios, stock, imágenes y estado activo) pertenecen exclusivamente a la base de datos viva PostgreSQL, modificada en caliente vía Telegram (Hermes Agent), panel administrativo o CRM.
+   - Git es el SoR exclusivo para código fuente, componentes UI, CSS y esquemas DDL (`db:migrate`).
+
+2. **Aislamiento en `zerops.yaml`**:
+   - En el runtime de producción (`webprod`), `initCommands` ejecuta **ÚNICAMENTE** migraciones con `zsc execOnce`:
+     ```yaml
+     initCommands:
+       - case "$DATABASE_URL" in ${*|"") echo "ℹ️ DB no aprovisionada" ;; *) zsc execOnce ${appVersionId} -- bun run db:migrate || true ;; esac
+     start: exec bun run apps/web/dist/server/entry.mjs
+     ```
+   - **Prohibido ejecutar `db:seed` en los `initCommands` de producción**: `initCommands` se ejecuta en cada reinicio, failover y auto-escalado horizontal de Incus LXC; invocar seeds ahí destruiría los precios y stock del comerciante.
+
+3. **Ingesta Aditiva y Upsert Selectivo a Nivel de Columna**:
+   - Cuando el desarrollador introduce o actualiza productos desde código (`seed.ts`), el upsert actualiza únicamente metadata descriptiva (`name`, `description`, `category`):
+     ```sql
+     ON CONFLICT (slug) DO UPDATE SET
+       name = EXCLUDED.name,
+       description = EXCLUDED.description,
+       category = EXCLUDED.category;
+     -- base_price, stock, images y is_active NUNCA se sobreescriben en conflicto
+     ```
+   - Prohibido ejecutar sentencias destructivas (`DELETE FROM services` o `DELETE FROM products`) dentro de scripts de inicialización.
+
+4. **Blindaje de Red y Host Filtering en Astro SSR**:
+   - Para evitar vulnerabilidades de DNS Rebinding (CVE GHSA-vg6x-rcgg-rjx6) y bloqueos de Vite 6 en entornos de desarrollo o previews, `allowedHosts` utiliza comodines seguros con punto inicial:
+     ```javascript
+     server: {
+       host: "0.0.0.0",
+       port: 3000,
+       allowedHosts: [".zerops.app", `.${process.env.PRIMARY_DOMAIN || 'midominio.com'}`, "localhost"]
+     }
+     ```
+   - En producción SSR (`dist/server/entry.mjs`), Astro corre en modo standalone con Node/Bun nativo sin el dev server de Vite.
+
 ---
 
 ## 9. Desacople Estricto de Formularios por Intención de Negocio
