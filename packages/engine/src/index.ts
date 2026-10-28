@@ -15,4 +15,5 @@ export * from "./native";
 export * from "./dtcg";
 export * from "./meta-capi";
 export * from "./catalog-feed";
+export * from "./meta-ads";
 
