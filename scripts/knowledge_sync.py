@@ -326,6 +326,7 @@ class CourseCompactor:
         course_name: str,
         items: List[Dict[str, Any]],
         output_base_dir: str = DEFAULT_OUTPUT_DIR,
+        dry_run: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """Genera un compendio Markdown unificado a partir de una lista de lecciones del mismo curso y cluster."""
         if not items:
@@ -388,16 +389,21 @@ class CourseCompactor:
         full_content = header + body
 
         cluster_dir = os.path.join(output_base_dir, cluster.lower())
-        os.makedirs(cluster_dir, exist_ok=True)
-
         safe_course = cls.sanitize_slug(course_name)
         compendium_filename = f"[{provider}]__[{cluster.upper()}]__{safe_course}.md"
         compendium_path = os.path.join(cluster_dir, compendium_filename)
 
-        with open(compendium_path, "w", encoding="utf-8") as f:
-            f.write(full_content)
+        if not dry_run:
+            os.makedirs(cluster_dir, exist_ok=True)
+            with open(compendium_path, "w", encoding="utf-8") as f:
+                f.write(full_content)
+            compendium_stat = os.stat(compendium_path)
+            size_bytes = compendium_stat.st_size
+            mtime = int(compendium_stat.st_mtime)
+        else:
+            size_bytes = len(full_content.encode("utf-8"))
+            mtime = int(time.time())
 
-        compendium_stat = os.stat(compendium_path)
         fp = hashlib.sha256(full_content.encode("utf-8")).hexdigest()
 
         return {
@@ -409,9 +415,9 @@ class CourseCompactor:
             "lessons_count": len(extracted_sections),
             "total_items_in_course": len(items),
             "words_count": total_words,
-            "size_bytes": compendium_stat.st_size,
+            "size_bytes": size_bytes,
             "fingerprint": fp,
-            "mtime": int(compendium_stat.st_mtime),
+            "mtime": mtime,
             "target_notebook": f"[ESPECIALIDAD_{cluster.upper()}]",
         }
 
@@ -422,6 +428,7 @@ class CourseCompactor:
         target_cluster: Optional[str] = None,
         target_provider: Optional[str] = None,
         output_base_dir: str = DEFAULT_OUTPUT_DIR,
+        dry_run: bool = False,
     ) -> List[Dict[str, Any]]:
         """Agrupa los items canónicos por tupla (provider, cluster, course_dir) y genera compendios."""
         eligible_items = []
@@ -456,6 +463,7 @@ class CourseCompactor:
                 course_name=course_name,
                 items=items,
                 output_base_dir=output_base_dir,
+                dry_run=dry_run,
             )
             if comp:
                 compendiums.append(comp)
@@ -1543,11 +1551,16 @@ def cmd_compact(args):
     print(f"• Total archivos analizados: {len(all_scanned):,}")
 
     output_base_dir = getattr(args, "output_dir", None) or CourseCompactor.DEFAULT_OUTPUT_DIR
+    is_dry_run = getattr(args, "dry_run", False)
+    if is_dry_run:
+        print("🔍 MODO SIMULACIÓN (--dry-run ACTIVO): No se escribirán archivos en disco.")
+
     compendiums = CourseCompactor.compact_all(
         scanned_items=all_scanned,
         target_cluster=target_cluster,
         target_provider=target_provider,
         output_base_dir=output_base_dir,
+        dry_run=is_dry_run,
     )
 
     if not compendiums:
