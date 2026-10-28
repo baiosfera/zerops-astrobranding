@@ -2640,6 +2640,11 @@ def run_tests():
         assert res_real_payload.get("decision") in ["continue", "CONTINUE"] and "SENSOR-FIRST" in res_real_payload.get("reason", "").upper(), f"Expected CONTINUE on real Antigravity payload, got {res_real_payload}"
         print("✓ Test 60 Passed: Real Antigravity payload with lastUserInput triggers Stop Hook without mocks")
 
+        # Test 61: Commercial & Ad Telemetry Skill Trigger Radar (Meta Ads, Google Ads, TikTok, CAPI)
+        telemetry_matches = detect_skills_in_prompt("vamos a configurar meta ads y google ads con consent mode v2 y localbusiness sab")
+        assert any(s[0] == "ad-telemetry" for s in telemetry_matches), f"Expected ad-telemetry match in detect_skills_in_prompt, got {telemetry_matches}"
+        print("✓ Test 61 Passed: Commercial & Ad Telemetry Skill Trigger Radar matches ad-telemetry (Meta/Google/TikTok/CAPI)")
+
     finally:
         if os.path.exists("/tmp/.gov_mutation_stop_force_count"):
             try:

@@ -12,3 +12,6 @@ export * from "./frappe";
 export * from "./meta";
 export * from "./catalog";
 export * from "./meta-ads";
+export * from "./presence";
+export * from "./offerings";
+export * from "./telemetry";
