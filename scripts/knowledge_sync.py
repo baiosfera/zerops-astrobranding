@@ -260,7 +260,8 @@ class CourseCompactor:
         "vip", "basic", "profesional", "categorias", "author", "archivos",
         "1. cua", "2. cua", "3. cua", "cursos sprint", "cortos", "00. incompletos",
         "01. desarrollo personal", "02. seducción", "03. inversiones finanzas",
-        "04. instagram", "05. ventas", "06. meta ads", "07. marketing"
+        "04. instagram", "05. ventas", "06. meta ads", "07. marketing",
+        "03 training playbooks and workshops"
     }
 
     @classmethod
@@ -294,13 +295,28 @@ class CourseCompactor:
                 course_dir = os.path.dirname(file_path)
         elif top in ("PLATZI", "DIGITALMARKETER"):
             provider = top
-            if len(parts) >= 3:
+            if len(parts) >= 4 and parts[1].lower() in cls.INTERMEDIATE_TIERS:
+                course_name = parts[2]
+                course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2])
+            elif len(parts) >= 3:
                 course_name = parts[2]
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2])
             elif len(parts) == 2:
                 stem = os.path.splitext(parts[1])[0]
                 course_name = stem
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1])
+            else:
+                course_name = "General"
+                course_dir = os.path.dirname(file_path)
+        elif top == "IA INTELIGENCIA ARTIFICIAL":
+            provider = "IA"
+            if len(parts) >= 3:
+                course_name = parts[1]
+                course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1])
+            elif len(parts) == 2:
+                stem = os.path.splitext(parts[1])[0]
+                course_name = stem
+                course_dir = os.path.join("/var/www/baiosfera", parts[0])
             else:
                 course_name = "General"
                 course_dir = os.path.dirname(file_path)
@@ -596,6 +612,7 @@ class CourseScanner:
     DEFAULT_SEARCH_PATHS = [
         "/var/www/baiosfera/CURSOS",
         "/var/www/baiosfera/DIGITALMARKETER",
+        "/var/www/baiosfera/IA INTELIGENCIA ARTIFICIAL",
         "/var/www/baiosfera/PLATZI",
     ]
 
@@ -696,13 +713,19 @@ class CourseScanner:
 
     # Mapeo prioritario de Siglas de Tracks (Nivel 4 - Prioridad Máxima)
     TRACK_TAGS_MAP = {
+        "ia inteligencia artificial": "ia_prompting",
+        "spec driven developer": "ia_prompting",
+        "cyberclick": "ia_prompting",
         "[ecom]": "ecommerce",
         "03 ecom": "ecommerce",
         "[autom]": "automatizaciones",
         "04 autom": "automatizaciones",
+        "12 dev web": "automatizaciones",
+        "38 agile data project strategy": "automatizaciones",
         "[ai]": "ia_prompting",
         "14 ai prompt": "ia_prompting",
         "[prompt]": "ia_prompting",
+        "monetiza tu talento": "ia_prompting",
         "[uxui]": "ux_ui",
         "[designthinking]": "ux_ui",
         "[graphic]": "ux_ui",
@@ -710,13 +733,16 @@ class CourseScanner:
         "[growth]": "funnels",
         "[journey]": "funnels",
         "47 growth journey mktn product": "funnels",
+        "23 startup": "ofertas",
         "[branding]": "branding",
         "30 branding marcap invest": "branding",
         "[ads]": "paid_ads",
         "[pauta]": "paid_ads",
+        "34 social +5": "paid_ads",
         "[copy]": "copywriting",
         "[email]": "email",
         "[whatsapp]": "whatsapp",
+        "11 skilll working": "general",
     }
 
     @classmethod
