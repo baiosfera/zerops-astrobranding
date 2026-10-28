@@ -632,10 +632,18 @@ if [ "$UPDATE_MODE" = true ]; then
     fi
 
     # Desplegar CLIs esenciales en PATH y .bin
-    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync; do
-        if [ -f "$REPO_DIR/scripts/$cli" ] || [ -f "$REPO_DIR/scripts/$cli.sh" ]; then
+    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync knowledge-sync anti-slop-linter; do
+        src_cli=""
+        if [ -f "$REPO_DIR/scripts/$cli" ]; then
             src_cli="$REPO_DIR/scripts/$cli"
-            [ ! -f "$src_cli" ] && src_cli="$REPO_DIR/scripts/$cli.sh"
+        elif [ -f "$REPO_DIR/scripts/$cli.sh" ]; then
+            src_cli="$REPO_DIR/scripts/$cli.sh"
+        elif [ -f "$REPO_DIR/scripts/$cli.py" ]; then
+            src_cli="$REPO_DIR/scripts/$cli.py"
+        elif [ -f "$REPO_DIR/scripts/${cli//-/_}.py" ]; then
+            src_cli="$REPO_DIR/scripts/${cli//-/_}.py"
+        fi
+        if [ -n "$src_cli" ]; then
             cp -f "$src_cli" "$PROJECT_ROOT/.bin/$cli" 2>/dev/null || true
             chmod +x "$PROJECT_ROOT/.bin/$cli" 2>/dev/null || true
             sudo ln -sf "$PROJECT_ROOT/.bin/$cli" "/usr/local/bin/$cli" 2>/dev/null || true
