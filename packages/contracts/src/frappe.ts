@@ -65,3 +65,79 @@ export const FrappeSalesInvoiceSchema = z.object({
 
 export type FrappeSalesInvoice = z.infer<typeof FrappeSalesInvoiceSchema>;
 export type FrappeSalesInvoiceInput = z.input<typeof FrappeSalesInvoiceSchema>;
+
+export const FrappeDocTypeTargetSchema = z.enum([
+  "CRM Lead",
+  "CRM Deal",
+  "Sales Order",
+  "Sales Invoice",
+  "Subscription",
+]);
+
+export type FrappeDocTypeTarget = z.infer<typeof FrappeDocTypeTargetSchema>;
+
+export const OfferingToFrappeMappingSchema = z.object({
+  archetype: z.enum([
+    "physical_goods",
+    "courses_education",
+    "memberships_mrr",
+    "events_ticketing",
+    "digital_products",
+    "service_bookings",
+  ]),
+  target_doctype: FrappeDocTypeTargetSchema,
+  is_stock_item: z.boolean(),
+  requires_delivery_note: z.boolean(),
+  crm_qualification_required: z.boolean(),
+});
+
+export type OfferingToFrappeMapping = z.infer<typeof OfferingToFrappeMappingSchema>;
+
+export function getFrappeMappingForArchetype(
+  archetype: "physical_goods" | "courses_education" | "memberships_mrr" | "events_ticketing" | "digital_products" | "service_bookings"
+): OfferingToFrappeMapping {
+  switch (archetype) {
+    case "physical_goods":
+      return {
+        archetype,
+        target_doctype: "Sales Order",
+        is_stock_item: true,
+        requires_delivery_note: true,
+        crm_qualification_required: false,
+      };
+    case "courses_education":
+    case "digital_products":
+      return {
+        archetype,
+        target_doctype: "Sales Invoice",
+        is_stock_item: false,
+        requires_delivery_note: false,
+        crm_qualification_required: false,
+      };
+    case "memberships_mrr":
+      return {
+        archetype,
+        target_doctype: "Subscription",
+        is_stock_item: false,
+        requires_delivery_note: false,
+        crm_qualification_required: false,
+      };
+    case "events_ticketing":
+      return {
+        archetype,
+        target_doctype: "Sales Invoice",
+        is_stock_item: false,
+        requires_delivery_note: false,
+        crm_qualification_required: false,
+      };
+    case "service_bookings":
+      return {
+        archetype,
+        target_doctype: "CRM Lead",
+        is_stock_item: false,
+        requires_delivery_note: false,
+        crm_qualification_required: true,
+      };
+  }
+}
+

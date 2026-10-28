@@ -64,4 +64,20 @@ describe("@astrobranding/contracts", () => {
     expect(signal.event_name).toBe("Purchase");
     expect(signal.value).toBe(130000);
   });
+
+  it("should correctly map offering archetypes to Frappe DocTypes", () => {
+    const { getFrappeMappingForArchetype } = require("./frappe");
+    
+    const physical = getFrappeMappingForArchetype("physical_goods");
+    expect(physical.target_doctype).toBe("Sales Order");
+    expect(physical.is_stock_item).toBe(true);
+    expect(physical.requires_delivery_note).toBe(true);
+
+    const booking = getFrappeMappingForArchetype("service_bookings");
+    expect(booking.target_doctype).toBe("CRM Lead");
+    expect(booking.crm_qualification_required).toBe(true);
+
+    const membership = getFrappeMappingForArchetype("memberships_mrr");
+    expect(membership.target_doctype).toBe("Subscription");
+  });
 });
