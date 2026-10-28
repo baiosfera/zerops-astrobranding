@@ -34,6 +34,7 @@ import unicodedata
 import subprocess
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Set, Tuple
+from collections import defaultdict
 
 # Inyectar site-packages de uv notebooklm-mcp-cli si existe
 UV_SITE_PACKAGES = "/home/zerops/.local/share/uv/tools/notebooklm-mcp-cli/lib/python3.12/site-packages"
@@ -292,61 +293,72 @@ class CourseScanner:
     # 11 Especialidades Soberanas
     THEMATIC_CLUSTERS = {
         "copywriting": [
-            "copy", "copywriting", "escritura", "titul", "hook", "storytelling",
-            "narrativa", "persuasion", "redaccion", "headline", "swipe", "script",
-            "words that sell", "carta de venta", "cartas de venta", "texto persuasivo"
+            "copy", "copywriting", "escritura persuasiva", "titular", "titulares",
+            "titulo", "titulos", "gancho", "ganchos", "hook", "hooks", "storytelling",
+            "narrativa", "persuasion", "redaccion", "redacción", "headline", "headlines",
+            "swipe file", "swipe", "script", "words that sell", "carta de venta", "cartas de venta", "texto persuasivo"
         ],
         "ofertas": [
-            "oferta", "precio", "pricing", "hormozi", "grand slam", "value equation",
-            "propuesta de valor", "garantia", "offer", "guarantee", "bonus", "stack",
-            "site offers", "irresistible", "modelos de negocio", "monetiz"
+            "oferta", "ofertas", "precio", "pricing", "hormozi", "grand slam", "value equation",
+            "propuesta de valor", "garantia", "garantía", "offer", "offers", "guarantee",
+            "bonus", "stack", "bonus stack", "offer stack", "site offers", "irresistible",
+            "modelos de negocio", "monetiz", "icp", "ideal customer", "ideal client", "cliente ideal", "avatar"
         ],
         "funnels": [
-            "funnel", "embudo", "checkout", "bump", "upsell", "downsell", "cvj",
-            "customer value journey", "landing", "conversion", "convert", "optin",
-            "squeeze", "lead magnet", "playbook", "campaign fix", "sales-boosting",
-            "funnel architecture", "cro", "ab testing", "growth hacking", "crecimiento"
+            "funnel", "funnels", "embudo", "embudos", "checkout", "checkouts",
+            "bump", "order bump", "upsell", "downsell", "cvj", "customer value journey",
+            "landing", "landing page", "landings", "conversion", "conversiones",
+            "optin", "squeeze", "squeeze page", "lead magnet", "vsl", "video sales letter",
+            "funnel architecture", "cro", "ab testing", "tripwire", "home page", "homepage"
         ],
         "whatsapp": [
-            "whatsapp", "chat", "bot", "cierre", "mensajeria", "conversacional",
-            "chatbot", "dm", "atencion al cliente", "atención al cliente"
+            "whatsapp", "chatbot", "chatbots", "cierre por chat", "mensajeria",
+            "mensajería", "conversacional", "conversational commerce", "atencion al cliente",
+            "atención al cliente"
         ],
         "email": [
-            "email", "correo", "newsletter", "nurture", "secuencia", "listmonk",
+            "email", "correo", "newsletter", "nurture", "secuencia", "secuencias", "listmonk",
             "broadcast", "subject line", "autoresponder", "welcome sequence",
-            "re-engagement", "entregabilidad"
+            "re engagement", "entregabilidad", "email marketing", "dmarc", "dkim"
         ],
         "paid_ads": [
-            "ads", "pauta", "meta ads", "facebook ads", "tiktok ads", "creativo",
-            "trafico", "traffic", "anuncio", "velocity", "audiencia", "escalado",
-            "paid", "media buyer", "roas", "creative", "campaign", "ad copy",
-            "google ads", "performance max"
+            "ads", "pauta", "meta ads", "facebook ads", "fb ads", "instagram ads", "tiktok ads",
+            "creativo", "creativos", "trafico", "tráfico", "traffic", "anuncio", "anuncios",
+            "velocity", "audiencia", "audiencias", "escalado", "paid media", "media buyer",
+            "roas", "ad copy", "google ads", "performance max", "campaign fixer", "campaign", "campaigns"
         ],
         "branding": [
-            "brand", "marca", "branding", "identidad", "arquetipo", "posicionamiento",
-            "category of one", "tono de voz", "authority", "reputation", "brand guidelines"
+            "brand", "marca", "branding", "identidad", "arquetipo", "arquetipos",
+            "posicionamiento", "category of one", "tono de voz", "authority", "reputation",
+            "brand guidelines", "marca personal"
         ],
         "ecommerce": [
             "ecom", "ecommerce", "supply chain", "logistica", "logística", "tienda",
-            "dropshipping", "shopify", "woocommerce", "amazon", "inventario",
-            "retail", "vender por internet", "catalogo", "catálogo", "red de valor"
+            "tiendas online", "dropshipping", "shopify", "woocommerce", "amazon",
+            "inventario", "retail", "vender por internet", "catalogo", "catálogo",
+            "product page", "product pages", "ficha de producto", "red de valor"
         ],
         "automatizaciones": [
-            "autom", "automatizacion", "automatización", "n8n", "make", "zapier",
-            "rpa", "crm", "webhook", "hiperautomatizacion", "no-code", "nocode",
+            "autom", "automatizacion", "automatización", "automatizaciones", "automation",
+            "automations", "workflow", "workflows", "n8n", "make", "zapier", "rpa",
+            "crm", "webhook", "webhooks", "hiperautomatizacion", "no code", "nocode",
             "procesos de marketing"
         ],
         "ia_prompting": [
-            "ai prompt", "prompt", "prompting", "chatgpt", "midjourney", "claude",
-            "agentes ai", "agentes de ia", "context vault", "llm", "inteligencia artificial",
-            "ia para", "ingenieria de prompt", "ingeniería de prompt"
+            "ai prompt", "prompt", "prompts", "prompting", "chatgpt", "midjourney",
+            "claude", "agentes ai", "agentes de ia", "ai assistant", "ai assistants",
+            "ai engines", "ai engine", "ai systems", "ai system", "ai tools", "gpts",
+            "gpt", "gemini", "copilot", "context vault", "llm", "inteligencia artificial",
+            "ia para", "ingenieria de prompt", "ingeniería de prompt", "prompt toolkit",
+            "ai search", "artificial intelligence"
         ],
         "ux_ui": [
-            "uxui", "ux/ui", "design thinking", "designthinking", "tipografia", "tipografía",
-            "manejo del color", "teoria del color", "direccion de arte", "dirección de arte",
-            "composicion visual", "composición visual", "accesibilidad", "diseno centrado",
-            "diseño centrado", "arquitectura de informacion", "arquitectura de información",
-            "usaria", "interfaz", "ui", "ux"
+            "uxui", "ux/ui", "ui/ux", "design thinking", "designthinking", "tipografia",
+            "tipografía", "manejo del color", "teoria del color", "teoría del color",
+            "direccion de arte", "dirección de arte", "composicion visual", "composición visual",
+            "accesibilidad", "diseno centrado", "diseño centrado", "arquitectura de informacion",
+            "arquitectura de información", "wireframe", "wireframing", "interfaz",
+            "interfaces", "ui", "ux"
         ],
     }
 
@@ -402,24 +414,24 @@ class CourseScanner:
 
     @classmethod
     def match_cluster_keywords(cls, text: str) -> Optional[str]:
-        """Busca coincidencias en la matriz de clusters sobre un segmento de texto."""
+        """Busca coincidencias exactas por límite de palabra en la matriz de clusters."""
         norm_text = cls.normalize_text(text)
         if not norm_text:
             return None
 
         # Prioridad de desempate: evaluar clusters más especializados primero
         priority_order = [
-            "ia_prompting", "ux_ui", "automatizaciones", "ecommerce",
-            "whatsapp", "email", "paid_ads", "ofertas", "funnels",
-            "branding", "copywriting"
+            "ia_prompting", "ux_ui", "whatsapp", "email",
+            "ecommerce", "automatizaciones", "paid_ads",
+            "ofertas", "funnels", "branding", "copywriting"
         ]
 
         for cluster in priority_order:
             keywords = cls.THEMATIC_CLUSTERS.get(cluster, [])
             for kw in keywords:
-                # Búsqueda por token o límite de palabra para evitar falsos positivos
-                pattern = r"(?:^|\s)" + re.escape(kw) + r"(?:$|\s)"
-                if re.search(pattern, norm_text) or kw in norm_text:
+                # Blindaje estricto: exige límites de palabra exactos para evitar colisiones de sub-cadenas
+                pattern = r"\b" + re.escape(kw) + r"\b"
+                if re.search(pattern, norm_text, flags=re.IGNORECASE):
                     return cluster
 
         return None
@@ -463,10 +475,12 @@ class CourseScanner:
             if c_grand:
                 return (c_grand, f"Curso contenedor: '{grandparent_dir}'")
 
-        # Nivel Fallback: Evaluar la ruta completa
-        c_any = cls.match_cluster_keywords(norm_path)
-        if c_any:
-            return (c_any, "Coincidencia en ruta completa")
+        # Nivel Fallback: Evaluar carpetas intermedias hacia arriba evitando las raíces comunes
+        if len(parts) > 3:
+            for p_part in reversed(parts[3:-2]):
+                c_part = cls.match_cluster_keywords(p_part)
+                if c_part:
+                    return (c_part, f"Directorio intermedio: '{p_part}'")
 
         return ("general", "Sin coincidencia temática")
 
@@ -516,12 +530,63 @@ class CourseScanner:
         return False
 
     @classmethod
+    def extract_lesson_stem(cls, filename: str) -> str:
+        """
+        Extrae la raíz temática de una lección eliminando extensiones y sufijos de idioma.
+        Ej:
+          'Start_Here.es.srt' -> 'start here'
+          'Start_Here.es.vtt' -> 'start here'
+          'Start_Here.md'     -> 'start here'
+          'Start_Here.mp3'    -> 'start here'
+          'Start_Here.mp4'    -> 'start here'
+        """
+        stem = filename
+        stem = re.sub(r"\.(?:es|en|pt|fr|de)?\.(?:srt|vtt)$", "", stem, flags=re.IGNORECASE)
+        stem = re.sub(r"\.(?:srt|vtt|mp4|mp3|m4a|aac|wav|md|docx|pdf|txt)$", "", stem, flags=re.IGNORECASE)
+        norm = cls.normalize_text(stem)
+        return norm if norm else stem.lower().strip()
+
+    @classmethod
+    def _register_resource(
+        cls,
+        resources_list: List[Dict[str, Any]],
+        entry: os.DirEntry,
+        ext: str,
+        tier: str,
+        canonical_upload: bool,
+        reason_detail: Optional[str] = None,
+        has_peer_doc: bool = False,
+    ):
+        try:
+            st = entry.stat(follow_symlinks=False)
+            cluster, match_reason = cls.classify_cluster_bottom_up(entry.path)
+            target_title = cls.CLUSTER_NOTEBOOK_TITLES.get(
+                cluster, f"[ESPECIALIDAD_{cluster.upper()}]"
+            )
+            resources_list.append({
+                "path": entry.path,
+                "filename": entry.name,
+                "ext": ext,
+                "tier": tier,
+                "canonical_upload": canonical_upload,
+                "size_bytes": st.st_size,
+                "mtime": int(st.st_mtime),
+                "cluster": cluster,
+                "match_reason": match_reason,
+                "status_detail": reason_detail if reason_detail else match_reason,
+                "has_peer_doc": has_peer_doc,
+                "target_notebook": target_title,
+            })
+        except Exception:
+            pass
+
+    @classmethod
     def scan_path(
         cls,
         base_dir: str,
         max_depth: int = 4,
     ) -> List[Dict[str, Any]]:
-        """Recorre de forma controlada el sistema de archivos clasificando con Bottom-Up y Peer-Docs."""
+        """Recorre de forma controlada el sistema de archivos clasificando con Bottom-Up, Peer-Docs y Deduplicación por Stem."""
         resources = []
         if not os.path.exists(base_dir):
             return resources
@@ -549,61 +614,164 @@ class CourseScanner:
                 if not files:
                     continue
 
-                # 1. Detección local en la carpeta actual
-                has_local_subtitles = any(
-                    os.path.splitext(e.name)[1].lower() in (".srt", ".vtt")
-                    for e in files
-                )
-                has_local_docs = any(
-                    os.path.splitext(e.name)[1].lower() in (".docx", ".pdf", ".md", ".txt")
-                    for e in files
-                )
+                # Filtrar solo archivos de interés
+                relevant_files = []
+                for entry in files:
+                    ext = os.path.splitext(entry.name)[1].lower()
+                    if ext in (".docx", ".md", ".txt", ".pdf", ".srt", ".vtt", ".aac", ".m4a", ".mp3", ".mp4"):
+                        relevant_files.append((entry, ext))
 
-                # 2. Correlación de Documentos Hermanos (Peer-Docs en carpeta padre)
+                if not relevant_files:
+                    continue
+
+                # 1. Correlación de Documentos Hermanos (Peer-Docs en carpeta padre)
                 parent_dir = os.path.dirname(current_dir)
                 current_dir_name = os.path.basename(current_dir)
                 has_peer_doc = cls.find_peer_document_in_parent(
                     parent_dir, current_dir_name, parent_cache
                 )
 
-                has_text_coverage = has_local_subtitles or has_local_docs or has_peer_doc
+                # 2. Agrupación por Stem de Lección en la carpeta actual
+                stem_groups: Dict[str, List[Tuple[os.DirEntry, str]]] = defaultdict(list)
+                for entry, ext in relevant_files:
+                    stem = cls.extract_lesson_stem(entry.name)
+                    stem_groups[stem].append((entry, ext))
 
-                for entry in files:
-                    ext = os.path.splitext(entry.name)[1].lower()
-                    tier = None
-                    if ext in (".docx", ".md", ".txt", ".pdf"):
-                        tier = "direct_document"
-                    elif ext in (".srt", ".vtt"):
-                        tier = "subtitle_text"
-                    elif ext in (".aac", ".m4a", ".mp3"):
-                        tier = "direct_audio"
-                    elif ext == ".mp4":
-                        if has_text_coverage:
-                            tier = "video_residual"
-                        else:
-                            tier = "orphan_video"
+                # 3. Jerarquía de Formatos por Stem (Anti-Redundancia)
+                for stem, group in stem_groups.items():
+                    docs = [it for it in group if it[1] in (".docx", ".md", ".txt", ".pdf")]
+                    subs = [it for it in group if it[1] in (".srt", ".vtt")]
+                    audios = [it for it in group if it[1] in (".aac", ".m4a", ".mp3")]
+                    videos = [it for it in group if it[1] == ".mp4"]
 
-                    if tier:
-                        try:
-                            st = entry.stat(follow_symlinks=False)
-                            cluster, reason = cls.classify_cluster_bottom_up(entry.path)
-                            target_title = cls.CLUSTER_NOTEBOOK_TITLES.get(
-                                cluster, f"[ESPECIALIDAD_{cluster.upper()}]"
+                    # CASO 1: Existe Documento Maestro (.md, .docx, .pdf, .txt)
+                    if docs:
+                        for entry, ext in docs:
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="direct_document",
+                                canonical_upload=True,
+                                reason_detail=None,
+                                has_peer_doc=has_peer_doc
                             )
-                            resources.append({
-                                "path": entry.path,
-                                "filename": entry.name,
-                                "ext": ext,
-                                "tier": tier,
-                                "size_bytes": st.st_size,
-                                "mtime": int(st.st_mtime),
-                                "cluster": cluster,
-                                "match_reason": reason,
-                                "has_peer_doc": has_peer_doc,
-                                "target_notebook": target_title,
-                            })
-                        except Exception:
-                            continue
+                        for entry, ext in subs:
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="format_redundant",
+                                canonical_upload=False,
+                                reason_detail="Omitido: Ya existe documento maestro (.md/.docx/.pdf) para esta lección",
+                                has_peer_doc=has_peer_doc
+                            )
+                        for entry, ext in audios:
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="format_redundant",
+                                canonical_upload=False,
+                                reason_detail="Omitido: Ya existe documento maestro (.md/.docx/.pdf) para esta lección",
+                                has_peer_doc=has_peer_doc
+                            )
+                        for entry, ext in videos:
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="video_residual",
+                                canonical_upload=False,
+                                reason_detail="Omitido: Lección cubierta por documento maestro",
+                                has_peer_doc=has_peer_doc
+                            )
+
+                    # CASO 2: No hay Documento Maestro, pero hay Subtítulo (.srt, .vtt)
+                    elif subs:
+                        # Prioridad: .es.srt > .srt > .es.vtt > .vtt
+                        def sub_prio(item):
+                            n = item[0].name.lower()
+                            if n.endswith(".es.srt"): return 0
+                            if n.endswith(".srt"): return 1
+                            if n.endswith(".es.vtt"): return 2
+                            return 3
+
+                        sorted_subs = sorted(subs, key=sub_prio)
+                        primary_sub = sorted_subs[0]
+                        redundant_subs = sorted_subs[1:]
+
+                        cls._register_resource(
+                            resources, primary_sub[0], primary_sub[1],
+                            tier="subtitle_text",
+                            canonical_upload=True,
+                            reason_detail=None,
+                            has_peer_doc=has_peer_doc
+                        )
+                        for entry, ext in redundant_subs:
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="format_redundant",
+                                canonical_upload=False,
+                                reason_detail="Omitido: Subtítulo redundante (.vtt/.srt duplicado)",
+                                has_peer_doc=has_peer_doc
+                            )
+                        for entry, ext in audios:
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="format_redundant",
+                                canonical_upload=False,
+                                reason_detail="Omitido: Audio cubierto por subtítulo limpio",
+                                has_peer_doc=has_peer_doc
+                            )
+                        for entry, ext in videos:
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="video_residual",
+                                canonical_upload=False,
+                                reason_detail="Omitido: Lección cubierta por subtítulo limpio",
+                                has_peer_doc=has_peer_doc
+                            )
+
+                    # CASO 3: No hay Documento ni Subtítulo, pero hay Audio (.mp3, .m4a, .aac)
+                    elif audios:
+                        for idx, (entry, ext) in enumerate(audios):
+                            if idx == 0:
+                                cls._register_resource(
+                                    resources, entry, ext,
+                                    tier="direct_audio",
+                                    canonical_upload=True,
+                                    reason_detail=None,
+                                    has_peer_doc=has_peer_doc
+                                )
+                            else:
+                                cls._register_resource(
+                                    resources, entry, ext,
+                                    tier="format_redundant",
+                                    canonical_upload=False,
+                                    reason_detail="Omitido: Audio duplicado para la misma lección",
+                                    has_peer_doc=has_peer_doc
+                                )
+                        for entry, ext in videos:
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="video_residual",
+                                canonical_upload=False,
+                                reason_detail="Omitido: Audio nativo disponible",
+                                has_peer_doc=has_peer_doc
+                            )
+
+                    # CASO 4: Solo hay Video (.mp4)
+                    else:
+                        for entry, ext in videos:
+                            if has_peer_doc:
+                                cls._register_resource(
+                                    resources, entry, ext,
+                                    tier="video_residual",
+                                    canonical_upload=False,
+                                    reason_detail="Omitido: Cubierto por documento hermano en carpeta padre",
+                                    has_peer_doc=has_peer_doc
+                                )
+                            else:
+                                cls._register_resource(
+                                    resources, entry, ext,
+                                    tier="orphan_video",
+                                    canonical_upload=False,
+                                    reason_detail="Video huérfano sin documento ni audio",
+                                    has_peer_doc=has_peer_doc
+                                )
             except Exception:
                 continue
 
@@ -872,17 +1040,19 @@ def cmd_scan(args):
 
     paths = [args.target] if args.target else CourseScanner.DEFAULT_SEARCH_PATHS
     total_found = 0
-    pending_found = 0
-    by_cluster: Dict[str, List[Dict[str, Any]]] = {}
-
+    total_canonical = 0
+    pending_canonical = 0
     total_docs = 0
     total_subs = 0
     total_audios = 0
     total_residuals = 0
+    total_redundant = 0
     total_orphans = 0
 
+    by_cluster: Dict[str, List[Dict[str, Any]]] = {}
+
     print("==================================================================")
-    print("🔍 INICIANDO ESCANEO ANATÓMICO SSoT (knowledge-sync v2)")
+    print("🔍 INICIANDO ESCANEO ANATÓMICO SSoT (knowledge-sync v2.1)")
     print("==================================================================")
     print(f"• Manifiesto SSoT activo: {len(uploaded)} fuentes ya registradas.")
 
@@ -894,7 +1064,6 @@ def cmd_scan(args):
         total_found += len(found)
 
         for item in found:
-            # Reutilizar metadatos para no duplicar llamadas os.stat sobre FUSE
             fp = MetadataFingerprint.compute_from_stat(
                 os.path.relpath(item["path"], "/var/www/baiosfera"),
                 item["size_bytes"],
@@ -902,16 +1071,23 @@ def cmd_scan(args):
             )
             item["fingerprint"] = fp
             item["already_uploaded"] = fp in uploaded
-            if not item["already_uploaded"]:
-                pending_found += 1
 
             t = item["tier"]
-            if t == "direct_document":
-                total_docs += 1
-            elif t == "subtitle_text":
-                total_subs += 1
-            elif t == "direct_audio":
-                total_audios += 1
+            is_canon = item.get("canonical_upload", False)
+
+            if is_canon:
+                total_canonical += 1
+                if not item["already_uploaded"]:
+                    pending_canonical += 1
+
+                if t == "direct_document":
+                    total_docs += 1
+                elif t == "subtitle_text":
+                    total_subs += 1
+                elif t == "direct_audio":
+                    total_audios += 1
+            elif t == "format_redundant":
+                total_redundant += 1
             elif t == "video_residual":
                 total_residuals += 1
             elif t == "orphan_video":
@@ -923,44 +1099,52 @@ def cmd_scan(args):
             by_cluster[c].append(item)
 
     print("\n==================================================================")
-    print("📊 DASHBOARD OPERATIVO DE FRUGALIDAD & AUDITORÍA SSoT")
+    print("📊 DASHBOARD OPERATIVO DE FRUGALIDAD & AUDITORÍA SSoT (v2.1)")
     print("==================================================================")
-    print(f"  • Total recursos analizados: {total_found}")
-    print(f"  • Fuentes pendientes de ingesta: {pending_found}")
-    print(f"  • Documentos maestros (.docx/.pdf/.md): {total_docs} (⚡ Ingesta directa < 2s)")
-    print(f"  • Subtítulos limpios (.srt/.vtt): {total_subs} (⚡ Ingesta directa sin timecodes)")
-    print(f"  • Audios nativos (.mp3/.aac): {total_audios} (🎙️ Speech-to-Text en Google Cloud)")
-    print(f"  • 🛡️ VIDEOS OMITIDOS (Ahorro de CPU y FUSE): {total_residuals} videos")
-    print(f"     (Cubiertos al 100% por documentos hermanos .docx/.pdf en carpeta padre)")
-    print(f"  • ⚠️ Videos huérfanos reales (Worker Efímero): {total_orphans} videos")
+    print(f"  • Total recursos analizados en disco: {total_found}")
+    print(f"  • 🛡️ Formatos redundantes omitidos (Mismo stem de lección): {total_redundant}")
+    print(f"     (Subtítulos e/o audios duplicados cuando ya existe documento maestro o subtítulo primario)")
+    print(f"  • 🛡️ Videos residuales omitidos (Ahorro de CPU y FUSE): {total_residuals}")
+    print(f"     (Cubiertos al 100% por documentos maestros, subtítulos o doc hermano en carpeta padre)")
+    print(f"  • ⚠️ Videos huérfanos reales (Worker Efímero): {total_orphans}")
+    print(f"  • ⚡ FUENTES CANÓNICAS ÚNICAS LISTAS PARA SUBIR: {total_canonical}")
+    print(f"     - Documentos maestros (.docx/.pdf/.md): {total_docs} (⚡ Ingesta directa < 2s)")
+    print(f"     - Subtítulos primarios (.srt/.vtt): {total_subs} (⚡ Ingesta directa sin timecodes)")
+    print(f"     - Audios primarios (.mp3/.aac): {total_audios} (🎙️ Speech-to-Text en Google Cloud)")
+    print(f"  • Fuentes canónicas ya registradas en SSoT: {total_canonical - pending_canonical}")
+    print(f"  • Fuentes canónicas pendientes de ingesta: {pending_canonical}")
 
     print("\n==================================================================")
     print("📂 DESGLOSE POR ESPECIALIDAD Y TRAZA DE MICRO-CLASIFICACIÓN:")
     print("==================================================================")
 
     for cluster, items in sorted(by_cluster.items()):
-        pending_in_c = sum(1 for i in items if not i["already_uploaded"])
+        canon_items = [i for i in items if i.get("canonical_upload", False)]
+        pending_in_c = sum(1 for i in canon_items if not i["already_uploaded"])
         target_nb = CourseScanner.CLUSTER_NOTEBOOK_TITLES.get(cluster, f"[ESPECIALIDAD_{cluster.upper()}]")
         print(f"\n📁 [{cluster.upper()}] -> Cuaderno: {target_nb}")
-        print(f"   Total recursos: {len(items)} | Pendientes por subir: {pending_in_c}")
+        print(f"   Recursos en disco: {len(items)} | Fuentes canónicas únicas: {len(canon_items)} | Pendientes: {pending_in_c}")
 
-        # Desglose por tier
-        tiers = {}
-        for it in items:
-            tiers[it["tier"]] = tiers.get(it["tier"], 0) + 1
-        tier_str = ", ".join([f"{k}: {v}" for k, v in tiers.items()])
-        print(f"   Composición: {tier_str}")
+        docs_c = sum(1 for i in canon_items if i["tier"] == "direct_document")
+        subs_c = sum(1 for i in canon_items if i["tier"] == "subtitle_text")
+        aud_c = sum(1 for i in canon_items if i["tier"] == "direct_audio")
+        print(f"   Composición Canónica: direct_document: {docs_c}, subtitle_text: {subs_c}, direct_audio: {aud_c}")
 
-        # Muestra representativa de traza de clasificación (hasta 4 ejemplos)
+        red_c = sum(1 for i in items if i["tier"] == "format_redundant")
+        vid_c = sum(1 for i in items if i["tier"] in ("video_residual", "orphan_video"))
+        print(f"   Omitidos por optimización: format_redundant: {red_c}, video_residual/orphan: {vid_c}")
+
+        # Muestra representativa de traza de clasificación (priorizando fuentes canónicas)
         sample_reasons = {}
-        for it in items:
+        source_sample = canon_items if canon_items else items
+        for it in source_sample:
             reason = it.get("match_reason", "coincidencia")
             if reason not in sample_reasons:
                 sample_reasons[reason] = os.path.basename(it["path"])
             if len(sample_reasons) >= 3:
                 break
 
-        print("   Muestra de Micro-Clasificación:")
+        print("   Muestra Canónica de Micro-Clasificación:")
         for r, fname in sample_reasons.items():
             print(f"     - [{r}] -> {fname}")
 
@@ -970,7 +1154,7 @@ def cmd_scan(args):
             print(f"   👉 Comando sugerido: knowledge-sync push --cluster {cluster} --limit {limit_sug}")
 
     print("\n==================================================================")
-    print(f"✅ ESCANEO FINALIZADO EXITOSAMENTE. Total pendientes: {pending_found}")
+    print(f"✅ ESCANEO FINALIZADO EXITOSAMENTE. Total fuentes canónicas pendientes: {pending_canonical}")
     print("==================================================================")
 
 
@@ -1058,6 +1242,13 @@ def cmd_push(args):
             # Videos residuales (con doc hermano) se omiten
             if item["tier"] == "video_residual":
                 continue
+
+            # Formatos redundantes (ya cubiertos por formato superior) se omiten
+            if item["tier"] == "format_redundant" or not item.get("canonical_upload", False):
+                if item["tier"] == "orphan_video" and getattr(args, "convert_orphan_videos", False):
+                    pass
+                else:
+                    continue
 
             # Videos huérfanos se procesan solo con flag explícito
             if item["tier"] == "orphan_video" and not getattr(args, "convert_orphan_videos", False):
@@ -1211,9 +1402,15 @@ Hoy hablaremos de ofertas irresistibles.
     )
     assert c_micro == "email", f"Falla Test 4: Esperaba 'email' por micro-lección, obtuvo '{c_micro}'"
 
-    # Desempate IA vs Copywriting
+    # Desempate IA vs Copywriting vs Email vs Ofertas
     assert CourseScanner.classify_cluster("Marketing_Context_Vault.md") == "ia_prompting"
     assert CourseScanner.classify_cluster("Cartas_de_Venta_PAS.docx") == "copywriting"
+    assert CourseScanner.classify_cluster("Email_Promo_Campaign_Builder.md") == "email"
+    assert CourseScanner.classify_cluster("AI_Gone_Wild_Create_a_Team_of_Ai_Assistants_with_Stackable_GPTs.es.srt") == "ia_prompting"
+    assert CourseScanner.classify_cluster("DigitalMarketer_Offer_Architect_2.0.md") == "ofertas"
+    assert CourseScanner.classify_cluster("Build_Your_Winning_eCommerce_Product_Page.md") == "ecommerce"
+    assert CourseScanner.classify_cluster("Home_Page_Optimizer.md") == "funnels"
+    assert CourseScanner.classify_cluster("How_to_Attract_Your_First_5_Brand_Ambassadors.es.srt") == "branding"
     print("✓ [Test 4] Clasificador Bottom-Up, Mapeo de Siglas & Aislamiento IA/Copy: PASSED")
 
     # Test 5: Correlación de Documentos Hermanos (Peer-Docs) con Normalización Unicode NFC
@@ -1250,6 +1447,24 @@ Hoy hablaremos de ofertas irresistibles.
         AudioExtractor.cleanup(extracted_aac)
         assert not os.path.exists(extracted_aac), "Falla Test 6: No se limpió el archivo temporal"
     print("✓ [Test 6] Extractor FFmpeg con Timeout y Limpieza de /tmp: PASSED")
+
+    # Test 7: Deduplicación por Stem de Lección y Jerarquía de Calidad
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        base = "01_welcome_lesson"
+        for ext in (".md", ".es.srt", ".es.vtt", ".srt", ".vtt", ".mp3", ".mp4"):
+            with open(os.path.join(tmp_dir, f"{base}{ext}"), "w") as f:
+                f.write("dummy content")
+
+        scanned = CourseScanner.scan_path(tmp_dir)
+        canon = [i for i in scanned if i.get("canonical_upload", False)]
+        redundant = [i for i in scanned if i["tier"] == "format_redundant"]
+        residual = [i for i in scanned if i["tier"] == "video_residual"]
+
+        assert len(canon) == 1, f"Falla Test 7: Debió haber exactamente 1 fuente canónica, pero hay {len(canon)}"
+        assert canon[0]["ext"] == ".md", f"Falla Test 7: La fuente canónica debió ser .md, fue {canon[0]['ext']}"
+        assert len(redundant) == 5, f"Falla Test 7: Debieron omitirse 5 formatos redundantes, pero hay {len(redundant)}"
+        assert len(residual) == 1, f"Falla Test 7: El video debió ser residual, pero hay {len(residual)}"
+    print("✓ [Test 7] Deduplicación por Stem de Lección & Jerarquía de Calidad: PASSED")
 
     print("\n🎉 TODAS LAS PRUEBAS FÍSICAS PASARON CON ÉXITO (EXIT 0).")
     sys.exit(0)
