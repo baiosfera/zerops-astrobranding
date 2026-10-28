@@ -177,7 +177,7 @@ export async function dispatchMetaSignal(
     requestBody.test_event_code = testEventCode;
   }
 
-  const appSecret = config?.appSecret || process.env.META_APP_SECRET;
+  const appSecret = config?.appSecret || (process.env.META_REQUIRE_APPSECRET_PROOF === "true" ? process.env.META_APP_SECRET : undefined);
   let endpoint = `https://graph.facebook.com/${apiVersion}/${pixelId}/events`;
   if (appSecret) {
     const proof = createHmac("sha256", appSecret).update(accessToken).digest("hex");
