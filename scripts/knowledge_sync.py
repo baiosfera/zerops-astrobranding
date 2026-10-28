@@ -256,9 +256,16 @@ class CourseCompactor:
 
     DEFAULT_OUTPUT_DIR = "/var/www/localstorage/knowledge_cache/compendiums"
 
+    INTERMEDIATE_TIERS = {
+        "vip", "basic", "profesional", "categorias", "author", "archivos",
+        "1. cua", "2. cua", "3. cua", "cursos sprint", "cortos", "00. incompletos",
+        "01. desarrollo personal", "02. seducción", "03. inversiones finanzas",
+        "04. instagram", "05. ventas", "06. meta ads", "07. marketing"
+    }
+
     @classmethod
     def extract_course_metadata(cls, file_path: str) -> Dict[str, str]:
-        """Extrae (provider, course_name, course_dir) preservando la jerarquía institucional."""
+        """Extrae (provider, course_name, course_dir) preservando la jerarquía institucional y detectando niveles intermedios."""
         rel = os.path.relpath(file_path, "/var/www/baiosfera")
         parts = rel.split(os.sep)
         if not parts:
@@ -271,11 +278,16 @@ class CourseCompactor:
         top = parts[0]
         if top == "CURSOS":
             provider = parts[1] if len(parts) > 1 else "CURSOS"
-            if len(parts) > 3:
+            if len(parts) >= 4 and parts[2].lower() in cls.INTERMEDIATE_TIERS:
+                course_name = parts[3]
+                course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2], parts[3])
+            elif len(parts) >= 4:
                 course_name = parts[2]
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2])
-            elif len(parts) > 2:
-                course_name = parts[2]
+            elif len(parts) == 3:
+                stem = os.path.splitext(parts[2])[0]
+                clean_name = re.sub(r"[\s_-]+(clase|sesi[oó]n|modulo|lecci[oó]n)[\s_-]*\d+.*$", "", stem, flags=re.I).strip()
+                course_name = clean_name or parts[1]
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1])
             else:
                 course_name = provider
@@ -286,7 +298,8 @@ class CourseCompactor:
                 course_name = parts[2]
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2])
             elif len(parts) == 2:
-                course_name = parts[1]
+                stem = os.path.splitext(parts[1])[0]
+                course_name = stem
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1])
             else:
                 course_name = "General"
@@ -581,17 +594,9 @@ class CourseScanner:
     """Escanea y micro-clasifica recursos educativos sin agotar memoria ni cuota FUSE."""
 
     DEFAULT_SEARCH_PATHS = [
-        "/var/www/baiosfera/CURSOS/MCV/VIP",
-        "/var/www/baiosfera/CURSOS/MCV/BASIC",
-        "/var/www/baiosfera/CURSOS/VELOCITYMEDIA",
+        "/var/www/baiosfera/CURSOS",
         "/var/www/baiosfera/DIGITALMARKETER",
-        "/var/www/baiosfera/PLATZI/59 CONTENT COPY EMAIL SEO STORYTELLING VENTAS",
-        "/var/www/baiosfera/PLATZI/47 GROWTH JOURNEY MKTN PRODUCT",
-        "/var/www/baiosfera/PLATZI/33 GRAPHIC THINKING UXUI",
-        "/var/www/baiosfera/PLATZI/30 BRANDING MARCAP INVEST",
-        "/var/www/baiosfera/PLATZI/14 AI PROMPT",
-        "/var/www/baiosfera/PLATZI/04 AUTOM",
-        "/var/www/baiosfera/PLATZI/03 ECOM",
+        "/var/www/baiosfera/PLATZI",
     ]
 
     EXCLUDE_DIRS = {
@@ -897,7 +902,7 @@ class CourseScanner:
     def scan_path(
         cls,
         base_dir: str,
-        max_depth: int = 4,
+        max_depth: int = 6,
     ) -> List[Dict[str, Any]]:
         """Recorre de forma controlada el sistema de archivos clasificando con Bottom-Up, Peer-Docs y Deduplicación por Stem."""
         resources = []
@@ -1944,7 +1949,7 @@ def main():
     # Subcomando: scan
     scan_parser = subparsers.add_parser("scan", help="Escanea cursos sin gastar tokens ni cuota FUSE")
     scan_parser.add_argument("--target", type=str, default=None, help="Directorio objetivo específico")
-    scan_parser.add_argument("--max-depth", type=int, default=4, help="Profundidad máxima de escaneo")
+    scan_parser.add_argument("--max-depth", type=int, default=6, help="Profundidad máxima de escaneo")
 
     # Subcomando: compact
     compact_parser = subparsers.add_parser(
@@ -1960,7 +1965,7 @@ def main():
         default=None,
         help="Directorio destino para compendios (default: /var/www/localstorage/knowledge_cache/compendiums)",
     )
-    compact_parser.add_argument("--max-depth", type=int, default=4, help="Profundidad máxima de escaneo")
+    compact_parser.add_argument("--max-depth", type=int, default=6, help="Profundidad máxima de escaneo")
     compact_parser.add_argument("--dry-run", action="store_true", help="Simula sin escribir compendios en disco")
 
     # Subcomando: init-clusters
@@ -1975,7 +1980,7 @@ def main():
     push_parser.add_argument("--cluster", type=str, default=None, help="Filtrar por cluster específico (ecommerce, funnels, etc.)")
     push_parser.add_argument("--limit", type=int, default=None, help="Límite máximo de archivos a subir en esta pasada")
     push_parser.add_argument("--delay", type=float, default=5.0, help="Delay entre subidas en segundos")
-    push_parser.add_argument("--max-depth", type=int, default=4, help="Profundidad máxima de escaneo")
+    push_parser.add_argument("--max-depth", type=int, default=6, help="Profundidad máxima de escaneo")
     push_parser.add_argument(
         "--compendiums",
         action="store_true",
