@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import type {
   MetaServerEventInput,
   MetaCapiResponse,
@@ -8,6 +8,7 @@ import type {
 export interface MetaCapiConfig {
   pixelId?: string;
   accessToken?: string;
+  appSecret?: string;
   testEventCode?: string;
   timeoutMs?: number;
   graphApiVersion?: string;
@@ -176,7 +177,12 @@ export async function dispatchMetaSignal(
     requestBody.test_event_code = testEventCode;
   }
 
-  const endpoint = `https://graph.facebook.com/${apiVersion}/${pixelId}/events`;
+  const appSecret = config?.appSecret || process.env.META_APP_SECRET;
+  let endpoint = `https://graph.facebook.com/${apiVersion}/${pixelId}/events`;
+  if (appSecret) {
+    const proof = createHmac("sha256", appSecret).update(accessToken).digest("hex");
+    endpoint = `${endpoint}?appsecret_proof=${proof}`;
+  }
 
   try {
     const controller = new AbortController();
