@@ -180,9 +180,11 @@ Cualquier AGY debe clasificar y persistir los datos según la necesidad real y f
 4. **`postgresql` (PostgreSQL 18):** Capa Relacional Transaccional ACID. Tablas de negocio (`clients`, `orders`, `leads`, `outbox`), facturación electrónica (`dian_cufe`), esquemas de Listmonk y EvolutionGo.
 
 ### Puente de Evolución Sin Fricción: De PostgreSQL Ligero a Frappe CRM & ERPNext
-- **Fase Inicial (Lean):** El e-commerce gestiona pedidos, pasarelas de pago y datos de facturación en PostgreSQL 18 (`orders`). Los assets de producto se sirven desde `localstorage`. Cero overhead.
+- **Fase Inicial (Lean):** El e-commerce gestiona pedidos, pasarelas de pago y datos de facturación en PostgreSQL 18 (`orders` y `offerings`). Los assets de producto se sirven desde `localstorage`. Cero overhead.
 - **Fase de Maduración (ERPNext / Frappe):** Cuando el negocio activa ERPNext y Frappe CRM:
-  * **Conexión Desacoplada:** El bridge sincroniza transacciones de PostgreSQL hacia Frappe DocTypes (`Sales Order`, `Sales Invoice`, `Customer`) vía workers asíncronos BullMQ / NATS.
+  * **Conexión Desacoplada & Outbox Transaccional:** Toda sincronización hacia Frappe DocTypes (`Sales Order`, `Sales Invoice`, `Customer`, `CRM Lead`) se encola atómicamente en `task_outbox` (`type: "frappe_sync"`).
+  * **Resiliencia Fail-Safe Absoluta:** Cero llamadas HTTP síncronas bloqueantes en los endpoints de checkout o webhooks de pasarela. Si la instancia de Frappe está en hibernación, suspendida o responde `403/502`, la tienda sigue vendiendo con normalidad (Cero Fallas en Checkout). El worker `drainTaskOutbox` procesa y reintenta con retroceso exponencial (*exponential backoff*).
+  * **Mapeo Canónico de 6 Arquetipos de Oferta:** `@astrobranding/contracts` provee la función canónica `getFrappeMappingForArchetype()` para traducir los 6 arquetipos de oferta a los DocTypes respectivos de Frappe, manteniendo las etiquetas visibles en español para el cliente.
   * **Archivos y Facturas:** Si Frappe corre en Frappe Cloud o en contenedor dedicado en Zerops, los comprobantes PDF/XML se gestionan vía API REST o, si el volumen lo exige, se aprovisiona `recipes/services/04-objectstorage.yaml` de forma aditiva para almacenar los adjuntos pesados en MinIO S3 sin alterar la lógica del frontend.
 
 ---
@@ -232,6 +234,7 @@ Todo producto construido bajo esta plantilla debe orquestar el ecosistema de 141
 - **`zod-4`**: Validación de esquemas estricta en las Astro Actions.
 
 ### C. Conversión, Funnels & Transaccional
+- **`ad-telemetry`**: Orquestador universal multi-red de publicidad y telemetría (Meta CAPI, Google Ads Enhanced Conversions, TikTok Events API, Consent Mode v2, Atribución 1st-party cookie 90 días, Schema SAB vs Storefront y Outbox transaccional).
 - **`checkout-funnels`**: Funnels de alta conversión con 1-Click Upsells y Meta CAPI.
 - **`payment-gateways`**: Firmas SHA-256 e idempotencia en Valkey (60s lock).
 - **`growth-engine`**: Neurocopywriting basado en la Oferta Hormozi y StoryBrand.
@@ -871,6 +874,39 @@ Una vez que el worker `whatsappbot` esté verificado y recibiendo el tráfico de
 - **Certificación de paridad limpia:**
   * Compilar y testear en `webdev` (`bun run build && bun test`) certificando exit code 0.
   * Promover a `webprod` para erradicar cualquier residuo zombi del frontend.
+
+---
+
+## 24. Ecosistema Universal Ads-First, Pixel-First & Outbox Telemetry
+
+Toda solución web y marca en Zerops implementa el estándar unificado de telemetría y conversión definido en [`template-universal-ads-and-telemetry.md`](file:///var/www/artifacts/templates/template-universal-ads-and-telemetry.md), orquestado por la skill [`ad-telemetry`](file:///var/www/.agents/skills/ad-telemetry/SKILL.md) y los contratos `@astrobranding/contracts`:
+
+### 1. Triangulación Publicitaria Multi-Red (Meta + Google + TikTok)
+- **Meta Conversions API (CAPI) + Píxel Web:** Deduplicación estricta por tupla `(event_name, event_id)` con hashing SHA-256 en servidor (`em`, `ph`, `client_ip_address`, `client_user_agent`).
+- **Google Ads Enhanced Conversions:** Soporte nativo para Consent Mode v2 (`ad_storage`, `ad_user_data`, `ad_personalization`, `analytics_storage` en `'denied'` por defecto antes del consentimiento del usuario).
+- **TikTok Events API v1.3:** Trazabilidad determinista con `ttclid` de 1st-party cookie.
+
+### 2. Regla de Oro: Núcleo Técnico en Inglés, Vistas e Interfaz en Español
+- **Núcleo Técnico (Inmutable):** Tablas de base de datos (`offerings`, `task_outbox`, `orders`), eventos de telemetría (`Purchase`, `AddToCart`, `Lead`), contratos TypeScript y colas NATS/Valkey se nombran estrictamente en **inglés**.
+- **Interfaz Humana & Frappe/CRM (100% en Español):** Vistas para clientes, formularios, catálogos en tienda, tableros de anuncios (Business Manager, Google Ads en español) y DocTypes de Frappe Desk (*Factura de Venta*, *Clientes*, *Pedidos*) se presentan en **español** para máxima usabilidad.
+
+### 3. Agnosticismo de Presencia (SAB vs Storefront Físico)
+- **Local Físico (`physical_storefront`):** Expone Schema.org `Store`/`LocalBusiness` con dirección postal completa y coordenadas para Google Business Profile.
+- **Negocio de Área de Servicio (`service_area_business`, SAB):** Oculta dirección residencial para proteger privacidad; declara `areaServed` y `serviceType` evitando rechazos de verificación y suspensiones automáticas en Google y Meta.
+
+### 4. 6 Arquetipos Universales de Oferta & Mapeo a Frappe DocTypes
+Los productos o servicios se tipifican en 6 arquetipos (`offerings.ts`), mapeándose a través de `getFrappeMappingForArchetype()`:
+- `physical_goods` $\to$ DocType `Sales Order` + feed XML de catálogo.
+- `courses_education` $\to$ DocType `Sales Invoice` + enrolamiento en LMS.
+- `memberships_mrr` $\to$ DocType `Subscription` / `Sales Invoice` recurrente.
+- `events_ticketing` $\to$ DocType `Sales Invoice` + ticket/QR emitido.
+- `digital_products` $\to$ DocType `Sales Invoice` + link de descarga segura.
+- `service_bookings` $\to$ DocType `CRM Lead` / `Opportunity` + webhook de calendario.
+
+### 5. Puente Outbox Transaccional Desacoplado para Frappe / ERPNext
+- **Persistencia Atómica:** La tienda guarda pedidos y señales en `task_outbox` en la misma transacción ACID de PostgreSQL 18.
+- **Cero Bloqueo:** El worker `drainTaskOutbox` procesa las tareas asíncronamente. Si Frappe Cloud está en mantenimiento, en espera de activación o responde 403/502, el checkout jamás se interrumpe y las tareas se reintentan con retroceso exponencial.
+
 
 
 

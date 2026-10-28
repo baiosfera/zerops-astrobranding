@@ -145,3 +145,32 @@ CREATE TABLE IF NOT EXISTS client_shards (
 
 CREATE UNIQUE INDEX IF NOT EXISTS client_shards_client_id_shard_type_idx ON client_shards (client_id, shard_type);
 CREATE INDEX IF NOT EXISTS client_shards_shard_type_idx ON client_shards (shard_type);
+
+-- 10. Table: offerings (Universal Commercial Offerings Across 6 Archetypes)
+CREATE TABLE IF NOT EXISTS offerings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    archetype TEXT NOT NULL,
+    channel_strategy TEXT NOT NULL,
+    price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    currency TEXT NOT NULL DEFAULT 'COP',
+    compare_at_price NUMERIC(12, 2),
+    availability TEXT NOT NULL DEFAULT 'in_stock',
+    brand TEXT NOT NULL,
+    category TEXT,
+    image_url TEXT,
+    additional_image_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+    meta_event_mapping JSONB NOT NULL DEFAULT '{"web": "Purchase", "capi": "Purchase"}'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS offerings_slug_idx ON offerings (slug);
+CREATE INDEX IF NOT EXISTS offerings_archetype_idx ON offerings (archetype);
+CREATE INDEX IF NOT EXISTS offerings_channel_strategy_idx ON offerings (channel_strategy);
+CREATE INDEX IF NOT EXISTS offerings_active_idx ON offerings (active);
+

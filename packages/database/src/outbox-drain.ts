@@ -152,3 +152,109 @@ export async function fetchPendingTasks(limit = 10, now = new Date()): Promise<T
     )
     .limit(limit);
 }
+
+export type TaskHandler = (task: TaskOutboxRecord) => Promise<{ success: boolean; error?: string }>;
+
+export interface DrainOptions {
+  batchSize?: number;
+  maxAttempts?: number;
+  baseBackoffMs?: number;
+  handlers: Record<string, TaskHandler>;
+}
+
+/**
+ * Robust outbox drain cycle:
+ * Claims pending tasks, dispatches them to matching handlers, and completes or reschedules
+ * with exponential backoff without crashing the application.
+ */
+export async function drainTaskOutbox(options: DrainOptions): Promise<{ processed: number; succeeded: number; failed: number }> {
+  const batchSize = options.batchSize ?? 10;
+  const maxAttempts = options.maxAttempts ?? 5;
+  const baseBackoffMs = options.baseBackoffMs ?? 5_000;
+
+  // 1. Recover stale leases first (e.g. crashed workers)
+  await recoverStaleLeases();
+
+  // 2. Fetch batch of ready tasks
+  const tasks = await fetchPendingTasks(batchSize);
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const task of tasks) {
+    const token = await claimTask(task.id);
+    if (!token) continue; // Claimed by concurrent worker
+
+    const handler = options.handlers[task.type];
+    if (!handler) {
+      // Unknown task type: mark as skipped
+      await completeTask(task.id, token, {
+        kind: "terminal",
+        status: "skipped",
+        attempts: task.attempts + 1,
+        lastError: `No handler registered for task type: ${task.type}`,
+      });
+      failed++;
+      continue;
+    }
+
+    try {
+      const result = await handler(task);
+      if (result.success) {
+        await completeTask(task.id, token, {
+          kind: "terminal",
+          status: "done",
+          attempts: task.attempts + 1,
+        });
+        succeeded++;
+      } else {
+        const nextAttempts = task.attempts + 1;
+        if (nextAttempts >= maxAttempts) {
+          await completeTask(task.id, token, {
+            kind: "terminal",
+            status: "failed",
+            attempts: nextAttempts,
+            lastError: result.error ?? "Max attempts reached",
+          });
+          failed++;
+        } else {
+          const backoffDelay = baseBackoffMs * Math.pow(2, task.attempts);
+          const nextRun = new Date(Date.now() + backoffDelay);
+          await completeTask(task.id, token, {
+            kind: "retry",
+            status: "failed",
+            attempts: nextAttempts,
+            lastError: result.error ?? "Handler returned failure",
+            scheduledFor: nextRun,
+          });
+          failed++;
+        }
+      }
+    } catch (err: any) {
+      const nextAttempts = task.attempts + 1;
+      const errorMsg = err?.message || String(err);
+      if (nextAttempts >= maxAttempts) {
+        await completeTask(task.id, token, {
+          kind: "terminal",
+          status: "failed",
+          attempts: nextAttempts,
+          lastError: `Unhandled exception: ${errorMsg}`,
+        });
+        failed++;
+      } else {
+        const backoffDelay = baseBackoffMs * Math.pow(2, task.attempts);
+        const nextRun = new Date(Date.now() + backoffDelay);
+        await completeTask(task.id, token, {
+          kind: "retry",
+          status: "failed",
+          attempts: nextAttempts,
+          lastError: `Unhandled exception: ${errorMsg}`,
+          scheduledFor: nextRun,
+        });
+        failed++;
+      }
+    }
+  }
+
+  return { processed: tasks.length, succeeded, failed };
+}
+

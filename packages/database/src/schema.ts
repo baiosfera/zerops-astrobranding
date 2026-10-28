@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb, vector, index, integer, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, vector, index, integer, uniqueIndex, boolean, numeric } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const clients = pgTable("clients", {
@@ -194,4 +194,44 @@ export const clientShards = pgTable(
 
 export type ClientShard = typeof clientShards.$inferSelect;
 export type NewClientShard = typeof clientShards.$inferInsert;
+
+/**
+ * Universal Commercial Offerings (6 Archetypes: physical_goods, courses_education,
+ * memberships_mrr, events_ticketing, digital_products, service_bookings)
+ * SSoT aligned with @astrobranding/contracts (offerings.ts)
+ */
+export const offerings = pgTable(
+  "offerings",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    archetype: text("archetype").notNull(), // physical_goods | courses_education | memberships_mrr | events_ticketing | digital_products | service_bookings
+    channelStrategy: text("channel_strategy").notNull(), // commerce_feed | direct_web_conversion | messaging_booking
+    price: numeric("price", { precision: 12, scale: 2 }).default("0.00").notNull(),
+    currency: text("currency").default("COP").notNull(),
+    compareAtPrice: numeric("compare_at_price", { precision: 12, scale: 2 }),
+    availability: text("availability").default("in_stock").notNull(), // in_stock | out_of_stock | preorder
+    brand: text("brand").notNull(),
+    category: text("category"),
+    imageUrl: text("image_url"),
+    additionalImageUrls: jsonb("additional_image_urls").default([]).notNull(),
+    metaEventMapping: jsonb("meta_event_mapping").default({ web: "Purchase", capi: "Purchase" }).notNull(),
+    metadata: jsonb("metadata").default({}).notNull(),
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("offerings_slug_idx").on(table.slug),
+    index("offerings_archetype_idx").on(table.archetype),
+    index("offerings_channel_strategy_idx").on(table.channelStrategy),
+    index("offerings_active_idx").on(table.active),
+  ]
+);
+
+export type OfferingRecord = typeof offerings.$inferSelect;
+export type NewOfferingRecord = typeof offerings.$inferInsert;
+
 
