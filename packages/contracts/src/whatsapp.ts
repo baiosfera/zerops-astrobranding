@@ -4,6 +4,7 @@ export const WhatsAppSendOtpSchema = z.object({
   phoneNumber: z.string().min(7),
   template: z.enum(["otp_verification", "welcome_dossier", "notification"]).default("otp_verification"),
   clientName: z.string().optional(),
+  brandName: z.string().optional(),
 });
 
 export type WhatsAppSendOtpInput = z.infer<typeof WhatsAppSendOtpSchema>;
