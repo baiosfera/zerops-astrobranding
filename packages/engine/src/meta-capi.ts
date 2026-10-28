@@ -3,7 +3,7 @@ import type {
   MetaServerEventInput,
   MetaCapiResponse,
   MetaUserData,
-} from "@baiosfera/contracts";
+} from "@astrobranding/contracts";
 
 export interface MetaCapiConfig {
   pixelId?: string;
