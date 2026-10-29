@@ -169,8 +169,51 @@ CREATE TABLE IF NOT EXISTS offerings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS offerings_slug_idx ON offerings (slug);
+CREATE INDEX IF NOT EXISTS offerings_slug_idx ON offerings (slug);
+CREATE UNIQUE INDEX IF NOT EXISTS offerings_slug_active_unique ON offerings (slug) WHERE active = true;
 CREATE INDEX IF NOT EXISTS offerings_archetype_idx ON offerings (archetype);
 CREATE INDEX IF NOT EXISTS offerings_channel_strategy_idx ON offerings (channel_strategy);
 CREATE INDEX IF NOT EXISTS offerings_active_idx ON offerings (active);
+
+-- 11. Table: admin_users (RBAC: Superadmin & Merchant)
+CREATE TABLE IF NOT EXISTS admin_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    telegram_user_id BIGINT NOT NULL UNIQUE,
+    role TEXT NOT NULL DEFAULT 'merchant', -- 'superadmin' | 'merchant'
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS admin_users_telegram_idx ON admin_users (telegram_user_id);
+
+-- 12. Table: admin_otps (Single-use Cryptographic OTPs)
+CREATE TABLE IF NOT EXISTS admin_otps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+    code_hash TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS admin_otps_user_expires_idx ON admin_otps (user_id, expires_at);
+
+-- 13. Table: admin_sessions (7-day HTTP-Only Cookie Sessions)
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    id TEXT PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+    session_token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS admin_sessions_token_hash_idx ON admin_sessions (session_token_hash);
+CREATE INDEX IF NOT EXISTS admin_sessions_user_id_idx ON admin_sessions (user_id);
+
 

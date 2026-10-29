@@ -413,6 +413,36 @@ Para prevenir el **Split-Brain / Overwrite Hazard** entre cambios del comerciant
      ```
    - En producción SSR (`dist/server/entry.mjs`), Astro corre en modo standalone con Node/Bun nativo sin el dev server de Vite.
 
+### 8.2 Arquitectura de Catálogo Bidireccional: Panel Ofuscado (/adminn), OTP Telegram y Hermes FreeLLMAPI ($0 Cost)
+
+Para permitir que comerciantes no técnicos modifiquen catálogo, precios y disponibilidad en tiempo real sin requerir GitOps ni consumir tokens comerciales:
+
+1. **Partial Unique Indexes para Soft-Delete Sin Colisiones de Slug**:
+   - En PostgreSQL 18, un índice único global sobre `slug` (`UNIQUE(slug)`) bloquea la creación de nuevos items si un producto histórico inactivo ya usó dicho slug.
+   - La regla soberana es **Soft-Delete Seguro** (`is_active = 0` / `active = false`):
+     ```sql
+     ALTER TABLE products DROP CONSTRAINT IF EXISTS products_slug_unique;
+     CREATE INDEX IF NOT EXISTS products_slug_idx ON products (slug);
+     CREATE UNIQUE INDEX IF NOT EXISTS products_slug_active_unique ON products (slug) WHERE is_active = 1;
+     ```
+   - El soft-delete preserva integridad referencial con pedidos (`order_items`), carritos y outbox sin romper claves foráneas.
+
+2. **Panel Ofuscado (`/adminn`) con Autenticación OTP por Telegram Bot API Nativo**:
+   - **Cero Dependencia de Pasarelas Externas de SMS/Email**: El OTP de 6 dígitos se genera criptográficamente (`crypto.randomInt(100000, 999999)`), se hashea con SHA-256 (`code_hash`), tiene TTL de 5 minutos, máximo 5 intentos fallidos y se despacha directamente vía HTTP POST a `https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/sendMessage`.
+   - **RBAC Estricto en Base de Datos (`admin_users`)**:
+     * `superadmin`: Acceso total, modificación de slugs, borrado permanente (`deleteProductHard`).
+     * `merchant`: Modificación de precios, stock, imágenes, activación/desactivación (`toggleProductStatus`). Prohibido mutar slugs o ejecutar hard-deletes.
+   - **Sesiones HTTP-Only**: Cookie firmada `admin_session` de 7 días indexada por hash en PostgreSQL (`admin_sessions`).
+   - **Alerta de Auditoría Silenciosa**: Cada mutación de precio o catálogo envía notificación inmediata al Telegram del Superadmin.
+
+3. **Hermes Agent & FreeLLMAPI a Costo Cero ($0 Token Billing)**:
+   - **Capa 1 ($0 Costo)**: Hermes consulta y actualiza catálogo llamando a FreeLLMAPI (`http://freellmapi:3001/v1/chat/completions`) vía Bifrost (`http://bifrost:8080/v1/chat/completions`).
+   - **Payload Frugal Anti-Rate-Limit**:
+     * Proveedores gratuitos (Groq, Cerebras, OpenRouter Free) imponen techos de TPM/OTPM.
+     * Enviar obligatoriamente `max_tokens: 300` y `temperature: 0.1` en cada llamada.
+     * Herramientas acotadas (`ECOMMERCE_TOOLS` < 150 tokens): `get_store_products`, `toggle_product_status`, `update_product_price`, `get_recent_orders`.
+   - **Persistencia SQLite WAL Blindada**: FreeLLMAPI opera con `PRAGMA synchronous = NORMAL`, `PRAGMA wal_autocheckpoint = 1000` y atrapa `SIGTERM`/`SIGINT` ejecutando `PRAGMA wal_checkpoint(TRUNCATE)` para prevenir corrupción de base de datos ante reinicios de contenedor en Zerops.
+
 ---
 
 ## 9. Desacople Estricto de Formularios por Intención de Negocio

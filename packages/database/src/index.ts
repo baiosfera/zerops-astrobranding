@@ -5,7 +5,8 @@ import * as schema from "./schema";
 export const DATABASE_VERSION = "1.0.0";
 export * from "./schema";
 export * from "./outbox-drain";
-export { eq, sql } from "drizzle-orm";
+export * from "./admin-auth";
+export { eq, sql, desc, asc, and, or, inArray } from "drizzle-orm";
 
 let _queryClient: ReturnType<typeof postgres> | null = null;
 let _db: ReturnType<typeof drizzle> | null = null;

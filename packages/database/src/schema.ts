@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb, vector, index, integer, uniqueIndex, boolean, numeric } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, vector, index, integer, uniqueIndex, boolean, numeric, bigint } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const clients = pgTable("clients", {
@@ -224,7 +224,8 @@ export const offerings = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("offerings_slug_idx").on(table.slug),
+    index("offerings_slug_idx").on(table.slug),
+    uniqueIndex("offerings_slug_active_unique").on(table.slug).where(sql`active = true`),
     index("offerings_archetype_idx").on(table.archetype),
     index("offerings_channel_strategy_idx").on(table.channelStrategy),
     index("offerings_active_idx").on(table.active),
@@ -233,5 +234,71 @@ export const offerings = pgTable(
 
 export type OfferingRecord = typeof offerings.$inferSelect;
 export type NewOfferingRecord = typeof offerings.$inferInsert;
+
+/**
+ * Admin Users (RBAC: Superadmin & Merchant)
+ */
+export const adminUsers = pgTable(
+  "admin_users",
+  {
+    id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+    name: text("name").notNull(),
+    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull().unique(),
+    role: text("role").default("merchant").notNull(), // 'superadmin' | 'merchant'
+    isActive: integer("is_active").default(1).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("admin_users_telegram_idx").on(table.telegramUserId),
+  ]
+);
+
+/**
+ * Admin OTPs (Single-use Cryptographic OTPs)
+ */
+export const adminOtps = pgTable(
+  "admin_otps",
+  {
+    id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+    userId: uuid("user_id").references(() => adminUsers.id, { onDelete: "cascade" }).notNull(),
+    codeHash: text("code_hash").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("admin_otps_user_expires_idx").on(table.userId, table.expiresAt),
+  ]
+);
+
+/**
+ * Admin Sessions (7-day HTTP-Only Cookie Sessions)
+ */
+export const adminSessions = pgTable(
+  "admin_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: uuid("user_id").references(() => adminUsers.id, { onDelete: "cascade" }).notNull(),
+    sessionTokenHash: text("session_token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("admin_sessions_token_hash_idx").on(table.sessionTokenHash),
+    index("admin_sessions_user_id_idx").on(table.userId),
+  ]
+);
+
+export type AdminUser = typeof adminUsers.$inferSelect;
+export type NewAdminUser = typeof adminUsers.$inferInsert;
+export type AdminOtp = typeof adminOtps.$inferSelect;
+export type NewAdminOtp = typeof adminOtps.$inferInsert;
+export type AdminSession = typeof adminSessions.$inferSelect;
+export type NewAdminSession = typeof adminSessions.$inferInsert;
 
 
