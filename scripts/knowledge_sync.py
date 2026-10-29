@@ -22,6 +22,7 @@ import os
 import sys
 import re
 import json
+import html
 import time
 import uuid
 import glob
@@ -48,41 +49,69 @@ if os.path.isdir(UV_SITE_PACKAGES) and UV_SITE_PACKAGES not in sys.path:
 # 1. Componente: Limpiador y Normalizador de Subtítulos SRT/VTT en Memoria
 # =============================================================================
 class SubtitlesCleaner:
-    """Normaliza y despoja códigos de tiempo de archivos .srt y .vtt."""
+    """Normaliza y despoja códigos de tiempo, etiquetas de formateo y repeticiones de roll-up en archivos .srt, .vtt y .txt de subtítulos."""
 
-    TIMECODE_SRT = re.compile(
-        r"^\d{1,5}\r?\n\d{2}:\d{2}:\d{2}[,\.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,\.]\d{3}.*$",
+    TIMECODE_LINE = re.compile(
+        r"^(?:\d{1,5}\r?\n)?(?:\d{2}:)?\d{2}:\d{2}[,\.]\d{3}\s*-->\s*(?:\d{2}:)?\d{2}:\d{2}[,\.]\d{3}.*$",
         re.MULTILINE,
     )
-    TIMECODE_VTT = re.compile(
-        r"^\d{2}:\d{2}(?::\d{2})?[,\.]\d{3}\s*-->\s*\d{2}:\d{2}(?::\d{2})?[,\.]\d{3}.*$",
-        re.MULTILINE,
-    )
+    HEADER_VTT = re.compile(r"^\ufeff?WEBVTT.*?\n(?:\w+:.*?\n)*\n?", re.DOTALL | re.IGNORECASE)
     TAG_HTML = re.compile(r"<[^>]+>")
-    HEADER_VTT = re.compile(r"^WEBVTT.*?\n\n", re.DOTALL | re.IGNORECASE)
 
     @classmethod
     def clean(cls, raw_content: str) -> str:
-        """Remueve numeración secuencial, marcas de tiempo y etiquetas de formateo."""
+        """Remueve numeración secuencial, marcas de tiempo, etiquetas de karaoke y deduplica repeticiones de roll-up."""
         if not raw_content:
             return ""
 
-        content = cls.HEADER_VTT.sub("", raw_content)
-        content = cls.TIMECODE_SRT.sub("", content)
-        content = cls.TIMECODE_VTT.sub("", content)
+        content = raw_content.replace("\r\n", "\n").replace("\r", "\n")
+        content = html.unescape(content)
+        content = cls.HEADER_VTT.sub("", content)
+        content = cls.TIMECODE_LINE.sub("", content)
         content = cls.TAG_HTML.sub("", content)
 
         lines = []
-        last_line = ""
         for line in content.splitlines():
             line_str = line.strip()
             if not line_str or line_str.isdigit():
                 continue
-            if line_str != last_line:
-                lines.append(line_str)
-                last_line = line_str
+            if line_str.upper().startswith(("NOTE", "REGION", "STYLE", "WEBVTT", "KIND:", "LANGUAGE:")):
+                continue
+            if lines:
+                prev = lines[-1]
+                if line_str == prev:
+                    continue
+                if line_str.startswith(prev):
+                    lines[-1] = line_str
+                    continue
+                if prev.startswith(line_str):
+                    continue
+                # Detección de solapamiento en roll-up (YouTube / auto-captions)
+                wp = prev.split()
+                wc = line_str.split()
+                overlap = False
+                for k in range(min(len(wp), len(wc), 8), 1, -1):
+                    if wp[-k:] == wc[:k]:
+                        lines[-1] = " ".join(wp + wc[k:])
+                        overlap = True
+                        break
+                if overlap:
+                    continue
 
-        return "\n".join(lines)
+            lines.append(line_str)
+
+        # Agrupar en párrafos continuos y legibles (cada ~5 oraciones o por pausas)
+        paragraphs = []
+        current_para = []
+        for l in lines:
+            current_para.append(l)
+            if len(current_para) >= 4 and l.endswith((".", "?", "!")):
+                paragraphs.append(" ".join(current_para))
+                current_para = []
+        if current_para:
+            paragraphs.append(" ".join(current_para))
+
+        return "\n\n".join(paragraphs) if paragraphs else "\n".join(lines)
 
 
 # =============================================================================
@@ -232,7 +261,10 @@ class TextContentExtractor:
         if ext in (".md", ".txt"):
             try:
                 with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                    return f.read().strip()
+                    raw = f.read().strip()
+                if "-->" in raw and re.search(r"\d{1,2}:\d{2}.*?-->", raw):
+                    return SubtitlesCleaner.clean(raw)
+                return raw
             except Exception:
                 return ""
         elif ext == ".docx":
@@ -1922,7 +1954,9 @@ def cmd_push(args):
                         "size_bytes": st.st_size,
                         "mtime": int(st.st_mtime),
                         "canonical_upload": True,
-                        "target_notebook": f"[ESPECIALIDAD_{c_name.upper()}]",
+                        "target_notebook": CourseScanner.CLUSTER_NOTEBOOK_TITLES.get(
+                            c_name, f"[ESPECIALIDAD_{c_name.upper()}]"
+                        ),
                         "fingerprint": fp,
                     })
     else:
