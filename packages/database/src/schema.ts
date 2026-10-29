@@ -214,6 +214,9 @@ export const services = pgTable(
     price: integer("price").notNull(),
     depositRequired: integer("deposit_required").default(0).notNull(),
     depositAmount: integer("deposit_amount").default(0).notNull(),
+    imageUrl: text("image_url"),
+    priceRange: text("price_range"),
+    badge: text("badge"),
     isActive: integer("is_active").default(1).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -383,6 +386,16 @@ export const adminSessions = pgTable(
   ]
 );
 
+/**
+ * 16. Site Settings (Key-Value Dynamic Configuration & Heros)
+ */
+export const siteSettings = pgTable("site_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  description: text("description"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // Inferred Types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -420,3 +433,5 @@ export type AdminOtp = typeof adminOtps.$inferSelect;
 export type NewAdminOtp = typeof adminOtps.$inferInsert;
 export type AdminSession = typeof adminSessions.$inferSelect;
 export type NewAdminSession = typeof adminSessions.$inferInsert;
+export type SiteSetting = typeof siteSettings.$inferSelect;
+export type NewSiteSetting = typeof siteSettings.$inferInsert;

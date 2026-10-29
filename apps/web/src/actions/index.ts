@@ -4,6 +4,9 @@ import {
   getDb,
   products,
   productVariants,
+  services,
+  bookings,
+  siteSettings,
   loginWithAdminPassword,
   requestAdminOtp,
   verifyAdminOtp,
@@ -183,11 +186,12 @@ export const server = {
       basePrice: z.number().positive(),
       category: z.string().min(1),
       slug: z.string().optional(),
+      stock: z.number().int().min(0).optional(),
       imageBase64: z.string().optional(),
       imageName: z.string().optional(),
       removeImage: z.boolean().optional(),
     }),
-    handler: async ({ id, name, description, basePrice, category, slug, imageBase64, imageName, removeImage }, context) => {
+    handler: async ({ id, name, description, basePrice, category, slug, stock, imageBase64, imageName, removeImage }, context) => {
       const adminUser = context.locals.adminUser;
       if (!adminUser) {
         throw new ActionError({
@@ -244,17 +248,25 @@ export const server = {
         }
       }
 
+      const updateData: Record<string, any> = {
+        name: name.trim(),
+        description: description?.trim() || null,
+        basePrice,
+        category: category.trim(),
+        slug: finalSlug,
+        images: finalImages,
+        updatedAt: new Date(),
+      };
+
+      if (stock !== undefined) {
+        updateData.stock = stock;
+        // Also synchronize variants
+        await db.update(productVariants).set({ stock, price: basePrice }).where(eq(productVariants.productId, id));
+      }
+
       await db
         .update(products)
-        .set({
-          name: name.trim(),
-          description: description?.trim() || null,
-          basePrice,
-          category: category.trim(),
-          slug: finalSlug,
-          images: finalImages,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(products.id, id));
 
       return { success: true };
@@ -267,10 +279,11 @@ export const server = {
       description: z.string().optional(),
       basePrice: z.number().positive(),
       category: z.string().min(1),
+      stock: z.number().int().min(0).optional(),
       imageBase64: z.string().optional(),
       imageName: z.string().optional(),
     }),
-    handler: async ({ name, description, basePrice, category, imageBase64, imageName }, context) => {
+    handler: async ({ name, description, basePrice, category, stock = 10, imageBase64, imageName }, context) => {
       const adminUser = context.locals.adminUser;
       if (!adminUser) {
         throw new ActionError({
@@ -326,6 +339,7 @@ export const server = {
           category: category.trim(),
           basePrice,
           images: imageUrls,
+          stock,
           isActive: 1,
         })
         .returning();
@@ -337,7 +351,7 @@ export const server = {
         size: "Única",
         color: "Estándar",
         price: basePrice,
-        stock: 10,
+        stock,
       });
 
       notifySuperadminAudit(
@@ -386,6 +400,266 @@ export const server = {
       ).catch(() => {});
 
       return { success: true };
+    },
+  }),
+
+  // ==========================================
+  // SERVICIOS DE MAQUILLAJE (ATELIER)
+  // ==========================================
+  toggleServiceStatus: defineAction({
+    input: z.object({
+      serviceId: z.string().uuid(),
+      isActive: z.number().min(0).max(1),
+    }),
+    handler: async ({ serviceId, isActive }, context) => {
+      const adminUser = context.locals.adminUser;
+      if (!adminUser) {
+        throw new ActionError({ code: "UNAUTHORIZED", message: "Sesión no autenticada en /adminn." });
+      }
+      const db = getDb();
+      const [serv] = await db.select().from(services).where(eq(services.id, serviceId)).limit(1);
+      if (!serv) {
+        throw new ActionError({ code: "NOT_FOUND", message: "Servicio no encontrado." });
+      }
+      await db.update(services).set({ isActive, updatedAt: new Date() }).where(eq(services.id, serviceId));
+      notifySuperadminAudit(
+        `💅 <b>Servicio /adminn</b>: <b>${serv.name}</b> ${isActive === 1 ? 'activado' : 'desactivado'} por <b>${adminUser.name}</b>.`
+      ).catch(() => {});
+      return { success: true, isActive };
+    },
+  }),
+
+  updateService: defineAction({
+    input: z.object({
+      id: z.string().uuid(),
+      name: z.string().min(1),
+      description: z.string().optional(),
+      price: z.number().positive(),
+      durationMinutes: z.number().positive(),
+      depositRequired: z.number().min(0).max(1),
+      depositAmount: z.number().min(0),
+      priceRange: z.string().optional(),
+      badge: z.string().optional(),
+      imageBase64: z.string().optional(),
+      imageName: z.string().optional(),
+    }),
+    handler: async ({ id, name, description, price, durationMinutes, depositRequired, depositAmount, priceRange, badge, imageBase64, imageName }, context) => {
+      const adminUser = context.locals.adminUser;
+      if (!adminUser) {
+        throw new ActionError({ code: "UNAUTHORIZED", message: "Sesión no autenticada en /adminn." });
+      }
+      const db = getDb();
+      const [current] = await db.select().from(services).where(eq(services.id, id)).limit(1);
+      if (!current) {
+        throw new ActionError({ code: "NOT_FOUND", message: "Servicio no encontrado." });
+      }
+
+      let finalImageUrl = current.imageUrl;
+      if (imageBase64 && imageName) {
+        try {
+          const buffer = Buffer.from(imageBase64.replace(/^data:image\/\w+;base64,/, ""), "base64");
+          const ext = imageName.split(".").pop()?.toLowerCase() || "jpg";
+          const safeFileName = `service_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+          const storageDir = getStorageDir();
+          const targetPath = join(storageDir, safeFileName);
+          writeFileSync(targetPath, buffer);
+          finalImageUrl = `/images/products/${safeFileName}`;
+        } catch (imgErr) {
+          console.error("[Action updateService] Image save error:", imgErr);
+        }
+      }
+
+      await db
+        .update(services)
+        .set({
+          name: name.trim(),
+          description: description?.trim() || null,
+          price,
+          durationMinutes,
+          depositRequired,
+          depositAmount,
+          priceRange: priceRange?.trim() || null,
+          badge: badge?.trim() || null,
+          imageUrl: finalImageUrl,
+          updatedAt: new Date(),
+        })
+        .where(eq(services.id, id));
+
+      notifySuperadminAudit(
+        `💅 <b>Servicio actualizado en /adminn</b>\nServicio: <b>${name}</b>\nPrecio: $${price.toLocaleString("es-CO")} COP\nModificado por: <b>${adminUser.name}</b>`
+      ).catch(() => {});
+
+      return { success: true };
+    },
+  }),
+
+  createService: defineAction({
+    input: z.object({
+      name: z.string().min(1),
+      description: z.string().optional(),
+      price: z.number().positive(),
+      durationMinutes: z.number().positive(),
+      depositRequired: z.number().min(0).max(1),
+      depositAmount: z.number().min(0),
+      priceRange: z.string().optional(),
+      badge: z.string().optional(),
+      imageBase64: z.string().optional(),
+      imageName: z.string().optional(),
+    }),
+    handler: async ({ name, description, price, durationMinutes, depositRequired, depositAmount, priceRange, badge, imageBase64, imageName }, context) => {
+      const adminUser = context.locals.adminUser;
+      if (!adminUser) {
+        throw new ActionError({ code: "UNAUTHORIZED", message: "Sesión no autenticada en /adminn." });
+      }
+
+      let baseSlug = name
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      if (!baseSlug) baseSlug = `servicio-${Date.now()}`;
+
+      let finalImageUrl = "/images/services/maquillaje-social-1.jpg";
+      if (imageBase64 && imageName) {
+        try {
+          const buffer = Buffer.from(imageBase64.replace(/^data:image\/\w+;base64,/, ""), "base64");
+          const ext = imageName.split(".").pop()?.toLowerCase() || "jpg";
+          const safeFileName = `service_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+          const storageDir = getStorageDir();
+          const targetPath = join(storageDir, safeFileName);
+          writeFileSync(targetPath, buffer);
+          finalImageUrl = `/images/products/${safeFileName}`;
+        } catch (imgErr) {
+          console.error("[Action createService] Image save error:", imgErr);
+        }
+      }
+
+      const db = getDb();
+      const [newService] = await db
+        .insert(services)
+        .values({
+          name: name.trim(),
+          slug: baseSlug,
+          description: description?.trim() || null,
+          price,
+          durationMinutes,
+          depositRequired,
+          depositAmount,
+          priceRange: priceRange?.trim() || null,
+          badge: badge?.trim() || null,
+          imageUrl: finalImageUrl,
+          isActive: 1,
+        })
+        .returning();
+
+      notifySuperadminAudit(
+        `✨ <b>Nuevo servicio creado en /adminn</b>\nServicio: <b>${newService.name}</b>\nSlug: <code>${newService.slug}</code>\nPrecio: $${price.toLocaleString("es-CO")} COP\nCreador: <b>${adminUser.name}</b>`
+      ).catch(() => {});
+
+      return { success: true, service: newService };
+    },
+  }),
+
+  // ==========================================
+  // CITAS & AGENDA (BOOKINGS)
+  // ==========================================
+  updateBookingStatus: defineAction({
+    input: z.object({
+      bookingId: z.string().uuid(),
+      status: z.enum(["pending", "confirmed", "completed", "cancelled"]),
+    }),
+    handler: async ({ bookingId, status }, context) => {
+      const adminUser = context.locals.adminUser;
+      if (!adminUser) {
+        throw new ActionError({ code: "UNAUTHORIZED", message: "Sesión no autenticada en /adminn." });
+      }
+      const db = getDb();
+      await db.update(bookings).set({ status }).where(eq(bookings.id, bookingId));
+      return { success: true, status };
+    },
+  }),
+
+  // ==========================================
+  // CONFIGURACIÓN & PORTADA (SITE SETTINGS)
+  // ==========================================
+  updateSiteSetting: defineAction({
+    input: z.object({
+      key: z.string().min(1),
+      value: z.record(z.any()),
+      description: z.string().optional(),
+    }),
+    handler: async ({ key, value, description }, context) => {
+      const adminUser = context.locals.adminUser;
+      if (!adminUser) {
+        throw new ActionError({ code: "UNAUTHORIZED", message: "Sesión no autenticada en /adminn." });
+      }
+      const db = getDb();
+      await db
+        .insert(siteSettings)
+        .values({
+          key,
+          value,
+          description: description || null,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: siteSettings.key,
+          set: {
+            value,
+            description: description || null,
+            updatedAt: new Date(),
+          },
+        });
+      return { success: true };
+    },
+  }),
+
+  uploadBannerImage: defineAction({
+    input: z.object({
+      targetKey: z.enum(["hero_image", "hero_secondary_image"]),
+      imageBase64: z.string().min(1),
+      imageName: z.string().min(1),
+      altText: z.string().optional(),
+    }),
+    handler: async ({ targetKey, imageBase64, imageName, altText }, context) => {
+      const adminUser = context.locals.adminUser;
+      if (!adminUser) {
+        throw new ActionError({ code: "UNAUTHORIZED", message: "Sesión no autenticada en /adminn." });
+      }
+      const buffer = Buffer.from(imageBase64.replace(/^data:image\/\w+;base64,/, ""), "base64");
+      const ext = imageName.split(".").pop()?.toLowerCase() || "jpg";
+      const safeFileName = `banner_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+      const storageDir = getStorageDir();
+      const targetPath = join(storageDir, safeFileName);
+      writeFileSync(targetPath, buffer);
+      const newImgUrl = `/images/products/${safeFileName}`;
+
+      const db = getDb();
+      const [curr] = await db.select().from(siteSettings).where(eq(siteSettings.key, targetKey)).limit(1);
+      const currVal = (curr?.value as Record<string, any>) || {};
+      const updatedVal = {
+        ...currVal,
+        url: newImgUrl,
+        alt: altText || currVal.alt || "Banner portada",
+      };
+
+      await db
+        .insert(siteSettings)
+        .values({
+          key: targetKey,
+          value: updatedVal,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: siteSettings.key,
+          set: {
+            value: updatedVal,
+            updatedAt: new Date(),
+          },
+        });
+
+      return { success: true, url: newImgUrl };
     },
   }),
 };

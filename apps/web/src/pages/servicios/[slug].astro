@@ -1,0 +1,273 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import SEO from "../../components/SEO.astro";
+import { getQueryClient } from "@astrobranding/database";
+
+export const prerender = false;
+
+const { slug } = Astro.params;
+
+let service: any = null;
+
+if (slug) {
+  try {
+    const sql = getQueryClient();
+    const rows = await sql`SELECT * FROM services WHERE slug = ${slug} AND is_active = 1 LIMIT 1`;
+    if (rows.length > 0) {
+      service = rows[0];
+    }
+  } catch (err) {
+    console.warn("DB lookup error in /servicios/[slug]:", err);
+  }
+}
+
+const serviceCatalogFallbacks: Record<string, any> = {
+  "maquillaje-de-novia": {
+    id: "s-01",
+    name: "Maquillaje de Novia",
+    slug: "maquillaje-de-novia",
+    description: "Atención especializada para bodas y novias en Medellín y Valle del Aburrá. Incluye preparación dérmica blindada de larga duración, visagismo personalizado, pestañas de seda y fijación profesional a prueba de lágrimas y emociones para el día más especial de tu vida.",
+    duration_minutes: 120,
+    price: 350000,
+    price_range: "$350.000 a $450.000",
+    badge: "Atelier de Novias",
+    image: "/images/services/maquillaje-novia-1.jpg"
+  },
+  "maquillaje-de-quinceanera": {
+    id: "s-02",
+    name: "Maquillaje de Quinceañera",
+    slug: "maquillaje-de-quinceanera",
+    description: "Estilismo fresco, juvenil y radiante para quinceañeras y ceremonias de graduación en Medellín. Resalta las facciones naturales con iluminación multidimensional, hidratación profunda y sellado prolongado para resistir toda la celebración.",
+    duration_minutes: 90,
+    price: 250000,
+    price_range: "$250.000 a $320.000",
+    badge: "Quinceañeras & Grados",
+    image: "/images/services/maquillaje-quinceanera-1.jpg"
+  },
+  "maquillaje-social": {
+    id: "s-03",
+    name: "Maquillaje Social",
+    slug: "maquillaje-social",
+    description: "Maquillaje profesional para eventos sociales, galas, grados y ocasiones especiales en Medellín y Valle del Aburrá. Acabado impecable de alta cobertura y duración con cosméticos de primeras marcas internacionales.",
+    duration_minutes: 60,
+    price: 150000,
+    price_range: "$150.000 a $250.000",
+    badge: "Eventos Sociales",
+    image: "/images/services/maquillaje-social-1.jpg"
+  },
+};
+
+if (!service) {
+  service = serviceCatalogFallbacks[slug || ""] || serviceCatalogFallbacks["maquillaje-de-novia"];
+}
+
+const priceRanges: Record<string, string> = {
+  "maquillaje-de-novia": "$350.000 a $450.000",
+  "maquillaje-de-quinceanera": "$250.000 a $320.000",
+  "maquillaje-social": "$150.000 a $250.000",
+};
+
+const displayRange = service.price_range || service.priceRange || priceRanges[service.slug] || new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+}).format(service.price);
+
+const serviceImage = service.image_url || service.imageUrl || service.image || serviceCatalogFallbacks[service.slug]?.image || "/images/services/maquillaje-social-1.jpg";
+---
+
+<BaseLayout
+  title={`${service.name} — Catalina Glamur`}
+  description={service.description}
+  image={serviceImage}
+>
+  <SEO
+    slot="head"
+    title={`${service.name} — Catalina Glamur Medellín`}
+    description={service.description}
+    canonicalUrl={`https://catalinaglamur.com/servicios/${service.slug}`}
+  />
+
+  <main class="min-h-screen bg-[#07080A] text-[#F7F3FA] py-10 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-5xl mx-auto space-y-12">
+      <!-- Breadcrumb -->
+      <nav class="flex items-center gap-2 text-xs text-[#8E98A8] font-mono">
+        <a href="/" class="hover:text-[#D4AF37] transition-colors">Inicio</a>
+        <span>/</span>
+        <a href="/servicios" class="hover:text-[#D4AF37] transition-colors">Maquillaje</a>
+        <span>/</span>
+        <span class="text-[#D4AF37]">{service.name}</span>
+      </nav>
+
+      <!-- Encabezado del Servicio -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+        <!-- Visual & Badges (Col 1-5) -->
+        <div class="lg:col-span-5 space-y-6">
+          <div class="aspect-[4/3] bg-[#0E1015] border border-[#232833] overflow-hidden relative group">
+            <img
+              src={serviceImage}
+              alt={service.name}
+              class="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+            />
+            <div class="absolute inset-0 bg-gradient-to-t from-[#07080A] via-transparent to-transparent opacity-80"></div>
+            <div class="absolute bottom-6 left-6 right-6">
+              <span class="px-2.5 py-1 text-[9px] font-mono uppercase tracking-[0.2em] bg-[#07080A]/90 border border-[#D4AF37]/50 text-[#D4AF37] mb-2 inline-block">
+                {service.badge || "Exclusivo"}
+              </span>
+              <h2 class="font-['Kalieb_Luxury'] text-2xl text-[#F7F3FA] font-medium">
+                Medellín y Valle del Aburrá
+              </h2>
+            </div>
+          </div>
+
+          <!-- Beneficios del Servicio -->
+          <div class="bg-[#0E1015] border border-[#232833] p-6 space-y-4 text-xs text-[#8E98A8]">
+            <span class="text-[9px] font-mono text-[#D4AF37] uppercase tracking-[0.2em] block">
+              ESPECIFICACIONES DEL SERVICIO
+            </span>
+            <div class="space-y-2.5 text-[#F7F3FA]">
+              <div class="flex items-center gap-2">
+                <span class="text-[#D4AF37] font-mono">&mdash;</span>
+                <span>Atención privada y personalizada en Medellín y Valle del Aburrá</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[#D4AF37] font-mono">&mdash;</span>
+                <span>Preparación dérmica profunda con sueros hidratantes y cosmética internacional</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[#D4AF37] font-mono">&mdash;</span>
+                <span>Técnica de piel blindada resistente al sudor, calor y lágrimas</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[#D4AF37] font-mono">&mdash;</span>
+                <span>Pestañas de seda punto a punto con adhesivo hipoalergénico de alta durabilidad</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[#D4AF37] font-mono">&mdash;</span>
+                <span>Kit profesional esterilizado e iluminación portátil de estudio para máxima fidelidad cromática</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Formulario de Agendamiento Directo (Col 6-12) -->
+        <div class="lg:col-span-7 bg-[#0E1015] border border-[#232833] p-8 sm:p-10 space-y-6">
+          <div class="space-y-2 border-b border-[#232833] pb-6">
+            <span class="text-[10px] text-[#D4AF37] font-mono uppercase tracking-[0.2em] block">
+              DURACIÓN ESTIMADA: {service.duration_minutes} MINUTOS
+            </span>
+            <h1 class="text-3xl sm:text-4xl font-['Kalieb_Luxury'] text-[#F7F3FA] font-medium">
+              {service.name}
+            </h1>
+            <p class="text-2xl font-bold text-[#D4AF37] font-mono pt-1">
+              {displayRange}
+            </p>
+            <p class="text-xs text-[#8E98A8] font-light leading-relaxed pt-2">
+              {service.description}
+            </p>
+          </div>
+
+          <form id="bookingForm" class="space-y-4">
+            <span class="text-xs font-mono uppercase tracking-[0.2em] text-[#F7F3FA] block">
+              Datos para Coordinar Cita
+            </span>
+
+            <div>
+              <label class="block text-xs font-mono text-[#8E98A8] uppercase tracking-wider mb-1.5">Nombre Completo *</label>
+              <input
+                type="text"
+                id="bookName"
+                required
+                placeholder="Tu nombre y apellido"
+                class="w-full bg-[#161A22] border border-[#232833] px-4 py-3 text-xs text-[#F7F3FA] placeholder-neutral-600 focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-mono text-[#8E98A8] uppercase tracking-wider mb-1.5">WhatsApp Móvil *</label>
+              <input
+                type="tel"
+                id="bookPhone"
+                required
+                placeholder="Ej: 300 123 4567"
+                class="w-full bg-[#161A22] border border-[#232833] px-4 py-3 text-xs text-[#F7F3FA] placeholder-neutral-600 focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-mono text-[#8E98A8] uppercase tracking-wider mb-1.5">Fecha Prevista *</label>
+                <input
+                  type="date"
+                  id="bookDate"
+                  required
+                  class="w-full bg-[#161A22] border border-[#232833] px-4 py-3 text-xs text-[#F7F3FA] focus:outline-none focus:border-[#D4AF37]"
+                />
+              </div>
+
+              <div>
+                <label class="block text-xs font-mono text-[#8E98A8] uppercase tracking-wider mb-1.5">Hora Estimada *</label>
+                <input
+                  type="time"
+                  id="bookTime"
+                  required
+                  class="w-full bg-[#161A22] border border-[#232833] px-4 py-3 text-xs text-[#F7F3FA] focus:outline-none focus:border-[#D4AF37]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-mono text-[#8E98A8] uppercase tracking-wider mb-1.5">Sector o Municipio en Medellín / Aburrá *</label>
+              <input
+                type="text"
+                id="bookAddress"
+                required
+                placeholder="Ej: El Poblado, Envigado, Laureles, Sabaneta..."
+                class="w-full bg-[#161A22] border border-[#232833] px-4 py-3 text-xs text-[#F7F3FA] placeholder-neutral-600 focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+
+            <div class="pt-2">
+              <button
+                type="submit"
+                id="submitBookBtn"
+                class="w-full py-4 bg-[#D4AF37] text-[#07080A] text-xs font-mono tracking-[0.2em] uppercase font-bold hover:bg-[#F5E08B] transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Agendar por WhatsApp Oficial &rarr;</span>
+              </button>
+            </div>
+            <p class="text-[10px] font-mono uppercase tracking-wider text-center text-[#8E98A8]">
+              Respuesta directa por WhatsApp (+57 304 578 1032)
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script define:vars={{ serviceName: service.name, servicePrice: displayRange }}>
+    const bookingForm = document.getElementById("bookingForm");
+    if (bookingForm) {
+      bookingForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const name = document.getElementById("bookName").value;
+        const phone = document.getElementById("bookPhone").value;
+        const date = document.getElementById("bookDate").value;
+        const time = document.getElementById("bookTime").value;
+        const address = document.getElementById("bookAddress").value;
+
+        const text = encodeURIComponent(
+          `Hola Catalina Glamur ✨ Deseo coordinar una cita de maquillaje:\n\n` +
+          `• Servicio: ${serviceName} (${servicePrice})\n` +
+          `• Nombre: ${name}\n` +
+          `• Teléfono: ${phone}\n` +
+          `• Fecha: ${date}\n` +
+          `• Hora: ${time}\n` +
+          `• Ubicación: ${address}`
+        );
+
+        window.open(`https://wa.me/573045781032?text=${text}`, "_blank");
+      });
+    }
+  </script>
+</BaseLayout>

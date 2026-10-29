@@ -1,7 +1,7 @@
 ---
 export const prerender = false;
 
-import { getDb, products, orders, desc } from "@astrobranding/database";
+import { getDb, products, productVariants, services, bookings, siteSettings, desc, eq } from "@astrobranding/database";
 
 // Handle direct logout navigation query (?logout=1)
 if (Astro.url.searchParams.get("logout") === "1") {
@@ -21,11 +21,32 @@ if (!adminUser) {
 }
 
 const db = getDb();
-const catalogItems = await db.select().from(products).orderBy(desc(products.createdAt));
 const isSuperadmin = adminUser.role === "superadmin";
 
-const activeCount = catalogItems.filter((p) => p.isActive === 1).length;
-const inactiveCount = catalogItems.length - activeCount;
+// 1. Fetch Products with Variants
+const catalogItems = await db.select().from(products).orderBy(desc(products.createdAt));
+const activeProductsCount = catalogItems.filter((p) => p.isActive === 1).length;
+
+// Collect distinct categories dynamically
+const rawCategories = Array.from(new Set(catalogItems.map((p) => p.category).filter(Boolean)));
+const defaultCategories = ["activewear", "enterizos", "conjuntos", "tops", "accesorios", "servicio"];
+const distinctCategories = Array.from(new Set([...rawCategories, ...defaultCategories]));
+
+// 2. Fetch Services
+const serviceItems = await db.select().from(services).orderBy(desc(services.createdAt));
+const activeServicesCount = serviceItems.filter((s) => s.isActive === 1).length;
+
+// 3. Fetch Bookings
+const bookingItems = await db.select().from(bookings).orderBy(desc(bookings.appointmentDate)).limit(50);
+
+// 4. Fetch Site Settings
+const settingsRows = await db.select().from(siteSettings);
+const settingsMap: Record<string, any> = {};
+for (const row of settingsRows) {
+  settingsMap[row.key] = row.value;
+}
+const heroImage = settingsMap["hero_image"] || { url: "/images/products/product-01.jpg", alt: "Portada Principal" };
+const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/services/maquillaje-social-1.jpg", alt: "Atelier Social" };
 ---
 
 <!doctype html>
@@ -33,19 +54,33 @@ const inactiveCount = catalogItems.length - activeCount;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Panel de Catálogo | Catalina Glamur</title>
+    <title>Panel de Control 360° | Catalina Glamur</title>
     <meta name="robots" content="noindex, nofollow, noarchive" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/styles/theme.css" />
+    <style>
+      .tab-btn.active {
+        background-color: #27272a;
+        color: #fbbf24;
+        border-color: #f59e0b;
+      }
+      .tab-pane {
+        display: none;
+      }
+      .tab-pane.active {
+        display: block;
+      }
+    </style>
   </head>
-  <body class="min-h-full flex flex-col selection:bg-amber-500 selection:text-black">
+  <body class="min-h-full flex flex-col selection:bg-amber-500 selection:text-black font-sans antialiased">
     <!-- Top Bar -->
     <header class="border-b border-zinc-800/80 bg-zinc-900/90 backdrop-blur sticky top-0 z-40">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <div class="flex items-center space-x-3">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span class="text-lg font-bold tracking-tight text-white">Catalina Glamur</span>
+          <span class="text-lg font-bold tracking-tight text-white font-serif">Catalina Glamur</span>
           <span class="hidden sm:inline-block text-[11px] font-mono uppercase bg-zinc-800 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">
-            /adminn
+            Suite 360°
           </span>
         </div>
 
@@ -56,7 +91,6 @@ const inactiveCount = catalogItems.length - activeCount;
               <span class={`text-[10px] uppercase font-mono px-1.5 py-0.2 rounded font-semibold ${isSuperadmin ? 'bg-purple-950/80 text-purple-300 border border-purple-800/50' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/50'}`}>
                 {adminUser.role}
               </span>
-              <span class="text-[10px] text-zinc-500 font-mono">TG: {adminUser.telegramUserId}</span>
             </div>
           </div>
 
@@ -72,225 +106,549 @@ const inactiveCount = catalogItems.length - activeCount;
     </header>
 
     <!-- Main Container -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <!-- Status Notice -->
-      <div id="dashboardNotice" class="hidden p-4 rounded-xl text-sm border transition-all"></div>
+      <div id="dashboardNotice" class="hidden p-4 rounded-xl text-sm border transition-all shadow-lg"></div>
 
-      <!-- Quick Metrics & Actions -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+      <!-- Header Title & Quick Metrics -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-zinc-800">
         <div>
-          <h1 class="text-2xl font-bold text-white tracking-tight">Administración de Catálogo</h1>
+          <h1 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            Panel de Control Soberano
+          </h1>
           <p class="text-xs text-zinc-400 mt-1">
-            Sincronización bidireccional inmediata en vivo (PostgreSQL, webdev, webprod y Telegram).
+            Gestión completa de catálogo, maquillaje, citas y portadas sin código. Sincronización en vivo con PostgreSQL 18.
           </p>
         </div>
 
-        <div class="flex items-center space-x-3">
+        <div class="flex items-center gap-2 flex-wrap">
           <button
             id="btnOpenNewProductModal"
-            class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-amber-500/10 flex items-center space-x-2 cursor-pointer"
+            class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all shadow-md shadow-amber-500/10 flex items-center space-x-1.5 cursor-pointer"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-            </svg>
-            <span>Nuevo Producto</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            <span>Nueva Prenda</span>
+          </button>
+          <button
+            id="btnOpenNewServiceModal"
+            class="bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-amber-500/30 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center space-x-1.5 cursor-pointer"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            <span>Nuevo Servicio</span>
           </button>
         </div>
       </div>
 
-      <!-- Metrics Badges -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div class="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4">
-          <div class="text-xs text-zinc-400 font-medium">Total Productos</div>
-          <div class="text-2xl font-bold text-white mt-1 font-mono">{catalogItems.length}</div>
-        </div>
-        <div class="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4">
-          <div class="text-xs text-emerald-400 font-medium">Activos en Tienda</div>
-          <div class="text-2xl font-bold text-emerald-400 mt-1 font-mono">{activeCount}</div>
-        </div>
-        <div class="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4">
-          <div class="text-xs text-zinc-500 font-medium">Ocultos (Soft-Delete)</div>
-          <div class="text-2xl font-bold text-zinc-500 mt-1 font-mono">{inactiveCount}</div>
-        </div>
-        <div class="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4">
-          <div class="text-xs text-amber-400 font-medium">Permisos de Usuario</div>
-          <div class="text-sm font-semibold text-white mt-2 capitalize">{adminUser.role}</div>
-        </div>
-      </div>
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center gap-2 border-b border-zinc-800 pb-3 overflow-x-auto text-xs font-medium">
+        <button
+          type="button"
+          data-target="tab-products"
+          class="tab-btn active px-4 py-2 rounded-xl border border-transparent bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap"
+        >
+          <span>👗 Catálogo de Prendas</span>
+          <span class="bg-zinc-800 text-amber-400 px-2 py-0.5 rounded-full text-[10px] font-mono border border-amber-500/20">{catalogItems.length}</span>
+        </button>
 
-      <!-- Product List Table -->
-      <div class="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
-        <div class="px-6 py-4 border-b border-zinc-800/80 flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-zinc-200">Listado de Prendas y Servicios</h2>
-          <span class="text-xs text-zinc-500 font-mono">Modificación en tiempo real</span>
-        </div>
+        <button
+          type="button"
+          data-target="tab-services"
+          class="tab-btn px-4 py-2 rounded-xl border border-transparent bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap"
+        >
+          <span>💄 Atelier de Maquillaje</span>
+          <span class="bg-zinc-800 text-amber-400 px-2 py-0.5 rounded-full text-[10px] font-mono border border-amber-500/20">{serviceItems.length}</span>
+        </button>
 
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-zinc-950/80 text-zinc-400 font-semibold border-b border-zinc-800/60 uppercase tracking-wider text-[10px]">
-              <tr>
-                <th scope="col" class="py-3 px-4 sm:px-6">Producto</th>
-                <th scope="col" class="py-3 px-4 hidden md:table-cell">Categoría</th>
-                <th scope="col" class="py-3 px-4 font-mono">Precio COP</th>
-                <th scope="col" class="py-3 px-4 text-center">Estado Tienda</th>
-                <th scope="col" class="py-3 px-4 sm:px-6 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-zinc-800/50 text-zinc-300">
-              {catalogItems.map((prod) => {
-                const images = Array.isArray(prod.images) ? prod.images : [];
-                const firstImg = images[0] || "/placeholder.jpg";
-                const isActive = prod.isActive === 1;
+        <button
+          type="button"
+          data-target="tab-bookings"
+          class="tab-btn px-4 py-2 rounded-xl border border-transparent bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap"
+        >
+          <span>📅 Citas & Agenda</span>
+          <span class="bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full text-[10px] font-mono">{bookingItems.length}</span>
+        </button>
 
-                return (
-                  <tr class="hover:bg-zinc-800/30 transition-colors">
-                    <td class="py-3 px-4 sm:px-6">
-                      <div class="flex items-center space-x-3">
-                        <img
-                          src={firstImg}
-                          alt={prod.name}
-                          class="w-10 h-10 rounded-lg object-cover bg-zinc-800 border border-zinc-700/60 shrink-0"
-                          loading="lazy"
-                          onerror="this.src='/placeholder.jpg'"
-                        />
-                        <div class="min-w-0">
-                          <div class="font-medium text-white truncate max-w-[180px] sm:max-w-xs">{prod.name}</div>
-                          <div class="text-[11px] text-zinc-500 font-mono truncate max-w-[180px] sm:max-w-xs">/{prod.slug}</div>
-                        </div>
-                      </div>
-                    </td>
+        <button
+          type="button"
+          data-target="tab-settings"
+          class="tab-btn px-4 py-2 rounded-xl border border-transparent bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap"
+        >
+          <span>🖼️ Portada & Lookbook</span>
+        </button>
+      </nav>
 
-                    <td class="py-3 px-4 hidden md:table-cell capitalize">
-                      <span class="bg-zinc-800 px-2 py-0.5 rounded text-[11px] text-zinc-300">
-                        {prod.category}
-                      </span>
-                    </td>
-
-                    <td class="py-3 px-4 font-mono font-semibold text-amber-400">
-                      ${prod.basePrice.toLocaleString("es-CO")}
-                    </td>
-
-                    <td class="py-3 px-4 text-center">
-                      <button
-                        data-action="toggle-status"
-                        data-id={prod.id}
-                        data-active={prod.isActive}
-                        class={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
-                          isActive
-                            ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 hover:bg-emerald-900/60"
-                            : "bg-zinc-800 text-zinc-500 border border-zinc-700 hover:bg-zinc-700/50"
-                        }`}
-                      >
-                        <span class={`w-1.5 h-1.5 rounded-full mr-1.5 ${isActive ? 'bg-emerald-400' : 'bg-zinc-500'}`}></span>
-                        {isActive ? "Activo" : "Oculto"}
-                      </button>
-                    </td>
-
-                    <td class="py-3 px-4 sm:px-6 text-right space-x-2">
-                      <button
-                        data-action="edit-product"
-                        data-id={prod.id}
-                        data-name={prod.name}
-                        data-description={prod.description || ""}
-                        data-price={prod.basePrice}
-                        data-category={prod.category}
-                        data-slug={prod.slug}
-                        data-image={firstImg}
-                        class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1 rounded-lg border border-zinc-700 transition-colors cursor-pointer"
-                      >
-                        Editar
-                      </button>
-
-                      {isSuperadmin ? (
-                        <button
-                          data-action="delete-hard"
-                          data-id={prod.id}
-                          data-name={prod.name}
-                          class="text-xs bg-red-950/40 hover:bg-red-900/60 text-red-300 px-2 py-1 rounded-lg border border-red-800/50 transition-colors cursor-pointer"
-                          title="Eliminación permanente (Superadmin)"
-                        >
-                          Eliminar
-                        </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </main>
-
-    <!-- EDIT MODAL -->
-    <div id="editModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-        <h3 class="text-lg font-bold text-white mb-2">Editar Producto</h3>
-
-        <div id="editModalAlert" class="hidden mb-4 p-3 rounded-xl text-xs border border-red-800 bg-red-950/70 text-red-200"></div>
-
-        <form id="editForm" class="space-y-4 text-xs">
-          <input type="hidden" id="editId" name="id" />
-
-          <div>
-            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Nombre</label>
+      <!-- TAB 1: PRENDAS & CATÁLOGO -->
+      <section id="tab-products" class="tab-pane active space-y-4">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/60 p-3 rounded-2xl border border-zinc-800">
+          <div class="relative w-full sm:w-80">
             <input
               type="text"
-              id="editName"
-              name="name"
+              id="searchProducts"
+              placeholder="Buscar prenda por nombre o categoría..."
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+          <div class="flex items-center gap-3 text-xs text-zinc-400">
+            <span>Activas: <strong class="text-emerald-400">{activeProductsCount}</strong></span>
+            <span>•</span>
+            <span>Ocultas: <strong class="text-zinc-400">{catalogItems.length - activeProductsCount}</strong></span>
+          </div>
+        </div>
+
+        <div class="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-zinc-300">
+              <thead class="bg-zinc-950/80 text-zinc-400 uppercase tracking-wider font-mono text-[10px] border-b border-zinc-800">
+                <tr>
+                  <th class="px-4 py-3.5">Prenda</th>
+                  <th class="px-4 py-3.5">Categoría</th>
+                  <th class="px-4 py-3.5">Precio (COP)</th>
+                  <th class="px-4 py-3.5">Stock</th>
+                  <th class="px-4 py-3.5">Estado</th>
+                  <th class="px-4 py-3.5 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="productsTableBody" class="divide-y divide-zinc-800/60">
+                {catalogItems.map((prod) => {
+                  let imgs: string[] = [];
+                  if (Array.isArray(prod.images)) {
+                    imgs = prod.images as string[];
+                  } else if (typeof prod.images === "string") {
+                    try { imgs = JSON.parse(prod.images); } catch (_) { imgs = []; }
+                  }
+                  const firstImg = imgs[0] || "/placeholder.jpg";
+                  return (
+                    <tr class="hover:bg-zinc-800/30 transition-colors product-row" data-name={prod.name.toLowerCase()} data-cat={(prod.category || "").toLowerCase()}>
+                      <td class="px-4 py-3">
+                        <div class="flex items-center space-x-3">
+                          <img
+                            src={firstImg}
+                            alt={prod.name}
+                            class="h-12 w-10 object-cover rounded-lg border border-zinc-800 bg-zinc-950 flex-shrink-0"
+                            loading="lazy"
+                          />
+                          <div>
+                            <div class="font-medium text-white">{prod.name}</div>
+                            <div class="text-[11px] text-zinc-500 font-mono">/p/{prod.slug}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-4 py-3">
+                        <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-mono bg-zinc-800 text-amber-300 border border-amber-500/20">
+                          {prod.category}
+                        </span>
+                      </td>
+                      <td class="px-4 py-3 font-mono font-semibold text-amber-400">
+                        ${prod.basePrice.toLocaleString("es-CO")}
+                      </td>
+                      <td class="px-4 py-3 font-mono">
+                        <span class={(prod.stock || 0) > 0 ? "text-emerald-400" : "text-red-400"}>
+                          {prod.stock || 0} uds
+                        </span>
+                      </td>
+                      <td class="px-4 py-3">
+                        <button
+                          type="button"
+                          class="btn-toggle-product cursor-pointer transition-transform active:scale-95"
+                          data-id={prod.id}
+                          data-active={prod.isActive}
+                          title="Clic para cambiar visibilidad"
+                        >
+                          {prod.isActive === 1 ? (
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
+                              ● Visible
+                            </span>
+                          ) : (
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700">
+                              ○ Oculto
+                            </span>
+                          )}
+                        </button>
+                      </td>
+                      <td class="px-4 py-3 text-right">
+                        <div class="flex items-center justify-end space-x-2">
+                          <button
+                            type="button"
+                            class="btn-edit-product px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors cursor-pointer"
+                            data-id={prod.id}
+                            data-name={prod.name}
+                            data-slug={prod.slug}
+                            data-price={prod.basePrice}
+                            data-category={prod.category}
+                            data-stock={prod.stock || 0}
+                            data-description={prod.description || ""}
+                            data-image={firstImg}
+                          >
+                            Editar
+                          </button>
+                          <a
+                            href={`/p/${prod.slug}`}
+                            target="_blank"
+                            class="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                            title="Ver en la tienda"
+                          >
+                            ↗
+                          </a>
+                          {isSuperadmin && (
+                            <button
+                              type="button"
+                              class="btn-delete-product px-2 py-1 rounded-lg bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/50 transition-colors cursor-pointer"
+                              data-id={prod.id}
+                              data-name={prod.name}
+                              title="Eliminar permanentemente (Superadmin)"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: ATELIER DE MAQUILLAJE (SERVICIOS) -->
+      <section id="tab-services" class="tab-pane space-y-4">
+        <div class="flex items-center justify-between bg-zinc-900/60 p-3 rounded-2xl border border-zinc-800">
+          <p class="text-xs text-zinc-400">
+            Servicios visibles en <a href="/servicios" target="_blank" class="text-amber-400 underline">/servicios</a>. Editá precios, duración, anticipos y fotografías directamente.
+          </p>
+          <span class="text-xs text-zinc-400">
+            Activos: <strong class="text-emerald-400">{activeServicesCount}</strong> / {serviceItems.length}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {serviceItems.map((serv) => (
+            <div class="bg-zinc-900/70 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col justify-between shadow-xl">
+              <div class="relative aspect-video bg-zinc-950">
+                <img
+                  src={serv.imageUrl || "/images/services/maquillaje-social-1.jpg"}
+                  alt={serv.name}
+                  class="w-full h-full object-cover"
+                />
+                <span class="absolute top-2.5 right-2.5 bg-black/70 backdrop-blur text-[10px] font-mono text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  {serv.badge || "Atelier"}
+                </span>
+                <span class="absolute bottom-2.5 left-2.5 bg-zinc-900/80 backdrop-blur text-[10px] font-mono text-zinc-300 px-2 py-0.5 rounded">
+                  ⏱ {serv.durationMinutes} min
+                </span>
+              </div>
+
+              <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
+                <div>
+                  <h3 class="font-bold text-white text-sm">{serv.name}</h3>
+                  <p class="text-[11px] text-zinc-400 line-clamp-2 mt-1">{serv.description || "Sin descripción corta."}</p>
+                </div>
+
+                <div class="pt-2 border-t border-zinc-800 space-y-1.5 text-xs">
+                  <div class="flex justify-between">
+                    <span class="text-zinc-500">Precio Base:</span>
+                    <strong class="font-mono text-amber-400">${serv.price.toLocaleString("es-CO")}</strong>
+                  </div>
+                  <div class="flex justify-between text-[11px]">
+                    <span class="text-zinc-500">Rango visible:</span>
+                    <span class="font-mono text-zinc-300">{serv.priceRange || "Según cotización"}</span>
+                  </div>
+                  <div class="flex justify-between text-[11px]">
+                    <span class="text-zinc-500">Anticipo:</span>
+                    <span class="font-mono text-zinc-300">
+                      {serv.depositRequired === 1 ? `$${serv.depositAmount.toLocaleString("es-CO")}` : "No requerido"}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="pt-3 border-t border-zinc-800 flex items-center justify-between">
+                  <button
+                    type="button"
+                    class="btn-toggle-service text-[11px] cursor-pointer"
+                    data-id={serv.id}
+                    data-active={serv.isActive}
+                  >
+                    {serv.isActive === 1 ? (
+                      <span class="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">● Activo</span>
+                    ) : (
+                      <span class="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">○ Inactivo</span>
+                    )}
+                  </button>
+
+                  <div class="flex gap-2">
+                    <a
+                      href={`/servicios/${serv.slug}`}
+                      target="_blank"
+                      class="px-2 py-1 text-xs rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+                      title="Ver página de servicio"
+                    >
+                      ↗
+                    </a>
+                    <button
+                      type="button"
+                      class="btn-edit-service px-3 py-1 text-xs font-semibold rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-colors cursor-pointer"
+                      data-id={serv.id}
+                      data-name={serv.name}
+                      data-slug={serv.slug}
+                      data-price={serv.price}
+                      data-duration={serv.durationMinutes}
+                      data-deposit-req={serv.depositRequired}
+                      data-deposit-amt={serv.depositAmount}
+                      data-pricerange={serv.priceRange || ""}
+                      data-badge={serv.badge || ""}
+                      data-image={serv.imageUrl || ""}
+                      data-description={serv.description || ""}
+                    >
+                      Editar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <!-- TAB 3: CITAS & AGENDA (BOOKINGS) -->
+      <section id="tab-bookings" class="tab-pane space-y-4">
+        <div class="flex items-center justify-between bg-zinc-900/60 p-3 rounded-2xl border border-zinc-800 text-xs text-zinc-400">
+          <span>Registro en vivo de reservas capturadas en el Atelier de Maquillaje.</span>
+          <span>Total citas: <strong class="text-white">{bookingItems.length}</strong></span>
+        </div>
+
+        {bookingItems.length === 0 ? (
+          <div class="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-10 text-center space-y-3">
+            <span class="text-3xl block">📅</span>
+            <h3 class="text-sm font-semibold text-zinc-300">No hay reservas registradas aún</h3>
+            <p class="text-xs text-zinc-500 max-w-sm mx-auto">
+              Cuando las clientas agenden citas en <code class="text-amber-400 font-mono">/servicios</code>, aparecerán listadas aquí para gestionar su estado y contactarlas por WhatsApp.
+            </p>
+          </div>
+        ) : (
+          <div class="bg-zinc-900/70 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-zinc-300">
+                <thead class="bg-zinc-950/80 text-zinc-400 uppercase tracking-wider font-mono text-[10px] border-b border-zinc-800">
+                  <tr>
+                    <th class="px-4 py-3.5">Fecha & Hora</th>
+                    <th class="px-4 py-3.5">Clienta</th>
+                    <th class="px-4 py-3.5">Servicio</th>
+                    <th class="px-4 py-3.5">Valor / Anticipo</th>
+                    <th class="px-4 py-3.5">Estado</th>
+                    <th class="px-4 py-3.5 text-right">Contacto</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-800/60">
+                  {bookingItems.map((b) => {
+                    const cleanPhone = (b.customerPhone || "").replace(/\D/g, "");
+                    const waLink = `https://wa.me/57${cleanPhone}?text=Hola%20${encodeURIComponent(b.customerName)},%20te%20escribimos%20de%20Catalina%20Glamur%20para%20confirmar%20tu%20cita.`;
+                    return (
+                      <tr class="hover:bg-zinc-800/30 transition-colors">
+                        <td class="px-4 py-3 font-mono text-zinc-200">
+                          {new Date(b.appointmentDate).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}
+                        </td>
+                        <td class="px-4 py-3">
+                          <div class="font-medium text-white">{b.customerName}</div>
+                          <div class="text-[11px] text-zinc-500 font-mono">{b.customerPhone}</div>
+                        </td>
+                        <td class="px-4 py-3">
+                          <span class="text-amber-300 font-medium">{b.serviceName}</span>
+                        </td>
+                        <td class="px-4 py-3 font-mono">
+                          <div>${b.totalAmount.toLocaleString("es-CO")}</div>
+                          {b.depositAmount > 0 && (
+                            <div class="text-[10px] text-emerald-400">Anticipo: ${b.depositAmount.toLocaleString("es-CO")}</div>
+                          )}
+                        </td>
+                        <td class="px-4 py-3">
+                          <select
+                            class="booking-status-select bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:border-amber-500 font-mono"
+                            data-id={b.id}
+                          >
+                            <option value="pending" selected={b.status === "pending"}>⏳ Pendiente</option>
+                            <option value="confirmed" selected={b.status === "confirmed"}>✅ Confirmada</option>
+                            <option value="completed" selected={b.status === "completed"}>✨ Completada</option>
+                            <option value="cancelled" selected={b.status === "cancelled"}>❌ Cancelada</option>
+                          </select>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                          <a
+                            href={waLink}
+                            target="_blank"
+                            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 text-[11px] transition-colors"
+                          >
+                            <span>WhatsApp</span>
+                            <span>↗</span>
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <!-- TAB 4: PORTADA & LOOKBOOK -->
+      <section id="tab-settings" class="tab-pane space-y-6">
+        <div class="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800 text-xs text-zinc-400">
+          Modificá las imágenes de portada principal y secundaria que se proyectan en la página de inicio. Podés seleccionar fotos directamente de la galería de tu teléfono.
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Hero Banner Principal -->
+          <div class="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-5 space-y-4">
+            <h3 class="font-bold text-white text-sm flex items-center justify-between">
+              <span>🖼️ Portada Principal (Hero)</span>
+              <span class="text-[11px] font-mono text-amber-400">hero_image</span>
+            </h3>
+
+            <div class="aspect-[3/4] max-h-72 w-full bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center">
+              <img id="previewHeroMain" src={heroImage.url} alt="Hero Principal" class="w-full h-full object-cover" />
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-semibold text-zinc-300">Cambiar Foto (Galería o Archivo)</label>
+              <input
+                type="file"
+                id="fileHeroMain"
+                accept="image/*"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
+              />
+              <button
+                type="button"
+                id="btnSaveHeroMain"
+                class="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Actualizar Portada Principal
+              </button>
+            </div>
+          </div>
+
+          <!-- Hero Lookbook Secundario -->
+          <div class="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-5 space-y-4">
+            <h3 class="font-bold text-white text-sm flex items-center justify-between">
+              <span>💄 Portada Secundaria (Atelier)</span>
+              <span class="text-[11px] font-mono text-amber-400">hero_secondary_image</span>
+            </h3>
+
+            <div class="aspect-[3/4] max-h-72 w-full bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center">
+              <img id="previewHeroSec" src={heroSecondary.url} alt="Hero Secundario" class="w-full h-full object-cover" />
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-xs font-semibold text-zinc-300">Cambiar Foto (Galería o Archivo)</label>
+              <input
+                type="file"
+                id="fileHeroSec"
+                accept="image/*"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
+              />
+              <button
+                type="button"
+                id="btnSaveHeroSec"
+                class="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Actualizar Portada Secundaria
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- DATALIST PARA CATEGORÍAS DINÁMICAS -->
+    <datalist id="categoriesList">
+      {distinctCategories.map((cat) => (
+        <option value={cat} />
+      ))}
+    </datalist>
+
+    <!-- MODAL: EDITAR PRODUCTO -->
+    <div id="modalEditProduct" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 space-y-4 text-xs max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between pb-2 border-b border-zinc-800">
+          <h2 class="text-base font-bold text-white">Editar Prenda</h2>
+          <button type="button" class="btn-close-modal text-zinc-400 hover:text-white text-lg">✕</button>
+        </div>
+
+        <form id="formEditProduct" class="space-y-4">
+          <input type="hidden" id="editProdId" />
+
+          <div>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Nombre Comercial</label>
+            <input
+              type="text"
+              id="editProdName"
               required
-              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 font-sans"
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
             />
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Precio COP</label>
               <input
                 type="number"
-                id="editPrice"
-                name="basePrice"
+                id="editProdPrice"
                 required
                 min="1000"
-                step="100"
-                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500"
+                step="500"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500 text-xs"
               />
             </div>
+
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Stock (uds)</label>
+              <input
+                type="number"
+                id="editProdStock"
+                required
+                min="0"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+
             <div>
               <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Categoría</label>
               <input
                 type="text"
-                id="editCategory"
-                name="category"
+                id="editProdCategory"
+                list="categoriesList"
                 required
-                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 font-sans"
+                placeholder="Elegir o escribir..."
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs font-mono"
               />
             </div>
           </div>
 
-          <!-- Foto del Producto (Superadmin & Comerciante) -->
+          <!-- Selector de Galería de Fotos (Sin capture) -->
           <div>
-            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Foto del Producto (Cámara o Galería)</label>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">
+              Foto de la Prenda (Galería de Fotos)
+            </label>
             <div class="flex items-center space-x-3 mb-2">
-              <img id="editImageCurrent" src="/placeholder.jpg" class="h-16 w-16 object-cover rounded-xl border border-zinc-800 bg-zinc-950 flex-shrink-0" />
+              <img id="editProdImgCurrent" src="/placeholder.jpg" class="h-16 w-12 object-cover rounded-xl border border-zinc-800 bg-zinc-950 flex-shrink-0" />
               <div class="flex-1">
                 <input
                   type="file"
-                  id="editImageFile"
+                  id="editProdImgFile"
                   accept="image/*"
-                  capture="environment"
                   class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
                 />
-                <p class="text-[10px] text-zinc-500 mt-1">Podés tomar una foto nueva con la cámara o elegir una de la galería.</p>
+                <p class="text-[10px] text-zinc-500 mt-1">Seleccioná una foto de tu galería. Se optimizará sin deformar proporciones.</p>
               </div>
             </div>
-            <div id="editImageNewPreviewContainer" class="hidden mt-2 p-2 bg-zinc-950/80 rounded-xl border border-amber-500/40 flex items-center space-x-3">
-              <img id="editImageNewPreview" class="h-14 w-14 object-cover rounded-lg border border-amber-500/80" />
-              <span class="text-[11px] text-amber-400 font-medium">📸 Nueva foto seleccionada lista para guardar</span>
+            <div id="editProdImgPreviewContainer" class="hidden mt-2 p-2 bg-zinc-950 rounded-xl border border-amber-500/40 flex items-center space-x-3">
+              <img id="editProdImgPreview" class="h-14 w-11 object-cover rounded-lg border border-amber-500/80" />
+              <span class="text-[11px] text-amber-400 font-medium">📸 Foto seleccionada lista para guardar</span>
             </div>
           </div>
 
-          {isSuperadmin ? (
+          {isSuperadmin && (
             <div>
               <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1 flex justify-between">
                 <span>Slug URL</span>
@@ -298,37 +656,32 @@ const inactiveCount = catalogItems.length - activeCount;
               </label>
               <input
                 type="text"
-                id="editSlug"
-                name="slug"
-                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
+                id="editProdSlug"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500 text-xs"
               />
             </div>
-          ) : (
-            <input type="hidden" id="editSlug" name="slug" />
           )}
 
           <div>
             <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Descripción</label>
             <textarea
-              id="editDescription"
-              name="description"
+              id="editProdDescription"
               rows="3"
-              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 font-sans"
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
             ></textarea>
           </div>
 
-          <div class="flex justify-end space-x-3 pt-3 border-t border-zinc-800">
+          <div class="flex justify-end space-x-2 pt-3 border-t border-zinc-800">
             <button
               type="button"
-              id="btnCancelEdit"
-              class="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors cursor-pointer"
+              class="btn-close-modal px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              id="btnSaveEdit"
-              class="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-semibold hover:bg-amber-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              id="btnSubmitEditProduct"
+              class="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition-colors cursor-pointer"
             >
               Guardar Cambios
             </button>
@@ -337,133 +690,312 @@ const inactiveCount = catalogItems.length - activeCount;
       </div>
     </div>
 
-    <!-- CREATE MODAL -->
-    <div id="createModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-        <h3 class="text-lg font-bold text-white mb-2">Agregar Nuevo Producto</h3>
+    <!-- MODAL: NUEVO PRODUCTO -->
+    <div id="modalNewProduct" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 space-y-4 text-xs max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between pb-2 border-b border-zinc-800">
+          <h2 class="text-base font-bold text-white">Publicar Nueva Prenda</h2>
+          <button type="button" class="btn-close-modal text-zinc-400 hover:text-white text-lg">✕</button>
+        </div>
 
-        <div id="createModalAlert" class="hidden mb-4 p-3 rounded-xl text-xs border border-red-800 bg-red-950/70 text-red-200"></div>
-
-        <form id="createForm" class="space-y-4 text-xs">
+        <form id="formNewProduct" class="space-y-4">
           <div>
             <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Nombre Comercial</label>
             <input
               type="text"
-              id="createName"
-              name="name"
+              id="newProdName"
               required
-              placeholder="Ej: Conjunto Escultor Obsidiana"
-              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 font-sans"
+              placeholder="Ej: Enterizo Escultor Obsidiana"
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
             />
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Precio COP</label>
               <input
                 type="number"
-                id="createPrice"
-                name="basePrice"
+                id="newProdPrice"
                 required
                 min="1000"
-                step="1000"
-                placeholder="98000"
-                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500"
+                step="500"
+                placeholder="85000"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500 text-xs"
               />
             </div>
+
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Stock (uds)</label>
+              <input
+                type="number"
+                id="newProdStock"
+                required
+                min="1"
+                value="10"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+
             <div>
               <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Categoría</label>
-              <select
-                id="createCategory"
-                name="category"
-                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 font-sans"
-              >
-                <option value="activewear">Activewear</option>
-                <option value="servicio">Servicio Estético</option>
-              </select>
+              <input
+                type="text"
+                id="newProdCategory"
+                list="categoriesList"
+                required
+                placeholder="Elegir o escribir..."
+                value="activewear"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs font-mono"
+              />
             </div>
           </div>
 
+          <!-- Selector de Galería de Fotos (Sin capture) -->
           <div>
-            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Foto del Producto (Cámara o Galería)</label>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Foto Principal (Galería)</label>
             <input
               type="file"
-              id="createImageFile"
+              id="newProdImgFile"
               accept="image/*"
-              capture="environment"
               class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
             />
-            <div id="imagePreviewContainer" class="hidden mt-2">
-              <img id="imagePreview" class="h-24 w-24 object-cover rounded-lg border border-zinc-700" />
+            <div id="newProdImgPreviewContainer" class="hidden mt-2 p-2 bg-zinc-950 rounded-xl border border-amber-500/40 flex items-center space-x-3">
+              <img id="newProdImgPreview" class="h-14 w-11 object-cover rounded-lg border border-amber-500/80" />
+              <span class="text-[11px] text-amber-400 font-medium">📸 Foto seleccionada lista</span>
             </div>
           </div>
 
           <div>
-            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Descripción (Opcional)</label>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Descripción</label>
             <textarea
-              id="createDescription"
-              name="description"
+              id="newProdDescription"
               rows="2"
-              placeholder="Detalles de tela, compresión y diseño..."
-              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 font-sans"
+              placeholder="Tejido 380g sin transparencias, compresión anatómica..."
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
             ></textarea>
           </div>
 
-          <div class="flex justify-end space-x-3 pt-3">
+          <div class="flex justify-end space-x-2 pt-3 border-t border-zinc-800">
             <button
               type="button"
-              id="btnCancelCreate"
-              class="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors cursor-pointer"
+              class="btn-close-modal px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              id="btnSaveCreate"
-              class="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-semibold hover:bg-amber-400 transition-colors cursor-pointer"
+              id="btnSubmitNewProduct"
+              class="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition-colors cursor-pointer"
             >
-              Publicar Producto
+              Publicar Prenda
             </button>
           </div>
         </form>
       </div>
     </div>
 
+    <!-- MODAL: EDITAR / CREAR SERVICIO -->
+    <div id="modalService" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 space-y-4 text-xs max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between pb-2 border-b border-zinc-800">
+          <h2 id="serviceModalTitle" class="text-base font-bold text-white">Editar Servicio de Maquillaje</h2>
+          <button type="button" class="btn-close-modal text-zinc-400 hover:text-white text-lg">✕</button>
+        </div>
+
+        <form id="formService" class="space-y-4">
+          <input type="hidden" id="serviceId" />
+
+          <div>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Nombre del Servicio</label>
+            <input
+              type="text"
+              id="serviceName"
+              required
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
+            />
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Precio Base (COP)</label>
+              <input
+                type="number"
+                id="servicePrice"
+                required
+                min="1000"
+                step="5000"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Duración (Minutos)</label>
+              <input
+                type="number"
+                id="serviceDuration"
+                required
+                min="15"
+                step="15"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Rango Visible al Público</label>
+              <input
+                type="text"
+                id="servicePriceRange"
+                placeholder="Ej: $250.000 a $320.000"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Etiqueta / Badge</label>
+              <input
+                type="text"
+                id="serviceBadge"
+                placeholder="Ej: Atelier de Novias"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-zinc-950/60 rounded-xl border border-zinc-800">
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">¿Requiere Anticipo?</label>
+              <select
+                id="serviceDepositReq"
+                class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-white text-xs font-mono"
+              >
+                <option value="0">No (Pago en cita)</option>
+                <option value="1">Sí (Cobrar anticipo)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Monto Anticipo (COP)</label>
+              <input
+                type="number"
+                id="serviceDepositAmt"
+                min="0"
+                step="5000"
+                value="0"
+                class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-white font-mono text-xs"
+              />
+            </div>
+          </div>
+
+          <!-- Selector de Foto de Servicio -->
+          <div>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Foto del Servicio (Galería)</label>
+            <div class="flex items-center space-x-3 mb-2">
+              <img id="serviceImgCurrent" src="/placeholder.jpg" class="h-14 w-20 object-cover rounded-xl border border-zinc-800 bg-zinc-950 flex-shrink-0" />
+              <div class="flex-1">
+                <input
+                  type="file"
+                  id="serviceImgFile"
+                  accept="image/*"
+                  class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
+                />
+              </div>
+            </div>
+            <div id="serviceImgPreviewContainer" class="hidden mt-2 p-2 bg-zinc-950 rounded-xl border border-amber-500/40 flex items-center space-x-3">
+              <img id="serviceImgPreview" class="h-12 w-16 object-cover rounded-lg border border-amber-500/80" />
+              <span class="text-[11px] text-amber-400 font-medium">📸 Foto seleccionada</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Descripción Detallada</label>
+            <textarea
+              id="serviceDescription"
+              rows="3"
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
+            ></textarea>
+          </div>
+
+          <div class="flex justify-end space-x-2 pt-3 border-t border-zinc-800">
+            <button
+              type="button"
+              class="btn-close-modal px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              id="btnSubmitService"
+              class="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-bold hover:bg-amber-400 transition-colors cursor-pointer"
+            >
+              Guardar Servicio
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- CLIENT SCRIPT: ENGINE 360° -->
     <script>
       import { actions } from "astro:actions";
 
-      const notice = document.getElementById("dashboardNotice") as HTMLDivElement;
-      const btnLogout = document.getElementById("btnLogout") as HTMLAnchorElement;
+      // 1. TABS SYSTEM WITH URL HASH MEMORY
+      const tabButtons = document.querySelectorAll<HTMLButtonElement>(".tab-btn");
+      const tabPanes = document.querySelectorAll<HTMLElement>(".tab-pane");
 
-      // Edit Modal Elements
-      const editModal = document.getElementById("editModal") as HTMLDivElement;
-      const editForm = document.getElementById("editForm") as HTMLFormElement;
-      const btnCancelEdit = document.getElementById("btnCancelEdit") as HTMLButtonElement;
-      const btnSaveEdit = document.getElementById("btnSaveEdit") as HTMLButtonElement;
-      const editModalAlert = document.getElementById("editModalAlert") as HTMLDivElement;
-      const editImageCurrent = document.getElementById("editImageCurrent") as HTMLImageElement;
-      const editImageFile = document.getElementById("editImageFile") as HTMLInputElement;
-      const editImageNewPreview = document.getElementById("editImageNewPreview") as HTMLImageElement;
-      const editImageNewPreviewContainer = document.getElementById("editImageNewPreviewContainer") as HTMLDivElement;
+      function activateTab(tabId: string) {
+        tabButtons.forEach((btn) => {
+          if (btn.dataset.target === tabId) {
+            btn.classList.add("active");
+          } else {
+            btn.classList.remove("active");
+          }
+        });
+        tabPanes.forEach((pane) => {
+          if (pane.id === tabId) {
+            pane.classList.add("active");
+          } else {
+            pane.classList.remove("active");
+          }
+        });
+        history.replaceState(null, "", `#${tabId}`);
+      }
 
-      // Create Modal Elements
-      const createModal = document.getElementById("createModal") as HTMLDivElement;
-      const createForm = document.getElementById("createForm") as HTMLFormElement;
-      const btnOpenNewProductModal = document.getElementById("btnOpenNewProductModal") as HTMLButtonElement;
-      const btnCancelCreate = document.getElementById("btnCancelCreate") as HTMLButtonElement;
-      const btnSaveCreate = document.getElementById("btnSaveCreate") as HTMLButtonElement;
-      const createModalAlert = document.getElementById("createModalAlert") as HTMLDivElement;
-      const createImageFile = document.getElementById("createImageFile") as HTMLInputElement;
-      const imagePreview = document.getElementById("imagePreview") as HTMLImageElement;
-      const imagePreviewContainer = document.getElementById("imagePreviewContainer") as HTMLDivElement;
+      tabButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (btn.dataset.target) activateTab(btn.dataset.target);
+        });
+      });
 
-      let editBase64 = "";
-      let editFileName = "";
-      let createBase64 = "";
-      let createFileName = "";
+      if (window.location.hash) {
+        const hashTarget = window.location.hash.substring(1);
+        if (document.getElementById(hashTarget)) {
+          activateTab(hashTarget);
+        }
+      }
 
-      // Client-Side Image Resizer & Optimizer (Compresses high-res phone photos to ~200KB)
-      async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.85): Promise<{ base64: string; name: string }> {
+      // 2. NOTICE SYSTEM
+      const notice = document.getElementById("dashboardNotice")!;
+      function showNotice(type: "success" | "error", msg: string) {
+        notice.classList.remove("hidden", "bg-emerald-950/80", "border-emerald-800", "text-emerald-200", "bg-red-950/80", "border-red-800", "text-red-200");
+        if (type === "success") {
+          notice.classList.add("bg-emerald-950/80", "border-emerald-800", "text-emerald-200");
+        } else {
+          notice.classList.add("bg-red-950/80", "border-red-800", "text-red-200");
+        }
+        notice.innerHTML = msg;
+        notice.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        setTimeout(() => notice.classList.add("hidden"), 5000);
+      }
+
+      // 3. MATHEMATICALLY STRICT ASPECT-RATIO COMPRESSOR (PROPORTIONS INTACT, ZERO DISTORTION)
+      async function compressImageStrict(
+        file: File,
+        maxWidth = 1200,
+        maxHeight = 1200,
+        quality = 0.85
+      ): Promise<{ base64: string; name: string }> {
         if (!file.type.startsWith("image/")) {
           throw new Error("El archivo seleccionado no es una imagen válida.");
         }
@@ -472,17 +1004,11 @@ const inactiveCount = catalogItems.length - activeCount;
           reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
-              let width = img.width;
-              let height = img.height;
-              if (width > maxWidth || height > maxHeight) {
-                if (width / height > maxWidth / maxHeight) {
-                  height = Math.round((height * maxWidth) / width);
-                  width = maxWidth;
-                } else {
-                  width = Math.round((width * maxHeight) / height);
-                  maxHeight = height;
-                }
-              }
+              // Scale invariant: guarantees EXACT aspect ratio without distortion
+              const scale = Math.min(maxWidth / img.width, maxHeight / img.height, 1);
+              const width = Math.round(img.width * scale);
+              const height = Math.round(img.height * scale);
+
               const canvas = document.createElement("canvas");
               canvas.width = width;
               canvas.height = height;
@@ -490,11 +1016,17 @@ const inactiveCount = catalogItems.length - activeCount;
               if (!ctx) {
                 return resolve({ base64: e.target?.result as string, name: file.name });
               }
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = "high";
               ctx.drawImage(img, 0, 0, width, height);
+
               const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
-              resolve({ base64: compressedBase64, name: file.name.replace(/\.[^.]+$/, ".jpg") });
+              resolve({
+                base64: compressedBase64,
+                name: file.name.replace(/\.[^.]+$/, ".jpg"),
+              });
             };
-            img.onerror = () => reject(new Error("No se pudo cargar la imagen para procesarla."));
+            img.onerror = () => reject(new Error("No se pudo procesar la imagen seleccionada."));
             img.src = e.target?.result as string;
           };
           reader.onerror = () => reject(new Error("Error al leer el archivo desde el dispositivo."));
@@ -502,255 +1034,496 @@ const inactiveCount = catalogItems.length - activeCount;
         });
       }
 
-      function showNotice(type: "success" | "error", msg: string) {
-        notice.classList.remove("hidden", "bg-emerald-950/50", "border-emerald-800", "text-emerald-200", "bg-red-950/50", "border-red-800", "text-red-200");
-        if (type === "success") {
-          notice.classList.add("bg-emerald-950/50", "border-emerald-800", "text-emerald-200");
-        } else {
-          notice.classList.add("bg-red-950/50", "border-red-800", "text-red-200");
-        }
-        notice.innerHTML = msg;
-        setTimeout(() => {
-          notice.classList.add("hidden");
-        }, 5000);
-      }
+      // 4. MODALS MANAGEMENT
+      const modalEditProduct = document.getElementById("modalEditProduct")!;
+      const modalNewProduct = document.getElementById("modalNewProduct")!;
+      const modalService = document.getElementById("modalService")!;
 
-      // Logout handler (Destructive multi-tier clean)
-      btnLogout?.addEventListener("click", async (e) => {
-        e.preventDefault();
-        try {
-          await actions.logout();
-        } catch (err) {
-          console.warn("Logout action notice:", err);
-        }
-        document.cookie = "admin_session=; path=/adminn; max-age=0; SameSite=Lax; Secure";
-        window.location.href = "/adminn/dashboard?logout=1";
+      document.querySelectorAll(".btn-close-modal").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          modalEditProduct.classList.add("hidden");
+          modalNewProduct.classList.add("hidden");
+          modalService.classList.add("hidden");
+        });
       });
 
-      // Status Toggle Handler
-      document.querySelectorAll("[data-action='toggle-status']").forEach((btn) => {
-        btn.addEventListener("click", async (e) => {
-          const target = e.currentTarget as HTMLButtonElement;
-          const productId = target.dataset.id!;
-          const currentActive = parseInt(target.dataset.active || "1", 10);
+      // 5. SEARCH FILTER FOR PRODUCTS
+      const searchInput = document.getElementById("searchProducts") as HTMLInputElement;
+      searchInput?.addEventListener("input", (e) => {
+        const query = (e.target as HTMLInputElement).value.toLowerCase().trim();
+        document.querySelectorAll<HTMLElement>(".product-row").forEach((row) => {
+          const name = row.dataset.name || "";
+          const cat = row.dataset.cat || "";
+          if (name.includes(query) || cat.includes(query)) {
+            row.style.display = "";
+          } else {
+            row.style.display = "none";
+          }
+        });
+      });
+
+      // 6. TOGGLE PRODUCT STATUS
+      document.querySelectorAll<HTMLButtonElement>(".btn-toggle-product").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const productId = btn.dataset.id!;
+          const currentActive = parseInt(btn.dataset.active || "1", 10);
           const nextActive = currentActive === 1 ? 0 : 1;
 
+          btn.disabled = true;
           try {
-            const { data, error } = await actions.toggleProductStatus({
-              productId,
-              isActive: nextActive,
-            });
-
-            if (error) {
-              showNotice("error", error.message);
-              return;
-            }
-
-            if (data?.success) {
-              target.dataset.active = nextActive.toString();
-              window.location.reload();
+            const { data, error } = await actions.toggleProductStatus({ productId, isActive: nextActive });
+            if (error || !data?.success) {
+              showNotice("error", error?.message || "No se pudo cambiar el estado del producto.");
+            } else {
+              showNotice("success", nextActive === 1 ? "✅ Prenda activada en la tienda." : "Prenda ocultada.");
+              setTimeout(() => window.location.reload(), 600);
             }
           } catch (err: any) {
-            showNotice("error", err?.message || "Error al actualizar estado.");
+            showNotice("error", err.message || "Error al actualizar.");
+          } finally {
+            btn.disabled = false;
           }
         });
       });
 
-      // Edit Button Click (Populates fields and photo for both Superadmin & Merchant)
-      document.querySelectorAll("[data-action='edit-product']").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          const target = e.currentTarget as HTMLButtonElement;
-          (document.getElementById("editId") as HTMLInputElement).value = target.dataset.id || "";
-          (document.getElementById("editName") as HTMLInputElement).value = target.dataset.name || "";
-          (document.getElementById("editDescription") as HTMLTextAreaElement).value = target.dataset.description || "";
-          (document.getElementById("editPrice") as HTMLInputElement).value = target.dataset.price || "";
-          (document.getElementById("editCategory") as HTMLInputElement).value = target.dataset.category || "";
-          const slugInput = document.getElementById("editSlug") as HTMLInputElement;
-          if (slugInput) slugInput.value = target.dataset.slug || "";
+      // 7. EDIT PRODUCT
+      let editProdBase64 = "";
+      let editProdFileName = "";
+      const editProdImgFile = document.getElementById("editProdImgFile") as HTMLInputElement;
+      const editProdImgPreviewContainer = document.getElementById("editProdImgPreviewContainer")!;
+      const editProdImgPreview = document.getElementById("editProdImgPreview") as HTMLImageElement;
 
-          // Populate current photo
-          editImageCurrent.src = target.dataset.image || "/placeholder.jpg";
-          editImageNewPreviewContainer.classList.add("hidden");
-          editImageFile.value = "";
-          editBase64 = "";
-          editFileName = "";
-          editModalAlert.classList.add("hidden");
-
-          editModal.classList.remove("hidden");
-        });
-      });
-
-      btnCancelEdit?.addEventListener("click", () => {
-        editModal.classList.add("hidden");
-      });
-
-      // Edit Photo File Selection & Client-Side Compression
-      editImageFile?.addEventListener("change", async (e: any) => {
-        const file = e.target.files?.[0];
-        if (file) {
-          try {
-            editModalAlert.classList.add("hidden");
-            const res = await compressImage(file);
-            editBase64 = res.base64;
-            editFileName = res.name;
-            editImageNewPreview.src = editBase64;
-            editImageNewPreviewContainer.classList.remove("hidden");
-          } catch (err: any) {
-            editModalAlert.textContent = err?.message || "Error al procesar la foto.";
-            editModalAlert.classList.remove("hidden");
-          }
+      editProdImgFile?.addEventListener("change", async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        try {
+          const compressed = await compressImageStrict(file);
+          editProdBase64 = compressed.base64;
+          editProdFileName = compressed.name;
+          editProdImgPreview.src = compressed.base64;
+          editProdImgPreviewContainer.classList.remove("hidden");
+        } catch (err: any) {
+          showNotice("error", err.message || "Error procesando la foto.");
         }
       });
 
-      // Save Edit Form
-      editForm?.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        editModalAlert.classList.add("hidden");
-        btnSaveEdit.disabled = true;
-        btnSaveEdit.textContent = "Guardando cambios...";
+      document.querySelectorAll<HTMLButtonElement>(".btn-edit-product").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          (document.getElementById("editProdId") as HTMLInputElement).value = btn.dataset.id || "";
+          (document.getElementById("editProdName") as HTMLInputElement).value = btn.dataset.name || "";
+          (document.getElementById("editProdPrice") as HTMLInputElement).value = btn.dataset.price || "";
+          (document.getElementById("editProdStock") as HTMLInputElement).value = btn.dataset.stock || "0";
+          (document.getElementById("editProdCategory") as HTMLInputElement).value = btn.dataset.category || "";
+          (document.getElementById("editProdDescription") as HTMLTextAreaElement).value = btn.dataset.description || "";
+          const slugInput = document.getElementById("editProdSlug") as HTMLInputElement;
+          if (slugInput) slugInput.value = btn.dataset.slug || "";
+          (document.getElementById("editProdImgCurrent") as HTMLImageElement).src = btn.dataset.image || "/placeholder.jpg";
 
-        const id = (document.getElementById("editId") as HTMLInputElement).value;
-        const name = (document.getElementById("editName") as HTMLInputElement).value;
-        const description = (document.getElementById("editDescription") as HTMLTextAreaElement).value;
-        const basePrice = parseInt((document.getElementById("editPrice") as HTMLInputElement).value, 10);
-        const category = (document.getElementById("editCategory") as HTMLInputElement).value;
-        const slug = (document.getElementById("editSlug") as HTMLInputElement)?.value;
+          editProdBase64 = "";
+          editProdFileName = "";
+          editProdImgFile.value = "";
+          editProdImgPreviewContainer.classList.add("hidden");
+
+          modalEditProduct.classList.remove("hidden");
+        });
+      });
+
+      document.getElementById("formEditProduct")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btnSave = document.getElementById("btnSubmitEditProduct") as HTMLButtonElement;
+        btnSave.disabled = true;
+        btnSave.innerText = "Guardando...";
+
+        const id = (document.getElementById("editProdId") as HTMLInputElement).value;
+        const name = (document.getElementById("editProdName") as HTMLInputElement).value;
+        const basePrice = parseInt((document.getElementById("editProdPrice") as HTMLInputElement).value, 10);
+        const stock = parseInt((document.getElementById("editProdStock") as HTMLInputElement).value, 10);
+        const category = (document.getElementById("editProdCategory") as HTMLInputElement).value;
+        const description = (document.getElementById("editProdDescription") as HTMLTextAreaElement).value;
+        const slugInput = document.getElementById("editProdSlug") as HTMLInputElement;
+        const slug = slugInput ? slugInput.value : undefined;
 
         try {
-          const { data, error } = await actions.updateProduct({
+          const payload: any = {
             id,
             name,
-            description,
             basePrice,
             category,
-            slug: slug || undefined,
-            imageBase64: editBase64 || undefined,
-            imageName: editFileName || undefined,
-          });
-
-          if (error) {
-            editModalAlert.textContent = error.message || "Error al guardar cambios.";
-            editModalAlert.classList.remove("hidden");
-            btnSaveEdit.disabled = false;
-            btnSaveEdit.textContent = "Guardar Cambios";
-            return;
+            stock,
+            description,
+            slug,
+          };
+          if (editProdBase64 && editProdFileName) {
+            payload.imageBase64 = editProdBase64;
+            payload.imageName = editProdFileName;
           }
 
-          if (data?.success) {
-            editModal.classList.add("hidden");
-            window.location.reload();
+          const { data, error } = await actions.updateProduct(payload);
+          if (error || !data?.success) {
+            showNotice("error", error?.message || "Error al actualizar la prenda.");
+          } else {
+            showNotice("success", "✅ Prenda actualizada exitosamente.");
+            modalEditProduct.classList.add("hidden");
+            setTimeout(() => window.location.reload(), 600);
           }
         } catch (err: any) {
-          editModalAlert.textContent = err?.message || "Error de conexión al guardar cambios.";
-          editModalAlert.classList.remove("hidden");
+          showNotice("error", err.message || "Error de conexión.");
         } finally {
-          btnSaveEdit.disabled = false;
-          btnSaveEdit.textContent = "Guardar Cambios";
+          btnSave.disabled = false;
+          btnSave.innerText = "Guardar Cambios";
         }
       });
 
-      // Hard Delete Handler (Superadmin only)
-      document.querySelectorAll("[data-action='delete-hard']").forEach((btn) => {
-        btn.addEventListener("click", async (e) => {
-          const target = e.currentTarget as HTMLButtonElement;
-          const productId = target.dataset.id!;
-          const name = target.dataset.name!;
+      // 8. NEW PRODUCT
+      const btnOpenNewProductModal = document.getElementById("btnOpenNewProductModal");
+      btnOpenNewProductModal?.addEventListener("click", () => {
+        modalNewProduct.classList.remove("hidden");
+      });
 
-          if (!confirm(`¿Eliminar permanentemente "${name}"?\nEsta acción no se puede deshacer.`)) {
-            return;
+      let newProdBase64 = "";
+      let newProdFileName = "";
+      const newProdImgFile = document.getElementById("newProdImgFile") as HTMLInputElement;
+      const newProdImgPreviewContainer = document.getElementById("newProdImgPreviewContainer")!;
+      const newProdImgPreview = document.getElementById("newProdImgPreview") as HTMLImageElement;
+
+      newProdImgFile?.addEventListener("change", async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        try {
+          const compressed = await compressImageStrict(file);
+          newProdBase64 = compressed.base64;
+          newProdFileName = compressed.name;
+          newProdImgPreview.src = compressed.base64;
+          newProdImgPreviewContainer.classList.remove("hidden");
+        } catch (err: any) {
+          showNotice("error", err.message || "Error al procesar la foto.");
+        }
+      });
+
+      document.getElementById("formNewProduct")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btnSave = document.getElementById("btnSubmitNewProduct") as HTMLButtonElement;
+        btnSave.disabled = true;
+        btnSave.innerText = "Publicando...";
+
+        const name = (document.getElementById("newProdName") as HTMLInputElement).value;
+        const basePrice = parseInt((document.getElementById("newProdPrice") as HTMLInputElement).value, 10);
+        const stock = parseInt((document.getElementById("newProdStock") as HTMLInputElement).value, 10);
+        const category = (document.getElementById("newProdCategory") as HTMLInputElement).value;
+        const description = (document.getElementById("newProdDescription") as HTMLTextAreaElement).value;
+
+        try {
+          const payload: any = {
+            name,
+            basePrice,
+            stock,
+            category,
+            description,
+          };
+          if (newProdBase64 && newProdFileName) {
+            payload.imageBase64 = newProdBase64;
+            payload.imageName = newProdFileName;
           }
 
+          const { data, error } = await actions.createProduct(payload);
+          if (error || !data?.success) {
+            showNotice("error", error?.message || "Error al crear la prenda.");
+          } else {
+            showNotice("success", "✨ ¡Nueva prenda publicada con éxito!");
+            modalNewProduct.classList.add("hidden");
+            setTimeout(() => window.location.reload(), 600);
+          }
+        } catch (err: any) {
+          showNotice("error", err.message || "Error de red.");
+        } finally {
+          btnSave.disabled = false;
+          btnSave.innerText = "Publicar Prenda";
+        }
+      });
+
+      // 9. HARD DELETE PRODUCT
+      document.querySelectorAll<HTMLButtonElement>(".btn-delete-product").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const productId = btn.dataset.id!;
+          const productName = btn.dataset.name!;
+          if (!confirm(`¿Eliminar permanentemente "${productName}"? Esta acción borrará todas sus variantes de la base de datos.`)) {
+            return;
+          }
           try {
             const { data, error } = await actions.deleteProductHard({ productId });
-            if (error) {
-              showNotice("error", error.message);
-              return;
-            }
-            if (data?.success) {
-              window.location.reload();
+            if (error || !data?.success) {
+              showNotice("error", error?.message || "Error al eliminar producto.");
+            } else {
+              showNotice("success", "🗑️ Producto eliminado permanentemente.");
+              setTimeout(() => window.location.reload(), 600);
             }
           } catch (err: any) {
-            showNotice("error", err?.message || "Error al eliminar.");
+            showNotice("error", err.message || "Error de conexión.");
           }
         });
       });
 
-      // Create Product Modal Handlers
-      btnOpenNewProductModal?.addEventListener("click", () => {
-        createModalAlert.classList.add("hidden");
-        createImageFile.value = "";
-        createBase64 = "";
-        createFileName = "";
-        imagePreviewContainer.classList.add("hidden");
-        createModal.classList.remove("hidden");
-      });
+      // 10. SERVICES MANAGEMENT
+      const btnOpenNewServiceModal = document.getElementById("btnOpenNewServiceModal");
+      const serviceModalTitle = document.getElementById("serviceModalTitle")!;
+      let serviceImgBase64 = "";
+      let serviceImgFileName = "";
+      const serviceImgFile = document.getElementById("serviceImgFile") as HTMLInputElement;
+      const serviceImgPreviewContainer = document.getElementById("serviceImgPreviewContainer")!;
+      const serviceImgPreview = document.getElementById("serviceImgPreview") as HTMLImageElement;
 
-      btnCancelCreate?.addEventListener("click", () => {
-        createModal.classList.add("hidden");
-      });
-
-      createImageFile?.addEventListener("change", async (e: any) => {
-        const file = e.target.files?.[0];
-        if (file) {
-          try {
-            createModalAlert.classList.add("hidden");
-            const res = await compressImage(file);
-            createBase64 = res.base64;
-            createFileName = res.name;
-            imagePreview.src = createBase64;
-            imagePreviewContainer.classList.remove("hidden");
-          } catch (err: any) {
-            createModalAlert.textContent = err?.message || "Error al procesar la foto.";
-            createModalAlert.classList.remove("hidden");
-          }
+      serviceImgFile?.addEventListener("change", async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        try {
+          const compressed = await compressImageStrict(file);
+          serviceImgBase64 = compressed.base64;
+          serviceImgFileName = compressed.name;
+          serviceImgPreview.src = compressed.base64;
+          serviceImgPreviewContainer.classList.remove("hidden");
+        } catch (err: any) {
+          showNotice("error", err.message || "Error al procesar foto del servicio.");
         }
       });
 
-      createForm?.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        createModalAlert.classList.add("hidden");
-        btnSaveCreate.disabled = true;
-        btnSaveCreate.textContent = "Publicando producto...";
+      btnOpenNewServiceModal?.addEventListener("click", () => {
+        serviceModalTitle.innerText = "Nuevo Servicio de Maquillaje";
+        (document.getElementById("serviceId") as HTMLInputElement).value = "";
+        (document.getElementById("serviceName") as HTMLInputElement).value = "";
+        (document.getElementById("servicePrice") as HTMLInputElement).value = "200000";
+        (document.getElementById("serviceDuration") as HTMLInputElement).value = "60";
+        (document.getElementById("servicePriceRange") as HTMLInputElement).value = "$150.000 a $250.000";
+        (document.getElementById("serviceBadge") as HTMLInputElement).value = "Atelier";
+        (document.getElementById("serviceDepositReq") as HTMLSelectElement).value = "0";
+        (document.getElementById("serviceDepositAmt") as HTMLInputElement).value = "0";
+        (document.getElementById("serviceDescription") as HTMLTextAreaElement).value = "";
+        (document.getElementById("serviceImgCurrent") as HTMLImageElement).src = "/images/services/maquillaje-social-1.jpg";
 
-        const name = (document.getElementById("createName") as HTMLInputElement).value;
-        const basePrice = parseInt((document.getElementById("createPrice") as HTMLInputElement).value, 10);
-        const category = (document.getElementById("createCategory") as HTMLSelectElement).value;
-        const description = (document.getElementById("createDescription") as HTMLTextAreaElement).value;
+        serviceImgBase64 = "";
+        serviceImgFileName = "";
+        serviceImgFile.value = "";
+        serviceImgPreviewContainer.classList.add("hidden");
+
+        modalService.classList.remove("hidden");
+      });
+
+      document.querySelectorAll<HTMLButtonElement>(".btn-edit-service").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          serviceModalTitle.innerText = "Editar Servicio de Maquillaje";
+          (document.getElementById("serviceId") as HTMLInputElement).value = btn.dataset.id || "";
+          (document.getElementById("serviceName") as HTMLInputElement).value = btn.dataset.name || "";
+          (document.getElementById("servicePrice") as HTMLInputElement).value = btn.dataset.price || "";
+          (document.getElementById("serviceDuration") as HTMLInputElement).value = btn.dataset.duration || "60";
+          (document.getElementById("servicePriceRange") as HTMLInputElement).value = btn.dataset.pricerange || "";
+          (document.getElementById("serviceBadge") as HTMLInputElement).value = btn.dataset.badge || "";
+          (document.getElementById("serviceDepositReq") as HTMLSelectElement).value = btn.dataset.depositReq || "0";
+          (document.getElementById("serviceDepositAmt") as HTMLInputElement).value = btn.dataset.depositAmt || "0";
+          (document.getElementById("serviceDescription") as HTMLTextAreaElement).value = btn.dataset.description || "";
+          (document.getElementById("serviceImgCurrent") as HTMLImageElement).src = btn.dataset.image || "/images/services/maquillaje-social-1.jpg";
+
+          serviceImgBase64 = "";
+          serviceImgFileName = "";
+          serviceImgFile.value = "";
+          serviceImgPreviewContainer.classList.add("hidden");
+
+          modalService.classList.remove("hidden");
+        });
+      });
+
+      document.querySelectorAll<HTMLButtonElement>(".btn-toggle-service").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const serviceId = btn.dataset.id!;
+          const currentActive = parseInt(btn.dataset.active || "1", 10);
+          const nextActive = currentActive === 1 ? 0 : 1;
+
+          btn.disabled = true;
+          try {
+            const { data, error } = await actions.toggleServiceStatus({ serviceId, isActive: nextActive });
+            if (error || !data?.success) {
+              showNotice("error", error?.message || "No se pudo cambiar el estado del servicio.");
+            } else {
+              showNotice("success", nextActive === 1 ? "✅ Servicio activado." : "Servicio ocultado.");
+              setTimeout(() => window.location.reload(), 600);
+            }
+          } catch (err: any) {
+            showNotice("error", err.message || "Error al actualizar.");
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+
+      document.getElementById("formService")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btnSave = document.getElementById("btnSubmitService") as HTMLButtonElement;
+        btnSave.disabled = true;
+        btnSave.innerText = "Guardando...";
+
+        const id = (document.getElementById("serviceId") as HTMLInputElement).value;
+        const name = (document.getElementById("serviceName") as HTMLInputElement).value;
+        const price = parseInt((document.getElementById("servicePrice") as HTMLInputElement).value, 10);
+        const durationMinutes = parseInt((document.getElementById("serviceDuration") as HTMLInputElement).value, 10);
+        const priceRange = (document.getElementById("servicePriceRange") as HTMLInputElement).value;
+        const badge = (document.getElementById("serviceBadge") as HTMLInputElement).value;
+        const depositRequired = parseInt((document.getElementById("serviceDepositReq") as HTMLSelectElement).value, 10);
+        const depositAmount = parseInt((document.getElementById("serviceDepositAmt") as HTMLInputElement).value, 10);
+        const description = (document.getElementById("serviceDescription") as HTMLTextAreaElement).value;
 
         try {
-          const { data, error } = await actions.createProduct({
+          const payload: any = {
             name,
-            basePrice,
-            category,
+            price,
+            durationMinutes,
+            priceRange,
+            badge,
+            depositRequired,
+            depositAmount,
             description,
-            imageBase64: createBase64 || undefined,
-            imageName: createFileName || undefined,
-          });
-
-          if (error) {
-            createModalAlert.textContent = error.message || "Error al crear producto.";
-            createModalAlert.classList.remove("hidden");
-            btnSaveCreate.disabled = false;
-            btnSaveCreate.textContent = "Publicar Producto";
-            return;
+          };
+          if (serviceImgBase64 && serviceImgFileName) {
+            payload.imageBase64 = serviceImgBase64;
+            payload.imageName = serviceImgFileName;
           }
 
-          if (data?.success) {
-            createModal.classList.add("hidden");
-            window.location.reload();
+          let res: any;
+          if (id) {
+            payload.id = id;
+            res = await actions.updateService(payload);
+          } else {
+            res = await actions.createService(payload);
+          }
+
+          if (res.error || !res.data?.success) {
+            showNotice("error", res.error?.message || "Error al guardar el servicio.");
+          } else {
+            showNotice("success", "💅 Servicio guardado exitosamente.");
+            modalService.classList.add("hidden");
+            setTimeout(() => window.location.reload(), 600);
           }
         } catch (err: any) {
-          createModalAlert.textContent = err?.message || "Error de conexión al crear producto.";
-          createModalAlert.classList.remove("hidden");
+          showNotice("error", err.message || "Error de red.");
         } finally {
-          btnSaveCreate.disabled = false;
-          btnSaveCreate.textContent = "Publicar Producto";
+          btnSave.disabled = false;
+          btnSave.innerText = "Guardar Servicio";
+        }
+      });
+
+      // 11. BOOKINGS STATUS SELECTOR
+      document.querySelectorAll<HTMLSelectElement>(".booking-status-select").forEach((select) => {
+        select.addEventListener("change", async () => {
+          const bookingId = select.dataset.id!;
+          const status = select.value as any;
+          select.disabled = true;
+
+          try {
+            const { data, error } = await actions.updateBookingStatus({ bookingId, status });
+            if (error || !data?.success) {
+              showNotice("error", error?.message || "No se pudo actualizar la cita.");
+            } else {
+              showNotice("success", `✅ Estado de cita actualizado a "${status}".`);
+            }
+          } catch (err: any) {
+            showNotice("error", err.message || "Error al actualizar.");
+          } finally {
+            select.disabled = false;
+          }
+        });
+      });
+
+      // 12. HERO BANNERS MANAGEMENT
+      let heroMainBase64 = "";
+      let heroMainFileName = "";
+      const fileHeroMain = document.getElementById("fileHeroMain") as HTMLInputElement;
+      const previewHeroMain = document.getElementById("previewHeroMain") as HTMLImageElement;
+      const btnSaveHeroMain = document.getElementById("btnSaveHeroMain") as HTMLButtonElement;
+
+      fileHeroMain?.addEventListener("change", async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        try {
+          const compressed = await compressImageStrict(file, 1600, 1600, 0.88);
+          heroMainBase64 = compressed.base64;
+          heroMainFileName = compressed.name;
+          previewHeroMain.src = compressed.base64;
+        } catch (err: any) {
+          showNotice("error", err.message || "Error al procesar foto de portada.");
+        }
+      });
+
+      btnSaveHeroMain?.addEventListener("click", async () => {
+        if (!heroMainBase64 || !heroMainFileName) {
+          showNotice("error", "Por favor seleccioná una nueva foto antes de guardar.");
+          return;
+        }
+        btnSaveHeroMain.disabled = true;
+        btnSaveHeroMain.innerText = "Subiendo Portada...";
+        try {
+          const { data, error } = await actions.uploadBannerImage({
+            targetKey: "hero_image",
+            imageBase64: heroMainBase64,
+            imageName: heroMainFileName,
+            altText: "Portada Principal Catalina Glamur",
+          });
+          if (error || !data?.success) {
+            showNotice("error", error?.message || "Error al actualizar portada principal.");
+          } else {
+            showNotice("success", "🖼️ ¡Portada principal actualizada con éxito!");
+            setTimeout(() => window.location.reload(), 600);
+          }
+        } catch (err: any) {
+          showNotice("error", err.message || "Error de conexión.");
+        } finally {
+          btnSaveHeroMain.disabled = false;
+          btnSaveHeroMain.innerText = "Actualizar Portada Principal";
+        }
+      });
+
+      let heroSecBase64 = "";
+      let heroSecFileName = "";
+      const fileHeroSec = document.getElementById("fileHeroSec") as HTMLInputElement;
+      const previewHeroSec = document.getElementById("previewHeroSec") as HTMLImageElement;
+      const btnSaveHeroSec = document.getElementById("btnSaveHeroSec") as HTMLButtonElement;
+
+      fileHeroSec?.addEventListener("change", async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        try {
+          const compressed = await compressImageStrict(file, 1600, 1600, 0.88);
+          heroSecBase64 = compressed.base64;
+          heroSecFileName = compressed.name;
+          previewHeroSec.src = compressed.base64;
+        } catch (err: any) {
+          showNotice("error", err.message || "Error al procesar foto secundaria.");
+        }
+      });
+
+      btnSaveHeroSec?.addEventListener("click", async () => {
+        if (!heroSecBase64 || !heroSecFileName) {
+          showNotice("error", "Por favor seleccioná una nueva foto antes de guardar.");
+          return;
+        }
+        btnSaveHeroSec.disabled = true;
+        btnSaveHeroSec.innerText = "Subiendo Portada...";
+        try {
+          const { data, error } = await actions.uploadBannerImage({
+            targetKey: "hero_secondary_image",
+            imageBase64: heroSecBase64,
+            imageName: heroSecFileName,
+            altText: "Atelier Social Catalina Glamur",
+          });
+          if (error || !data?.success) {
+            showNotice("error", error?.message || "Error al actualizar portada secundaria.");
+          } else {
+            showNotice("success", "💄 ¡Portada secundaria actualizada con éxito!");
+            setTimeout(() => window.location.reload(), 600);
+          }
+        } catch (err: any) {
+          showNotice("error", err.message || "Error de conexión.");
+        } finally {
+          btnSaveHeroSec.disabled = false;
+          btnSaveHeroSec.innerText = "Actualizar Portada Secundaria";
         }
       });
     </script>
   </body>
 </html>
-
-<style is:global>
-  @import "../../styles/theme.css";
-</style>

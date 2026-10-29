@@ -1,0 +1,311 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getQueryClient } from "@astrobranding/database";
+
+export const prerender = false;
+
+let services: any[] = [];
+
+try {
+  const sql = getQueryClient();
+  services = await sql`
+    SELECT * FROM services 
+    WHERE is_active = 1 
+    ORDER BY CASE slug 
+      WHEN 'maquillaje-social' THEN 1 
+      WHEN 'maquillaje-de-quinceanera' THEN 2 
+      WHEN 'maquillaje-de-novia' THEN 3 
+      ELSE 4 END ASC
+  `;
+} catch (err) {
+  console.warn("DB query error in /servicios:", err);
+}
+
+if (!services || services.length === 0) {
+  services = [
+    {
+      id: "s1",
+      slug: "maquillaje-social",
+      name: "Maquillaje Social & Eventos",
+      description: "Maquillaje profesional para eventos sociales, galas, grados y celebraciones en Medellín y Valle del Aburrá. Acabado impecable de alta cobertura, visagismo y productos cosméticos de primeras marcas internacionales.",
+      duration_minutes: 60,
+      price: 150000,
+      price_range: "$150.000 a $250.000",
+      badge: "Eventos & Galas",
+    },
+    {
+      id: "s2",
+      slug: "maquillaje-de-quinceanera",
+      name: "Maquillaje de Quinceañera",
+      description: "Estilismo fresco, juvenil y radiante para quinceañeras y ceremonias de grado en Medellín. Iluminación multidimensional, hidratación profunda y sellado prolongado para toda la celebración.",
+      duration_minutes: 90,
+      price: 250000,
+      price_range: "$250.000 a $320.000",
+      badge: "Quinceañeras & Grados",
+    },
+    {
+      id: "s3",
+      slug: "maquillaje-de-novia",
+      name: "Maquillaje de Novia",
+      description: "Atención especializada para bodas y novias en Medellín y Valle del Aburrá. Preparación dérmica blindada de larga duración, visagismo personalizado, pestañas de seda y fijación a prueba de lágrimas.",
+      duration_minutes: 120,
+      price: 350000,
+      price_range: "$350.000 a $450.000",
+      badge: "Bodas & Novias",
+    },
+  ];
+}
+
+const priceRanges: Record<string, string> = {
+  "maquillaje-social": "$150.000 a $250.000",
+  "maquillaje-de-quinceanera": "$250.000 a $320.000",
+  "maquillaje-de-novia": "$350.000 a $450.000",
+};
+
+const serviceImages: Record<string, string> = {
+  "maquillaje-de-novia": "/images/services/maquillaje-novia-1.jpg",
+  "maquillaje-de-quinceanera": "/images/services/maquillaje-quinceanera-1.jpg",
+  "maquillaje-social": "/images/services/maquillaje-social-1.jpg",
+};
+---
+
+<BaseLayout
+  title="Maquillaje Profesional para Eventos y Galas — Catalina Glamur Medellín"
+  description="Atelier de maquillaje profesional a domicilio para eventos sociales, quinceañeras y galas en Medellín. Piel blindada, visagismo y cosmética internacional de alta gama."
+>
+  <main class="max-w-7xl mx-auto px-6 py-16">
+    <!-- Header de Servicios (Editorial) -->
+    <div class="mb-16 space-y-4 max-w-3xl">
+      <div class="flex items-center gap-3 text-[10px] font-mono tracking-[0.3em] uppercase text-[#D4AF37]">
+        <span>02 &bull; ATELIER DE BELLEZA &bull; SOCIAL &amp; CELEBRACIONES</span>
+        <span class="h-px w-10 bg-[#D4AF37]/50"></span>
+        <span class="text-[#8A99B2]">MEDELLÍN &amp; VALLE DEL ABURRÁ</span>
+      </div>
+      <h1 class="text-4xl sm:text-6xl font-['Kalieb_Luxury'] text-[#F7F3FA] tracking-tight font-medium leading-[1.15]">
+        Atelier de Maquillaje Profesional
+      </h1>
+      <p class="text-xs sm:text-sm text-[#A6B0BF] font-light leading-relaxed max-w-2xl pt-2">
+        Atención personalizada a domicilio para eventos sociales, quinceañeras, galas y ocasiones memorables en Medellín y Valle del Aburrá. Técnica de preparación dérmica blindada de larga duración, visagismo y cosmética internacional de alta gama.
+      </p>
+    </div>
+
+    <!-- Muestra Audiovisual Responsiva de Atelier (Desktop Panorámico 16:9 / Mobile Vertical 9:16) -->
+    <div class="mb-16 bg-[#0E1015]/90 border border-[#f3b5c6]/30 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#232833]/80 pb-4">
+        <div>
+          <span class="text-[10px] font-mono tracking-[0.25em] uppercase text-[#f7d2dc] block">Atelier Audiovisual</span>
+          <h2 class="text-2xl sm:text-3xl font-['Kalieb_Luxury'] text-[#F7F3FA] font-medium">
+            Piel Blindada y Luminosidad Natural en Escena
+          </h2>
+        </div>
+        <div class="inline-flex items-center gap-2 px-3 py-1 bg-[#f3b5c6]/10 border border-[#f3b5c6]/40 text-[#f7d2dc] text-xs font-mono tracking-widest uppercase rounded-full">
+          <span>Social &bull; Quinceañeras &bull; Medellín</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        <!-- Contenedor de Video: 16:9 en Desktop, 9:16 en Mobile -->
+        <div class="lg:col-span-8 flex justify-center">
+          <!-- Versión Desktop Panorámica (16:9) -->
+          <div class="hidden lg:block w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-[#f3b5c6]/40 bg-black relative group">
+            <video
+              autoplay
+              muted
+              loop
+              playsinline
+              preload="metadata"
+              width="1920"
+              height="1080"
+              poster="/videos/poster-promo-maquillaje-desktop.jpg"
+              class="w-full h-full object-cover"
+            >
+              <source src="/videos/promo-maquillaje-desktop.mp4#t=0.001" type="video/mp4" />
+            </video>
+          </div>
+
+          <!-- Versión Mobile Vertical (9:16) -->
+          <div class="block lg:hidden w-full max-w-sm mx-auto aspect-[9/16] rounded-2xl overflow-hidden shadow-2xl border border-[#f3b5c6]/40 bg-black">
+            <video
+              autoplay
+              muted
+              loop
+              playsinline
+              preload="metadata"
+              width="1080"
+              height="1920"
+              poster="/videos/poster-promo-maquillaje.jpg"
+              class="w-full h-full object-cover"
+            >
+              <source src="/videos/promo-maquillaje.mp4#t=0.001" type="video/mp4" />
+            </video>
+          </div>
+        </div>
+
+        <!-- Columna de Conversión con Acciones Reales Clickeables -->
+        <div class="lg:col-span-4 space-y-5 text-left">
+          <div class="space-y-2">
+            <span class="text-[10px] font-mono uppercase tracking-[0.2em] text-[#8A99B2] block">Técnica Profesional</span>
+            <p class="text-xs sm:text-sm text-[#A6B0BF] font-light leading-relaxed">
+              Técnica de preparación dérmica resistente al calor, lágrimas y largas jornadas de celebración. Nos trasladamos a tu domicilio o lugar de preparación en Medellín y todo el Valle del Aburrá.
+            </p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-[#161A22] border border-[#232833] space-y-2">
+            <div class="flex items-center justify-between text-xs font-mono">
+              <span class="text-[#8A99B2]">Prioridad de Atención</span>
+              <span class="text-[#f7d2dc] font-semibold text-sm">Social &amp; Quinceañeras</span>
+            </div>
+            <div class="text-[11px] text-[#A6B0BF] font-light">
+              Incluye preparación facial con sueros de alta gama, visagismo y pestañas punto a punto o tira de seda.
+            </div>
+          </div>
+
+          <!-- Botones Reales de Llamado a la Acción -->
+          <div class="space-y-3 pt-2">
+            <a
+              href="/servicios/maquillaje-social"
+              class="w-full py-3.5 px-5 bg-[#f3b5c6] hover:bg-[#fce3eb] text-[#1a0812] text-xs font-mono tracking-[0.2em] uppercase font-bold text-center block rounded-lg transition-all shadow-lg hover:shadow-[#f3b5c6]/20"
+            >
+              Agendar Maquillaje Social &rarr;
+            </a>
+            <a
+              href="https://wa.me/573045781032?text=Hola%20Catalina,%20quiero%20cotizar%20maquillaje%20para%20un%20evento%20social%20o%20quincea%C3%B1era"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="w-full py-3 px-5 border border-[#232833] hover:border-[#f3b5c6] text-[#F7F3FA] hover:text-[#f7d2dc] text-xs font-mono tracking-[0.15em] uppercase text-center block rounded-lg transition-all"
+            >
+              Consultar Fechas por WhatsApp
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid de los 3 Servicios Oficiales (Architectural Cards) -->
+    <div id="servicios-grid" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {services.map((item, idx) => {
+        const range = item.price_range || item.priceRange || priceRanges[item.slug] || new Intl.NumberFormat("es-CO", {
+          style: "currency",
+          currency: "COP",
+          maximumFractionDigits: 0,
+        }).format(item.price);
+
+        const imgUrl = item.image_url || item.imageUrl || serviceImages[item.slug] || "/images/services/maquillaje-social-1.jpg";
+        const badge = item.badge || "Atelier";
+
+        return (
+          <a
+            href={`/servicios/${item.slug}`}
+            class="bg-[#0E1015] border border-[#232833] flex flex-col justify-between hover:border-[#D4AF37]/50 transition-colors group block"
+          >
+            <!-- Fotografía Editorial del Servicio -->
+            <div class="relative aspect-[16/10] bg-neutral-900 overflow-hidden">
+              <img
+                src={imgUrl}
+                alt={item.name}
+                class="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                loading="lazy"
+                onerror="this.src='/images/services/maquillaje-social-1.jpg'"
+              />
+              <div class="absolute inset-0 bg-gradient-to-t from-[#0E1015] via-transparent to-transparent opacity-80"></div>
+              <div class="absolute top-3 left-3 right-3 flex items-center justify-between">
+                {item.badge && (
+                  <span class="px-2 py-0.5 text-[9px] font-mono uppercase tracking-[0.2em] bg-[#07080A]/90 border border-[#232833] text-[#D4AF37]">
+                    {item.badge}
+                  </span>
+                )}
+                <span class="text-[10px] text-[#8A99B2] font-mono bg-[#07080A]/90 px-2 py-0.5 border border-[#232833]">
+                  {item.duration_minutes} MIN
+                </span>
+              </div>
+            </div>
+
+            <div class="p-6 sm:p-8 space-y-6 flex-grow flex flex-col justify-between">
+              <div class="space-y-3">
+                <h2 class="font-['Kalieb_Luxury'] text-2xl text-[#F7F3FA] group-hover:text-[#D4AF37] transition-colors font-medium">
+                  {item.name}
+                </h2>
+
+                <p class="text-xs text-[#8E98A8] font-light leading-relaxed line-clamp-3">
+                  {item.description}
+                </p>
+
+                <!-- Puntos Clave del Servicio -->
+                <div class="pt-4 space-y-2 border-t border-[#232833]/60 text-xs text-[#C4CDD5]">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[#D4AF37] font-mono">&mdash;</span>
+                    <span>Medellín y todo el Valle del Aburrá</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[#D4AF37] font-mono">&mdash;</span>
+                    <span>Piel blindada resistente a lágrimas y clima</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[#D4AF37] font-mono">&mdash;</span>
+                    <span>Pestañas de seda y visagismo milimétrico</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pt-6 border-t border-[#232833]/80 flex flex-col gap-4">
+                <div>
+                  <span class="text-[9px] text-[#8A99B2] uppercase tracking-[0.2em] block font-mono">
+                    Inversión
+                  </span>
+                  <span class="text-xl font-bold text-[#D4AF37] font-mono">
+                    {range}
+                  </span>
+                </div>
+
+                <span class="w-full py-3.5 border border-[#D4AF37]/50 text-[#D4AF37] text-xs font-mono tracking-[0.2em] uppercase group-hover:bg-[#D4AF37] group-hover:text-[#07080A] transition-colors text-center block">
+                  Ver Ficha &amp; Agendar &rarr;
+                </span>
+              </div>
+            </div>
+          </a>
+        );
+      })}
+    </div>
+
+    <!-- Cobertura y Proceso de Agendamiento (Architectural Process) -->
+    <section class="mt-28 border-t border-[#232833]/80 pt-16">
+      <div class="mb-12">
+        <span class="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D4AF37] block mb-2">
+          03 / METODOLOGÍA &bull; ATENCIÓN PRIVADA DE ATELIER
+        </span>
+        <h3 class="font-['Kalieb_Luxury'] text-3xl sm:text-4xl text-[#F7F3FA] font-medium">
+          Protocolo de Atención Personalizada
+        </h3>
+        <p class="text-xs font-mono text-[#8A99B2] uppercase tracking-wider mt-1">
+          Atención personalizada en Medellín, Envigado, Sabaneta, Bello, Itagüí y todo el Valle del Aburrá.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="border-l border-[#D4AF37]/50 pl-5 space-y-2">
+          <span class="text-[9px] font-mono text-[#D4AF37] block tracking-[0.2em] uppercase">FASE 01</span>
+          <h4 class="font-medium text-sm text-[#F7F3FA] font-sans">Diagnóstico Dérmico &amp; Visagismo</h4>
+          <p class="text-xs text-[#8E98A8] font-light leading-relaxed">
+            Evaluación de fototipo dérmico, morfología facial e iluminación técnica requerida según el horario de tu evento.
+          </p>
+        </div>
+
+        <div class="border-l border-[#D4AF37]/50 pl-5 space-y-2">
+          <span class="text-[9px] font-mono text-[#D4AF37] block tracking-[0.2em] uppercase">FASE 02</span>
+          <h4 class="font-medium text-sm text-[#F7F3FA] font-sans">Blindaje Mineral &amp; Colorimetría</h4>
+          <p class="text-xs text-[#8E98A8] font-light leading-relaxed">
+            Capa de sellado resistente a humedad, lágrimas y emociones intensas con cosméticos internacionales de alta gama.
+          </p>
+        </div>
+
+        <div class="border-l border-[#D4AF37]/50 pl-5 space-y-2">
+          <span class="text-[9px] font-mono text-[#D4AF37] block tracking-[0.2em] uppercase">FASE 03</span>
+          <h4 class="font-medium text-sm text-[#F7F3FA] font-sans">Fijación de Alta Definición</h4>
+          <p class="text-xs text-[#8E98A8] font-light leading-relaxed">
+            Aplicación de pestañas de seda y micro-pulverizado final que asegura 16+ horas de resplandor intacto.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+</BaseLayout>
