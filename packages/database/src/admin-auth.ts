@@ -1,5 +1,5 @@
-import { createHash, randomBytes, randomInt } from "crypto";
-import { eq, and, gt, desc } from "drizzle-orm";
+import { createHash, randomBytes, randomInt, pbkdf2Sync, timingSafeEqual } from "crypto";
+import { eq, or, and, gt, desc } from "drizzle-orm";
 import { getDb } from "./index";
 import { adminUsers, adminOtps, adminSessions, type AdminUser } from "./schema";
 
@@ -16,11 +16,40 @@ export interface AdminAuthResult {
     id: string;
     name: string;
     role: string;
-    telegramUserId: number;
+    telegramUserId?: number;
+    username?: string | null;
+    email?: string | null;
   };
 }
 
 const DEFAULT_BOT_USERNAME = "hermes_glamur_bot";
+
+/**
+ * Hashes a plaintext password using PBKDF2 with SHA-512 and a random 16-byte salt
+ */
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const hash = pbkdf2Sync(password, salt, 100000, 64, "sha512").toString("hex");
+  return `pbkdf2:100000:${salt.toString("hex")}:${hash}`;
+}
+
+/**
+ * Timing-safe password verification against stored PBKDF2 hash
+ */
+export function verifyPassword(password: string, storedHash: string): boolean {
+  if (!storedHash || !storedHash.startsWith("pbkdf2:")) return false;
+  const parts = storedHash.split(":");
+  if (parts.length !== 4) return false;
+  const iterations = parseInt(parts[1], 10);
+  const salt = Buffer.from(parts[2], "hex");
+  const originalHash = parts[3];
+  try {
+    const computed = pbkdf2Sync(password, salt, iterations, 64, "sha512").toString("hex");
+    return timingSafeEqual(Buffer.from(computed, "hex"), Buffer.from(originalHash, "hex"));
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Dispatches a message via Telegram Bot API
@@ -61,12 +90,83 @@ export async function sendTelegramBotMessage(
 }
 
 /**
- * Requests a single-use 6-digit OTP dispatched to the user's Telegram
+ * 1. PATH: Username/Email and Password Authentication
+ */
+export async function loginWithAdminPassword(
+  identifier: string,
+  password: string,
+  metadata?: { ip?: string; userAgent?: string }
+): Promise<AdminAuthResult> {
+  const db = getDb();
+  const trimmed = identifier.trim().toLowerCase();
+
+  const [user] = await db
+    .select()
+    .from(adminUsers)
+    .where(
+      and(
+        or(eq(adminUsers.username, trimmed), eq(adminUsers.email, trimmed)),
+        eq(adminUsers.isActive, 1)
+      )
+    )
+    .limit(1);
+
+  if (!user || !user.passwordHash) {
+    return {
+      success: false,
+      error: "invalid_credentials",
+      message: "Usuario o contraseña incorrectos.",
+    };
+  }
+
+  const isValid = verifyPassword(password, user.passwordHash);
+  if (!isValid) {
+    return {
+      success: false,
+      error: "invalid_credentials",
+      message: "Usuario o contraseña incorrectos.",
+    };
+  }
+
+  // Generate 7-day cryptographic session token
+  const rawSessionToken = randomBytes(32).toString("hex");
+  const sessionTokenHash = createHash("sha256").update(rawSessionToken).digest("hex");
+  const sessionId = randomBytes(16).toString("hex");
+  const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  await db.insert(adminSessions).values({
+    id: sessionId,
+    userId: user.id,
+    sessionTokenHash,
+    expiresAt: sessionExpiresAt,
+    ipAddress: metadata?.ip || null,
+    userAgent: metadata?.userAgent || null,
+  });
+
+  notifySuperadminAudit(
+    `🔐 <b>Inicio de sesión en /adminn (Contraseña)</b>\nUsuario: <b>${user.name}</b> (${user.role})\nIdentificador: <code>${identifier}</code>\nIP: <code>${metadata?.ip || "Desconocida"}</code>`
+  ).catch(() => {});
+
+  return {
+    success: true,
+    sessionToken: rawSessionToken,
+    user: {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      telegramUserId: user.telegramUserId ? Number(user.telegramUserId) : undefined,
+      username: user.username,
+      email: user.email,
+    },
+  };
+}
+
+/**
+ * 2. PATH: Requests a single-use 6-digit OTP dispatched to Telegram
  */
 export async function requestAdminOtp(telegramUserId: number): Promise<AdminAuthResult> {
   const db = getDb();
 
-  // 1. Verify user exists and is active
   const [user] = await db
     .select()
     .from(adminUsers)
@@ -81,7 +181,6 @@ export async function requestAdminOtp(telegramUserId: number): Promise<AdminAuth
     };
   }
 
-  // 2. Cooldown check: 60 seconds between OTP requests
   const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
   const [recentOtp] = await db
     .select()
@@ -101,17 +200,14 @@ export async function requestAdminOtp(telegramUserId: number): Promise<AdminAuth
     };
   }
 
-  // 3. Generate 6-digit cryptographic OTP
   const rawOtp = randomInt(100000, 1000000).toString();
   const codeHash = createHash("sha256").update(rawOtp).digest("hex");
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-  // Invalidate previous unconsumed OTPs
   await db
     .delete(adminOtps)
     .where(and(eq(adminOtps.userId, user.id), eq(adminOtps.consumedAt, null as any)));
 
-  // 4. Save to DB
   await db.insert(adminOtps).values({
     userId: user.id,
     codeHash,
@@ -119,7 +215,6 @@ export async function requestAdminOtp(telegramUserId: number): Promise<AdminAuth
     expiresAt,
   });
 
-  // 5. Send via Telegram Bot API
   const message = `🔐 <b>Código de acceso al Panel /adminn</b>\n\nTu código de verificación es:\n<code>${rawOtp}</code>\n\n⏱️ Vence en 5 minutos. No lo compartas con nadie.`;
   const tgResult = await sendTelegramBotMessage(telegramUserId, message);
 
@@ -147,7 +242,7 @@ export async function requestAdminOtp(telegramUserId: number): Promise<AdminAuth
 }
 
 /**
- * Verifies the 6-digit OTP and creates an active 7-day session
+ * 2. PATH: Verifies the 6-digit Telegram OTP and creates an active 7-day session
  */
 export async function verifyAdminOtp(
   telegramUserId: number,
@@ -189,7 +284,6 @@ export async function verifyAdminOtp(
   }
 
   if (otp.attempts >= 5) {
-    // Burn OTP after 5 failed attempts
     await db.update(adminOtps).set({ consumedAt: now }).where(eq(adminOtps.id, otp.id));
     return {
       success: false,
@@ -198,7 +292,6 @@ export async function verifyAdminOtp(
     };
   }
 
-  // Increment attempts
   await db
     .update(adminOtps)
     .set({ attempts: otp.attempts + 1 })
@@ -215,14 +308,12 @@ export async function verifyAdminOtp(
     };
   }
 
-  // Mark OTP as consumed
   await db.update(adminOtps).set({ consumedAt: now }).where(eq(adminOtps.id, otp.id));
 
-  // Generate 7-day cryptographic session token
   const rawSessionToken = randomBytes(32).toString("hex");
   const sessionTokenHash = createHash("sha256").update(rawSessionToken).digest("hex");
   const sessionId = randomBytes(16).toString("hex");
-  const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   await db.insert(adminSessions).values({
     id: sessionId,
@@ -233,9 +324,8 @@ export async function verifyAdminOtp(
     userAgent: metadata?.userAgent || null,
   });
 
-  // Silent audit alert to superadmins
   notifySuperadminAudit(
-    `🔐 <b>Inicio de sesión en /adminn</b>\nUsuario: <b>${user.name}</b> (${user.role})\nTelegram ID: <code>${user.telegramUserId}</code>\nIP: <code>${metadata?.ip || "Desconocida"}</code>`
+    `🔐 <b>Inicio de sesión en /adminn (Telegram OTP)</b>\nUsuario: <b>${user.name}</b> (${user.role})\nTelegram ID: <code>${user.telegramUserId}</code>\nIP: <code>${metadata?.ip || "Desconocida"}</code>`
   ).catch(() => {});
 
   return {
@@ -245,7 +335,201 @@ export async function verifyAdminOtp(
       id: user.id,
       name: user.name,
       role: user.role,
-      telegramUserId: Number(user.telegramUserId),
+      telegramUserId: user.telegramUserId ? Number(user.telegramUserId) : undefined,
+    },
+  };
+}
+
+/**
+ * 3. PATH: Requests a single-use 6-digit OTP dispatched to WhatsApp via Evolution API
+ */
+export async function requestAdminWhatsAppOtp(phone: string): Promise<AdminAuthResult> {
+  const db = getDb();
+  const cleanPhone = phone.replace(/\D/g, "");
+
+  const users = await db
+    .select()
+    .from(adminUsers)
+    .where(eq(adminUsers.isActive, 1));
+
+  const user = users.find((u) => {
+    if (!u.phone) return false;
+    const uClean = u.phone.replace(/\D/g, "");
+    return uClean.endsWith(cleanPhone) || cleanPhone.endsWith(uClean);
+  });
+
+  if (!user) {
+    return {
+      success: false,
+      error: "unauthorized_user",
+      message: "El número de teléfono no está autorizado como administrador.",
+    };
+  }
+
+  const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+  const [recentOtp] = await db
+    .select()
+    .from(adminOtps)
+    .where(and(eq(adminOtps.userId, user.id), gt(adminOtps.createdAt, oneMinuteAgo)))
+    .orderBy(desc(adminOtps.createdAt))
+    .limit(1);
+
+  if (recentOtp) {
+    const elapsedSeconds = Math.floor((Date.now() - recentOtp.createdAt.getTime()) / 1000);
+    const remaining = Math.max(1, 60 - elapsedSeconds);
+    return {
+      success: false,
+      error: "cooldown_active",
+      remainingSeconds: remaining,
+      message: `Espera ${remaining} segundos antes de solicitar un nuevo código.`,
+    };
+  }
+
+  const rawOtp = randomInt(100000, 1000000).toString();
+  const codeHash = createHash("sha256").update(rawOtp).digest("hex");
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+  await db.insert(adminOtps).values({
+    userId: user.id,
+    codeHash,
+    attempts: 0,
+    expiresAt,
+  });
+
+  const evolutionUrl = process.env.EVOLUTION_URL || "http://evolution:8085";
+  const apiKey = process.env.EVOLUTION_API_KEY || "";
+  const targetNumber = cleanPhone.length === 10 ? `57${cleanPhone}` : cleanPhone;
+  const message = `🔐 *Código de acceso al Panel /adminn*\n\nTu código de verificación es:\n*${rawOtp}*\n\n⏱️ Vence en 5 minutos. No lo compartas con nadie.`;
+
+  try {
+    const res = await fetch(`${evolutionUrl}/send/text`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { apikey: apiKey } : {}),
+      },
+      body: JSON.stringify({
+        number: targetNumber,
+        text: message,
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) {
+      console.warn(`[AdminAuth] Evolution HTTP ${res.status}`);
+    }
+  } catch (err: any) {
+    console.error("[AdminAuth] Evolution dispatch error:", err);
+  }
+
+  return {
+    success: true,
+    expiresIn: 300,
+    message: "Código enviado a tu WhatsApp.",
+  };
+}
+
+/**
+ * 3. PATH: Verifies the 6-digit WhatsApp OTP and creates an active 7-day session
+ */
+export async function verifyAdminWhatsAppOtp(
+  phone: string,
+  code: string,
+  metadata?: { ip?: string; userAgent?: string }
+): Promise<AdminAuthResult> {
+  const db = getDb();
+  const cleanPhone = phone.replace(/\D/g, "");
+
+  const users = await db
+    .select()
+    .from(adminUsers)
+    .where(eq(adminUsers.isActive, 1));
+
+  const user = users.find((u) => {
+    if (!u.phone) return false;
+    const uClean = u.phone.replace(/\D/g, "");
+    return uClean.endsWith(cleanPhone) || cleanPhone.endsWith(uClean);
+  });
+
+  if (!user) {
+    return { success: false, error: "unauthorized_user" };
+  }
+
+  const now = new Date();
+  const [otp] = await db
+    .select()
+    .from(adminOtps)
+    .where(
+      and(
+        eq(adminOtps.userId, user.id),
+        gt(adminOtps.expiresAt, now),
+        eq(adminOtps.consumedAt, null as any)
+      )
+    )
+    .orderBy(desc(adminOtps.createdAt))
+    .limit(1);
+
+  if (!otp) {
+    return {
+      success: false,
+      error: "otp_expired_or_invalid",
+      message: "El código ha expirado o no es válido. Solicita uno nuevo.",
+    };
+  }
+
+  if (otp.attempts >= 5) {
+    await db.update(adminOtps).set({ consumedAt: now }).where(eq(adminOtps.id, otp.id));
+    return {
+      success: false,
+      error: "too_many_attempts",
+      message: "Demasiados intentos fallidos. Solicita un nuevo código.",
+    };
+  }
+
+  await db
+    .update(adminOtps)
+    .set({ attempts: otp.attempts + 1 })
+    .where(eq(adminOtps.id, otp.id));
+
+  const providedHash = createHash("sha256").update(code.trim()).digest("hex");
+  if (providedHash !== otp.codeHash) {
+    const remaining = 5 - (otp.attempts + 1);
+    return {
+      success: false,
+      error: "invalid_code",
+      remainingAttempts: remaining,
+      message: `Código incorrecto. Te quedan ${remaining} intentos.`,
+    };
+  }
+
+  await db.update(adminOtps).set({ consumedAt: now }).where(eq(adminOtps.id, otp.id));
+
+  const rawSessionToken = randomBytes(32).toString("hex");
+  const sessionTokenHash = createHash("sha256").update(rawSessionToken).digest("hex");
+  const sessionId = randomBytes(16).toString("hex");
+  const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  await db.insert(adminSessions).values({
+    id: sessionId,
+    userId: user.id,
+    sessionTokenHash,
+    expiresAt: sessionExpiresAt,
+    ipAddress: metadata?.ip || null,
+    userAgent: metadata?.userAgent || null,
+  });
+
+  notifySuperadminAudit(
+    `🔐 <b>Inicio de sesión en /adminn (WhatsApp OTP)</b>\nUsuario: <b>${user.name}</b> (${user.role})\nTeléfono: <code>${user.phone}</code>\nIP: <code>${metadata?.ip || "Desconocida"}</code>`
+  ).catch(() => {});
+
+  return {
+    success: true,
+    sessionToken: rawSessionToken,
+    user: {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      telegramUserId: user.telegramUserId ? Number(user.telegramUserId) : undefined,
     },
   };
 }
@@ -314,9 +598,11 @@ export async function notifySuperadminAudit(message: string): Promise<void> {
       .where(and(eq(adminUsers.role, "superadmin"), eq(adminUsers.isActive, 1)));
 
     for (const sa of superadmins) {
-      await sendTelegramBotMessage(sa.telegramUserId, message, {
-        disableNotification: true,
-      });
+      if (sa.telegramUserId) {
+        await sendTelegramBotMessage(sa.telegramUserId, message, {
+          disableNotification: true,
+        });
+      }
     }
   } catch (err) {
     console.error("[AdminAuth] Failed to send superadmin audit notification:", err);

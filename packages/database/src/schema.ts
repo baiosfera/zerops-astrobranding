@@ -1,15 +1,66 @@
-import { pgTable, uuid, text, timestamp, jsonb, vector, index, integer, uniqueIndex, boolean, numeric, bigint } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, index, integer, uniqueIndex, bigint } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
+/**
+ * 1. Users (Better Auth Compatible)
+ */
+export const users = pgTable("users", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  phone: text("phone"),
+  emailVerified: integer("email_verified").default(0).notNull(),
+  image: text("image"),
+  role: text("role").default("customer").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const accounts = pgTable("accounts", {
+  id: text("id").primaryKey(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  password: text("password"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const verifications = pgTable("verifications", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * 2. Clients
+ */
 export const clients = pgTable("clients", {
-  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   phone: text("phone").notNull(),
-  birthDate: text("birth_date").notNull(),
-  birthTime: text("birth_time").notNull(),
-  birthCity: text("birth_city").notNull(),
-  birthCountry: text("birth_country").notNull(),
+  birthDate: text("birth_date").default(""),
+  birthTime: text("birth_time").default(""),
+  birthCity: text("birth_city").default(""),
+  birthCountry: text("birth_country").default(""),
   latitude: text("latitude"),
   longitude: text("longitude"),
   status: text("status").default("active").notNull(),
@@ -18,32 +69,31 @@ export const clients = pgTable("clients", {
 });
 
 /**
- * 15-Shard Omni Master Manifest Lakehouse Table (Tier 1 Bronze Dumps)
- * SSoT defined in /var/www/artifacts/omni_shards_master_manifest.md
+ * 3. Client Dumps (15-Shard Data Lakehouse)
  */
 export const clientDumps = pgTable(
   "client_dumps",
   {
-    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
     clientId: uuid("client_id")
       .references(() => clients.id, { onDelete: "cascade" })
       .notNull(),
-    birthMetadata: jsonb("birth_metadata").notNull(),
-    shardWesternTropical: jsonb("shard_western_tropical").notNull(),
-    shardWesternSidereal: jsonb("shard_western_sidereal").notNull(),
-    shardVedicJyotish: jsonb("shard_vedic_jyotish").notNull(),
-    shardVedicDashas: jsonb("shard_vedic_dashas").notNull(),
-    shardBaziMetaphysics: jsonb("shard_bazi_metaphysics").notNull(),
-    shardZiweiFengshui: jsonb("shard_ziwei_fengshui").notNull(),
-    shardKabbalahGematria: jsonb("shard_kabbalah_gematria").notNull(),
-    shardHebrewZmanim: jsonb("shard_hebrew_zmanim").notNull(),
-    shardHumanDesign: jsonb("shard_human_design").notNull(),
-    shardCosmobiologyMidpoints: jsonb("shard_cosmobiology_midpoints").notNull(),
-    shardNasaEphemerides: jsonb("shard_nasa_ephemerides").notNull(),
-    shardAstrocartographyAcg: jsonb("shard_astrocartography_acg").notNull(),
-    shardBusinessPentaOrg: jsonb("shard_business_penta_org").notNull(),
-    shardPartnerSynastry: jsonb("shard_partner_synastry").notNull(),
-    shardPredictiveElectional: jsonb("shard_predictive_electional").notNull(),
+    birthMetadata: jsonb("birth_metadata").default({}).notNull(),
+    shardWesternTropical: jsonb("shard_western_tropical").default({}).notNull(),
+    shardWesternSidereal: jsonb("shard_western_sidereal").default({}).notNull(),
+    shardVedicJyotish: jsonb("shard_vedic_jyotish").default({}).notNull(),
+    shardVedicDashas: jsonb("shard_vedic_dashas").default({}).notNull(),
+    shardBaziMetaphysics: jsonb("shard_bazi_metaphysics").default({}).notNull(),
+    shardZiweiFengshui: jsonb("shard_ziwei_fengshui").default({}).notNull(),
+    shardKabbalahGematria: jsonb("shard_kabbalah_gematria").default({}).notNull(),
+    shardHebrewZmanim: jsonb("shard_hebrew_zmanim").default({}).notNull(),
+    shardHumanDesign: jsonb("shard_human_design").default({}).notNull(),
+    shardCosmobiologyMidpoints: jsonb("shard_cosmobiology_midpoints").default({}).notNull(),
+    shardNasaEphemerides: jsonb("shard_nasa_ephemerides").default({}).notNull(),
+    shardAstrocartographyAcg: jsonb("shard_astrocartography_acg").default({}).notNull(),
+    shardBusinessPentaOrg: jsonb("shard_business_penta_org").default({}).notNull(),
+    shardPartnerSynastry: jsonb("shard_partner_synastry").default({}).notNull(),
+    shardPredictiveElectional: jsonb("shard_predictive_electional").default({}).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -53,17 +103,16 @@ export const clientDumps = pgTable(
 );
 
 /**
- * Gold Feeds Table (Tier 2 Gold Projections <1.5 KB XML)
- * Feeding specialized sub-oracles without context degradation
+ * 4. Client Feeds (Gold Feeds)
  */
 export const clientFeeds = pgTable(
   "client_feeds",
   {
-    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
     clientId: uuid("client_id")
       .references(() => clients.id, { onDelete: "cascade" })
       .notNull(),
-    feedType: text("feed_type").notNull(), // diag_a_psy, diag_b_voc, diag_c_mkt, diag_d_leg, diag_e_geo
+    feedType: text("feed_type").notNull(),
     xmlPayload: text("xml_payload").notNull(),
     tokenEstimate: integer("token_estimate").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -74,18 +123,39 @@ export const clientFeeds = pgTable(
 );
 
 /**
- * Leads & Funnel Opt-In Table (WhatsApp OTP + Email Progressive)
+ * 5. Analyses
+ */
+export const analyses = pgTable(
+  "analyses",
+  {
+    id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+    clientId: uuid("client_id")
+      .references(() => clients.id, { onDelete: "cascade" })
+      .notNull(),
+    chartData: jsonb("chart_data").default({}).notNull(),
+    archetype: text("archetype"),
+    strategicSummary: text("strategic_summary"),
+    brandingRecommendations: jsonb("branding_recommendations"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("analyses_client_id_idx").on(table.clientId),
+  ]
+);
+
+/**
+ * 6. Leads (WhatsApp OTP Funnel)
  */
 export const leads = pgTable(
   "leads",
   {
-    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
     phone: text("phone").notNull(),
     email: text("email"),
     name: text("name"),
     otpCode: text("otp_code"),
     otpExpiresAt: timestamp("otp_expires_at", { withTimezone: true }),
-    status: text("status").default("unverified").notNull(), // unverified | verified_phone | verified_email | converted
+    status: text("status").default("unverified").notNull(),
     crmLeadId: text("crm_lead_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -95,51 +165,143 @@ export const leads = pgTable(
   ]
 );
 
-export const analyses = pgTable(
-  "analyses",
+/**
+ * 7. Products & Variants (Catalina Glamur Activewear)
+ */
+export const products = pgTable(
+  "products",
   {
-    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
-    clientId: uuid("client_id")
-      .references(() => clients.id, { onDelete: "cascade" })
-      .notNull(),
-    chartData: jsonb("chart_data").notNull(),
-    archetype: text("archetype"),
-    strategicSummary: text("strategic_summary"),
-    brandingRecommendations: jsonb("branding_recommendations"),
-    embedding: vector("embedding", { dimensions: 1536 }),
+    id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    category: text("category").notNull(),
+    basePrice: integer("base_price").notNull(),
+    images: jsonb("images").default([]).notNull(),
+    isActive: integer("is_active").default(1).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    index("analyses_embedding_hnsw_idx").using("hnsw", table.embedding.op("vector_cosine_ops")),
-    index("analyses_client_id_idx").on(table.clientId),
+    index("products_slug_idx").on(table.slug),
+    uniqueIndex("products_slug_active_unique").on(table.slug).where(sql`is_active = 1`),
+    index("products_category_idx").on(table.category),
   ]
 );
 
-export const orders = pgTable("orders", {
-  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
-  clientId: uuid("client_id")
-    .references(() => clients.id)
-    .notNull(),
-  amount: text("amount").notNull(),
-  currency: text("currency").default("USD").notNull(),
-  status: text("status").default("pending").notNull(),
-  paymentRef: text("payment_ref"),
-  dianCufe: text("dian_cufe"),
+export const productVariants = pgTable("product_variants", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  productId: uuid("product_id").references(() => products.id, { onDelete: "cascade" }).notNull(),
+  sku: text("sku").notNull().unique(),
+  size: text("size").notNull(),
+  color: text("color").notNull(),
+  price: integer("price").notNull(),
+  stock: integer("stock").default(0).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 /**
- * TaskOutbox: Transactional Outbox Pattern in PostgreSQL 18
- * Adapted from di-sukharev/vibe with native UUIDv7 and skipDuplicates
+ * 8. Services (Catalina Glamur Aesthetics)
+ */
+export const services = pgTable(
+  "services",
+  {
+    id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    durationMinutes: integer("duration_minutes").default(60).notNull(),
+    price: integer("price").notNull(),
+    depositRequired: integer("deposit_required").default(0).notNull(),
+    depositAmount: integer("deposit_amount").default(0).notNull(),
+    isActive: integer("is_active").default(1).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("services_slug_idx").on(table.slug),
+    uniqueIndex("services_slug_active_unique").on(table.slug).where(sql`is_active = 1`),
+  ]
+);
+
+/**
+ * 9. Bookings (Google Calendar Adapter Ready)
+ */
+export const bookings = pgTable("bookings", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email").notNull(),
+  customerPhone: text("customer_phone").notNull(),
+  serviceName: text("service_name").notNull(),
+  appointmentDate: timestamp("appointment_date", { withTimezone: true }).notNull(),
+  status: text("status").default("pending").notNull(),
+  paymentType: text("payment_type").default("full").notNull(),
+  depositAmount: integer("deposit_amount").default(0).notNull(),
+  totalAmount: integer("total_amount").notNull(),
+  paymentStatus: text("payment_status").default("pending").notNull(),
+  googleCalendarEventId: text("google_calendar_event_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * 10. Orders & Order Items
+ */
+export const orders = pgTable("orders", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+  customerName: text("customer_name").default("Guest").notNull(),
+  customerEmail: text("customer_email"),
+  customerPhone: text("customer_phone").default("").notNull(),
+  shippingAddress: text("shipping_address"),
+  shippingCity: text("shipping_city"),
+  shippingDepartment: text("shipping_department"),
+  daneCode: text("dane_code"),
+  amount: text("amount"),
+  totalAmount: integer("total_amount").default(0).notNull(),
+  currency: text("currency").default("COP").notNull(),
+  paymentMethod: text("payment_method").default("wompi").notNull(),
+  paymentRef: text("payment_ref"),
+  status: text("status").default("pending").notNull(),
+  dianCufe: text("dian_cufe"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const orderItems = pgTable("order_items", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+  productId: uuid("product_id").references(() => products.id).notNull(),
+  variantId: uuid("variant_id").references(() => productVariants.id),
+  quantity: integer("quantity").default(1).notNull(),
+  unitPrice: integer("unit_price").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * 11. Inventory Locks
+ */
+export const inventoryLocks = pgTable("inventory_locks", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  variantId: uuid("variant_id").references(() => productVariants.id, { onDelete: "cascade" }).notNull(),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }),
+  quantity: integer("quantity").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * 12. Task Outbox
  */
 export const taskOutbox = pgTable(
   "task_outbox",
   {
-    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
     type: text("type").notNull(),
     dedupeKey: text("dedupe_key"),
     payload: jsonb("payload").default({}).notNull(),
-    status: text("status").default("pending").notNull(), // pending | processing | done | skipped | failed
+    status: text("status").default("pending").notNull(),
     attempts: integer("attempts").default(0).notNull(),
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }).defaultNow().notNull(),
     processingToken: text("processing_token"),
@@ -155,95 +317,19 @@ export const taskOutbox = pgTable(
   ]
 );
 
-export type Client = typeof clients.$inferSelect;
-export type NewClient = typeof clients.$inferInsert;
-export type ClientDumps = typeof clientDumps.$inferSelect;
-export type NewClientDumps = typeof clientDumps.$inferInsert;
-export type ClientFeeds = typeof clientFeeds.$inferSelect;
-export type NewClientFeeds = typeof clientFeeds.$inferInsert;
-export type Lead = typeof leads.$inferSelect;
-export type NewLead = typeof leads.$inferInsert;
-export type Analysis = typeof analyses.$inferSelect;
-export type NewAnalysis = typeof analyses.$inferInsert;
-export type Order = typeof orders.$inferSelect;
-export type NewOrder = typeof orders.$inferInsert;
-export type TaskOutboxRecord = typeof taskOutbox.$inferSelect;
-export type NewTaskOutboxRecord = typeof taskOutbox.$inferInsert;
-
 /**
- * Normalized Client Shards Table (Decoupled Agnostic Multi-Domain Store)
- * Supports dynamic sharding across any vertical (astrology, commerce, CRM, branding)
- */
-export const clientShards = pgTable(
-  "client_shards",
-  {
-    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
-    clientId: uuid("client_id")
-      .references(() => clients.id, { onDelete: "cascade" })
-      .notNull(),
-    shardType: text("shard_type").notNull(),
-    payload: jsonb("payload").default({}).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    uniqueIndex("client_shards_client_id_shard_type_idx").on(table.clientId, table.shardType),
-    index("client_shards_shard_type_idx").on(table.shardType),
-  ]
-);
-
-export type ClientShard = typeof clientShards.$inferSelect;
-export type NewClientShard = typeof clientShards.$inferInsert;
-
-/**
- * Universal Commercial Offerings (6 Archetypes: physical_goods, courses_education,
- * memberships_mrr, events_ticketing, digital_products, service_bookings)
- * SSoT aligned with @astrobranding/contracts (offerings.ts)
- */
-export const offerings = pgTable(
-  "offerings",
-  {
-    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
-    slug: text("slug").notNull(),
-    title: text("title").notNull(),
-    description: text("description"),
-    archetype: text("archetype").notNull(), // physical_goods | courses_education | memberships_mrr | events_ticketing | digital_products | service_bookings
-    channelStrategy: text("channel_strategy").notNull(), // commerce_feed | direct_web_conversion | messaging_booking
-    price: numeric("price", { precision: 12, scale: 2 }).default("0.00").notNull(),
-    currency: text("currency").default("COP").notNull(),
-    compareAtPrice: numeric("compare_at_price", { precision: 12, scale: 2 }),
-    availability: text("availability").default("in_stock").notNull(), // in_stock | out_of_stock | preorder
-    brand: text("brand").notNull(),
-    category: text("category"),
-    imageUrl: text("image_url"),
-    additionalImageUrls: jsonb("additional_image_urls").default([]).notNull(),
-    metaEventMapping: jsonb("meta_event_mapping").default({ web: "Purchase", capi: "Purchase" }).notNull(),
-    metadata: jsonb("metadata").default({}).notNull(),
-    active: boolean("active").default(true).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    index("offerings_slug_idx").on(table.slug),
-    uniqueIndex("offerings_slug_active_unique").on(table.slug).where(sql`active = true`),
-    index("offerings_archetype_idx").on(table.archetype),
-    index("offerings_channel_strategy_idx").on(table.channelStrategy),
-    index("offerings_active_idx").on(table.active),
-  ]
-);
-
-export type OfferingRecord = typeof offerings.$inferSelect;
-export type NewOfferingRecord = typeof offerings.$inferInsert;
-
-/**
- * Admin Users (RBAC: Superadmin & Merchant)
+ * 13. Admin Users (Stealth Admin & Telegram Gateway RBAC)
  */
 export const adminUsers = pgTable(
   "admin_users",
   {
     id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
     name: text("name").notNull(),
-    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull().unique(),
+    username: text("username").unique(),
+    email: text("email").unique(),
+    passwordHash: text("password_hash"),
+    phone: text("phone"),
+    telegramUserId: bigint("telegram_user_id", { mode: "number" }).unique(),
     role: text("role").default("merchant").notNull(), // 'superadmin' | 'merchant'
     isActive: integer("is_active").default(1).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -251,11 +337,14 @@ export const adminUsers = pgTable(
   },
   (table) => [
     index("admin_users_telegram_idx").on(table.telegramUserId),
+    index("admin_users_username_idx").on(table.username),
+    index("admin_users_email_idx").on(table.email),
+    index("admin_users_phone_idx").on(table.phone),
   ]
 );
 
 /**
- * Admin OTPs (Single-use Cryptographic OTPs)
+ * 14. Admin OTPs (Single-use Cryptographic OTPs)
  */
 export const adminOtps = pgTable(
   "admin_otps",
@@ -274,7 +363,7 @@ export const adminOtps = pgTable(
 );
 
 /**
- * Admin Sessions (7-day HTTP-Only Cookie Sessions)
+ * 15. Admin Sessions (7-day HTTP-Only Cookie Sessions)
  */
 export const adminSessions = pgTable(
   "admin_sessions",
@@ -294,11 +383,40 @@ export const adminSessions = pgTable(
   ]
 );
 
+// Inferred Types
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
+export type Client = typeof clients.$inferSelect;
+export type NewClient = typeof clients.$inferInsert;
+export type ClientDumps = typeof clientDumps.$inferSelect;
+export type NewClientDumps = typeof clientDumps.$inferInsert;
+export type ClientFeeds = typeof clientFeeds.$inferSelect;
+export type NewClientFeeds = typeof clientFeeds.$inferInsert;
+export type Analysis = typeof analyses.$inferSelect;
+export type NewAnalysis = typeof analyses.$inferInsert;
+export type Lead = typeof leads.$inferSelect;
+export type NewLead = typeof leads.$inferInsert;
+export type Product = typeof products.$inferSelect;
+export type NewProduct = typeof products.$inferInsert;
+export type ProductVariant = typeof productVariants.$inferSelect;
+export type NewProductVariant = typeof productVariants.$inferInsert;
+export type Service = typeof services.$inferSelect;
+export type NewService = typeof services.$inferInsert;
+export type Booking = typeof bookings.$inferSelect;
+export type NewBooking = typeof bookings.$inferInsert;
+export type Order = typeof orders.$inferSelect;
+export type NewOrder = typeof orders.$inferInsert;
+export type OrderItem = typeof orderItems.$inferSelect;
+export type NewOrderItem = typeof orderItems.$inferInsert;
+export type InventoryLock = typeof inventoryLocks.$inferSelect;
+export type NewInventoryLock = typeof inventoryLocks.$inferInsert;
+export type TaskOutboxRecord = typeof taskOutbox.$inferSelect;
+export type NewTaskOutboxRecord = typeof taskOutbox.$inferInsert;
 export type AdminUser = typeof adminUsers.$inferSelect;
 export type NewAdminUser = typeof adminUsers.$inferInsert;
 export type AdminOtp = typeof adminOtps.$inferSelect;
 export type NewAdminOtp = typeof adminOtps.$inferInsert;
 export type AdminSession = typeof adminSessions.$inferSelect;
 export type NewAdminSession = typeof adminSessions.$inferInsert;
-
-

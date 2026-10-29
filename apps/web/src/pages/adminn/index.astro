@@ -1,0 +1,581 @@
+---
+export const prerender = false;
+
+// If already authenticated, redirect to dashboard
+if (Astro.locals.adminUser) {
+  return Astro.redirect("/adminn/dashboard");
+}
+---
+
+<!doctype html>
+<html lang="es" class="h-full bg-zinc-950 text-zinc-100">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acceso Administrativo | Catalina Glamur</title>
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="h-full flex items-center justify-center p-4 selection:bg-amber-500 selection:text-black">
+    <div class="w-full max-w-md bg-zinc-900/90 border border-zinc-800/80 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+      <!-- Glow ambient effect -->
+      <div class="absolute -top-24 -left-24 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-amber-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <!-- Header -->
+      <div class="text-center mb-6 relative">
+        <span class="inline-block text-xs uppercase tracking-widest text-amber-400 font-medium mb-2">Portal Seguro</span>
+        <h1 class="text-2xl font-bold tracking-tight text-white">Catalina Glamur</h1>
+        <p class="text-sm text-zinc-400 mt-1">Gestión interna de catálogo y pedidos</p>
+      </div>
+
+      <!-- Error / Notice Box -->
+      <div id="alertBox" class="hidden mb-6 p-4 rounded-xl text-sm border transition-all"></div>
+
+      <!-- Navigation Tabs for Auth Methods -->
+      <div class="grid grid-cols-3 gap-1 bg-zinc-950/80 p-1 rounded-xl border border-zinc-800 mb-6 text-xs font-medium">
+        <button
+          type="button"
+          id="tabBtnPassword"
+          class="py-2 rounded-lg text-center transition-all bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold"
+        >
+          Contraseña
+        </button>
+        <button
+          type="button"
+          id="tabBtnTelegram"
+          class="py-2 rounded-lg text-center transition-all text-zinc-400 hover:text-white"
+        >
+          Telegram
+        </button>
+        <button
+          type="button"
+          id="tabBtnWhatsapp"
+          class="py-2 rounded-lg text-center transition-all text-zinc-400 hover:text-white"
+        >
+          WhatsApp
+        </button>
+      </div>
+
+      <!-- TAB 1: Password Form -->
+      <div id="tabContentPassword" class="space-y-5">
+        <form id="passwordForm" class="space-y-4">
+          <div>
+            <label for="identifier" class="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2">
+              Usuario o Correo
+            </label>
+            <input
+              type="text"
+              id="identifier"
+              name="identifier"
+              required
+              autocomplete="username"
+              placeholder="admin o catalina"
+              class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/50 transition-all text-sm"
+            />
+          </div>
+
+          <div>
+            <label for="password" class="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2">
+              Contraseña
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              required
+              autocomplete="current-password"
+              placeholder="••••••••••••"
+              class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/50 transition-all text-sm"
+            />
+          </div>
+
+          <button
+            type="submit"
+            id="btnPasswordSubmit"
+            class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold py-3 px-4 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+          >
+            <span id="btnPasswordText">Iniciar Sesión</span>
+            <svg id="btnPasswordSpinner" class="hidden animate-spin h-5 w-5 text-zinc-950" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </button>
+        </form>
+      </div>
+
+      <!-- TAB 2: Telegram Form -->
+      <div id="tabContentTelegram" class="hidden space-y-5">
+        <!-- Request OTP -->
+        <form id="telegramRequestForm" class="space-y-4">
+          <div>
+            <label for="telegramId" class="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2">
+              ID de Telegram
+            </label>
+            <input
+              type="text"
+              id="telegramId"
+              name="telegramUserId"
+              required
+              pattern="[0-9]+"
+              inputmode="numeric"
+              placeholder="Ej: 8971481206"
+              class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/50 transition-all font-mono text-sm"
+            />
+            <p class="text-xs text-zinc-500 mt-2">
+              Recibirás un código en tu chat con
+              <a href="https://t.me/hermes_glamur_bot" target="_blank" rel="noopener noreferrer" class="text-amber-400 hover:underline">@hermes_glamur_bot</a>.
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            id="btnTgRequest"
+            class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold py-3 px-4 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+          >
+            <span id="btnTgRequestText">Enviar Código por Telegram</span>
+            <svg id="btnTgRequestSpinner" class="hidden animate-spin h-5 w-5 text-zinc-950" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </button>
+        </form>
+
+        <!-- Verify Telegram OTP -->
+        <form id="telegramVerifyForm" class="hidden space-y-4">
+          <div>
+            <div class="flex justify-between items-center mb-2">
+              <label for="tgOtpCode" class="block text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                Código Telegram
+              </label>
+              <span id="tgCooldownSpan" class="text-xs text-zinc-500 font-mono"></span>
+            </div>
+            <input
+              type="text"
+              id="tgOtpCode"
+              name="code"
+              required
+              maxlength="6"
+              pattern="[0-9]{6}"
+              inputmode="numeric"
+              placeholder="······"
+              class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-center text-2xl tracking-[0.5em] font-mono font-bold text-amber-400 placeholder-zinc-700 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+            />
+          </div>
+
+          <button
+            type="submit"
+            id="btnTgVerify"
+            class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold py-3 px-4 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+          >
+            <span id="btnTgVerifyText">Verificar e Ingresar</span>
+            <svg id="btnTgVerifySpinner" class="hidden animate-spin h-5 w-5 text-zinc-950" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            id="btnTgBack"
+            class="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors text-center"
+          >
+            ← Cambiar ID de Telegram
+          </button>
+        </form>
+      </div>
+
+      <!-- TAB 3: WhatsApp Form -->
+      <div id="tabContentWhatsapp" class="hidden space-y-5">
+        <!-- Request WhatsApp OTP -->
+        <form id="waRequestForm" class="space-y-4">
+          <div>
+            <label for="waPhone" class="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2">
+              Número de WhatsApp
+            </label>
+            <input
+              type="tel"
+              id="waPhone"
+              name="phone"
+              required
+              placeholder="Ej: 304 578 1032"
+              class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/50 transition-all font-mono text-sm"
+            />
+            <p class="text-xs text-zinc-500 mt-2">
+              Recibirás un código OTP de 6 dígitos en tu WhatsApp registrado.
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            id="btnWaRequest"
+            class="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-zinc-950 font-semibold py-3 px-4 rounded-xl transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+          >
+            <span id="btnWaRequestText">Enviar Código por WhatsApp</span>
+            <svg id="btnWaRequestSpinner" class="hidden animate-spin h-5 w-5 text-zinc-950" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </button>
+        </form>
+
+        <!-- Verify WhatsApp OTP -->
+        <form id="waVerifyForm" class="hidden space-y-4">
+          <div>
+            <div class="flex justify-between items-center mb-2">
+              <label for="waOtpCode" class="block text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                Código WhatsApp
+              </label>
+              <span id="waCooldownSpan" class="text-xs text-zinc-500 font-mono"></span>
+            </div>
+            <input
+              type="text"
+              id="waOtpCode"
+              name="code"
+              required
+              maxlength="6"
+              pattern="[0-9]{6}"
+              inputmode="numeric"
+              placeholder="······"
+              class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-center text-2xl tracking-[0.5em] font-mono font-bold text-emerald-400 placeholder-zinc-700 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+            />
+          </div>
+
+          <button
+            type="submit"
+            id="btnWaVerify"
+            class="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-zinc-950 font-semibold py-3 px-4 rounded-xl transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+          >
+            <span id="btnWaVerifyText">Verificar e Ingresar</span>
+            <svg id="btnWaVerifySpinner" class="hidden animate-spin h-5 w-5 text-zinc-950" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            id="btnWaBack"
+            class="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors text-center"
+          >
+            ← Cambiar Número de WhatsApp
+          </button>
+        </form>
+      </div>
+
+      <!-- Footer Info -->
+      <div class="mt-8 pt-4 border-t border-zinc-800/60 text-center">
+        <p class="text-[11px] text-zinc-400 font-mono">
+          🔒 Acceso auditado y cifrado (SHA-256 / PBKDF2)
+        </p>
+      </div>
+    </div>
+
+    <!-- Client Script -->
+    <script>
+      import { actions } from "astro:actions";
+
+      // Elements
+      const alertBox = document.getElementById("alertBox") as HTMLDivElement;
+
+      // Tabs
+      const tabBtnPassword = document.getElementById("tabBtnPassword") as HTMLButtonElement;
+      const tabBtnTelegram = document.getElementById("tabBtnTelegram") as HTMLButtonElement;
+      const tabBtnWhatsapp = document.getElementById("tabBtnWhatsapp") as HTMLButtonElement;
+
+      const tabContentPassword = document.getElementById("tabContentPassword") as HTMLDivElement;
+      const tabContentTelegram = document.getElementById("tabContentTelegram") as HTMLDivElement;
+      const tabContentWhatsapp = document.getElementById("tabContentWhatsapp") as HTMLDivElement;
+
+      function switchTab(target: "password" | "telegram" | "whatsapp") {
+        hideAlert();
+        const tabs = [
+          { name: "password", btn: tabBtnPassword, content: tabContentPassword },
+          { name: "telegram", btn: tabBtnTelegram, content: tabContentTelegram },
+          { name: "whatsapp", btn: tabBtnWhatsapp, content: tabContentWhatsapp },
+        ];
+
+        tabs.forEach((t) => {
+          if (t.name === target) {
+            t.btn.classList.add("bg-amber-500/15", "text-amber-400", "border", "border-amber-500/30", "font-semibold");
+            t.btn.classList.remove("text-zinc-400");
+            t.content.classList.remove("hidden");
+          } else {
+            t.btn.classList.remove("bg-amber-500/15", "text-amber-400", "border", "border-amber-500/30", "font-semibold");
+            t.btn.classList.add("text-zinc-400");
+            t.content.classList.add("hidden");
+          }
+        });
+      }
+
+      tabBtnPassword.addEventListener("click", () => switchTab("password"));
+      tabBtnTelegram.addEventListener("click", () => switchTab("telegram"));
+      tabBtnWhatsapp.addEventListener("click", () => switchTab("whatsapp"));
+
+      function showAlert(type: "error" | "warning" | "info", htmlMessage: string) {
+        alertBox.className = "mb-6 p-4 rounded-xl text-sm border transition-all";
+        if (type === "error") {
+          alertBox.classList.add("bg-red-950/50", "border-red-800", "text-red-200");
+        } else if (type === "warning") {
+          alertBox.classList.add("bg-amber-950/50", "border-amber-800", "text-amber-200");
+        } else {
+          alertBox.classList.add("bg-emerald-950/50", "border-emerald-800", "text-emerald-200");
+        }
+        alertBox.innerHTML = htmlMessage;
+        alertBox.classList.remove("hidden");
+      }
+
+      function hideAlert() {
+        alertBox.classList.add("hidden");
+      }
+
+      // --- TAB 1: Password Form ---
+      const passwordForm = document.getElementById("passwordForm") as HTMLFormElement;
+      const identifierInput = document.getElementById("identifier") as HTMLInputElement;
+      const passwordInput = document.getElementById("password") as HTMLInputElement;
+      const btnPasswordSubmit = document.getElementById("btnPasswordSubmit") as HTMLButtonElement;
+      const btnPasswordText = document.getElementById("btnPasswordText") as HTMLSpanElement;
+      const btnPasswordSpinner = document.getElementById("btnPasswordSpinner") as HTMLElement;
+
+      passwordForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        hideAlert();
+
+        const identifier = identifierInput.value.trim();
+        const password = passwordInput.value;
+        if (!identifier || !password) return;
+
+        btnPasswordSubmit.disabled = true;
+        btnPasswordText.textContent = "Comprobando...";
+        btnPasswordSpinner.classList.remove("hidden");
+
+        try {
+          const { data, error } = await actions.loginWithPassword({ identifier, password });
+          if (error) {
+            showAlert("error", error.message || "Credenciales incorrectas.");
+            return;
+          }
+
+          if (data && data.success) {
+            showAlert("info", "🎉 Acceso correcto. Redirigiendo al panel...");
+            setTimeout(() => {
+              window.location.href = "/adminn/dashboard";
+            }, 500);
+          } else {
+            showAlert("error", data?.message || "Usuario o contraseña inválidos.");
+            passwordInput.select();
+          }
+        } catch (err: any) {
+          showAlert("error", err?.message || "Error de red inesperado.");
+        } finally {
+          btnPasswordSubmit.disabled = false;
+          btnPasswordText.textContent = "Iniciar Sesión";
+          btnPasswordSpinner.classList.add("hidden");
+        }
+      });
+
+      // --- TAB 2: Telegram OTP ---
+      const tgReqForm = document.getElementById("telegramRequestForm") as HTMLFormElement;
+      const tgVerifyForm = document.getElementById("telegramVerifyForm") as HTMLFormElement;
+      const telegramIdInput = document.getElementById("telegramId") as HTMLInputElement;
+      const tgOtpCodeInput = document.getElementById("tgOtpCode") as HTMLInputElement;
+      const btnTgRequest = document.getElementById("btnTgRequest") as HTMLButtonElement;
+      const btnTgRequestText = document.getElementById("btnTgRequestText") as HTMLSpanElement;
+      const btnTgRequestSpinner = document.getElementById("btnTgRequestSpinner") as HTMLElement;
+      const btnTgVerify = document.getElementById("btnTgVerify") as HTMLButtonElement;
+      const btnTgVerifyText = document.getElementById("btnTgVerifyText") as HTMLSpanElement;
+      const btnTgVerifySpinner = document.getElementById("btnTgVerifySpinner") as HTMLElement;
+      const btnTgBack = document.getElementById("btnTgBack") as HTMLButtonElement;
+      const tgCooldownSpan = document.getElementById("tgCooldownSpan") as HTMLSpanElement;
+
+      let currentTgId = "";
+
+      tgReqForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        hideAlert();
+
+        const telegramUserId = telegramIdInput.value.trim();
+        if (!telegramUserId) return;
+
+        btnTgRequest.disabled = true;
+        btnTgRequestText.textContent = "Enviando...";
+        btnTgRequestSpinner.classList.remove("hidden");
+
+        try {
+          const { data, error } = await actions.requestOtp({ telegramUserId });
+          if (error) {
+            showAlert("error", error.message || "Error al solicitar código.");
+            return;
+          }
+
+          if (data && data.success) {
+            currentTgId = telegramUserId;
+            tgReqForm.classList.add("hidden");
+            tgVerifyForm.classList.remove("hidden");
+            tgOtpCodeInput.value = "";
+            tgOtpCodeInput.focus();
+            showAlert("info", "✅ Código enviado a tu Telegram.");
+          } else if (data?.error === "telegram_bot_not_started") {
+            showAlert("warning", `⚠️ Inicia primero el bot en Telegram enviando <b>/start</b>.<br><a href="https://t.me/${data.botUsername || 'hermes_glamur_bot'}" target="_blank" class="text-amber-400 underline font-semibold mt-1 inline-block">Abrir @${data.botUsername || 'hermes_glamur_bot'}</a>`);
+          } else {
+            showAlert("error", data?.message || "Usuario no autorizado.");
+          }
+        } catch (err: any) {
+          showAlert("error", err?.message || "Error de conexión.");
+        } finally {
+          btnTgRequest.disabled = false;
+          btnTgRequestText.textContent = "Enviar Código por Telegram";
+          btnTgRequestSpinner.classList.add("hidden");
+        }
+      });
+
+      tgVerifyForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        hideAlert();
+
+        const code = tgOtpCodeInput.value.trim();
+        if (code.length !== 6) {
+          showAlert("error", "El código debe tener 6 dígitos.");
+          return;
+        }
+
+        btnTgVerify.disabled = true;
+        btnTgVerifyText.textContent = "Verificando...";
+        btnTgVerifySpinner.classList.remove("hidden");
+
+        try {
+          const { data, error } = await actions.verifyOtp({ telegramUserId: currentTgId, code });
+          if (error) {
+            showAlert("error", error.message || "Error de verificación.");
+            return;
+          }
+
+          if (data && data.success) {
+            showAlert("info", "🎉 Acceso correcto. Redirigiendo...");
+            setTimeout(() => {
+              window.location.href = "/adminn/dashboard";
+            }, 500);
+          } else {
+            showAlert("error", data?.message || "Código inválido.");
+            tgOtpCodeInput.select();
+          }
+        } catch (err: any) {
+          showAlert("error", err?.message || "Error de red.");
+        } finally {
+          btnTgVerify.disabled = false;
+          btnTgVerifyText.textContent = "Verificar e Ingresar";
+          btnTgVerifySpinner.classList.add("hidden");
+        }
+      });
+
+      btnTgBack.addEventListener("click", () => {
+        hideAlert();
+        tgVerifyForm.classList.add("hidden");
+        tgReqForm.classList.remove("hidden");
+        telegramIdInput.focus();
+      });
+
+      // --- TAB 3: WhatsApp OTP ---
+      const waReqForm = document.getElementById("waRequestForm") as HTMLFormElement;
+      const waVerifyForm = document.getElementById("waVerifyForm") as HTMLFormElement;
+      const waPhoneInput = document.getElementById("waPhone") as HTMLInputElement;
+      const waOtpCodeInput = document.getElementById("waOtpCode") as HTMLInputElement;
+      const btnWaRequest = document.getElementById("btnWaRequest") as HTMLButtonElement;
+      const btnWaRequestText = document.getElementById("btnWaRequestText") as HTMLSpanElement;
+      const btnWaRequestSpinner = document.getElementById("btnWaRequestSpinner") as HTMLElement;
+      const btnWaVerify = document.getElementById("btnWaVerify") as HTMLButtonElement;
+      const btnWaVerifyText = document.getElementById("btnWaVerifyText") as HTMLSpanElement;
+      const btnWaVerifySpinner = document.getElementById("btnWaVerifySpinner") as HTMLElement;
+      const btnWaBack = document.getElementById("btnWaBack") as HTMLButtonElement;
+
+      let currentWaPhone = "";
+
+      waReqForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        hideAlert();
+
+        const phone = waPhoneInput.value.trim();
+        if (!phone) return;
+
+        btnWaRequest.disabled = true;
+        btnWaRequestText.textContent = "Enviando...";
+        btnWaRequestSpinner.classList.remove("hidden");
+
+        try {
+          const { data, error } = await actions.requestWhatsAppOtp({ phone });
+          if (error) {
+            showAlert("error", error.message || "Error al solicitar código.");
+            return;
+          }
+
+          if (data && data.success) {
+            currentWaPhone = phone;
+            waReqForm.classList.add("hidden");
+            waVerifyForm.classList.remove("hidden");
+            waOtpCodeInput.value = "";
+            waOtpCodeInput.focus();
+            showAlert("info", "✅ Código enviado a tu WhatsApp.");
+          } else {
+            showAlert("error", data?.message || "Número no autorizado.");
+          }
+        } catch (err: any) {
+          showAlert("error", err?.message || "Error de conexión.");
+        } finally {
+          btnWaRequest.disabled = false;
+          btnWaRequestText.textContent = "Enviar Código por WhatsApp";
+          btnWaRequestSpinner.classList.add("hidden");
+        }
+      });
+
+      waVerifyForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        hideAlert();
+
+        const code = waOtpCodeInput.value.trim();
+        if (code.length !== 6) {
+          showAlert("error", "El código debe tener 6 dígitos.");
+          return;
+        }
+
+        btnWaVerify.disabled = true;
+        btnWaVerifyText.textContent = "Verificando...";
+        btnWaVerifySpinner.classList.remove("hidden");
+
+        try {
+          const { data, error } = await actions.verifyWhatsAppOtp({ phone: currentWaPhone, code });
+          if (error) {
+            showAlert("error", error.message || "Error de verificación.");
+            return;
+          }
+
+          if (data && data.success) {
+            showAlert("info", "🎉 Acceso correcto. Redirigiendo...");
+            setTimeout(() => {
+              window.location.href = "/adminn/dashboard";
+            }, 500);
+          } else {
+            showAlert("error", data?.message || "Código inválido.");
+            waOtpCodeInput.select();
+          }
+        } catch (err: any) {
+          showAlert("error", err?.message || "Error de red.");
+        } finally {
+          btnWaVerify.disabled = false;
+          btnWaVerifyText.textContent = "Verificar e Ingresar";
+          btnWaVerifySpinner.classList.add("hidden");
+        }
+      });
+
+      btnWaBack.addEventListener("click", () => {
+        hideAlert();
+        waVerifyForm.classList.add("hidden");
+        waReqForm.classList.remove("hidden");
+        waPhoneInput.focus();
+      });
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  @import "../../styles/theme.css";
+</style>
