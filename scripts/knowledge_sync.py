@@ -261,7 +261,9 @@ class CourseCompactor:
         "1. cua", "2. cua", "3. cua", "cursos sprint", "cortos", "00. incompletos",
         "01. desarrollo personal", "02. seducción", "03. inversiones finanzas",
         "04. instagram", "05. ventas", "06. meta ads", "07. marketing",
-        "03 training playbooks and workshops"
+        "03 training playbooks and workshops",
+        "00_start_here", "01_ai_systems", "02_programs_and_accelerators",
+        "03_training_playbooks_and_workshops", "04_bonuses_and_masterclasses", "05_choose_your_focus"
     }
 
     @classmethod
@@ -279,7 +281,10 @@ class CourseCompactor:
         top = parts[0]
         if top == "CURSOS":
             provider = parts[1] if len(parts) > 1 else "CURSOS"
-            if len(parts) >= 4 and parts[2].lower() in cls.INTERMEDIATE_TIERS:
+            if provider == "LUIS-INESTROSA" and len(parts) >= 3 and parts[2].startswith("Taller CONFERENCIAS QUE VENDEN"):
+                course_name = "Taller CONFERENCIAS QUE VENDEN"
+                course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], "Taller CONFERENCIAS QUE VENDEN")
+            elif len(parts) >= 4 and parts[2].lower() in cls.INTERMEDIATE_TIERS:
                 course_name = parts[3]
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2], parts[3])
             elif len(parts) >= 4:
@@ -330,6 +335,10 @@ class CourseCompactor:
             )
 
         clean_course_name = re.sub(r"^[0-9]+[_\s-]+", "", course_name).strip()
+        if provider == "DIGITALMARKETER":
+            clean_course_name = re.sub(r"_[a-z0-9\-]+$", "", clean_course_name)
+            clean_course_name = clean_course_name.replace("_", " ").strip()
+
         if not clean_course_name:
             clean_course_name = course_name
 
@@ -511,10 +520,18 @@ class CourseCompactor:
             if cluster_votes:
                 dominant_cluster = Counter(cluster_votes).most_common(1)[0][0]
             else:
-                c_course = CourseScanner.match_cluster_keywords(course_name)
-                dominant_cluster = c_course if c_course else "general"
+                # 1. Intentar token de corchetes en el nombre del curso o directorio
+                tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", course_name + " " + course_dir)
+                dominant_cluster = "general"
+                for t in tags:
+                    if t.upper() in CourseScanner.PLATZI_TAGS_MAP:
+                        dominant_cluster = CourseScanner.PLATZI_TAGS_MAP[t.upper()]
+                        break
+                if dominant_cluster == "general":
+                    c_course = CourseScanner.match_cluster_keywords(course_name)
+                    dominant_cluster = c_course if c_course else "general"
 
-            # Descartar cursos que no pertenecen a ninguna de las 11 especialidades de negocio
+            # Descartar cursos que no pertenecen a ninguna de las 15 especialidades de negocio
             if dominant_cluster == "general":
                 continue
 
@@ -660,7 +677,6 @@ class CourseScanner:
     DEFAULT_SEARCH_PATHS = [
         "/var/www/baiosfera/CURSOS",
         "/var/www/baiosfera/DIGITALMARKETER",
-        "/var/www/baiosfera/IA INTELIGENCIA ARTIFICIAL",
         "/var/www/baiosfera/PLATZI",
     ]
 
@@ -685,28 +701,60 @@ class CourseScanner:
         "chakras", "reiki", "sanacion", "sanación", "magia", "esoterico", "esotérico"
     }
 
-    # 11 Especialidades Soberanas
+    # 15 Especialidades Soberanas Canónicas
     THEMATIC_CLUSTERS = {
+        "seo": [
+            "seo", "search marketing", "search engine", "google search console", "gsc", "semrush",
+            "ahrefs", "seo tecnico", "seo técnico", "posicionamiento web", "aeo", "geo",
+            "busquedas organicas", "búsquedas orgánicas", "consultorias seo", "consultorías seo",
+            "linkbuilding", "backlinks", "google search ads"
+        ],
+        "data_analytics": [
+            "analytics", "google analytics", "ga4", "google tag manager", "gtm", "metricas",
+            "métricas", "tracking", "data mastery", "analitica digital", "analítica digital",
+            "informes para marketing", "reportes de redes sociales", "ciencia de datos para negocio",
+            "medir el crecimiento", "tag manager", "tracking de datos"
+        ],
+        "social_media": [
+            "social media", "redes sociales", "community manager", "community management",
+            "instagram", "reels", "tiktok", "youtube", "linkedin", "social challenge",
+            "creadores de video", "produccion para youtube", "producción para youtube",
+            "podcast", "podcasting", "facebook group", "facebook page", "scroll stopping",
+            "estrategias de contenido para linkedin", "creacion de reels", "divulgacion educativa en youtube"
+        ],
+        "product_management": [
+            "product management", "product manager", "product owner", "product design",
+            "product discovery", "scrum", "scrum master", "agile", "agile delivery", "pmbok",
+            "gestion de proyectos", "gestión de proyectos", "project management",
+            "evaluacion financiera de proyectos", "evaluación financiera de proyectos",
+            "planeacion estrategica", "planeación estratégica", "pensamiento estrategico",
+            "pensamiento estratégico", "business model canvas", "modelos de negocio",
+            "lean startup", "mvp", "startups", "startup", "primeros clientes", "cultura startup",
+            "head of marketing bootcamp", "marketing momentum", "momentum blockers"
+        ],
         "copywriting": [
             "copy", "copywriting", "escritura persuasiva", "titular", "titulares",
             "titulo", "titulos", "gancho", "ganchos", "hook", "hooks", "storytelling",
             "narrativa", "persuasion", "redaccion", "redacción", "headline", "headlines",
             "swipe file", "swipe", "script", "words that sell", "carta de venta", "cartas de venta",
-            "carta de ventas", "cartas de ventas", "texto persuasivo", "escribir bien", "redactar", "copywriter"
+            "carta de ventas", "cartas de ventas", "texto persuasivo", "escribir bien", "redactar",
+            "copywriter", "vsl", "video sales letter", "direct response copywriter", "pillar blog post",
+            "content cluster strategy", "blog builder", "content marketing mastery"
         ],
         "ofertas": [
             "oferta", "ofertas", "precio", "precios", "pricing", "hormozi", "grand slam", "value equation",
             "propuesta de valor", "garantia", "garantía", "offer", "offers", "guarantee",
             "bonus", "stack", "bonus stack", "offer stack", "site offers", "irresistible",
-            "modelos de negocio", "monetiz", "monetizacion", "monetización", "icp", "ideal customer",
-            "ideal client", "cliente ideal", "avatar", "negociacion", "negociación", "ventas", "venta", "vender"
+            "icp", "ideal customer", "ideal client", "cliente ideal", "avatar", "negociacion",
+            "negociación", "ventas", "venta", "vender", "1-call close", "conferencias que venden",
+            "cierre de ventas", "promociones", "profitable promotions", "giveaway promotion"
         ],
         "funnels": [
             "funnel", "funnels", "embudo", "embudos", "checkout", "checkouts",
             "bump", "order bump", "upsell", "downsell", "cvj", "customer value journey",
             "landing", "landing page", "landings", "conversion", "conversiones",
-            "optin", "squeeze", "squeeze page", "lead magnet", "vsl", "video sales letter",
-            "funnel architecture", "cro", "ab testing", "tripwire", "home page", "homepage"
+            "optin", "squeeze", "squeeze page", "lead magnet", "cro", "ab testing",
+            "tripwire", "home page", "homepage", "quiz funnel", "funnel builder", "split test"
         ],
         "whatsapp": [
             "whatsapp", "chatbot", "chatbots", "cierre por chat", "mensajeria",
@@ -716,19 +764,22 @@ class CourseScanner:
         "email": [
             "email", "correo", "newsletter", "nurture", "secuencia", "secuencias", "listmonk",
             "broadcast", "subject line", "autoresponder", "welcome sequence",
-            "re engagement", "entregabilidad", "email marketing", "dmarc", "dkim"
+            "re engagement", "entregabilidad", "email marketing", "dmarc", "dkim",
+            "email promo", "email follow-up", "customer-centric emails"
         ],
         "paid_ads": [
             "ads", "pauta", "meta ads", "facebook ads", "fb ads", "instagram ads", "tiktok ads",
             "creativo", "creativos", "trafico", "tráfico", "traffic", "anuncio", "anuncios",
             "velocity", "audiencia", "audiencias", "escalado", "paid media", "media buyer",
-            "roas", "ad copy", "google ads", "performance max", "pmax", "campaign fixer", "campaign", "campaigns",
-            "instagram", "reels", "tiktok", "redes sociales", "social media", "youtube ads", "linkedin ads"
+            "roas", "ad copy", "google ads", "performance max", "pmax", "campaign fixer",
+            "campaign fix", "campaign", "campaigns", "youtube ads", "youtube ad", "linkedin ads",
+            "pinterest ads", "display ads", "paid traffic", "video ad", "facebook ad"
         ],
         "branding": [
             "brand", "marca", "branding", "identidad", "arquetipo", "arquetipos",
             "posicionamiento", "category of one", "tono de voz", "authority", "reputation",
-            "brand guidelines", "marca personal", "marcap", "marca de poder"
+            "brand guidelines", "marca personal", "marcap", "marca de poder", "celebrity marketer",
+            "become the go-to expert", "brief creativo", "benchmarking", "investigacion para el branding"
         ],
         "ecommerce": [
             "ecom", "ecommerce", "supply chain", "logistica", "logística", "tienda",
@@ -740,7 +791,7 @@ class CourseScanner:
             "autom", "automatizacion", "automatización", "automatizaciones", "automation",
             "automations", "workflow", "workflows", "n8n", "make", "zapier", "rpa",
             "crm", "webhook", "webhooks", "hiperautomatizacion", "no code", "nocode",
-            "procesos de marketing"
+            "procesos de marketing", "client on-boarding"
         ],
         "ia_prompting": [
             "ai prompt", "prompt", "prompts", "prompting", "chatgpt", "midjourney",
@@ -748,7 +799,7 @@ class CourseScanner:
             "ai engines", "ai engine", "ai systems", "ai system", "ai tools", "gpts",
             "gpt", "gemini", "copilot", "context vault", "llm", "inteligencia artificial",
             "ia para", "ingenieria de prompt", "ingeniería de prompt", "prompt toolkit",
-            "ai search", "artificial intelligence"
+            "ai search", "artificial intelligence", "ai essentials"
         ],
         "ux_ui": [
             "uxui", "ux/ui", "ui/ux", "design thinking", "designthinking", "tipografia",
@@ -756,7 +807,8 @@ class CourseScanner:
             "direccion de arte", "dirección de arte", "composicion visual", "composición visual",
             "accesibilidad", "diseno centrado", "diseño centrado", "arquitectura de informacion",
             "arquitectura de información", "wireframe", "wireframing", "interfaz",
-            "interfaces", "ui", "ux"
+            "interfaces", "ui", "ux", "figma", "storybook", "design systems", "sistemas de diseno",
+            "sistemas de diseño"
         ],
     }
 
@@ -772,41 +824,77 @@ class CourseScanner:
         "automatizaciones": "[ESPECIALIDAD_AUTOMATIZACIONES_Y_WORKFLOWS]",
         "ia_prompting": "[ESPECIALIDAD_IA_PROMPTING_Y_AGENTES]",
         "ux_ui": "[ESPECIALIDAD_UX_UI_Y_PRODUCTO]",
+        "seo": "[ESPECIALIDAD_SEO_AEO_SEARCH]",
+        "social_media": "[ESPECIALIDAD_REDES_SOCIALES_Y_COMUNIDAD]",
+        "data_analytics": "[ESPECIALIDAD_DATA_METRICAS_Y_ANALYTICS]",
+        "product_management": "[ESPECIALIDAD_PRODUCT_MANAGEMENT_Y_STARTUP]",
     }
 
-    # Mapeo prioritario de Siglas de Tracks (Nivel 4 - Prioridad Máxima)
-    TRACK_TAGS_MAP = {
-        "ia inteligencia artificial": "ia_prompting",
-        "spec driven developer": "ia_prompting",
-        "cyberclick": "ia_prompting",
-        "[ecom]": "ecommerce",
-        "03 ecom": "ecommerce",
-        "[autom]": "automatizaciones",
-        "04 autom": "automatizaciones",
-        "12 dev web": "automatizaciones",
-        "38 agile data project strategy": "automatizaciones",
-        "[ai]": "ia_prompting",
-        "14 ai prompt": "ia_prompting",
-        "[prompt]": "ia_prompting",
-        "monetiza tu talento": "ia_prompting",
-        "[uxui]": "ux_ui",
-        "[designthinking]": "ux_ui",
-        "[graphic]": "ux_ui",
-        "33 graphic thinking uxui": "ux_ui",
-        "[growth]": "funnels",
-        "[journey]": "funnels",
-        "47 growth journey mktn product": "funnels",
-        "23 startup": "ofertas",
-        "[branding]": "branding",
-        "30 branding marcap invest": "branding",
-        "[ads]": "paid_ads",
-        "[pauta]": "paid_ads",
-        "34 social +5": "paid_ads",
-        "[copy]": "copywriting",
-        "[email]": "email",
-        "[whatsapp]": "whatsapp",
-        "11 skilll working": "general",
+    # Mapeo determinista de Siglas y Tokens de Corchetes ([TAG])
+    PLATZI_TAGS_MAP = {
+        # SEO & Búsqueda
+        "SEO": "seo",
+        # Redes Sociales Orgánicas & Comunidad
+        "SOCIAL": "social_media",
+        "INSTAGRAM": "social_media",
+        "TIKTOK": "social_media",
+        "YOUTUBE": "social_media",
+        "VIDEO": "social_media",
+        "LINKEDIN": "social_media",
+        # Data & Analítica
+        "DATA": "data_analytics",
+        # Product Management & Metodologías
+        "PRODUCT": "product_management",
+        "AGILE": "product_management",
+        "PROJECT": "product_management",
+        "STRATEGY": "product_management",
+        "STARTUP": "product_management",
+        "WORKING": "product_management",
+        "SKILL": "product_management",
+        "SKILLS": "product_management",
+        # UX/UI & Diseño
+        "UXUI": "ux_ui",
+        "DESIGNTHINKING": "ux_ui",
+        "GRAPHIC": "ux_ui",
+        "DEV": "ux_ui",
+        "WEB": "ux_ui",
+        # Copywriting & Contenidos
+        "COPY": "copywriting",
+        "COPYWRITING": "copywriting",
+        "CONTENT": "copywriting",
+        "STORYTELLING": "copywriting",
+        # Email Marketing
+        "EMAILM": "email",
+        "EMAIL": "email",
+        # Ventas / Ofertas
+        "VENTAS": "ofertas",
+        "OFERTAS": "ofertas",
+        # Funnels & Growth
+        "FUNNELS": "funnels",
+        "GROWTH": "funnels",
+        "JOURNEY": "funnels",
+        "MKTN": "funnels",
+        # Branding & Investigación
+        "BRANDING": "branding",
+        "MARCAP": "branding",
+        "INVEST": "branding",
+        # Pauta Publicitaria
+        "ADS": "paid_ads",
+        "PAUTA": "paid_ads",
+        # E-commerce
+        "ECOM": "ecommerce",
+        "ECOMMERCE": "ecommerce",
+        # Automatizaciones
+        "AUTOM": "automatizaciones",
+        # IA & Prompting
+        "AI": "ia_prompting",
+        "PROMPT": "ia_prompting",
+        # WhatsApp
+        "WHATSAPP": "whatsapp",
     }
+
+    # Mapeo retrocompatible
+    TRACK_TAGS_MAP = PLATZI_TAGS_MAP
 
     @classmethod
     def normalize_text(cls, text: str) -> str:
@@ -828,6 +916,7 @@ class CourseScanner:
 
         # Prioridad de desempate: evaluar clusters más especializados primero
         priority_order = [
+            "seo", "data_analytics", "social_media", "product_management",
             "ia_prompting", "ux_ui", "whatsapp", "email",
             "ecommerce", "automatizaciones", "paid_ads",
             "copywriting", "funnels", "ofertas", "branding"
@@ -854,8 +943,12 @@ class CourseScanner:
     @classmethod
     def classify_cluster_bottom_up(cls, file_path: str) -> Tuple[str, str]:
         """
-        Clasifica una ruta de archivo evaluando en 4 capas concéntricas:
-        Retorna (cluster_key, match_reason)
+        Clasifica una ruta de archivo aplicando una estrategia polimórfica según proveedor:
+        1. PLATZI: Detección estricta de tokens [TAG] en nombre de archivo o carpeta del curso.
+        2. DIGITALMARKETER: Limpieza de slug sufijo y clasificación semántica por título de curso en inglés.
+        3. SCVIP: Mapeo directo por carpeta temática numerada.
+        4. CA: Detección de prefijo ca [TAG] o keywords.
+        5. LUIS-INESTROSA / MCV / VELOCITYMEDIA: Detección semántica por keywords del curso.
         """
         norm_path = unicodedata.normalize("NFC", file_path)
         parts = [p for p in norm_path.split(os.sep) if p]
@@ -867,32 +960,95 @@ class CourseScanner:
         parent_dir = parts[-2] if len(parts) >= 2 else ""
         grandparent_dir = parts[-3] if len(parts) >= 3 else ""
 
-        # Nivel 4 (Prioridad Máxima): ¿Existe una sigla de Track explícita en alguna parte?
-        lower_full_path = norm_path.lower()
-        for tag, cluster in cls.TRACK_TAGS_MAP.items():
-            if tag in lower_full_path:
-                return (cluster, f"Sigla de Track '{tag}' en ruta")
+        # 1. ESTRATEGIA PLATZI: Token exacto de corchetes en archivo o carpeta inmediata
+        if "PLATZI" in parts:
+            file_tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", filename)
+            for raw_tag in file_tags:
+                tag_up = raw_tag.upper()
+                if tag_up in cls.PLATZI_TAGS_MAP:
+                    return (cls.PLATZI_TAGS_MAP[tag_up], f"Platzi token [{tag_up}] en archivo")
 
-        # Nivel 1: Evaluar nombre del archivo/lección (ej: 04_embudo_ventas.mp4)
+            if len(parts) >= 2:
+                parent_tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", parts[-2])
+                for raw_tag in parent_tags:
+                    tag_up = raw_tag.upper()
+                    if tag_up in cls.PLATZI_TAGS_MAP:
+                        return (cls.PLATZI_TAGS_MAP[tag_up], f"Platzi token [{tag_up}] en carpeta de curso")
+
+            if "monetiza tu talento" in norm_path.lower():
+                return ("ia_prompting", "Platzi track Monetiza tu Talento con IA")
+
+        # 2. ESTRATEGIA CA: Detección de prefijos ca [TAG]
+        if "CA" in parts:
+            ca_tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", filename + " " + (parts[-2] if len(parts) >= 2 else ""))
+            for raw_tag in ca_tags:
+                tag_up = raw_tag.upper()
+                if tag_up in cls.PLATZI_TAGS_MAP:
+                    return (cls.PLATZI_TAGS_MAP[tag_up], f"CA token [{tag_up}]")
+            if "MLM_58-18" in parts or "multinivel" in norm_path.lower():
+                return ("ofertas", "CA prospección multinivel y ventas")
+
+        # 3. ESTRATEGIA SCVIP: Carpetas temáticas numeradas
+        if "SCVIP" in parts:
+            lower_path = norm_path.lower()
+            if "04. instagram" in lower_path or "04.instagram" in lower_path:
+                return ("social_media", "SCVIP 04. INSTAGRAM")
+            if "05. ventas" in lower_path or "05.ventas" in lower_path:
+                return ("ofertas", "SCVIP 05. VENTAS")
+            if "06. meta ads" in lower_path or "06.meta ads" in lower_path:
+                return ("paid_ads", "SCVIP 06. META ADS")
+            if "07. marketing" in lower_path or "07.marketing" in lower_path:
+                course_tag = cls.match_cluster_keywords(filename) or (cls.match_cluster_keywords(parts[-2]) if len(parts) >= 2 else None)
+                if course_tag:
+                    return (course_tag, f"SCVIP 07. MARKETING ({course_tag})")
+                return ("paid_ads", "SCVIP 07. MARKETING general")
+
+        # 4. ESTRATEGIA DIGITALMARKETER: Clasificación por título de curso en inglés (sin sufijo de slug)
+        if "DIGITALMARKETER" in parts:
+            dm_idx = parts.index("DIGITALMARKETER")
+            course_part = ""
+            if len(parts) > dm_idx + 2:
+                course_part = parts[dm_idx + 2]
+            elif len(parts) > dm_idx + 1:
+                course_part = parts[dm_idx + 1]
+
+            clean_dm_title = re.sub(r"_[a-z0-9\-]+$", "", course_part)
+            clean_dm_title = clean_dm_title.replace("_", " ").strip()
+
+            c_dm = cls.match_cluster_keywords(clean_dm_title)
+            if c_dm:
+                return (c_dm, f"DigitalMarketer curso: '{clean_dm_title}'")
+
+        # 5. ESTRATEGIA LUIS-INESTROSA
+        if "LUIS-INESTROSA" in parts:
+            if "conferencias que venden" in norm_path.lower():
+                return ("ofertas", "Luis Inestrosa conferencias que venden")
+            if "habla y vendete bien" in norm_path.lower():
+                return ("ofertas", "Luis Inestrosa habla y vendete bien")
+
+        # 6. ESTRATEGIA GENERAL (Fallback semántico por capas concéntricas)
+        # Nivel 1: Archivo
         c_file = cls.match_cluster_keywords(filename)
         if c_file:
             return (c_file, f"Lección individual: '{filename}'")
 
-        # Nivel 2: Evaluar subcarpeta inmediata / Módulo (ej: Modulo 3 - Email Marketing)
-        if parent_dir:
+        # Nivel 2: Módulo / Subcarpeta inmediata (evitando fases genéricas)
+        if parent_dir and parent_dir not in ("01_PLAN", "02_BUILD", "03_LAUNCH", "01_Content", "MP3", "BASIC", "VIP", "PROFESIONAL"):
             c_parent = cls.match_cluster_keywords(parent_dir)
             if c_parent:
                 return (c_parent, f"Módulo temático: '{parent_dir}'")
 
-        # Nivel 3: Evaluar carpeta contenedora del curso
-        if grandparent_dir:
+        # Nivel 3: Curso contenedor
+        if grandparent_dir and grandparent_dir not in ("03_TRAINING_PLAYBOOKS_AND_WORKSHOPS", "01_AI_SYSTEMS", "02_PROGRAMS_AND_ACCELERATORS", "CURSOS", "PLATZI", "DIGITALMARKETER"):
             c_grand = cls.match_cluster_keywords(grandparent_dir)
             if c_grand:
                 return (c_grand, f"Curso contenedor: '{grandparent_dir}'")
 
-        # Nivel Fallback: Evaluar carpetas intermedias hacia arriba evitando las raíces comunes
+        # Nivel Fallback: Carpetas intermedias
         if len(parts) > 3:
-            for p_part in reversed(parts[3:-2]):
+            for p_part in reversed(parts[2:-2]):
+                if p_part in ("03_TRAINING_PLAYBOOKS_AND_WORKSHOPS", "01_AI_SYSTEMS", "02_PROGRAMS_AND_ACCELERATORS", "CURSOS", "PLATZI", "DIGITALMARKETER", "baiosfera", "var", "www"):
+                    continue
                 c_part = cls.match_cluster_keywords(p_part)
                 if c_part:
                     return (c_part, f"Directorio intermedio: '{p_part}'")
@@ -1316,6 +1472,42 @@ REGLAS DE RESPUESTA AFIRMATIVAS:
 - Documenta las leyes de UX (Fitts, Hick, Miller, Jakob) y su aplicación táctica para reducir la carga cognitiva del usuario.
 - Codifica los estándares de accesibilidad web (WCAG AAA/APCA) y diseño inclusivo.
 - Modela la arquitectura de información, flujos de navegación y wireframing que maximizan la claridad y la conversión.
+""",
+    "seo": """Eres el Ingeniero Maestro de SEO Técnico, AEO (Answer Engine Optimization) y GEO (Generative Engine Optimization).
+Tu objetivo es extraer las estrategias de optimización para motores de búsqueda tradicionales y modelos generativos de IA.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Extrae las arquitecturas de rastreo, indexación, Core Web Vitals y jerarquías canónicas de URL.
+- Modela las metodologías de investigación de palabras clave, intención de búsqueda y mapas de tópicos semánticos.
+- Documenta las estrategias de SEO para motores de respuesta de IA (ChatGPT Search, Perplexity, Google SGE/AI Overviews).
+- Codifica los patrones de marcado estructurado Schema.org, auditorías técnicas con Google Search Console y análisis de Semrush.
+""",
+    "social_media": """Eres el Director de Estrategia de Redes Sociales Orgánicas, Formatos Cortos y Creación de Contenido.
+Tu misión es destilar las heurísticas de viralidad, retención y construcción de comunidad en plataformas sociales.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Descompón los primeros 3 segundos de ganchos visuales y auditivos en Reels, TikTok y YouTube Shorts.
+- Codifica las estrategias de contenido en LinkedIn para fundadores, marcas personales y venta B2B.
+- Extrae las directivas de Community Management para convertir comentarios y mensajes directos en relaciones comerciales.
+- Modela calendarios editoriales, reciclaje inteligente de formatos largos a piezas cortas y producción de podcasts.
+""",
+    "data_analytics": """Eres el Analista Principal de Métricas de Negocio, Analítica Digital y Tracking de Conversiones.
+Tu función es extraer los modelos de medición, eventos de seguimiento e interpretación de datos comerciales.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Codifica la configuración de arquitecturas de medición con Google Analytics 4 (GA4) y Google Tag Manager (GTM).
+- Extrae las definiciones matemáticas de métricas clave: CAC, LTV, ROAS, AOV, Churn Rate y tasa de conversión por etapa.
+- Modela los cuadros de mando (dashboards) e informes de desempeño para identificar cuellos de botella en el embudo.
+- Documenta las mejores prácticas para seguimiento con API de conversiones (CAPI) y mitigación de pérdidas por cookies de terceros.
+""",
+    "product_management": """Eres el Líder de Producto, Metodologías Ágiles y Validación de Startups.
+Tu misión es extraer los marcos de Product Discovery, entrega ágil (Scrum/Agile) y desarrollo de modelos de negocio.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Modela los procesos de Product Discovery: validación de problemas, entrevistas con usuarios y definición de MVP.
+- Codifica los rituales y artefactos de Scrum y Agile Delivery (sprints, backlogs, user stories, criterios de aceptación).
+- Extrae las matrices estratégicas de toma de decisiones: Business Model Canvas, Value Proposition Canvas y análisis de riesgos.
+- Documenta las tácticas de consecución de primeros clientes y tracción temprana para startups y nuevos productos.
 """,
 }
 
