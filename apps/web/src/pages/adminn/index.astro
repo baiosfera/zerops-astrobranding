@@ -5,25 +5,28 @@ export const prerender = false;
 const magicToken = Astro.url.searchParams.get("token");
 let magicError = "";
 if (magicToken) {
-  const { consumeMagicLoginToken } = await import("@astrobranding/database");
-  const ip =
-    Astro.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    Astro.clientAddress ||
-    "N/A";
   const userAgent = Astro.request.headers.get("user-agent") || "N/A";
+  const isBot = /bot|crawler|spider|facebookexternalhit|telegrambot|twitterbot/i.test(userAgent);
+  if (!isBot) {
+    const { consumeMagicLoginToken } = await import("@astrobranding/database");
+    const ip =
+      Astro.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      Astro.clientAddress ||
+      "N/A";
 
-  const res = await consumeMagicLoginToken(magicToken, { ip, userAgent });
-  if (res.success && res.sessionToken) {
-    Astro.cookies.set("admin_session", res.sessionToken, {
-      path: "/adminn",
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-    });
-    return Astro.redirect("/adminn/dashboard");
-  } else {
-    magicError = res.message || "El enlace de 1 clic ha expirado o ya fue utilizado.";
+    const res = await consumeMagicLoginToken(magicToken, { ip, userAgent });
+    if (res.success && res.sessionToken) {
+      Astro.cookies.set("admin_session", res.sessionToken, {
+        path: "/adminn",
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+      });
+      return Astro.redirect("/adminn/dashboard");
+    } else {
+      magicError = res.message || "El enlace de 1 clic ha expirado o ya fue utilizado.";
+    }
   }
 }
 
