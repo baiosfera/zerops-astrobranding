@@ -1976,6 +1976,7 @@ def main():
     scan_parser = subparsers.add_parser("scan", help="Escanea cursos sin gastar tokens ni cuota FUSE")
     scan_parser.add_argument("--target", type=str, default=None, help="Directorio objetivo específico")
     scan_parser.add_argument("--max-depth", type=int, default=6, help="Profundidad máxima de escaneo")
+    scan_parser.add_argument("--dry-run", action="store_true", help="Tolerado por conveniencia (scan ya es solo lectura por defecto)")
 
     # Subcomando: compact
     compact_parser = subparsers.add_parser(
