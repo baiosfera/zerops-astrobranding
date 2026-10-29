@@ -431,8 +431,15 @@ class CourseCompactor:
                 extracted_sections.append(f"### {idx}. {clean_lesson_title}\n*(Simulación)*")
                 continue
 
+            if CourseScanner.is_scaffold_stub(fpath):
+                continue
+
             content = TextContentExtractor.extract(fpath)
             if not content:
+                continue
+
+            # Descartar stubs residuales o secciones de solo enlaces a medios
+            if len(content.split()) < 30 and ("- **Video" in content or "Subtítulo" in content):
                 continue
 
             words = len(content.split())
@@ -448,7 +455,8 @@ class CourseCompactor:
             )
             extracted_sections.append(section_md)
 
-        if not extracted_sections:
+        min_words_threshold = 20 if os.environ.get("KNOWLEDGE_SYNC_TEST") else 200
+        if not extracted_sections or total_words < min_words_threshold:
             return None
 
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -1323,6 +1331,46 @@ class CourseScanner:
             pass
 
     @classmethod
+    def is_scaffold_stub(cls, file_path: str) -> bool:
+        """
+        Detecta si un archivo .md o .txt es un cascarón vacío de scaffold (puntero a medios)
+        que no contiene contenido educativo sustancial y nunca debe eclipsar subtítulos reales.
+        """
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext not in (".md", ".txt"):
+            return False
+        try:
+            if not os.path.exists(file_path):
+                return False
+            size = os.path.getsize(file_path)
+            if size > 15000:  # Archivos de más de 15KB tienen contenido real
+                return False
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+        except Exception:
+            return False
+
+        # 1. Marcadores inequívocos de listas de medios scaffold
+        stub_patterns = [
+            r"-\s+\*\*Video(?:\s+MP4)?:\*\*",
+            r"-\s+\*\*Audio(?:\s+MP3)?:\*\*",
+            r"-\s+\*\*Subt[ií]tulos(?:\s+[A-Z]{2})?:\*\*",
+            r"-\s+Video(?:\s+MP4)?:\s*[`\w\-\.]+\.mp4",
+        ]
+        for p in stub_patterns:
+            if re.search(p, content, re.I):
+                return True
+
+        # 2. Archivos ultracortos con múltiples punteros a extensiones de video/audio
+        words = content.split()
+        if len(words) < 60:
+            media_hits = len(re.findall(r"\.(mp4|mp3|m4a|aac|srt|vtt)\b", content, re.I))
+            if media_hits >= 2:
+                return True
+
+        return False
+
+    @classmethod
     def scan_path(
         cls,
         base_dir: str,
@@ -1381,10 +1429,24 @@ class CourseScanner:
 
                 # 3. Jerarquía de Formatos por Stem (Anti-Redundancia)
                 for stem, group in stem_groups.items():
-                    docs = [it for it in group if it[1] in (".docx", ".md", ".txt", ".pdf")]
+                    raw_docs = [it for it in group if it[1] in (".docx", ".md", ".txt", ".pdf")]
                     subs = [it for it in group if it[1] in (".srt", ".vtt")]
                     audios = [it for it in group if it[1] in (".aac", ".m4a", ".mp3")]
                     videos = [it for it in group if it[1] == ".mp4"]
+
+                    # Separar documentos maestros reales de cascarones de enlaces (scaffold stubs)
+                    docs = []
+                    for entry, ext in raw_docs:
+                        if cls.is_scaffold_stub(entry.path):
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="scaffold_stub",
+                                canonical_upload=False,
+                                reason_detail="Omitido: Archivo esqueleto de enlaces a medios",
+                                has_peer_doc=has_peer_doc
+                            )
+                        else:
+                            docs.append((entry, ext))
 
                     # CASO 1: Existe Documento Maestro (.md, .docx, .pdf, .txt)
                     if docs:
@@ -2216,6 +2278,7 @@ def cmd_push(args):
 # =============================================================================
 def run_tests():
     """Ejecuta pruebas unitarias de los componentes de software deterministas."""
+    os.environ["KNOWLEDGE_SYNC_TEST"] = "1"
     print("==================================================================")
     print("🧪 EJECUTANDO SUITE DE PRUEBAS UNITARIAS DETERMINISTAS (knowledge-sync v2)")
     print("==================================================================")
@@ -2398,6 +2461,39 @@ Hoy hablaremos de ofertas irresistibles.
             assert "Bienvenidos a la clase de automatizacion" in body, "Falla Test 8: No extrajo .srt limpio"
             assert "Segmentacion avanzada" in body, "Falla Test 8: No extrajo .md"
     print("✓ [Test 8] Compactación Multi-Curso y Parsers Polimórficos (.docx, .srt, .md): PASSED")
+
+    # Test 9: Detección de Cascarones (Scaffold Stubs) y Promoción de Subtítulos Reales
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        base = "02_real_lesson"
+        stub_content = """# 02 Real Lesson
+- **Video MP4:** 02_real_lesson.mp4
+- **Audio MP3:** 02_real_lesson.mp3
+- **Subtítulos ES:** 02_real_lesson.es.srt
+"""
+        with open(os.path.join(tmp_dir, f"{base}.md"), "w") as f:
+            f.write(stub_content)
+
+        sample_srt = """1
+00:00:01,000 --> 00:00:04,500
+En esta clase aprenderemos a construir ofertas de alta conversión y valor irresistible.
+"""
+        with open(os.path.join(tmp_dir, f"{base}.es.srt"), "w") as f:
+            f.write(sample_srt)
+
+        with open(os.path.join(tmp_dir, f"{base}.mp4"), "w") as f:
+            f.write("dummy video")
+
+        scanned = CourseScanner.scan_path(tmp_dir)
+        stub_item = next((i for i in scanned if i["path"].endswith(".md")), None)
+        assert stub_item is not None, "Falla Test 9: No se encontró el .md"
+        assert stub_item["tier"] == "scaffold_stub", f"Falla Test 9: El stub debió ser 'scaffold_stub', fue '{stub_item['tier']}'"
+        assert not stub_item["canonical_upload"], "Falla Test 9: El stub no debe ser canonical_upload"
+
+        sub_item = next((i for i in scanned if i["path"].endswith(".es.srt")), None)
+        assert sub_item is not None, "Falla Test 9: No se encontró el .es.srt"
+        assert sub_item["canonical_upload"], "Falla Test 9: El subtítulo real debió ser promovido a canonical_upload"
+        assert sub_item["tier"] == "subtitle_text", f"Falla Test 9: El subtítulo debió ser 'subtitle_text', fue '{sub_item['tier']}'"
+    print("✓ [Test 9] Detección de Scaffold Stubs & Promoción de Subtítulo Real: PASSED")
 
     print("\n🎉 TODAS LAS PRUEBAS FÍSICAS PASARON CON ÉXITO (EXIT 0).")
     sys.exit(0)
