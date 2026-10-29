@@ -3,6 +3,18 @@ export const prerender = false;
 
 import { getDb, products, orders, desc } from "@astrobranding/database";
 
+// Handle direct logout navigation query (?logout=1)
+if (Astro.url.searchParams.get("logout") === "1") {
+  const sessionToken = Astro.cookies.get("admin_session")?.value;
+  if (sessionToken) {
+    const { revokeAdminSession } = await import("@astrobranding/database");
+    await revokeAdminSession(sessionToken);
+  }
+  Astro.cookies.delete("admin_session", { path: "/" });
+  Astro.cookies.delete("admin_session", { path: "/adminn" });
+  return Astro.redirect("/adminn");
+}
+
 const adminUser = Astro.locals.adminUser;
 if (!adminUser) {
   return Astro.redirect("/adminn");
@@ -48,12 +60,13 @@ const inactiveCount = catalogItems.length - activeCount;
             </div>
           </div>
 
-          <button
+          <a
+            href="/adminn/dashboard?logout=1"
             id="btnLogout"
-            class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white px-3 py-1.5 rounded-lg border border-zinc-700/60 transition-all cursor-pointer"
+            class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white px-3 py-1.5 rounded-lg border border-zinc-700/60 transition-all cursor-pointer inline-flex items-center"
           >
             Cerrar Sesión
-          </button>
+          </a>
         </div>
       </div>
     </header>
@@ -182,6 +195,7 @@ const inactiveCount = catalogItems.length - activeCount;
                         data-price={prod.basePrice}
                         data-category={prod.category}
                         data-slug={prod.slug}
+                        data-image={firstImg}
                         class="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-2.5 py-1 rounded-lg border border-zinc-700 transition-colors cursor-pointer"
                       >
                         Editar
@@ -210,8 +224,10 @@ const inactiveCount = catalogItems.length - activeCount;
 
     <!-- EDIT MODAL -->
     <div id="editModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl relative">
-        <h3 class="text-lg font-bold text-white mb-4">Editar Producto</h3>
+      <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <h3 class="text-lg font-bold text-white mb-2">Editar Producto</h3>
+
+        <div id="editModalAlert" class="hidden mb-4 p-3 rounded-xl text-xs border border-red-800 bg-red-950/70 text-red-200"></div>
 
         <form id="editForm" class="space-y-4 text-xs">
           <input type="hidden" id="editId" name="id" />
@@ -236,7 +252,7 @@ const inactiveCount = catalogItems.length - activeCount;
                 name="basePrice"
                 required
                 min="1000"
-                step="1000"
+                step="100"
                 class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500"
               />
             </div>
@@ -252,20 +268,44 @@ const inactiveCount = catalogItems.length - activeCount;
             </div>
           </div>
 
+          <!-- Foto del Producto (Superadmin & Comerciante) -->
           <div>
-            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1 flex justify-between">
-              <span>Slug URL</span>
-              {!isSuperadmin ? <span class="text-zinc-500 lowercase">(Solo Superadmin)</span> : null}
-            </label>
-            <input
-              type="text"
-              id="editSlug"
-              name="slug"
-              required
-              disabled={!isSuperadmin}
-              class={`w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500 ${!isSuperadmin ? 'opacity-50 cursor-not-allowed bg-zinc-900' : ''}`}
-            />
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Foto del Producto (Cámara o Galería)</label>
+            <div class="flex items-center space-x-3 mb-2">
+              <img id="editImageCurrent" src="/placeholder.jpg" class="h-16 w-16 object-cover rounded-xl border border-zinc-800 bg-zinc-950 flex-shrink-0" />
+              <div class="flex-1">
+                <input
+                  type="file"
+                  id="editImageFile"
+                  accept="image/*"
+                  capture="environment"
+                  class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
+                />
+                <p class="text-[10px] text-zinc-500 mt-1">Podés tomar una foto nueva con la cámara o elegir una de la galería.</p>
+              </div>
+            </div>
+            <div id="editImageNewPreviewContainer" class="hidden mt-2 p-2 bg-zinc-950/80 rounded-xl border border-amber-500/40 flex items-center space-x-3">
+              <img id="editImageNewPreview" class="h-14 w-14 object-cover rounded-lg border border-amber-500/80" />
+              <span class="text-[11px] text-amber-400 font-medium">📸 Nueva foto seleccionada lista para guardar</span>
+            </div>
           </div>
+
+          {isSuperadmin ? (
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1 flex justify-between">
+                <span>Slug URL</span>
+                <span class="text-zinc-500 lowercase">(Superadmin)</span>
+              </label>
+              <input
+                type="text"
+                id="editSlug"
+                name="slug"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
+              />
+            </div>
+          ) : (
+            <input type="hidden" id="editSlug" name="slug" />
+          )}
 
           <div>
             <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Descripción</label>
@@ -277,7 +317,7 @@ const inactiveCount = catalogItems.length - activeCount;
             ></textarea>
           </div>
 
-          <div class="flex justify-end space-x-3 pt-3">
+          <div class="flex justify-end space-x-3 pt-3 border-t border-zinc-800">
             <button
               type="button"
               id="btnCancelEdit"
@@ -288,7 +328,7 @@ const inactiveCount = catalogItems.length - activeCount;
             <button
               type="submit"
               id="btnSaveEdit"
-              class="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-semibold hover:bg-amber-400 transition-colors cursor-pointer"
+              class="px-4 py-2 rounded-xl bg-amber-500 text-zinc-950 font-semibold hover:bg-amber-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Guardar Cambios
             </button>
@@ -299,8 +339,10 @@ const inactiveCount = catalogItems.length - activeCount;
 
     <!-- CREATE MODAL -->
     <div id="createModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl relative">
-        <h3 class="text-lg font-bold text-white mb-4">Agregar Nuevo Producto</h3>
+      <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <h3 class="text-lg font-bold text-white mb-2">Agregar Nuevo Producto</h3>
+
+        <div id="createModalAlert" class="hidden mb-4 p-3 rounded-xl text-xs border border-red-800 bg-red-950/70 text-red-200"></div>
 
         <form id="createForm" class="space-y-4 text-xs">
           <div>
@@ -391,23 +433,74 @@ const inactiveCount = catalogItems.length - activeCount;
       import { actions } from "astro:actions";
 
       const notice = document.getElementById("dashboardNotice") as HTMLDivElement;
-      const btnLogout = document.getElementById("btnLogout") as HTMLButtonElement;
+      const btnLogout = document.getElementById("btnLogout") as HTMLAnchorElement;
 
-      // Modals
+      // Edit Modal Elements
       const editModal = document.getElementById("editModal") as HTMLDivElement;
       const editForm = document.getElementById("editForm") as HTMLFormElement;
       const btnCancelEdit = document.getElementById("btnCancelEdit") as HTMLButtonElement;
+      const btnSaveEdit = document.getElementById("btnSaveEdit") as HTMLButtonElement;
+      const editModalAlert = document.getElementById("editModalAlert") as HTMLDivElement;
+      const editImageCurrent = document.getElementById("editImageCurrent") as HTMLImageElement;
+      const editImageFile = document.getElementById("editImageFile") as HTMLInputElement;
+      const editImageNewPreview = document.getElementById("editImageNewPreview") as HTMLImageElement;
+      const editImageNewPreviewContainer = document.getElementById("editImageNewPreviewContainer") as HTMLDivElement;
 
+      // Create Modal Elements
       const createModal = document.getElementById("createModal") as HTMLDivElement;
       const createForm = document.getElementById("createForm") as HTMLFormElement;
       const btnOpenNewProductModal = document.getElementById("btnOpenNewProductModal") as HTMLButtonElement;
       const btnCancelCreate = document.getElementById("btnCancelCreate") as HTMLButtonElement;
+      const btnSaveCreate = document.getElementById("btnSaveCreate") as HTMLButtonElement;
+      const createModalAlert = document.getElementById("createModalAlert") as HTMLDivElement;
       const createImageFile = document.getElementById("createImageFile") as HTMLInputElement;
       const imagePreview = document.getElementById("imagePreview") as HTMLImageElement;
       const imagePreviewContainer = document.getElementById("imagePreviewContainer") as HTMLDivElement;
 
+      let editBase64 = "";
+      let editFileName = "";
       let createBase64 = "";
       let createFileName = "";
+
+      // Client-Side Image Resizer & Optimizer (Compresses high-res phone photos to ~200KB)
+      async function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.85): Promise<{ base64: string; name: string }> {
+        if (!file.type.startsWith("image/")) {
+          throw new Error("El archivo seleccionado no es una imagen válida.");
+        }
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+              let width = img.width;
+              let height = img.height;
+              if (width > maxWidth || height > maxHeight) {
+                if (width / height > maxWidth / maxHeight) {
+                  height = Math.round((height * maxWidth) / width);
+                  width = maxWidth;
+                } else {
+                  width = Math.round((width * maxHeight) / height);
+                  maxHeight = height;
+                }
+              }
+              const canvas = document.createElement("canvas");
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext("2d");
+              if (!ctx) {
+                return resolve({ base64: e.target?.result as string, name: file.name });
+              }
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+              resolve({ base64: compressedBase64, name: file.name.replace(/\.[^.]+$/, ".jpg") });
+            };
+            img.onerror = () => reject(new Error("No se pudo cargar la imagen para procesarla."));
+            img.src = e.target?.result as string;
+          };
+          reader.onerror = () => reject(new Error("Error al leer el archivo desde el dispositivo."));
+          reader.readAsDataURL(file);
+        });
+      }
 
       function showNotice(type: "success" | "error", msg: string) {
         notice.classList.remove("hidden", "bg-emerald-950/50", "border-emerald-800", "text-emerald-200", "bg-red-950/50", "border-red-800", "text-red-200");
@@ -422,10 +515,16 @@ const inactiveCount = catalogItems.length - activeCount;
         }, 5000);
       }
 
-      // Logout handler
-      btnLogout?.addEventListener("click", async () => {
-        await actions.logout();
-        window.location.href = "/adminn";
+      // Logout handler (Destructive multi-tier clean)
+      btnLogout?.addEventListener("click", async (e) => {
+        e.preventDefault();
+        try {
+          await actions.logout();
+        } catch (err) {
+          console.warn("Logout action notice:", err);
+        }
+        document.cookie = "admin_session=; path=/adminn; max-age=0; SameSite=Lax; Secure";
+        window.location.href = "/adminn/dashboard?logout=1";
       });
 
       // Status Toggle Handler
@@ -457,16 +556,26 @@ const inactiveCount = catalogItems.length - activeCount;
         });
       });
 
-      // Edit Button Click
+      // Edit Button Click (Populates fields and photo for both Superadmin & Merchant)
       document.querySelectorAll("[data-action='edit-product']").forEach((btn) => {
         btn.addEventListener("click", (e) => {
           const target = e.currentTarget as HTMLButtonElement;
-          (document.getElementById("editId") as HTMLInputElement).value = target.dataset.id!;
-          (document.getElementById("editName") as HTMLInputElement).value = target.dataset.name!;
-          (document.getElementById("editDescription") as HTMLTextAreaElement).value = target.dataset.description!;
-          (document.getElementById("editPrice") as HTMLInputElement).value = target.dataset.price!;
-          (document.getElementById("editCategory") as HTMLInputElement).value = target.dataset.category!;
-          (document.getElementById("editSlug") as HTMLInputElement).value = target.dataset.slug!;
+          (document.getElementById("editId") as HTMLInputElement).value = target.dataset.id || "";
+          (document.getElementById("editName") as HTMLInputElement).value = target.dataset.name || "";
+          (document.getElementById("editDescription") as HTMLTextAreaElement).value = target.dataset.description || "";
+          (document.getElementById("editPrice") as HTMLInputElement).value = target.dataset.price || "";
+          (document.getElementById("editCategory") as HTMLInputElement).value = target.dataset.category || "";
+          const slugInput = document.getElementById("editSlug") as HTMLInputElement;
+          if (slugInput) slugInput.value = target.dataset.slug || "";
+
+          // Populate current photo
+          editImageCurrent.src = target.dataset.image || "/placeholder.jpg";
+          editImageNewPreviewContainer.classList.add("hidden");
+          editImageFile.value = "";
+          editBase64 = "";
+          editFileName = "";
+          editModalAlert.classList.add("hidden");
+
           editModal.classList.remove("hidden");
         });
       });
@@ -475,15 +584,37 @@ const inactiveCount = catalogItems.length - activeCount;
         editModal.classList.add("hidden");
       });
 
+      // Edit Photo File Selection & Client-Side Compression
+      editImageFile?.addEventListener("change", async (e: any) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          try {
+            editModalAlert.classList.add("hidden");
+            const res = await compressImage(file);
+            editBase64 = res.base64;
+            editFileName = res.name;
+            editImageNewPreview.src = editBase64;
+            editImageNewPreviewContainer.classList.remove("hidden");
+          } catch (err: any) {
+            editModalAlert.textContent = err?.message || "Error al procesar la foto.";
+            editModalAlert.classList.remove("hidden");
+          }
+        }
+      });
+
       // Save Edit Form
       editForm?.addEventListener("submit", async (e) => {
         e.preventDefault();
+        editModalAlert.classList.add("hidden");
+        btnSaveEdit.disabled = true;
+        btnSaveEdit.textContent = "Guardando cambios...";
+
         const id = (document.getElementById("editId") as HTMLInputElement).value;
         const name = (document.getElementById("editName") as HTMLInputElement).value;
         const description = (document.getElementById("editDescription") as HTMLTextAreaElement).value;
         const basePrice = parseInt((document.getElementById("editPrice") as HTMLInputElement).value, 10);
         const category = (document.getElementById("editCategory") as HTMLInputElement).value;
-        const slug = (document.getElementById("editSlug") as HTMLInputElement).value;
+        const slug = (document.getElementById("editSlug") as HTMLInputElement)?.value;
 
         try {
           const { data, error } = await actions.updateProduct({
@@ -492,11 +623,16 @@ const inactiveCount = catalogItems.length - activeCount;
             description,
             basePrice,
             category,
-            slug,
+            slug: slug || undefined,
+            imageBase64: editBase64 || undefined,
+            imageName: editFileName || undefined,
           });
 
           if (error) {
-            showNotice("error", error.message);
+            editModalAlert.textContent = error.message || "Error al guardar cambios.";
+            editModalAlert.classList.remove("hidden");
+            btnSaveEdit.disabled = false;
+            btnSaveEdit.textContent = "Guardar Cambios";
             return;
           }
 
@@ -505,7 +641,11 @@ const inactiveCount = catalogItems.length - activeCount;
             window.location.reload();
           }
         } catch (err: any) {
-          showNotice("error", err?.message || "Error al guardar cambios.");
+          editModalAlert.textContent = err?.message || "Error de conexión al guardar cambios.";
+          editModalAlert.classList.remove("hidden");
+        } finally {
+          btnSaveEdit.disabled = false;
+          btnSaveEdit.textContent = "Guardar Cambios";
         }
       });
 
@@ -537,6 +677,11 @@ const inactiveCount = catalogItems.length - activeCount;
 
       // Create Product Modal Handlers
       btnOpenNewProductModal?.addEventListener("click", () => {
+        createModalAlert.classList.add("hidden");
+        createImageFile.value = "";
+        createBase64 = "";
+        createFileName = "";
+        imagePreviewContainer.classList.add("hidden");
         createModal.classList.remove("hidden");
       });
 
@@ -544,22 +689,29 @@ const inactiveCount = catalogItems.length - activeCount;
         createModal.classList.add("hidden");
       });
 
-      createImageFile?.addEventListener("change", (e: any) => {
+      createImageFile?.addEventListener("change", async (e: any) => {
         const file = e.target.files?.[0];
         if (file) {
-          createFileName = file.name;
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            createBase64 = event.target?.result as string;
+          try {
+            createModalAlert.classList.add("hidden");
+            const res = await compressImage(file);
+            createBase64 = res.base64;
+            createFileName = res.name;
             imagePreview.src = createBase64;
             imagePreviewContainer.classList.remove("hidden");
-          };
-          reader.readAsDataURL(file);
+          } catch (err: any) {
+            createModalAlert.textContent = err?.message || "Error al procesar la foto.";
+            createModalAlert.classList.remove("hidden");
+          }
         }
       });
 
       createForm?.addEventListener("submit", async (e) => {
         e.preventDefault();
+        createModalAlert.classList.add("hidden");
+        btnSaveCreate.disabled = true;
+        btnSaveCreate.textContent = "Publicando producto...";
+
         const name = (document.getElementById("createName") as HTMLInputElement).value;
         const basePrice = parseInt((document.getElementById("createPrice") as HTMLInputElement).value, 10);
         const category = (document.getElementById("createCategory") as HTMLSelectElement).value;
@@ -576,7 +728,10 @@ const inactiveCount = catalogItems.length - activeCount;
           });
 
           if (error) {
-            showNotice("error", error.message);
+            createModalAlert.textContent = error.message || "Error al crear producto.";
+            createModalAlert.classList.remove("hidden");
+            btnSaveCreate.disabled = false;
+            btnSaveCreate.textContent = "Publicar Producto";
             return;
           }
 
@@ -585,7 +740,11 @@ const inactiveCount = catalogItems.length - activeCount;
             window.location.reload();
           }
         } catch (err: any) {
-          showNotice("error", err?.message || "Error al crear producto.");
+          createModalAlert.textContent = err?.message || "Error de conexión al crear producto.";
+          createModalAlert.classList.remove("hidden");
+        } finally {
+          btnSaveCreate.disabled = false;
+          btnSaveCreate.textContent = "Publicar Producto";
         }
       });
     </script>

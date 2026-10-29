@@ -45,7 +45,7 @@ export const server = {
       const res = await loginWithAdminPassword(identifier, password, { ip, userAgent });
       if (res.success && res.sessionToken) {
         context.cookies.set("admin_session", res.sessionToken, {
-          path: "/adminn",
+          path: "/",
           httpOnly: true,
           secure: true,
           sameSite: "lax",
@@ -81,7 +81,7 @@ export const server = {
       const res = await verifyAdminWhatsAppOtp(phone, code, { ip, userAgent });
       if (res.success && res.sessionToken) {
         context.cookies.set("admin_session", res.sessionToken, {
-          path: "/adminn",
+          path: "/",
           httpOnly: true,
           secure: true,
           sameSite: "lax",
@@ -117,7 +117,7 @@ export const server = {
       const res = await verifyAdminOtp(telegramUserId, code, { ip, userAgent });
       if (res.success && res.sessionToken) {
         context.cookies.set("admin_session", res.sessionToken, {
-          path: "/adminn",
+          path: "/",
           httpOnly: true,
           secure: true,
           sameSite: "lax",
@@ -134,6 +134,7 @@ export const server = {
       const sessionToken = context.cookies.get("admin_session")?.value;
       if (sessionToken) {
         await revokeAdminSession(sessionToken);
+        context.cookies.delete("admin_session", { path: "/" });
         context.cookies.delete("admin_session", { path: "/adminn" });
       }
       return { success: true };
@@ -181,9 +182,12 @@ export const server = {
       description: z.string().optional(),
       basePrice: z.number().positive(),
       category: z.string().min(1),
-      slug: z.string().min(1),
+      slug: z.string().optional(),
+      imageBase64: z.string().optional(),
+      imageName: z.string().optional(),
+      removeImage: z.boolean().optional(),
     }),
-    handler: async ({ id, name, description, basePrice, category, slug }, context) => {
+    handler: async ({ id, name, description, basePrice, category, slug, imageBase64, imageName, removeImage }, context) => {
       const adminUser = context.locals.adminUser;
       if (!adminUser) {
         throw new ActionError({
@@ -203,7 +207,7 @@ export const server = {
 
       // RBAC: Only superadmin can mutate slugs
       let finalSlug = current.slug;
-      if (slug !== current.slug) {
+      if (slug && slug.trim() && slug.trim() !== current.slug) {
         if (adminUser.role !== "superadmin") {
           throw new ActionError({
             code: "FORBIDDEN",
@@ -220,6 +224,26 @@ export const server = {
         ).catch(() => {});
       }
 
+      // Handle Image Mutation (Both Superadmin & Merchant)
+      let finalImages = Array.isArray(current.images) ? [...current.images] : [];
+      if (removeImage) {
+        finalImages = [];
+      }
+      if (imageBase64 && imageName) {
+        try {
+          const buffer = Buffer.from(imageBase64.replace(/^data:image\/\w+;base64,/, ""), "base64");
+          const ext = imageName.split(".").pop()?.toLowerCase() || "jpg";
+          const safeFileName = `admin_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+          const storageDir = getStorageDir();
+          const targetPath = join(storageDir, safeFileName);
+          writeFileSync(targetPath, buffer);
+          const newImgUrl = `/images/products/${safeFileName}`;
+          finalImages = [newImgUrl, ...finalImages.filter((img) => img !== newImgUrl)];
+        } catch (imgErr) {
+          console.error("[Action updateProduct] Image save error:", imgErr);
+        }
+      }
+
       await db
         .update(products)
         .set({
@@ -228,6 +252,7 @@ export const server = {
           basePrice,
           category: category.trim(),
           slug: finalSlug,
+          images: finalImages,
           updatedAt: new Date(),
         })
         .where(eq(products.id, id));

@@ -17,7 +17,7 @@ if (magicToken) {
     const res = await consumeMagicLoginToken(magicToken, { ip, userAgent });
     if (res.success && res.sessionToken) {
       Astro.cookies.set("admin_session", res.sessionToken, {
-        path: "/adminn",
+        path: "/",
         httpOnly: true,
         secure: true,
         sameSite: "lax",
