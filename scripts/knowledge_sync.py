@@ -960,31 +960,26 @@ class CourseScanner:
         parent_dir = parts[-2] if len(parts) >= 2 else ""
         grandparent_dir = parts[-3] if len(parts) >= 3 else ""
 
-        # 1. ESTRATEGIA PLATZI: Token exacto de corchetes en archivo o carpeta inmediata
-        if "PLATZI" in parts:
-            file_tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", filename)
-            for raw_tag in file_tags:
+        # Capa 0: Token universal de corchetes [TAG] en archivo o carpeta inmediata
+        file_tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", filename)
+        for raw_tag in file_tags:
+            tag_up = raw_tag.upper()
+            if tag_up in cls.PLATZI_TAGS_MAP:
+                return (cls.PLATZI_TAGS_MAP[tag_up], f"Token [{tag_up}] en archivo")
+
+        if len(parts) >= 2 and parts[-2] not in ("01_PLAN", "02_BUILD", "03_LAUNCH", "01_Content", "MP3"):
+            parent_tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", parts[-2])
+            for raw_tag in parent_tags:
                 tag_up = raw_tag.upper()
                 if tag_up in cls.PLATZI_TAGS_MAP:
-                    return (cls.PLATZI_TAGS_MAP[tag_up], f"Platzi token [{tag_up}] en archivo")
+                    return (cls.PLATZI_TAGS_MAP[tag_up], f"Token [{tag_up}] en carpeta de curso")
 
-            if len(parts) >= 2:
-                parent_tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", parts[-2])
-                for raw_tag in parent_tags:
-                    tag_up = raw_tag.upper()
-                    if tag_up in cls.PLATZI_TAGS_MAP:
-                        return (cls.PLATZI_TAGS_MAP[tag_up], f"Platzi token [{tag_up}] en carpeta de curso")
+        # Casos especiales de rutas conocidas
+        if "PLATZI" in parts and "monetiza tu talento" in norm_path.lower():
+            return ("ia_prompting", "Platzi track Monetiza tu Talento con IA")
 
-            if "monetiza tu talento" in norm_path.lower():
-                return ("ia_prompting", "Platzi track Monetiza tu Talento con IA")
-
-        # 2. ESTRATEGIA CA: Detección de prefijos ca [TAG]
+        # 2. ESTRATEGIA CA: Detección de prefijos ca [TAG] o multinivel
         if "CA" in parts:
-            ca_tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", filename + " " + (parts[-2] if len(parts) >= 2 else ""))
-            for raw_tag in ca_tags:
-                tag_up = raw_tag.upper()
-                if tag_up in cls.PLATZI_TAGS_MAP:
-                    return (cls.PLATZI_TAGS_MAP[tag_up], f"CA token [{tag_up}]")
             if "MLM_58-18" in parts or "multinivel" in norm_path.lower():
                 return ("ofertas", "CA prospección multinivel y ventas")
 
@@ -1645,7 +1640,8 @@ def cmd_scan(args):
     manifest_mgr = PartitionedManifest()
     uploaded = manifest_mgr.get_uploaded_fingerprints()
 
-    paths = [args.target] if args.target else CourseScanner.DEFAULT_SEARCH_PATHS
+    target = getattr(args, "target_pos", None) or args.target
+    paths = [target] if target else CourseScanner.DEFAULT_SEARCH_PATHS
     total_found = 0
     total_canonical = 0
     pending_canonical = 0
@@ -1833,7 +1829,8 @@ def cmd_compact(args):
 
     target_provider = args.provider.upper() if getattr(args, "provider", None) else None
 
-    paths = [args.target] if args.target else CourseScanner.DEFAULT_SEARCH_PATHS
+    target = getattr(args, "target_pos", None) or args.target
+    paths = [target] if target else CourseScanner.DEFAULT_SEARCH_PATHS
     all_scanned = []
 
     for p in paths:
@@ -1893,7 +1890,8 @@ def cmd_push(args):
     if target_cluster == "ads":
         target_cluster = "paid_ads"
 
-    paths = [args.target] if args.target else CourseScanner.DEFAULT_SEARCH_PATHS
+    target = getattr(args, "target_pos", None) or args.target
+    paths = [target] if target else CourseScanner.DEFAULT_SEARCH_PATHS
     candidates = []
 
     if getattr(args, "compendiums", False):
@@ -2237,6 +2235,7 @@ def main():
 
     # Subcomando: scan
     scan_parser = subparsers.add_parser("scan", help="Escanea cursos sin gastar tokens ni cuota FUSE")
+    scan_parser.add_argument("target_pos", nargs="?", default=None, help="Directorio objetivo opcional (posicional)")
     scan_parser.add_argument("--target", type=str, default=None, help="Directorio objetivo específico")
     scan_parser.add_argument("--max-depth", type=int, default=6, help="Profundidad máxima de escaneo")
     scan_parser.add_argument("--dry-run", action="store_true", help="Tolerado por conveniencia (scan ya es solo lectura por defecto)")
@@ -2246,6 +2245,7 @@ def main():
         "compact",
         help="Compacta y fusiona cursos en compendios Markdown unificados por (Curso, Cluster)",
     )
+    compact_parser.add_argument("target_pos", nargs="?", default=None, help="Directorio objetivo opcional (posicional)")
     compact_parser.add_argument("--target", type=str, default=None, help="Directorio objetivo específico")
     compact_parser.add_argument("--cluster", type=str, default=None, help="Filtrar por cluster específico (ecommerce, funnels, etc.)")
     compact_parser.add_argument("--provider", type=str, default=None, help="Filtrar por proveedor específico (PLATZI, DIGITALMARKETER, etc.)")
@@ -2261,11 +2261,12 @@ def main():
     # Subcomando: init-clusters
     init_parser = subparsers.add_parser(
         "init-clusters",
-        help="Pre-aprovisiona los 11 cuadernos de cluster, inyecta system prompts y exporta clusters.json",
+        help="Pre-aprovisiona los 15 cuadernos de cluster, inyecta system prompts y exporta clusters.json",
     )
 
     # Subcomando: push
     push_parser = subparsers.add_parser("push", help="Ingesta incremental hacia NotebookLM")
+    push_parser.add_argument("target_pos", nargs="?", default=None, help="Directorio objetivo opcional (posicional)")
     push_parser.add_argument("--target", type=str, default=None, help="Directorio objetivo específico")
     push_parser.add_argument("--cluster", type=str, default=None, help="Filtrar por cluster específico (ecommerce, funnels, etc.)")
     push_parser.add_argument("--limit", type=int, default=None, help="Límite máximo de archivos a subir en esta pasada")
