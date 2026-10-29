@@ -2,6 +2,7 @@
 export const prerender = false;
 
 import { getDb, products, productVariants, services, bookings, siteSettings, desc, eq } from "@astrobranding/database";
+import "../../styles/theme.css";
 
 // Handle direct logout navigation query (?logout=1)
 if (Astro.url.searchParams.get("logout") === "1") {
@@ -57,7 +58,6 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
     <title>Panel de Control 360° | Catalina Glamur</title>
     <meta name="robots" content="noindex, nofollow, noarchive" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="stylesheet" href="/styles/theme.css" />
     <style>
       .tab-btn.active {
         background-color: #27272a;
@@ -1527,3 +1527,7 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
     </script>
   </body>
 </html>
+
+<style is:global>
+  @import "../../styles/theme.css";
+</style>
