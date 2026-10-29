@@ -36,7 +36,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Set, Tuple
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 # Inyectar site-packages de uv notebooklm-mcp-cli si existe
 UV_SITE_PACKAGES = "/home/zerops/.local/share/uv/tools/notebooklm-mcp-cli/lib/python3.12/site-packages"
@@ -379,8 +379,12 @@ class CourseCompactor:
                 clean_lesson_title = stem
 
             if dry_run:
-                # Simulación rápida: estima palabras sin descargar ni parsear archivos sobre FUSE
-                words = max(50, it.get("size_bytes", 1000) // 7)
+                # Simulación rápida: solo estima palabras en documentos de texto (.docx, .pdf, .srt, .md)
+                ext = it.get("ext", "").lower()
+                if ext in (".docx", ".pdf", ".srt", ".vtt", ".md", ".txt"):
+                    words = max(50, min(80_000, it.get("size_bytes", 1000) // 7))
+                else:
+                    words = 0
                 total_words += words
                 toc_entries.append(f"{idx}. **{clean_lesson_title}** (~{words} palabras est.)")
                 extracted_sections.append(f"### {idx}. {clean_lesson_title}\n*(Simulación)*")
@@ -478,19 +482,50 @@ class CourseCompactor:
                 continue
 
             meta = cls.extract_course_metadata(it["path"])
-            it["_provider"] = meta["provider"]
+            provider = meta["provider"]
+            if target_provider and provider != target_provider.upper():
+                continue
+
+            # Filtro de Dominio: descartar contenido esotérico / salud / bienestar ajeno al marketing
+            norm_p = re.sub(r"[-_]+", " ", it["path"].lower())
+            if any(bad in norm_p for bad in CourseScanner.NON_MARKETING_KEYWORDS):
+                continue
+
+            it["_provider"] = provider
             it["_course_name"] = meta["course_name"]
             it["_course_dir"] = meta["course_dir"]
 
-            if target_provider and meta["provider"] != target_provider.upper():
-                continue
-
             eligible_items.append(it)
 
-        groups = defaultdict(list)
+        # 1. Agrupar lecciones por curso físico (provider, course_dir, course_name)
+        course_items = defaultdict(list)
         for it in eligible_items:
-            key = (it["_provider"], it["cluster"], it["_course_dir"], it["_course_name"])
-            groups[key].append(it)
+            key = (it["_provider"], it["_course_dir"], it["_course_name"])
+            course_items[key].append(it)
+
+        # 2. Regla de Cohesión de Curso (Course-First Cohesion)
+        # Asigna el 100% de las lecciones del curso a su especialidad dominante
+        groups = defaultdict(list)
+        for (provider, course_dir, course_name), items in course_items.items():
+            cluster_votes = [it["cluster"] for it in items if it.get("cluster") != "general"]
+            if cluster_votes:
+                dominant_cluster = Counter(cluster_votes).most_common(1)[0][0]
+            else:
+                c_course = CourseScanner.match_cluster_keywords(course_name)
+                dominant_cluster = c_course if c_course else "general"
+
+            # Descartar cursos que no pertenecen a ninguna de las 11 especialidades de negocio
+            if dominant_cluster == "general":
+                continue
+
+            if target_cluster and dominant_cluster != target_cluster:
+                continue
+
+            # Alinear todas las lecciones del curso a la especialidad dominante
+            for it in items:
+                it["cluster"] = dominant_cluster
+
+            groups[(provider, dominant_cluster, course_dir, course_name)] = items
 
         total_groups = len(groups)
         print(f"• Cursos únicos detectados para consolidar: {total_groups:,}", flush=True)
@@ -638,19 +673,33 @@ class CourseScanner:
         ".git", ".rclone"
     }
 
+    # Palabras clave y patrones de exclusión para temas ajenos al negocio/marketing
+    NON_MARKETING_KEYWORDS = {
+        "biodecodificacion", "biodecodificación", "constelaciones", "hipnosis", "hipnotica", "hipnótica",
+        "codigos sagrados", "códigos sagrados", "cirugias cuanticas", "cirugías cuánticas", "metodo yuen",
+        "método yuen", "micologia", "micología", "letras hebreas", "vision aural", "visión aural",
+        "astrologica", "astrológica", "dopamine mastery", "dormir mejor", "amor propio",
+        "desafiando imposibles", "tantra", "terapeuta", "terapeutas", "transgeracional", "transgeneracional",
+        "01. desarrollo personal", "02. seducción", "seduccion", "seducción", "sanar trauma",
+        "meditaciones", "meditacion", "meditación", "mesmerismo", "paralelo de embrio", "autoestima",
+        "chakras", "reiki", "sanacion", "sanación", "magia", "esoterico", "esotérico"
+    }
+
     # 11 Especialidades Soberanas
     THEMATIC_CLUSTERS = {
         "copywriting": [
             "copy", "copywriting", "escritura persuasiva", "titular", "titulares",
             "titulo", "titulos", "gancho", "ganchos", "hook", "hooks", "storytelling",
             "narrativa", "persuasion", "redaccion", "redacción", "headline", "headlines",
-            "swipe file", "swipe", "script", "words that sell", "carta de venta", "cartas de venta", "texto persuasivo"
+            "swipe file", "swipe", "script", "words that sell", "carta de venta", "cartas de venta",
+            "carta de ventas", "cartas de ventas", "texto persuasivo", "escribir bien", "redactar", "copywriter"
         ],
         "ofertas": [
-            "oferta", "ofertas", "precio", "pricing", "hormozi", "grand slam", "value equation",
+            "oferta", "ofertas", "precio", "precios", "pricing", "hormozi", "grand slam", "value equation",
             "propuesta de valor", "garantia", "garantía", "offer", "offers", "guarantee",
             "bonus", "stack", "bonus stack", "offer stack", "site offers", "irresistible",
-            "modelos de negocio", "monetiz", "icp", "ideal customer", "ideal client", "cliente ideal", "avatar"
+            "modelos de negocio", "monetiz", "monetizacion", "monetización", "icp", "ideal customer",
+            "ideal client", "cliente ideal", "avatar", "negociacion", "negociación", "ventas", "venta", "vender"
         ],
         "funnels": [
             "funnel", "funnels", "embudo", "embudos", "checkout", "checkouts",
@@ -673,12 +722,13 @@ class CourseScanner:
             "ads", "pauta", "meta ads", "facebook ads", "fb ads", "instagram ads", "tiktok ads",
             "creativo", "creativos", "trafico", "tráfico", "traffic", "anuncio", "anuncios",
             "velocity", "audiencia", "audiencias", "escalado", "paid media", "media buyer",
-            "roas", "ad copy", "google ads", "performance max", "campaign fixer", "campaign", "campaigns"
+            "roas", "ad copy", "google ads", "performance max", "pmax", "campaign fixer", "campaign", "campaigns",
+            "instagram", "reels", "tiktok", "redes sociales", "social media", "youtube ads", "linkedin ads"
         ],
         "branding": [
             "brand", "marca", "branding", "identidad", "arquetipo", "arquetipos",
             "posicionamiento", "category of one", "tono de voz", "authority", "reputation",
-            "brand guidelines", "marca personal"
+            "brand guidelines", "marca personal", "marcap", "marca de poder"
         ],
         "ecommerce": [
             "ecom", "ecommerce", "supply chain", "logistica", "logística", "tienda",
@@ -771,7 +821,7 @@ class CourseScanner:
 
     @classmethod
     def match_cluster_keywords(cls, text: str) -> Optional[str]:
-        """Busca coincidencias exactas por límite de palabra en la matriz de clusters."""
+        """Busca coincidencias exactas por límite de palabra en la matriz de clusters, priorizando frases compuestas."""
         norm_text = cls.normalize_text(text)
         if not norm_text:
             return None
@@ -780,13 +830,21 @@ class CourseScanner:
         priority_order = [
             "ia_prompting", "ux_ui", "whatsapp", "email",
             "ecommerce", "automatizaciones", "paid_ads",
-            "ofertas", "funnels", "branding", "copywriting"
+            "copywriting", "funnels", "ofertas", "branding"
         ]
 
+        # Capa 1: Evaluar frases compuestas (>= 2 palabras) primero por mayor especificidad semántica
         for cluster in priority_order:
-            keywords = cls.THEMATIC_CLUSTERS.get(cluster, [])
-            for kw in keywords:
-                # Blindaje estricto: exige límites de palabra exactos para evitar colisiones de sub-cadenas
+            phrases = [kw for kw in cls.THEMATIC_CLUSTERS.get(cluster, []) if " " in kw]
+            for kw in phrases:
+                pattern = r"\b" + re.escape(kw) + r"\b"
+                if re.search(pattern, norm_text, flags=re.IGNORECASE):
+                    return cluster
+
+        # Capa 2: Evaluar palabras simples con límite de palabra estricto
+        for cluster in priority_order:
+            singles = [kw for kw in cls.THEMATIC_CLUSTERS.get(cluster, []) if " " not in kw]
+            for kw in singles:
                 pattern = r"\b" + re.escape(kw) + r"\b"
                 if re.search(pattern, norm_text, flags=re.IGNORECASE):
                     return cluster
