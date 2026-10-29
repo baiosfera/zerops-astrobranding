@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomInt, pbkdf2Sync, timingSafeEqual } from "crypto";
-import { eq, or, and, gt, desc } from "drizzle-orm";
+import { eq, or, and, gt, desc, isNull } from "drizzle-orm";
 import { getDb } from "./index";
 import { adminUsers, adminOtps, adminSessions, type AdminUser } from "./schema";
 
@@ -206,7 +206,7 @@ export async function requestAdminOtp(telegramUserId: number): Promise<AdminAuth
 
   await db
     .delete(adminOtps)
-    .where(and(eq(adminOtps.userId, user.id), eq(adminOtps.consumedAt, null as any)));
+    .where(and(eq(adminOtps.userId, user.id), isNull(adminOtps.consumedAt)));
 
   await db.insert(adminOtps).values({
     userId: user.id,
@@ -269,7 +269,7 @@ export async function verifyAdminOtp(
       and(
         eq(adminOtps.userId, user.id),
         gt(adminOtps.expiresAt, now),
-        eq(adminOtps.consumedAt, null as any)
+        isNull(adminOtps.consumedAt)
       )
     )
     .orderBy(desc(adminOtps.createdAt))
@@ -463,7 +463,7 @@ export async function verifyAdminWhatsAppOtp(
       and(
         eq(adminOtps.userId, user.id),
         gt(adminOtps.expiresAt, now),
-        eq(adminOtps.consumedAt, null as any)
+        isNull(adminOtps.consumedAt)
       )
     )
     .orderBy(desc(adminOtps.createdAt))
@@ -607,4 +607,111 @@ export async function notifySuperadminAudit(message: string): Promise<void> {
   } catch (err) {
     console.error("[AdminAuth] Failed to send superadmin audit notification:", err);
   }
+}
+
+/**
+ * 4. PATH: 1-Click Telegram Magic Login Link (Zero-typing, instant auth)
+ */
+export async function createTelegramMagicLinkToken(
+  telegramUserId: number
+): Promise<{ success: boolean; token?: string; error?: string }> {
+  const db = getDb();
+  const [user] = await db
+    .select()
+    .from(adminUsers)
+    .where(and(eq(adminUsers.telegramUserId, telegramUserId), eq(adminUsers.isActive, 1)))
+    .limit(1);
+
+  if (!user) {
+    return { success: false, error: "unauthorized_user" };
+  }
+
+  const rawToken = randomBytes(24).toString("hex");
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+  await db.insert(adminOtps).values({
+    userId: user.id,
+    codeHash: tokenHash,
+    attempts: 0,
+    expiresAt,
+  });
+
+  return { success: true, token: rawToken };
+}
+
+/**
+ * Validates and consumes the 1-click magic login token, returning an active 7-day session token
+ */
+export async function consumeMagicLoginToken(
+  rawToken: string,
+  metadata?: { ip?: string; userAgent?: string }
+): Promise<AdminAuthResult> {
+  if (!rawToken || rawToken.trim().length < 16) {
+    return { success: false, error: "invalid_token" };
+  }
+
+  const db = getDb();
+  const tokenHash = createHash("sha256").update(rawToken.trim()).digest("hex");
+  const now = new Date();
+
+  const [otp] = await db
+    .select({
+      otp: adminOtps,
+      user: adminUsers,
+    })
+    .from(adminOtps)
+    .innerJoin(adminUsers, eq(adminOtps.userId, adminUsers.id))
+    .where(
+      and(
+        eq(adminOtps.codeHash, tokenHash),
+        gt(adminOtps.expiresAt, now),
+        isNull(adminOtps.consumedAt),
+        eq(adminUsers.isActive, 1)
+      )
+    )
+    .limit(1);
+
+  if (!otp || !otp.user) {
+    return {
+      success: false,
+      error: "invalid_or_expired_token",
+      message: "El enlace mágico ha expirado o ya fue utilizado.",
+    };
+  }
+
+  // Invalidate OTP (single-use)
+  await db.update(adminOtps).set({ consumedAt: now }).where(eq(adminOtps.id, otp.otp.id));
+
+  // Generate 7-day cryptographic session
+  const rawSessionToken = randomBytes(32).toString("hex");
+  const sessionTokenHash = createHash("sha256").update(rawSessionToken).digest("hex");
+  const sessionId = randomBytes(16).toString("hex");
+  const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  await db.insert(adminSessions).values({
+    id: sessionId,
+    userId: otp.user.id,
+    sessionTokenHash,
+    expiresAt: sessionExpiresAt,
+    ipAddress: metadata?.ip || null,
+    userAgent: metadata?.userAgent || null,
+  });
+
+  notifySuperadminAudit(
+    `🔐 <b>Inicio de sesión en /adminn (1-Clic Telegram)</b>\nUsuario: <b>${otp.user.name}</b> (${otp.user.role})\nIP: <code>${metadata?.ip || "Desconocida"}</code>`
+  ).catch(() => {});
+
+  return {
+    success: true,
+    sessionToken: rawSessionToken,
+    user: {
+      id: otp.user.id,
+      name: otp.user.name,
+      role: otp.user.role,
+      telegramUserId: otp.user.telegramUserId ? Number(otp.user.telegramUserId) : undefined,
+      username: otp.user.username,
+      email: otp.user.email,
+    },
+  };
 }

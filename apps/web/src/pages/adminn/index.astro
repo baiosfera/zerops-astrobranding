@@ -1,7 +1,33 @@
 ---
 export const prerender = false;
 
-// If already authenticated, redirect to dashboard
+// 1. Check for 1-Click Magic Link Token (?token=...)
+const magicToken = Astro.url.searchParams.get("token");
+let magicError = "";
+if (magicToken) {
+  const { consumeMagicLoginToken } = await import("@astrobranding/database");
+  const ip =
+    Astro.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    Astro.clientAddress ||
+    "N/A";
+  const userAgent = Astro.request.headers.get("user-agent") || "N/A";
+
+  const res = await consumeMagicLoginToken(magicToken, { ip, userAgent });
+  if (res.success && res.sessionToken) {
+    Astro.cookies.set("admin_session", res.sessionToken, {
+      path: "/adminn",
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+    });
+    return Astro.redirect("/adminn/dashboard");
+  } else {
+    magicError = res.message || "El enlace de 1 clic ha expirado o ya fue utilizado.";
+  }
+}
+
+// 2. If already authenticated, redirect to dashboard
 if (Astro.locals.adminUser) {
   return Astro.redirect("/adminn/dashboard");
 }
@@ -30,7 +56,9 @@ if (Astro.locals.adminUser) {
       </div>
 
       <!-- Error / Notice Box -->
-      <div id="alertBox" class="hidden mb-6 p-4 rounded-xl text-sm border transition-all"></div>
+      <div id="alertBox" class={`mb-6 p-4 rounded-xl text-sm border transition-all ${magicError ? 'bg-red-950/50 border-red-800 text-red-200' : 'hidden'}`}>
+        {magicError}
+      </div>
 
       <!-- Navigation Tabs for Auth Methods -->
       <div class="grid grid-cols-3 gap-1 bg-zinc-950/80 p-1 rounded-xl border border-zinc-800 mb-6 text-xs font-medium">
@@ -106,83 +134,110 @@ if (Astro.locals.adminUser) {
 
       <!-- TAB 2: Telegram Form -->
       <div id="tabContentTelegram" class="hidden space-y-5">
-        <!-- Request OTP -->
-        <form id="telegramRequestForm" class="space-y-4">
-          <div>
-            <label for="telegramId" class="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2">
-              ID de Telegram
-            </label>
-            <input
-              type="text"
-              id="telegramId"
-              name="telegramUserId"
-              required
-              pattern="[0-9]+"
-              inputmode="numeric"
-              placeholder="Ej: 8971481206"
-              class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/50 transition-all font-mono text-sm"
-            />
-            <p class="text-xs text-zinc-500 mt-2">
-              Recibirás un código en tu chat con
-              <a href="https://t.me/hermes_glamur_bot" target="_blank" rel="noopener noreferrer" class="text-amber-400 hover:underline">@hermes_glamur_bot</a>.
-            </p>
-          </div>
-
-          <button
-            type="submit"
-            id="btnTgRequest"
-            class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold py-3 px-4 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
-          >
-            <span id="btnTgRequestText">Enviar Código por Telegram</span>
-            <svg id="btnTgRequestSpinner" class="hidden animate-spin h-5 w-5 text-zinc-950" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        <div class="text-center p-5 bg-zinc-950/70 rounded-xl border border-zinc-800 space-y-3">
+          <div class="inline-flex p-3 bg-amber-500/10 text-amber-400 rounded-full">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.121l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.197 1.006.128.832.942z"/>
             </svg>
-          </button>
-        </form>
-
-        <!-- Verify Telegram OTP -->
-        <form id="telegramVerifyForm" class="hidden space-y-4">
-          <div>
-            <div class="flex justify-between items-center mb-2">
-              <label for="tgOtpCode" class="block text-xs font-semibold uppercase tracking-wider text-zinc-300">
-                Código Telegram
-              </label>
-              <span id="tgCooldownSpan" class="text-xs text-zinc-500 font-mono"></span>
-            </div>
-            <input
-              type="text"
-              id="tgOtpCode"
-              name="code"
-              required
-              maxlength="6"
-              pattern="[0-9]{6}"
-              inputmode="numeric"
-              placeholder="······"
-              class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-center text-2xl tracking-[0.5em] font-mono font-bold text-amber-400 placeholder-zinc-700 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
-            />
           </div>
-
-          <button
-            type="submit"
-            id="btnTgVerify"
-            class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold py-3 px-4 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+          <h3 class="text-sm font-semibold text-white">Acceso 1 Clic con Telegram</h3>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            No necesitas saber ni escribir ningún ID numérico. Simplemente abre tu bot de Telegram y toca el botón para entrar:
+          </p>
+          <a
+            href="https://t.me/hermes_glamur_bot?start=login"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center justify-center w-full py-3 px-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-semibold rounded-xl text-sm transition-all shadow-lg shadow-sky-500/15 space-x-2"
           >
-            <span id="btnTgVerifyText">Verificar e Ingresar</span>
-            <svg id="btnTgVerifySpinner" class="hidden animate-spin h-5 w-5 text-zinc-950" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <span>Abrir Bot y Entrar en 1 Clic</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
             </svg>
-          </button>
+          </a>
+          <p class="text-[11px] text-zinc-500">
+            O envíale el comando <code class="text-amber-400 font-mono">/login</code> a @hermes_glamur_bot.
+          </p>
+        </div>
 
-          <button
-            type="button"
-            id="btnTgBack"
-            class="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors text-center"
-          >
-            ← Cambiar ID de Telegram
-          </button>
-        </form>
+        <details class="text-xs text-zinc-500 pt-1">
+          <summary class="cursor-pointer hover:text-zinc-300 transition-colors font-medium text-center">
+            ¿Preferís ingresar con ID numérico y código OTP?
+          </summary>
+          <div class="mt-4 space-y-4">
+            <!-- Request OTP -->
+            <form id="telegramRequestForm" class="space-y-4">
+              <div>
+                <label for="telegramId" class="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2">
+                  ID de Telegram
+                </label>
+                <input
+                  type="text"
+                  id="telegramId"
+                  name="telegramUserId"
+                  pattern="[0-9]+"
+                  inputmode="numeric"
+                  placeholder="Ej: 8971481206"
+                  class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/50 transition-all font-mono text-sm"
+                />
+              </div>
+
+              <button
+                type="submit"
+                id="btnTgRequest"
+                class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+              >
+                <span id="btnTgRequestText">Enviar Código OTP</span>
+                <svg id="btnTgRequestSpinner" class="hidden animate-spin h-4 w-4 text-zinc-950" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </button>
+            </form>
+
+            <!-- Verify Telegram OTP -->
+            <form id="telegramVerifyForm" class="hidden space-y-4">
+              <div>
+                <div class="flex justify-between items-center mb-2">
+                  <label for="tgOtpCode" class="block text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                    Código Telegram
+                  </label>
+                  <span id="tgCooldownSpan" class="text-xs text-zinc-500 font-mono"></span>
+                </div>
+                <input
+                  type="text"
+                  id="tgOtpCode"
+                  name="code"
+                  maxlength="6"
+                  pattern="[0-9]{6}"
+                  inputmode="numeric"
+                  placeholder="······"
+                  class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-center text-2xl tracking-[0.5em] font-mono font-bold text-amber-400 placeholder-zinc-700 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                />
+              </div>
+
+              <button
+                type="submit"
+                id="btnTgVerify"
+                class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+              >
+                <span id="btnTgVerifyText">Verificar e Ingresar</span>
+                <svg id="btnTgVerifySpinner" class="hidden animate-spin h-4 w-4 text-zinc-950" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                id="btnTgBack"
+                class="w-full py-1 text-xs text-zinc-400 hover:text-white transition-colors text-center"
+              >
+                ← Volver a Enviar Código
+              </button>
+            </form>
+          </div>
+        </details>
       </div>
 
       <!-- TAB 3: WhatsApp Form -->
