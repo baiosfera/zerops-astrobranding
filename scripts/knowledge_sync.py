@@ -378,6 +378,14 @@ class CourseCompactor:
             if not clean_lesson_title:
                 clean_lesson_title = stem
 
+            if dry_run:
+                # Simulación rápida: estima palabras sin descargar ni parsear archivos sobre FUSE
+                words = max(50, it.get("size_bytes", 1000) // 7)
+                total_words += words
+                toc_entries.append(f"{idx}. **{clean_lesson_title}** (~{words} palabras est.)")
+                extracted_sections.append(f"### {idx}. {clean_lesson_title}\n*(Simulación)*")
+                continue
+
             content = TextContentExtractor.extract(fpath)
             if not content:
                 continue
@@ -484,8 +492,13 @@ class CourseCompactor:
             key = (it["_provider"], it["cluster"], it["_course_dir"], it["_course_name"])
             groups[key].append(it)
 
+        total_groups = len(groups)
+        print(f"• Cursos únicos detectados para consolidar: {total_groups:,}", flush=True)
+
         compendiums = []
-        for (provider, cluster, course_dir, course_name), items in groups.items():
+        for idx, ((provider, cluster, course_dir, course_name), items) in enumerate(groups.items(), 1):
+            if idx % 10 == 0 or idx == 1 or idx == total_groups:
+                print(f"  [{idx}/{total_groups}] Analizando: [{provider}] [{cluster.upper()}] {course_name} ({len(items)} items)...", flush=True)
             comp = cls.compact_group(
                 provider=provider,
                 cluster=cluster,
