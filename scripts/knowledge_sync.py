@@ -448,11 +448,14 @@ class CourseCompactor:
                 extracted_sections.append(f"### {section_idx}. {clean_lesson_title}\n*(Simulación)*")
                 continue
 
-            if CourseScanner.is_scaffold_stub(fpath) or CourseScanner.is_non_llm_auxiliary(fpath):
+            if CourseScanner.is_scaffold_stub(fpath) or CourseScanner.is_non_llm_auxiliary(fpath) or CourseScanner.is_placeholder_or_duplicate(fpath):
                 continue
 
             content = TextContentExtractor.extract(fpath)
             if not content:
+                continue
+
+            if CourseScanner.is_placeholder_or_duplicate(fpath, content):
                 continue
 
             # Descartar stubs residuales o secciones de solo enlaces a medios
@@ -484,16 +487,8 @@ class CourseCompactor:
         if not extracted_sections or total_words < min_words_threshold:
             return None
 
-        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         header = (
-            f"# COMPENDIO DE CONOCIMIENTO: {cluster.upper()} — {course_name}\n\n"
-            f"> **Especialidad / Cluster**: `{cluster.upper()}`  \n"
-            f"> **Proveedor / Origen**: `{provider}`  \n"
-            f"> **Curso / Módulo**: `{course_name}`  \n"
-            f"> **Lecciones Consolidadas**: {len(extracted_sections)} de {len(items)} analizadas  \n"
-            f"> **Volumen Estimado**: {total_words:,} palabras  \n"
-            f"> **Fecha de Generación**: {now_iso}  \n\n"
-            f"---\n\n"
+            f"# [{provider}] [{cluster.upper()}] — {course_name}\n\n"
             f"## 📑 Índice de Lecciones y Documentos\n\n"
             + "\n".join(toc_entries)
             + "\n\n---\n\n"
@@ -574,63 +569,65 @@ class CourseCompactor:
         c_title = CourseScanner.match_cluster_keywords(clean_name)
         c_phrase = CourseScanner.match_cluster_phrases(clean_name)
 
+        raw_cluster: Optional[str] = None
+
         # 3. Proveedor PLATZI
         if provider == "PLATZI" and m_tag and m_tag in CourseScanner.PLATZI_TAGS_MAP:
             tag_cluster = CourseScanner.PLATZI_TAGS_MAP[m_tag]
             coarse_tags = {"DEV", "GROWTH", "INVEST", "MKTN", "WORKING", "VENTAS"}
             if m_tag in coarse_tags:
-                if c_title:
-                    return c_title
-                return tag_cluster
+                raw_cluster = c_title if c_title else tag_cluster
             else:
-                # Tag específico (UXUI, SEO, ECOM, AUTOM, AI, DATA, SOCIAL, COPY, BRANDING)
-                # Si el título tiene frase compuesta fuerte de otra área específica (ej: whatsapp business):
-                if c_phrase and c_phrase in ("whatsapp", "paid_ads", "ia_prompting", "automatizaciones"):
-                    return c_phrase
-                return tag_cluster
+                if c_phrase and c_phrase in ("whatsapp_conversational", "paid_ads", "ai_prompting_agents", "automations_workflows"):
+                    raw_cluster = c_phrase
+                else:
+                    raw_cluster = tag_cluster
 
         # 4. Proveedor DIGITALMARKETER
-        if provider == "DIGITALMARKETER":
+        elif provider == "DIGITALMARKETER":
             if c_title:
-                return c_title
-            c_dir = CourseScanner.match_cluster_keywords(os.path.basename(course_dir))
-            if c_dir:
-                return c_dir
+                raw_cluster = c_title
+            else:
+                c_dir = CourseScanner.match_cluster_keywords(os.path.basename(course_dir))
+                if c_dir:
+                    raw_cluster = c_dir
 
         # 5. Proveedores CA, SCVIP, MCV, LUIS-INESTROSA, VELOCITYMEDIA
-        if m_tag and m_tag in CourseScanner.PLATZI_TAGS_MAP:
-            return CourseScanner.PLATZI_TAGS_MAP[m_tag]
-
-        lower_name = clean_name.lower()
-        if "ca-marcap" in lower_name or "cua-marcap" in lower_name:
-            return "branding"
-        if "ca-vsl" in lower_name:
-            return "copywriting"
-        if "ca-oferta" in lower_name or "ca-price" in lower_name or "mlm_58-18" in lower_name:
-            return "ofertas"
-        if "ca-funnels" in lower_name or "cua-funnels" in lower_name:
-            return "funnels"
-        if "cua-ads" in lower_name:
-            return "paid_ads"
-        if "cua-ai" in lower_name:
-            return "ia_prompting"
-        if "ca-seo" in lower_name:
-            return "seo"
-
-        if c_title:
-            return c_title
-
-        if course_dir:
-            c_dir = CourseScanner.match_cluster_keywords(os.path.basename(course_dir))
-            if c_dir:
-                return c_dir
+        elif m_tag and m_tag in CourseScanner.PLATZI_TAGS_MAP:
+            raw_cluster = CourseScanner.PLATZI_TAGS_MAP[m_tag]
+        else:
+            lower_name = clean_name.lower()
+            if "ca-marcap" in lower_name or "cua-marcap" in lower_name:
+                raw_cluster = "branding_authority"
+            elif "ca-vsl" in lower_name:
+                raw_cluster = "copywriting"
+            elif "ca-oferta" in lower_name or "ca-price" in lower_name or "mlm_58-18" in lower_name:
+                raw_cluster = "offers_pricing"
+            elif "ca-funnels" in lower_name or "cua-funnels" in lower_name:
+                raw_cluster = "funnels_cro"
+            elif "cua-ads" in lower_name:
+                raw_cluster = "paid_ads"
+            elif "cua-ai" in lower_name:
+                raw_cluster = "ai_prompting_agents"
+            elif "ca-seo" in lower_name:
+                raw_cluster = "seo_aeo"
+            elif c_title:
+                raw_cluster = c_title
+            elif course_dir:
+                c_dir = CourseScanner.match_cluster_keywords(os.path.basename(course_dir))
+                if c_dir:
+                    raw_cluster = c_dir
 
         # 6. Fallback final por micro-lecciones
-        cluster_votes = [it["cluster"] for it in items if it.get("cluster") not in ("general", None)]
-        if cluster_votes:
-            return Counter(cluster_votes).most_common(1)[0][0]
+        if not raw_cluster or raw_cluster == "general":
+            cluster_votes = [it["cluster"] for it in items if it.get("cluster") not in ("general", None)]
+            if cluster_votes:
+                raw_cluster = Counter(cluster_votes).most_common(1)[0][0]
 
-        return None
+        if not raw_cluster:
+            return None
+
+        return CourseScanner.CANONICAL_CLUSTER_MAP.get(raw_cluster, raw_cluster)
 
     @classmethod
     def compact_all(
@@ -673,31 +670,45 @@ class CourseCompactor:
             key = (it["_provider"], it["_course_dir"], it["_course_name"])
             course_items[key].append(it)
 
-        # 2. Regla de Cohesión y Clasificación Macro-First Blindada
+        # 2. Partición Multi-Compendio y Clasificación Semántica por Lección
         groups = defaultdict(list)
         for (provider, course_dir, course_name), items in course_items.items():
-            dominant_cluster = cls.determine_course_cluster(
+            macro_cluster = cls.determine_course_cluster(
                 provider=provider,
                 course_name=course_name,
                 course_dir=course_dir,
                 items=items,
             )
+            macro_canon = CourseScanner.CANONICAL_CLUSTER_MAP.get(macro_cluster, macro_cluster) if macro_cluster else None
 
-            # Descartar cursos excluidos o sin especialidad canónica
-            if not dominant_cluster or dominant_cluster == "general":
-                continue
-
-            if target_cluster and dominant_cluster != target_cluster:
-                continue
-
-            # Alinear todas las lecciones del curso a la especialidad dominante
             for it in items:
-                it["cluster"] = dominant_cluster
+                fname = os.path.basename(it["path"])
+                item_cluster = it.get("cluster")
 
-            groups[(provider, dominant_cluster, course_dir, course_name)] = items
+                # Prioridad 1: Frase clave específica en el archivo de la lección
+                c_phrase = CourseScanner.match_cluster_phrases(fname)
+                if c_phrase:
+                    target_c = CourseScanner.CANONICAL_CLUSTER_MAP.get(c_phrase, c_phrase)
+                # Prioridad 2: Cluster pre-clasificado a nivel de lección si es canónico y no genérico
+                elif item_cluster and item_cluster not in ("general", None):
+                    target_c = CourseScanner.CANONICAL_CLUSTER_MAP.get(item_cluster, item_cluster)
+                # Prioridad 3: Fallback al cluster macro del curso contenedor
+                elif macro_canon and macro_canon != "general":
+                    target_c = macro_canon
+                else:
+                    target_c = None
+
+                if not target_c or target_c == "general":
+                    continue
+
+                if target_cluster and target_c != target_cluster:
+                    continue
+
+                it["cluster"] = target_c
+                groups[(provider, target_c, course_dir, course_name)].append(it)
 
         total_groups = len(groups)
-        print(f"• Cursos únicos detectados para consolidar: {total_groups:,}", flush=True)
+        print(f"• Compendios únicos a consolidar (partición multi-compendio): {total_groups:,}", flush=True)
 
         compendiums = []
         for idx, ((provider, cluster, course_dir, course_name), items) in enumerate(groups.items(), 1):
@@ -870,150 +881,196 @@ class CourseScanner:
         r"ejercicio", r"imprimible", r"audit[-_ 20]*print", r"fillable"
     ]
 
-    # 15 Especialidades Soberanas Canónicas
+    # 18 Especialidades Soberanas Canónicas (Customer Value Journey & Business Life Cycle)
     THEMATIC_CLUSTERS = {
-        "seo": [
-            "seo", "search marketing", "search engine", "google search console", "gsc", "semrush",
-            "ahrefs", "seo tecnico", "seo técnico", "posicionamiento web", "aeo", "geo",
-            "busquedas organicas", "búsquedas orgánicas", "consultorias seo", "consultorías seo",
-            "linkbuilding", "backlinks", "keyword research", "palabras clave", "seo 101", "search strategy"
+        "avatar_research": [
+            "icp", "ideal customer profile", "buyer persona", "avatar", "cliente ideal", "publico objetivo",
+            "público objetivo", "dolores del cliente", "mapa de empatia", "mapa de empatía", "customer research",
+            "investigacion de usuarios", "investigación de usuarios", "investigacion de mercado", "investigación de mercado",
+            "jobs to be done", "jtbd", "thick data", "customer interviews", "entrevistas a clientes", "focus group",
+            "etnografia digital", "etnografía digital", "segmentacion psicografica", "segmentación psicográfica",
+            "segmentacion de mercado", "arquetipos de cliente", "dolores y deseos", "customer empathy", "user research"
         ],
-        "data_analytics": [
-            "analytics", "google analytics", "ga4", "google tag manager", "gtm", "metricas",
-            "métricas", "tracking", "data mastery", "analitica digital", "analítica digital",
-            "analitica web", "analítica web", "informes para marketing", "reportes de redes sociales",
-            "ciencia de datos para negocio", "medir el crecimiento", "tag manager", "tracking de datos",
-            "business intelligence", "dashboards", "metricas para startups", "thick data"
+        "branding_authority": [
+            "branding", "brand", "marca", "marcap", "marca personal", "personal brand", "marca de poder", "identidad de marca",
+            "brand identity", "tono de voz", "manual de marca", "brandbook", "brand guidelines", "posicionamiento",
+            "positioning", "authority", "autoridad", "categoria de uno", "categoría de uno", "category of one",
+            "become the go to expert", "celebrity marketer", "brief creativo", "arquitectura de marca", "brand equity",
+            "brand ambassadors", "propuesta de valor de marca", "brand story", "brand positioning", "reputacion", "reputación"
+        ],
+        "offers_pricing": [
+            "oferta", "ofertas", "offer", "offers", "precio", "precios", "ofertas irresistibles", "irresistible offer",
+            "grand slam", "grand slam offer", "propuesta de valor", "pricing", "fijacion de precios", "fijación de precios",
+            "value based pricing", "pricing por valor", "precio de valor", "hormozi", "value equation", "ecuacion de valor",
+            "ecuación de valor", "garantia", "garantía", "guarantee", "bonus stack", "stack de bonos", "offer stack",
+            "price elasticity", "elasticidad de precio", "high ticket", "high-ticket", "premium pricing", "inversion vs retorno",
+            "estructuracion de ofertas", "site offers", "offer architect"
         ],
         "social_media": [
-            "social media", "redes sociales", "community manager", "community management",
-            "instagram", "reels", "tiktok", "youtube", "linkedin", "social challenge",
-            "creadores de video", "produccion para youtube", "producción para youtube",
-            "podcast", "podcasting", "facebook group", "facebook page", "scroll stopping",
-            "estrategias de contenido para linkedin", "creacion de reels", "divulgacion educativa en youtube",
-            "listening en redes sociales", "crecimiento en redes", "youtube subscribers"
+            "social media", "redes sociales", "instagram", "reels", "tiktok", "youtube", "linkedin", "community manager",
+            "community management", "contenido organico", "contenido orgánico", "carrusel", "carruseles", "posts",
+            "historias", "stories", "tiktok creativo", "creadores de video", "produccion para youtube", "producción para youtube",
+            "podcast", "podcasting", "listening en redes", "crecimiento en redes", "viral content", "social strategy",
+            "youtube subscribers", "scroll stopping", "estrategias de contenido para linkedin"
         ],
-        "product_management": [
-            "product management", "product manager", "product owner", "product design",
-            "product discovery", "scrum", "scrum master", "agile", "agile delivery", "pmbok",
-            "gestion de proyectos", "gestión de proyectos", "project management",
-            "evaluacion financiera de proyectos", "evaluación financiera de proyectos",
-            "planeacion estrategica", "planeación estratégica", "pensamiento estrategico",
-            "pensamiento estratégico", "business model canvas", "modelos de negocio",
-            "lean startup", "mvp", "crear mvp", "startups", "startup", "primeros clientes",
-            "cultura startup", "head of marketing bootcamp", "marketing momentum", "momentum blockers"
-        ],
-        "copywriting": [
-            "copy", "copywriting", "escritura persuasiva", "titular", "titulares",
-            "titulo", "titulos", "gancho", "ganchos", "hook", "hooks", "storytelling",
-            "narrativa", "persuasion", "redaccion", "redacción", "headline", "headlines",
-            "swipe file", "swipe files", "swipe", "script", "words that sell", "carta de venta",
-            "cartas de venta", "carta de ventas", "cartas de ventas", "texto persuasivo",
-            "escribir bien", "redactar", "copywriter", "vsl", "video sales letter",
-            "direct response copywriter", "pillar blog post", "content cluster strategy",
-            "blog builder", "content marketing mastery", "titulares que venden"
-        ],
-        "ofertas": [
-            "oferta", "ofertas", "precio", "precios", "pricing", "hormozi", "grand slam", "value equation",
-            "propuesta de valor", "garantia", "garantía", "offer", "offers", "guarantee",
-            "bonus", "stack", "bonus stack", "offer stack", "site offers", "irresistible",
-            "icp", "ideal customer", "ideal client", "cliente ideal", "avatar", "negociacion",
-            "negociación", "ventas", "venta", "vender", "1-call close", "one call close", "the 1 call close",
-            "close masterclass", "conferencias que venden", "habla y vendete bien", "habla y vendete",
-            "cierre de ventas", "cerrar ventas", "promociones", "profitable promotions", "giveaway promotion",
-            "high ticket", "high-ticket", "manejo de objeciones", "objection handling", "tacticas de venta",
-            "inmersion de ventas", "venta logica emocional", "ventas b2b", "ventas b2c", "master en ventas"
-        ],
-        "funnels": [
-            "funnel", "funnels", "embudo", "embudos", "checkout", "checkouts",
-            "bump", "order bump", "upsell", "downsell", "cvj", "customer value journey",
-            "landing", "landing page", "landings", "conversion", "conversiones",
-            "optin", "squeeze", "squeeze page", "lead magnet", "cro", "ab testing",
-            "tripwire", "home page", "homepage", "quiz funnel", "funnel builder", "split test",
-            "microembudos", "embudo 2k"
-        ],
-        "whatsapp": [
-            "whatsapp", "whatsapp business", "whatsapp marketing", "chatbot", "chatbots",
-            "cierre por chat", "mensajeria", "mensajería", "conversacional", "conversational commerce",
-            "atencion al cliente", "atención al cliente", "rapport para atencion al cliente"
-        ],
-        "email": [
-            "email", "correo", "newsletter", "newsletters", "nurture", "secuencia", "secuencias", "listmonk",
-            "broadcast", "subject line", "autoresponder", "welcome sequence", "cold email",
-            "re engagement", "entregabilidad", "email marketing", "dmarc", "dkim",
-            "email promo", "email follow-up", "customer-centric emails", "email newsletter"
+        "seo_aeo": [
+            "seo", "search engine optimization", "posicionamiento web", "posicionamiento organico", "posicionamiento orgánico",
+            "google search console", "gsc", "semrush", "ahrefs", "seo tecnico", "seo técnico", "aeo",
+            "answer engine optimization", "geo", "generative engine optimization", "searchgpt", "perplexity seo",
+            "backlinks", "link building", "linkbuilding", "keyword research", "palabras clave", "intencion de busqueda",
+            "intención de búsqueda", "seo para ecommerce", "search strategy", "consultorias seo", "consultorías seo"
         ],
         "paid_ads": [
-            "ads", "pauta", "meta ads", "facebook ads", "fb ads", "instagram ads", "tiktok ads",
-            "tiktok ad", "google search ads", "search ads", "search ad", "google search ad",
-            "trafico", "tráfico", "traffic", "anuncio", "anuncios",
-            "velocity", "audiencia", "audiencias", "escalado", "paid media", "media buyer",
-            "media buying", "roas", "ad copy", "google ads", "performance max", "pmax", "campaign fixer",
-            "campaign fix", "campaigns", "campaign", "display ads", "display ad", "video ad",
-            "video ads", "youtube ads", "youtube ad", "linkedin ads", "linkedin ad", "pinterest ads",
-            "pinterest ad", "paid traffic", "scaling academy", "ad playbook", "ads playbook",
-            "ad creative", "ad creatives", "creativos para anuncios"
+            "ads", "paid ads", "pauta", "pauta publicitaria", "meta ads", "meta ad", "facebook ads", "facebook ad",
+            "fb ads", "fb ad", "instagram ads", "instagram ad", "campañas publicitarias", "campanas publicitarias",
+            "campaña publicitaria", "campana publicitaria", "anuncios en meta", "anuncios en instagram", "google ads",
+            "google ad", "google search ads", "google search ad", "performance max", "pmax", "tiktok ads", "tiktok ad",
+            "linkedin ads", "linkedin ad", "roas", "cpa", "cpm", "media buying", "media buyer", "creativos para anuncios",
+            "ad creatives", "business manager", "administrador de anuncios", "pixel de meta", "capi", "retargeting",
+            "remarketing", "audiencias personalizadas", "lookalike", "scaling academy", "ad playbook", "ads playbook"
         ],
-        "branding": [
-            "branding", "brand", "marca", "marcap", "marca personal", "personal brand",
-            "marca de poder", "identidad", "tono de voz", "arquetipo", "arquetipos",
-            "brief creativo", "brief", "posicionamiento", "authority", "reputation",
-            "brand guidelines", "become the go-to expert", "category of one", "celebrity marketer",
-            "benchmarking", "investigacion para el branding"
+        "copywriting": [
+            "copy", "copywriting", "redaccion persuasiva", "redacción persuasiva", "titular", "titulares", "headline",
+            "headlines", "gancho", "ganchos", "hook", "hooks", "storytelling", "narrativa", "cartas de venta",
+            "carta de venta", "sales letter", "vsl", "video sales letter", "textos que venden", "persuasion", "persuasión",
+            "direct response copywriter", "swipe file", "formulas de copy", "bullet points", "balas persuasivas",
+            "copywriting de respuesta directa", "words that sell", "pillar blog post", "titulares que venden"
         ],
-        "ecommerce": [
-            "ecommerce", "ecom", "tienda", "tiendas online", "vender por internet", "shopify",
-            "woocommerce", "dropshipping", "catalogo", "catálogo", "inventario", "logistica",
-            "logística", "supply chain", "red de valor", "product page", "product pages",
-            "ficha de producto", "amazon", "retail"
+        "funnels_cro": [
+            "funnel", "funnels", "embudo", "embudos", "embudos de venta", "landing", "landing page", "landings",
+            "home page", "homepage", "optimizer", "page optimizer", "paginas de captura", "páginas de captura",
+            "checkout", "checkouts", "order bump", "bump", "upsell", "downsell", "cro",
+            "conversion rate optimization", "optimizacion de conversion", "optimización de conversión",
+            "ab testing", "split testing", "lead magnet", "squeeze page", "optin", "microembudos", "embudo de ventas",
+            "embudos automatizados", "customer value journey", "cvj", "quiz funnel"
         ],
-        "automatizaciones": [
-            "automatizacion", "automatizaciones", "automatización", "automation", "automations",
-            "make", "zapier", "n8n", "webhook", "webhooks", "workflow", "workflows",
-            "no code", "nocode", "rpa", "hiperautomatizacion", "crm", "autom",
-            "procesos de marketing", "client on-boarding"
+        "whatsapp_conversational": [
+            "whatsapp", "whatsapp marketing", "whatsapp business", "ventas por whatsapp", "chatbot", "chatbots",
+            "bot de whatsapp", "comercio conversacional", "conversational commerce", "cierre por chat", "secuencias de whatsapp",
+            "mensajes masivos de whatsapp", "mensajes por chat", "difusion whatsapp", "difusiones whatsapp",
+            "rapport por chat", "atencion conversacional", "atencion al cliente", "atención al cliente"
         ],
-        "ia_prompting": [
-            "ia para", "prompt", "prompting", "prompts", "chatgpt", "gpt", "gpts", "claude",
-            "midjourney", "llm", "llms", "inteligencia artificial", "artificial intelligence",
-            "ingenieria de prompt", "ingeniería de prompt", "context vault", "ai assistant",
-            "ai assistants", "ai essentials", "ai tools", "ai prompt", "ai system", "ai systems",
-            "ai search", "ai engine", "ai engines", "prompt toolkit", "agentes de ia", "agentes ai",
-            "gemini", "copilot", "langsmith", "observabilidad de agentes", "ai profits"
+        "consultative_sales": [
+            "ventas consultivas", "ventas b2b", "prospeccion", "prospección", "llamadas de venta", "sales calls",
+            "closing calls", "cierre de ventas", "cerrar ventas", "1 call close", "1-call close", "one call close",
+            "the 1 call close", "manejo de objeciones", "objection handling", "pitch de ventas", "sales pitch",
+            "conferencias que venden", "habla y vendete bien", "ventas de alto valor", "high ticket sales",
+            "negociacion", "negociación", "pipeline de ventas", "sales qualification", "meddpicc", "bant",
+            "inmersion de ventas", "venta logica emocional"
         ],
-        "ux_ui": [
-            "ux", "ui", "ux/ui", "ui/ux", "uxui", "interfaz", "interfaces", "figma", "storybook",
-            "design systems", "sistemas de diseno", "sistemas de diseño", "design thinking",
-            "designthinking", "teoria del color", "teoría del color", "manejo del color",
-            "tipografia", "tipografía", "composicion visual", "composición visual",
-            "direccion de arte", "dirección de arte", "diseno centrado", "diseño centrado",
-            "wireframe", "wireframing", "accesibilidad", "user research", "ux research",
-            "investigacion de usuarios", "investigación de usuarios", "wordpress", "web"
+        "email_marketing": [
+            "email", "email marketing", "correo electronico", "correo electrónico", "newsletters", "newsletter",
+            "autoresponder", "welcome sequence", "secuencias de email", "nurture", "secuencia de bienvenida",
+            "entregabilidad", "dmarc", "dkim", "cold email", "email copywriting", "difusiones por correo",
+            "listmonk", "broadcast de email", "secuencias automatizadas de correo", "email follow up", "customer centric emails"
         ],
+        "customer_success": [
+            "customer success", "retencion de clientes", "retención de clientes", "reduccion de churn", "reducción de churn",
+            "churn rate", "fidelizacion de clientes", "fidelización de clientes", "onboarding de clientes", "soporte al cliente",
+            "net promoter score", "nps", "satisfaccion del cliente", "satisfacción del cliente", "exito del cliente",
+            "éxito del cliente", "servicio al cliente", "experiencia del cliente", "customer experience", "cx"
+        ],
+        "growth_loops": [
+            "growth loops", "growth hacking", "marketing viral", "viral marketing", "viralidad", "bucles de crecimiento",
+            "programas de referidos", "referidos", "referral program", "boca a boca", "word of mouth", "flywheel",
+            "k factor", "product led growth", "plg", "aceleracion de crecimiento", "crecimiento exponencial", "habit loops"
+        ],
+        "ecommerce_stores": [
+            "ecommerce", "e-commerce", "tiendas online", "tienda online", "tienda", "tiendas", "vender por internet",
+            "shopify", "woocommerce", "dropshipping", "catalogo de productos", "catálogo de productos", "inventario",
+            "logistica", "logística", "supply chain", "envios", "pasarelas de pago", "pago contra entrega", "cod",
+            "cash on delivery", "ficha de producto", "product page", "devoluciones", "retail", "amazon"
+        ],
+        "automations_workflows": [
+            "automatizacion", "automatizaciones", "automatización", "automation", "automations", "make", "zapier",
+            "n8n", "webhook", "webhooks", "workflow", "workflows", "no code", "nocode", "rpa", "procesos automatizados",
+            "crm workflows", "integracion de apis", "integración de apis", "integraciones no code", "api integrations",
+            "hiperautomatizacion", "client on boarding"
+        ],
+        "data_analytics": [
+            "data analytics", "analytics", "analitica digital", "analítica digital", "analitica web", "analítica web",
+            "google analytics", "ga4", "looker studio", "business intelligence", "dashboards", "paneles de datos",
+            "metricas de marketing", "métricas de marketing", "tracking", "seguimiento de eventos", "cpa", "ltv",
+            "lifetime value", "cac", "costo de adquisicion", "atribucion multi touch", "atribución multi-touch",
+            "kpis de negocio", "google tag manager", "gtm"
+        ],
+        "ai_prompting_agents": [
+            "ia", "ai", "inteligencia artificial", "artificial intelligence", "prompt engineering", "ingenieria de prompt",
+            "ingeniería de prompt", "prompts", "prompt", "prompting", "chatgpt", "gpt", "gpts", "claude", "gemini",
+            "llm", "llms", "agentes de ia", "agentes ai", "agentes autonomos", "agentes autónomos", "crewai",
+            "pydantic ai", "context engineering", "observabilidad de agentes", "langsmith", "flujos agenticos",
+            "flujos agénticos", "context vault", "ai assistants", "ai tools"
+        ],
+        "product_startup": [
+            "product management", "product manager", "gestion de producto", "gestión de producto", "startup", "startups",
+            "lean startup", "business model canvas", "canvas de negocio", "mvp", "producto minimo viable",
+            "producto mínimo viable", "validacion de producto", "validación de producto", "product market fit", "pmf",
+            "product discovery", "roadmap de producto", "agile delivery", "scrum", "scrum master", "agile",
+            "pmbok", "evaluacion financiera de proyectos", "pensamiento estrategico", "pensamiento estratégico",
+            "ux", "ui", "ux/ui", "ui/ux", "uxui", "figma", "design systems", "sistemas de diseno", "sistemas de diseño",
+            "design thinking", "tipografia", "tipografía", "graphic thinking", "interfaz", "interfaces", "wireframe", "accesibilidad"
+        ],
+    }
+
+    # Mapa de Normalización Canónica (18 Especialidades SSoT)
+    CANONICAL_CLUSTER_MAP = {
+        # Canónicos directos
+        "avatar_research": "avatar_research",
+        "branding_authority": "branding_authority",
+        "offers_pricing": "offers_pricing",
+        "social_media": "social_media",
+        "seo_aeo": "seo_aeo",
+        "paid_ads": "paid_ads",
+        "copywriting": "copywriting",
+        "funnels_cro": "funnels_cro",
+        "whatsapp_conversational": "whatsapp_conversational",
+        "consultative_sales": "consultative_sales",
+        "email_marketing": "email_marketing",
+        "customer_success": "customer_success",
+        "growth_loops": "growth_loops",
+        "ecommerce_stores": "ecommerce_stores",
+        "automations_workflows": "automations_workflows",
+        "data_analytics": "data_analytics",
+        "ai_prompting_agents": "ai_prompting_agents",
+        "product_startup": "product_startup",
+        # Aliases retrocompatibles
+        "seo": "seo_aeo",
+        "branding": "branding_authority",
+        "ofertas": "offers_pricing",
+        "funnels": "funnels_cro",
+        "whatsapp": "whatsapp_conversational",
+        "email": "email_marketing",
+        "ecommerce": "ecommerce_stores",
+        "automatizaciones": "automations_workflows",
+        "ia_prompting": "ai_prompting_agents",
+        "product_management": "product_startup",
+        "ux_ui": "product_startup",
     }
 
     CLUSTER_NOTEBOOK_TITLES = {
-        "copywriting": "[ESPECIALIDAD_COPY_TITULARES_Y_GANCHOS]",
-        "ofertas": "[ESPECIALIDAD_OFERTAS_Y_PRICING]",
-        "funnels": "[ESPECIALIDAD_FUNNELS_CHECKOUTS_Y_BUMPS]",
-        "whatsapp": "[ESPECIALIDAD_WHATSAPP_MARKETING_Y_BOTS]",
-        "email": "[ESPECIALIDAD_EMAIL_AUTOMATION_Y_NURTURE]",
-        "paid_ads": "[ESPECIALIDAD_META_ADS_CREATIVOS_Y_PAUTA]",
-        "branding": "[ESPECIALIDAD_BRANDING_Y_POSICIONAMIENTO]",
-        "ecommerce": "[ESPECIALIDAD_ECOMMERCE_Y_TIENDAS]",
-        "automatizaciones": "[ESPECIALIDAD_AUTOMATIZACIONES_Y_WORKFLOWS]",
-        "ia_prompting": "[ESPECIALIDAD_IA_PROMPTING_Y_AGENTES]",
-        "ux_ui": "[ESPECIALIDAD_UX_UI_Y_PRODUCTO]",
-        "seo": "[ESPECIALIDAD_SEO_AEO_SEARCH]",
+        "avatar_research": "[ESPECIALIDAD_AVATAR_ICP_Y_RESEARCH]",
+        "branding_authority": "[ESPECIALIDAD_BRANDING_Y_AUTORIDAD]",
+        "offers_pricing": "[ESPECIALIDAD_OFERTAS_Y_PRICING]",
         "social_media": "[ESPECIALIDAD_REDES_SOCIALES_Y_COMUNIDAD]",
+        "seo_aeo": "[ESPECIALIDAD_SEO_AEO_SEARCH]",
+        "paid_ads": "[ESPECIALIDAD_META_ADS_CREATIVOS_Y_PAUTA]",
+        "copywriting": "[ESPECIALIDAD_COPY_TITULARES_Y_GANCHOS]",
+        "funnels_cro": "[ESPECIALIDAD_FUNNELS_CHECKOUTS_Y_CRO]",
+        "whatsapp_conversational": "[ESPECIALIDAD_WHATSAPP_Y_CONVERSACIONAL]",
+        "consultative_sales": "[ESPECIALIDAD_VENTAS_CONSULTIVAS_B2B]",
+        "email_marketing": "[ESPECIALIDAD_EMAIL_AUTOMATION_Y_NURTURE]",
+        "customer_success": "[ESPECIALIDAD_CUSTOMER_SUCCESS_Y_CHURN]",
+        "growth_loops": "[ESPECIALIDAD_GROWTH_LOOPS_Y_REFERIDOS]",
+        "ecommerce_stores": "[ESPECIALIDAD_ECOMMERCE_Y_TIENDAS]",
+        "automations_workflows": "[ESPECIALIDAD_AUTOMATIZACIONES_Y_WORKFLOWS]",
         "data_analytics": "[ESPECIALIDAD_DATA_METRICAS_Y_ANALYTICS]",
-        "product_management": "[ESPECIALIDAD_PRODUCT_MANAGEMENT_Y_STARTUP]",
+        "ai_prompting_agents": "[ESPECIALIDAD_IA_PROMPTING_Y_AGENTES]",
+        "product_startup": "[ESPECIALIDAD_PRODUCT_MANAGEMENT_Y_STARTUP]",
     }
-
     # Mapeo determinista de Siglas y Tokens de Corchetes ([TAG])
     PLATZI_TAGS_MAP = {
         # SEO & Búsqueda
-        "SEO": "seo",
+        "SEO": "seo_aeo",
         # Redes Sociales Orgánicas & Comunidad
         "SOCIAL": "social_media",
         "INSTAGRAM": "social_media",
@@ -1024,53 +1081,54 @@ class CourseScanner:
         # Data & Analítica
         "DATA": "data_analytics",
         # Product Management & Metodologías
-        "PRODUCT": "product_management",
-        "AGILE": "product_management",
-        "PROJECT": "product_management",
-        "STRATEGY": "product_management",
-        "STARTUP": "product_management",
-        "WORKING": "product_management",
-        "SKILL": "product_management",
-        "SKILLS": "product_management",
+        "PRODUCT": "product_startup",
+        "AGILE": "product_startup",
+        "PROJECT": "product_startup",
+        "STRATEGY": "product_startup",
+        "STARTUP": "product_startup",
+        "WORKING": "product_startup",
+        "SKILL": "product_startup",
+        "SKILLS": "product_startup",
         # UX/UI & Diseño
-        "UXUI": "ux_ui",
-        "DESIGNTHINKING": "ux_ui",
-        "GRAPHIC": "ux_ui",
-        "DEV": "ux_ui",
-        "WEB": "ux_ui",
+        "UXUI": "product_startup",
+        "DESIGNTHINKING": "product_startup",
+        "GRAPHIC": "product_startup",
+        "DEV": "product_startup",
+        "WEB": "product_startup",
         # Copywriting & Contenidos
         "COPY": "copywriting",
         "COPYWRITING": "copywriting",
         "CONTENT": "copywriting",
         "STORYTELLING": "copywriting",
         # Email Marketing
-        "EMAILM": "email",
-        "EMAIL": "email",
+        "EMAILM": "email_marketing",
+        "EMAIL": "email_marketing",
         # Ventas / Ofertas
-        "VENTAS": "ofertas",
-        "OFERTAS": "ofertas",
+        "VENTAS": "consultative_sales",
+        "OFERTAS": "offers_pricing",
         # Funnels & Growth
-        "FUNNELS": "funnels",
-        "GROWTH": "funnels",
-        "JOURNEY": "funnels",
-        "MKTN": "funnels",
+        "FUNNELS": "funnels_cro",
+        "GROWTH": "growth_loops",
+        "JOURNEY": "customer_success",
+        "MKTN": "funnels_cro",
         # Branding & Investigación
-        "BRANDING": "branding",
-        "MARCAP": "branding",
-        "INVEST": "branding",
+        "BRANDING": "branding_authority",
+        "MARCAP": "branding_authority",
+        "INVEST": "avatar_research",
+        "AVATAR": "avatar_research",
         # Pauta Publicitaria
         "ADS": "paid_ads",
         "PAUTA": "paid_ads",
         # E-commerce
-        "ECOM": "ecommerce",
-        "ECOMMERCE": "ecommerce",
+        "ECOM": "ecommerce_stores",
+        "ECOMMERCE": "ecommerce_stores",
         # Automatizaciones
-        "AUTOM": "automatizaciones",
+        "AUTOM": "automations_workflows",
         # IA & Prompting
-        "AI": "ia_prompting",
-        "PROMPT": "ia_prompting",
+        "AI": "ai_prompting_agents",
+        "PROMPT": "ai_prompting_agents",
         # WhatsApp
-        "WHATSAPP": "whatsapp",
+        "WHATSAPP": "whatsapp_conversational",
     }
 
     # Mapeo retrocompatible
@@ -1093,7 +1151,7 @@ class CourseScanner:
         Busca coincidencias semánticas priorizando la máxima especificidad por longitud
         de frase compuesta (Longest Match). Resuelve ambigüedades favoreciendo frases
         compuestas específicas (ej: 'tiktok ad' -> paid_ads, 'google search ads' -> paid_ads)
-        frente a palabras aisladas (ej: 'tiktok' -> social_media, 'search' -> seo).
+        frente a palabras aisladas (ej: 'tiktok' -> social_media, 'search' -> seo_aeo).
         """
         norm_text = cls.normalize_text(text)
         if not norm_text:
@@ -1106,9 +1164,10 @@ class CourseScanner:
         best_cluster = None
 
         tie_order = [
-            "paid_ads", "ia_prompting", "whatsapp", "email", "funnels",
-            "ofertas", "copywriting", "seo", "data_analytics", "social_media",
-            "ecommerce", "automatizaciones", "ux_ui", "branding", "product_management"
+            "paid_ads", "ai_prompting_agents", "whatsapp_conversational", "email_marketing",
+            "funnels_cro", "offers_pricing", "copywriting", "seo_aeo", "data_analytics",
+            "social_media", "ecommerce_stores", "automations_workflows", "branding_authority",
+            "product_startup", "avatar_research", "consultative_sales", "customer_success", "growth_loops"
         ]
 
         for cluster in tie_order:
@@ -1136,9 +1195,10 @@ class CourseScanner:
         best_cluster = None
 
         tie_order = [
-            "paid_ads", "ia_prompting", "whatsapp", "email", "funnels",
-            "ofertas", "copywriting", "seo", "data_analytics", "social_media",
-            "ecommerce", "automatizaciones", "ux_ui", "branding", "product_management"
+            "paid_ads", "ai_prompting_agents", "whatsapp_conversational", "email_marketing",
+            "funnels_cro", "offers_pricing", "copywriting", "seo_aeo", "data_analytics",
+            "social_media", "ecommerce_stores", "automations_workflows", "branding_authority",
+            "product_startup", "avatar_research", "consultative_sales", "customer_success", "growth_loops"
         ]
 
         for cluster in tie_order:
@@ -1155,15 +1215,67 @@ class CourseScanner:
         return best_cluster
 
     @classmethod
-    def classify_cluster_bottom_up(cls, file_path: str) -> Tuple[str, str]:
+    def profile_content_density(cls, text: str) -> Tuple[Optional[str], float, Dict[str, int]]:
+        """
+        Analiza la densidad léxica y semántica del texto real extraído de una lección
+        contra las 18 especialidades canónicas.
+        Pondera fuertemente frases compuestas (>= 2 palabras, 5 pts) sobre palabras aisladas (1.5 pts).
+        Retorna (top_cluster, confidence_score, hit_counts) o (None, 0.0, {}) si no hay señal suficiente.
+        """
+        if not text or len(text.strip()) < 50:
+            return (None, 0.0, {})
+
+        sample = text[:50000].lower()
+        norm_sample = unicodedata.normalize("NFC", sample)
+
+        scores: Dict[str, float] = defaultdict(float)
+        hits: Dict[str, int] = defaultdict(int)
+
+        for cluster_key, terms in cls.THEMATIC_CLUSTERS.items():
+            canon_key = cls.CANONICAL_CLUSTER_MAP.get(cluster_key, cluster_key)
+            for term in terms:
+                norm_term = unicodedata.normalize("NFC", term.lower().strip())
+                if not norm_term:
+                    continue
+                pattern = r"\b" + re.escape(norm_term) + r"\b"
+                count = len(re.findall(pattern, norm_sample))
+                if count > 0:
+                    hits[canon_key] += count
+                    is_phrase = " " in norm_term
+                    weight = 5.0 if is_phrase else 1.5
+                    scores[canon_key] += count * weight
+
+        if not scores:
+            return (None, 0.0, {})
+
+        sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        top_cluster, top_score = sorted_scores[0]
+        second_score = sorted_scores[1][1] if len(sorted_scores) > 1 else 0.0
+
+        if top_score >= 8.0:
+            return (top_cluster, top_score, dict(hits))
+
+        return (None, 0.0, dict(hits))
+
+    @classmethod
+    def classify_cluster_bottom_up(cls, file_path: str, content: str = "") -> Tuple[str, str]:
         """
         Clasifica una ruta de archivo aplicando una estrategia polimórfica según proveedor:
-        1. PLATZI: Detección estricta de tokens [TAG] en nombre de archivo o carpeta del curso.
-        2. DIGITALMARKETER: Limpieza de slug sufijo y clasificación semántica por título de curso en inglés.
-        3. SCVIP: Mapeo directo por carpeta temática numerada.
-        4. CA: Detección de prefijo ca [TAG] o keywords.
-        5. LUIS-INESTROSA / MCV / VELOCITYMEDIA: Detección semántica por keywords del curso.
+        1. CONTENT-FIRST: Inspección semántica de texto real (>= 50 caracteres) si está disponible.
+        2. FRASES CLAVE EN ARCHIVO: Máxima especificidad por frases compuestas (Longest Match).
+        3. PLATZI: Detección estricta de tokens [TAG] en nombre de archivo o carpeta del curso.
+        4. DIGITALMARKETER: Limpieza de slug sufijo y clasificación semántica por título de curso en inglés.
+        5. SCVIP: Mapeo directo por carpeta temática numerada.
+        6. CA: Detección de prefijo ca [TAG] o multinivel.
+        7. LUIS-INESTROSA / MCV / VELOCITYMEDIA: Detección semántica por keywords del curso.
         """
+        # 0. Inspección de Contenido (Content-First Semantic Profiling)
+        if content and len(content.strip()) >= 50:
+            c_dens, score_dens, _ = cls.profile_content_density(content)
+            if c_dens and score_dens >= 12.0:
+                canon_dens = cls.CANONICAL_CLUSTER_MAP.get(c_dens, c_dens)
+                return (canon_dens, f"Content-first semantic profiling (score={score_dens:.1f})")
+
         norm_path = unicodedata.normalize("NFC", file_path)
         parts = [p for p in norm_path.split(os.sep) if p]
 
@@ -1174,49 +1286,61 @@ class CourseScanner:
         parent_dir = parts[-2] if len(parts) >= 2 else ""
         grandparent_dir = parts[-3] if len(parts) >= 3 else ""
 
-        # Capa 0: Token universal de corchetes [TAG] en archivo o carpeta inmediata
+        # 1. Frases compuestas a nivel de archivo (máxima prioridad léxica)
+        c_phrase_file = cls.match_cluster_phrases(filename)
+        if c_phrase_file:
+            canon = cls.CANONICAL_CLUSTER_MAP.get(c_phrase_file, c_phrase_file)
+            return (canon, f"Frase clave en archivo: '{filename}'")
+
+        # 2. Capa 0: Token universal de corchetes [TAG] en archivo o carpeta inmediata
         file_tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", filename)
         for raw_tag in file_tags:
             tag_up = raw_tag.upper()
             if tag_up in cls.PLATZI_TAGS_MAP:
-                return (cls.PLATZI_TAGS_MAP[tag_up], f"Token [{tag_up}] en archivo")
+                canon = cls.CANONICAL_CLUSTER_MAP.get(cls.PLATZI_TAGS_MAP[tag_up], cls.PLATZI_TAGS_MAP[tag_up])
+                return (canon, f"Token [{tag_up}] en archivo")
 
         if len(parts) >= 2 and parts[-2] not in ("01_PLAN", "02_BUILD", "03_LAUNCH", "01_Content", "MP3"):
             parent_tags = re.findall(r"\[([A-Z0-9_\-\+]+)\]", parts[-2])
             for raw_tag in parent_tags:
                 tag_up = raw_tag.upper()
                 if tag_up in cls.PLATZI_TAGS_MAP:
-                    return (cls.PLATZI_TAGS_MAP[tag_up], f"Token [{tag_up}] en carpeta de curso")
+                    canon = cls.CANONICAL_CLUSTER_MAP.get(cls.PLATZI_TAGS_MAP[tag_up], cls.PLATZI_TAGS_MAP[tag_up])
+                    return (canon, f"Token [{tag_up}] en carpeta de curso")
 
         # Casos especiales de rutas conocidas
         if "PLATZI" in parts and "monetiza tu talento" in norm_path.lower():
-            return ("ia_prompting", "Platzi track Monetiza tu Talento con IA")
+            canon = cls.CANONICAL_CLUSTER_MAP.get("ai_prompting_agents", "ai_prompting_agents")
+            return (canon, "Platzi track Monetiza tu Talento con IA")
 
-        # 2. ESTRATEGIA CA: Detección de prefijos ca [TAG] o multinivel
+        # 3. ESTRATEGIA CA: Detección de prefijos ca [TAG] o multinivel
         if "CA" in parts:
             if "MLM_58-18" in parts or "multinivel" in norm_path.lower():
-                return ("ofertas", "CA prospección multinivel y ventas")
+                canon = cls.CANONICAL_CLUSTER_MAP.get("consultative_sales", "consultative_sales")
+                return (canon, "CA prospección multinivel y ventas")
 
-        # 3. ESTRATEGIA SCVIP: Carpetas temáticas numeradas
+        # 4. ESTRATEGIA SCVIP: Carpetas temáticas numeradas
         if "SCVIP" in parts:
             lower_path = norm_path.lower()
             if "04. instagram" in lower_path or "04.instagram" in lower_path:
-                return ("social_media", "SCVIP 04. INSTAGRAM")
+                return (cls.CANONICAL_CLUSTER_MAP.get("social_media", "social_media"), "SCVIP 04. INSTAGRAM")
             if "05. ventas" in lower_path or "05.ventas" in lower_path:
-                return ("ofertas", "SCVIP 05. VENTAS")
+                return (cls.CANONICAL_CLUSTER_MAP.get("offers_pricing", "offers_pricing"), "SCVIP 05. VENTAS")
             if "06. meta ads" in lower_path or "06.meta ads" in lower_path:
-                return ("paid_ads", "SCVIP 06. META ADS")
+                return (cls.CANONICAL_CLUSTER_MAP.get("paid_ads", "paid_ads"), "SCVIP 06. META ADS")
             if "07. marketing" in lower_path or "07.marketing" in lower_path:
                 course_tag = cls.match_cluster_keywords(filename) or (cls.match_cluster_keywords(parts[-2]) if len(parts) >= 2 else None)
                 if course_tag:
-                    return (course_tag, f"SCVIP 07. MARKETING ({course_tag})")
+                    canon = cls.CANONICAL_CLUSTER_MAP.get(course_tag, course_tag)
+                    return (canon, f"SCVIP 07. MARKETING ({canon})")
                 if len(parts) >= 3:
                     c_deep = cls.match_cluster_keywords(parts[-3])
                     if c_deep:
-                        return (c_deep, f"SCVIP 07. MARKETING ({c_deep})")
+                        canon = cls.CANONICAL_CLUSTER_MAP.get(c_deep, c_deep)
+                        return (canon, f"SCVIP 07. MARKETING ({canon})")
                 return ("general", "SCVIP 07. MARKETING sin coincidencia")
 
-        # 4. ESTRATEGIA DIGITALMARKETER: Clasificación por título de curso en inglés (sin sufijo de slug)
+        # 5. ESTRATEGIA DIGITALMARKETER: Clasificación por título de curso en inglés (sin sufijo de slug)
         if "DIGITALMARKETER" in parts:
             dm_idx = parts.index("DIGITALMARKETER")
             course_part = ""
@@ -1230,32 +1354,38 @@ class CourseScanner:
 
             c_dm = cls.match_cluster_keywords(clean_dm_title)
             if c_dm:
-                return (c_dm, f"DigitalMarketer curso: '{clean_dm_title}'")
+                canon = cls.CANONICAL_CLUSTER_MAP.get(c_dm, c_dm)
+                return (canon, f"DigitalMarketer curso: '{clean_dm_title}'")
 
-        # 5. ESTRATEGIA LUIS-INESTROSA
+        # 6. ESTRATEGIA LUIS-INESTROSA
         if "LUIS-INESTROSA" in parts:
             if "conferencias que venden" in norm_path.lower():
-                return ("ofertas", "Luis Inestrosa conferencias que venden")
+                canon = cls.CANONICAL_CLUSTER_MAP.get("consultative_sales", "consultative_sales")
+                return (canon, "Luis Inestrosa conferencias que venden")
             if "habla y vendete bien" in norm_path.lower():
-                return ("ofertas", "Luis Inestrosa habla y vendete bien")
+                canon = cls.CANONICAL_CLUSTER_MAP.get("consultative_sales", "consultative_sales")
+                return (canon, "Luis Inestrosa habla y vendete bien")
 
-        # 6. ESTRATEGIA GENERAL (Fallback semántico por capas concéntricas)
+        # 7. ESTRATEGIA GENERAL (Fallback semántico por capas concéntricas)
         # Nivel 1: Archivo
         c_file = cls.match_cluster_keywords(filename)
         if c_file:
-            return (c_file, f"Lección individual: '{filename}'")
+            canon = cls.CANONICAL_CLUSTER_MAP.get(c_file, c_file)
+            return (canon, f"Lección individual: '{filename}'")
 
         # Nivel 2: Módulo / Subcarpeta inmediata (evitando fases genéricas)
         if parent_dir and parent_dir not in ("01_PLAN", "02_BUILD", "03_LAUNCH", "01_Content", "MP3", "BASIC", "VIP", "PROFESIONAL"):
             c_parent = cls.match_cluster_keywords(parent_dir)
             if c_parent:
-                return (c_parent, f"Módulo temático: '{parent_dir}'")
+                canon = cls.CANONICAL_CLUSTER_MAP.get(c_parent, c_parent)
+                return (canon, f"Módulo temático: '{parent_dir}'")
 
         # Nivel 3: Curso contenedor
         if grandparent_dir and grandparent_dir not in ("03_TRAINING_PLAYBOOKS_AND_WORKSHOPS", "01_AI_SYSTEMS", "02_PROGRAMS_AND_ACCELERATORS", "CURSOS", "PLATZI", "DIGITALMARKETER"):
             c_grand = cls.match_cluster_keywords(grandparent_dir)
             if c_grand:
-                return (c_grand, f"Curso contenedor: '{grandparent_dir}'")
+                canon = cls.CANONICAL_CLUSTER_MAP.get(c_grand, c_grand)
+                return (canon, f"Curso contenedor: '{grandparent_dir}'")
 
         # Nivel Fallback: Carpetas intermedias
         if len(parts) > 3:
@@ -1264,15 +1394,16 @@ class CourseScanner:
                     continue
                 c_part = cls.match_cluster_keywords(p_part)
                 if c_part:
-                    return (c_part, f"Directorio intermedio: '{p_part}'")
+                    canon = cls.CANONICAL_CLUSTER_MAP.get(c_part, c_part)
+                    return (canon, f"Directorio intermedio: '{p_part}'")
 
         return ("general", "Sin coincidencia temática")
 
     @classmethod
-    def classify_cluster(cls, path_str: str) -> str:
+    def classify_cluster(cls, path_str: str, content: str = "") -> str:
         """Interfaz retrocompatible que retorna únicamente la clave de cluster."""
-        cluster, _ = cls.classify_cluster_bottom_up(path_str)
-        return cluster
+        cluster, _ = cls.classify_cluster_bottom_up(path_str, content=content)
+        return cls.CANONICAL_CLUSTER_MAP.get(cluster, cluster)
 
     @classmethod
     def find_peer_document_in_parent(
@@ -1420,6 +1551,44 @@ class CourseScanner:
         return False
 
     @classmethod
+    def is_placeholder_or_duplicate(cls, file_path: str, content: str = "") -> bool:
+        """
+        Detecta si un archivo es un placeholder vacío, borrador sin contenido sustancial,
+        o una copia duplicada sintáctica (ej: 'archivo (1).pdf', 'copia de...').
+        """
+        fname = os.path.basename(file_path).lower()
+        clean_name = fname.replace("20", " ").replace("_", " ").replace("-", " ")
+        clean_name = re.sub(r"\s+", " ", clean_name).strip()
+
+        # 1. Copias duplicadas sintácticas en el nombre
+        if re.search(r"(\(\d+\)|\bcopy\b|\bcopia\b|_copy)", fname, re.I):
+            return True
+
+        # 2. Placeholders en nombre de archivo
+        placeholder_file_patterns = [
+            r"\b(placeholder|contenido pendiente|en desarrollo|pr[oó]ximamente|borrador|draft|sample)\b",
+            r"^(pendiente|draft|borrador)\b",
+        ]
+        for pat in placeholder_file_patterns:
+            if re.search(pat, clean_name, re.I):
+                return True
+
+        # 3. Contenido de texto si fue suministrado
+        if content:
+            words = content.split()
+            if len(words) < 50:
+                short_text = content.lower()
+                placeholder_content_patterns = [
+                    r"\b(contenido pendiente|pr[oó]ximamente|coming soon|en construcci[oó]n|por definir|to be defined)\b",
+                    r"\b(lorem ipsum|asdf)\b",
+                ]
+                for pat in placeholder_content_patterns:
+                    if re.search(pat, short_text, re.I):
+                        return True
+
+        return False
+
+    @classmethod
     def detect_course_language(cls, path_or_context: str) -> str:
         """
         Detecta si el curso es predominantemente en inglés o español para
@@ -1518,10 +1687,18 @@ class CourseScanner:
                     audios = [it for it in group if it[1] in (".aac", ".m4a", ".mp3")]
                     videos = [it for it in group if it[1] == ".mp4"]
 
-                    # Separar documentos maestros reales de cascarones de enlaces (scaffold stubs) y material auxiliar no-LLM
+                    # Separar documentos maestros reales de cascarones de enlaces (scaffold stubs), placeholders/duplicados y material auxiliar no-LLM
                     docs = []
                     for entry, ext in raw_docs:
-                        if cls.is_scaffold_stub(entry.path):
+                        if cls.is_placeholder_or_duplicate(entry.path):
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="placeholder_duplicate",
+                                canonical_upload=False,
+                                reason_detail="Omitido: Archivo placeholder o copia duplicada",
+                                has_peer_doc=has_peer_doc
+                            )
+                        elif cls.is_scaffold_stub(entry.path):
                             cls._register_resource(
                                 resources, entry, ext,
                                 tier="scaffold_stub",
@@ -2438,33 +2615,33 @@ Hoy hablaremos de ofertas irresistibles.
     print("✓ [Test 3] Manifiesto Particionado & Exportación Atómica: PASSED")
 
     # Test 4: Clasificador Bottom-Up, Mapeo de Siglas y Aislamiento de IA vs Copy
-    assert CourseScanner.classify_cluster("PLATZI/03 ECOM/Curso de Supply Chain/01.mp4") == "ecommerce"
-    assert CourseScanner.classify_cluster("PLATZI/04 AUTOM/RPA/clase.mp4") == "automatizaciones"
-    assert CourseScanner.classify_cluster("PLATZI/14 AI PROMPT/Agentes/clase.mp4") == "ia_prompting"
-    assert CourseScanner.classify_cluster("PLATZI/33 GRAPHIC THINKING UXUI/Tipografia/clase.mp4") == "ux_ui"
+    assert CourseScanner.classify_cluster("PLATZI/03 ECOM/Curso de Supply Chain/01.mp4") == "ecommerce_stores"
+    assert CourseScanner.classify_cluster("PLATZI/04 AUTOM/RPA/clase.mp4") == "automations_workflows"
+    assert CourseScanner.classify_cluster("PLATZI/14 AI PROMPT/Agentes/clase.mp4") == "ai_prompting_agents"
+    assert CourseScanner.classify_cluster("PLATZI/33 GRAPHIC THINKING UXUI/Tipografia/clase.mp4") == "product_startup"
 
     # Micro-clasificación: lección de email dentro de carpeta madre compuestas
     c_micro, reason = CourseScanner.classify_cluster_bottom_up(
         "PLATZI/59 CONTENT COPY EMAIL SEO STORYTELLING VENTAS/Curso/Modulo 2/01_secuencias_de_email.mp4"
     )
-    assert c_micro == "email", f"Falla Test 4: Esperaba 'email' por micro-lección, obtuvo '{c_micro}'"
+    assert c_micro == "email_marketing", f"Falla Test 4: Esperaba 'email_marketing' por micro-lección, obtuvo '{c_micro}'"
 
     # Desempate IA vs Copywriting vs Email vs Ofertas
-    assert CourseScanner.classify_cluster("Marketing_Context_Vault.md") == "ia_prompting"
+    assert CourseScanner.classify_cluster("Marketing_Context_Vault.md") == "ai_prompting_agents"
     assert CourseScanner.classify_cluster("Cartas_de_Venta_PAS.docx") == "copywriting"
-    assert CourseScanner.classify_cluster("Email_Promo_Campaign_Builder.md") == "email"
-    assert CourseScanner.classify_cluster("AI_Gone_Wild_Create_a_Team_of_Ai_Assistants_with_Stackable_GPTs.es.srt") == "ia_prompting"
-    assert CourseScanner.classify_cluster("DigitalMarketer_Offer_Architect_2.0.md") == "ofertas"
-    assert CourseScanner.classify_cluster("Build_Your_Winning_eCommerce_Product_Page.md") == "ecommerce"
-    assert CourseScanner.classify_cluster("Home_Page_Optimizer.md") == "funnels"
-    assert CourseScanner.classify_cluster("How_to_Attract_Your_First_5_Brand_Ambassadors.es.srt") == "branding"
+    assert CourseScanner.classify_cluster("Email_Promo_Campaign_Builder.md") == "email_marketing"
+    assert CourseScanner.classify_cluster("AI_Gone_Wild_Create_a_Team_of_Ai_Assistants_with_Stackable_GPTs.es.srt") == "ai_prompting_agents"
+    assert CourseScanner.classify_cluster("DigitalMarketer_Offer_Architect_2.0.md") == "offers_pricing"
+    assert CourseScanner.classify_cluster("Build_Your_Winning_eCommerce_Product_Page.md") == "ecommerce_stores"
+    assert CourseScanner.classify_cluster("Home_Page_Optimizer.md") == "funnels_cro"
+    assert CourseScanner.classify_cluster("How_to_Attract_Your_First_5_Brand_Ambassadors.es.srt") == "branding_authority"
     # Longest Match & Blindaje Macro-First
     assert CourseScanner.match_cluster_keywords("Google Search Ads Playbook") == "paid_ads"
-    assert CourseScanner.match_cluster_keywords("The 1-Call Close Masterclass") == "ofertas"
+    assert CourseScanner.match_cluster_keywords("The 1-Call Close Masterclass") == "consultative_sales"
     assert CourseScanner.match_cluster_keywords("How to Launch Your First TikTok Ad: Profitability Within 30 Days") == "paid_ads"
-    assert CourseScanner.match_cluster_keywords("VENTAS Curso de Whatsapp Business") == "whatsapp"
-    assert CourseScanner.match_cluster_keywords("DEV Observabilidad de Agentes AI con LangSmith") == "ia_prompting"
-    assert CourseScanner.match_cluster_keywords("INVEST User Research Tecnicas para Investigacion Efectiva") == "ux_ui"
+    assert CourseScanner.match_cluster_keywords("VENTAS Curso de Whatsapp Business") == "whatsapp_conversational"
+    assert CourseScanner.match_cluster_keywords("DEV Observabilidad de Agentes AI con LangSmith") == "ai_prompting_agents"
+    assert CourseScanner.match_cluster_keywords("INVEST User Research Tecnicas para Investigacion Efectiva") == "avatar_research"
     print("✓ [Test 4] Clasificador Bottom-Up, Mapeo de Siglas & Aislamiento IA/Copy: PASSED")
 
     # Test 5: Correlación de Documentos Hermanos (Peer-Docs) con Normalización Unicode NFC
@@ -2717,6 +2894,139 @@ En esta clase aprenderemos a construir ofertas de alta conversión y valor irres
             assert "2. **Deep Dive**" in body
             assert "3. **" not in body
     print("✓ [Test 12] Deduplicación Intra-Curso y Sanitización Continua: PASSED")
+
+    # Test 13: Content-First Semantic Profiler en Lecciones Genéricas
+    generic_text = (
+        "En esta clase aprenderemos cómo escalar las campañas publicitarias en Meta Ads. "
+        "Configuraremos el Business Manager, optimizaremos los anuncios en Instagram y Facebook, "
+        "y analizaremos métricas clave como el ROAS, CPA y CPM mediante el pixel de Meta y el API CAPI. "
+        "Estructuraremos creativos para anuncios de alto impacto y retargeting a audiencias personalizadas."
+    )
+    c_dens, r_dens = CourseScanner.classify_cluster_bottom_up(
+        "/var/www/baiosfera/CURSOS/Generico/05_clase_generica.txt",
+        content=generic_text
+    )
+    assert c_dens == "paid_ads", f"Falla Test 13: Esperaba 'paid_ads', obtuvo '{c_dens}'"
+    assert "Content-first semantic profiling" in r_dens, f"Falla Test 13: Esperaba profiling por contenido, razón: {r_dens}"
+    print("✓ [Test 13] Content-First Semantic Profiler en Lecciones Genéricas: PASSED")
+
+    # Test 14: Partición Multi-Compendio en Cursos Híbridos (p. ej. Social Media + Paid Ads)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        course_dir = os.path.join(tmp_dir, "PLATZI", "04. INSTAGRAM", "Curso de Instagram para Negocios")
+        os.makedirs(course_dir, exist_ok=True)
+
+        items_hybrid = [
+            {
+                "path": os.path.join(course_dir, "01_Estrategia_de_Reels_y_Comunidad.md"),
+                "filename": "01_Estrategia_de_Reels_y_Comunidad.md",
+                "ext": ".md",
+                "size_bytes": 500,
+                "tier": "direct_document",
+                "canonical_upload": True,
+                "cluster": "social_media",
+            },
+            {
+                "path": os.path.join(course_dir, "02_Crecimiento_Organico_y_Carruseles.md"),
+                "filename": "02_Crecimiento_Organico_y_Carruseles.md",
+                "ext": ".md",
+                "size_bytes": 600,
+                "tier": "direct_document",
+                "canonical_upload": True,
+                "cluster": "social_media",
+            },
+            {
+                "path": os.path.join(course_dir, "03_Campañas_en_Meta_Ads_y_Pauta.md"),
+                "filename": "03_Campañas_en_Meta_Ads_y_Pauta.md",
+                "ext": ".md",
+                "size_bytes": 700,
+                "tier": "direct_document",
+                "canonical_upload": True,
+                "cluster": "paid_ads",
+            },
+        ]
+        with open(items_hybrid[0]["path"], "w") as f:
+            f.write("# Reels y Comunidad\nEstrategia completa de contenido orgánico para crear comunidad sólida y engagement en Instagram para negocios.")
+        with open(items_hybrid[1]["path"], "w") as f:
+            f.write("# Carruseles y Algoritmo\nPublicación regular y engagement orgánico optimizado para distribución masiva y alcance de nuevos seguidores.")
+        with open(items_hybrid[2]["path"], "w") as f:
+            f.write("# Meta Ads y Pauta\nPauta publicitaria profesional y campañas de conversión pagadas optimizando creativos, presupuestos, pixel de Meta y retargeting avanzado en Business Manager.")
+
+        comp_output = os.path.join(tmp_dir, "compendiums")
+        comps = CourseCompactor.compact_all(
+            scanned_items=items_hybrid,
+            output_base_dir=comp_output,
+        )
+        assert len(comps) == 2, f"Falla Test 14: Debieron generarse 2 compendios particionados, hubo {len(comps)}"
+        clusters_found = {c["cluster"] for c in comps}
+        assert clusters_found == {"social_media", "paid_ads"}, f"Falla Test 14: Clusters inesperados {clusters_found}"
+    print("✓ [Test 14] Partición Multi-Compendio por Especialidad en Cursos Híbridos: PASSED")
+
+    # Test 15: Encabezados Limpios Anti-Slop (Cero debug blockquotes, TOC directo)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        test_file = os.path.join(tmp_dir, "01_Clase.md")
+        with open(test_file, "w") as f:
+            f.write(
+                "# Introducción y Fundamentos\n"
+                "Contenido formativo de alto valor sobre marketing, tráfico pagado y optimización de conversión "
+                "para estructurar embudos rentables con ROAS positivo y escalabilidad continua."
+            )
+        single_item = [{
+            "path": test_file,
+            "filename": "01_Clase.md",
+            "ext": ".md",
+            "size_bytes": 100,
+            "tier": "direct_document",
+            "canonical_upload": True,
+        }]
+        comp_clean = CourseCompactor.compact_group(
+            provider="PLATZI",
+            cluster="paid_ads",
+            course_name="Master en Meta Ads",
+            items=single_item,
+            output_base_dir=tmp_dir,
+        )
+        assert comp_clean is not None, "Falla Test 15: No se generó el compendio limpio"
+        with open(comp_clean["compendium_path"], "r") as f:
+            clean_body = f.read()
+            assert clean_body.startswith("# [PLATZI] [PAID_ADS] — Master en Meta Ads\n\n## 📑 Índice de Lecciones y Documentos"), (
+                f"Falla Test 15: El encabezado no sigue la estructura limpia: {clean_body[:100]}"
+            )
+            assert "> **Especialidad" not in clean_body, "Falla Test 15: Persiste bloque de debug de especialidad"
+            assert "> **Fecha de Generación" not in clean_body, "Falla Test 15: Persiste bloque de debug de fecha"
+            assert "> **Volumen Estimado" not in clean_body, "Falla Test 15: Persiste bloque de debug de volumen"
+    print("✓ [Test 15] Encabezados Limpios Anti-Slop y TOC Directo: PASSED")
+
+    # Test 16: Detección y Exclusión de Placeholders y Copias Duplicadas
+    assert CourseScanner.is_placeholder_or_duplicate("01_clase (1).pdf"), "Falla Test 16: No detectó (1)"
+    assert CourseScanner.is_placeholder_or_duplicate("02_Contenido Pendiente.txt"), "Falla Test 16: No detectó Contenido Pendiente"
+    assert CourseScanner.is_placeholder_or_duplicate("03_draft_intro.docx"), "Falla Test 16: No detectó draft"
+    assert CourseScanner.is_placeholder_or_duplicate("04_clase_copy.md"), "Falla Test 16: No detectó copy"
+    assert CourseScanner.is_placeholder_or_duplicate("05_normal.txt", content="Contenido pendiente por definir."), "Falla Test 16: No detectó contenido placeholder"
+    assert not CourseScanner.is_placeholder_or_duplicate("01_clase_estrategica.md", content="Contenido educativo profundo de marketing estratégico."), "Falla Test 16: Falso positivo en lección legítima"
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        with open(os.path.join(tmp_dir, "01_clase (1).pdf"), "w") as f:
+            f.write("dummy")
+        with open(os.path.join(tmp_dir, "02_Contenido Pendiente.txt"), "w") as f:
+            f.write("dummy")
+        with open(os.path.join(tmp_dir, "03_leccion_valida.md"), "w") as f:
+            f.write("Leccion valida y completa")
+
+        scanned_ph = CourseScanner.scan_path(tmp_dir)
+        ph_items = [i for i in scanned_ph if i["tier"] == "placeholder_duplicate"]
+        canon_ph = [i for i in scanned_ph if i.get("canonical_upload", False)]
+        assert len(ph_items) == 2, f"Falla Test 16: Debieron detectarse 2 placeholders, hubo {len(ph_items)}"
+        assert len(canon_ph) == 1, f"Falla Test 16: Solo 1 lección debió ser canónica, hubo {len(canon_ph)}"
+        assert canon_ph[0]["filename"] == "03_leccion_valida.md"
+    print("✓ [Test 16] Detección de Placeholders y Copias Duplicadas: PASSED")
+
+    # Test 17: Integridad de Taxonomía Canónica de 18 Especialidades
+    assert len(CourseScanner.THEMATIC_CLUSTERS) == 18, f"Falla Test 17: Se esperaban 18 especialidades, hay {len(CourseScanner.THEMATIC_CLUSTERS)}"
+    assert len(CourseScanner.CLUSTER_NOTEBOOK_TITLES) == 18, f"Falla Test 17: Se esperaban 18 títulos de cuadernos, hay {len(CourseScanner.CLUSTER_NOTEBOOK_TITLES)}"
+    for cluster_k in CourseScanner.THEMATIC_CLUSTERS:
+        assert cluster_k in CourseScanner.CLUSTER_NOTEBOOK_TITLES, f"Falla Test 17: Falta título para cluster {cluster_k}"
+        assert CourseScanner.CANONICAL_CLUSTER_MAP.get(cluster_k) == cluster_k, f"Falla Test 17: {cluster_k} no es auto-canónico"
+    print("✓ [Test 17] Integridad Absoluta de Taxonomía Canónica de 18 Especialidades: PASSED")
 
     print("\n🎉 TODAS LAS PRUEBAS FÍSICAS PASARON CON ÉXITO (EXIT 0).")
     sys.exit(0)
