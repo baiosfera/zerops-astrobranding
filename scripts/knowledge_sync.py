@@ -2087,6 +2087,9 @@ class NotebookLMBridge:
         if client:
             self.client = client
         else:
+            uv_site = "/home/zerops/.local/share/uv/tools/notebooklm-mcp-cli/lib/python3.12/site-packages"
+            if os.path.isdir(uv_site) and uv_site not in sys.path:
+                sys.path.insert(0, uv_site)
             try:
                 from notebooklm_tools.cli.utils import get_client
                 self.client = get_client(None)
@@ -2380,9 +2383,17 @@ def cmd_init_clusters(args):
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
+    # Registrar Cuaderno Corona 'Categoría de Uno' (Cúspide Estratégica Soberana)
+    clusters_manifest["categoria_de_uno"] = {
+        "notebook_id": "63f2b7ea-bfce-482b-add5-02997157cb47",
+        "title": "Categoría de Uno",
+        "is_crown_notebook": True,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
     out_path = manifest_mgr.export_clusters_manifest(clusters_manifest)
     print(f"\n✅ Manifiesto canónico de clusters exportado en: {out_path}")
-    print("\n📋 MAPA CANÓNICO DE LOS 18 CLUSTERS:")
+    print("\n📋 MAPA CANÓNICO DE LOS 18 CLUSTERS + CUADERNO CORONA:")
     for c_key, data in clusters_manifest.items():
         print(f"  • {c_key.upper():<16} -> ID: {data['notebook_id']} ({data['title']})")
 
