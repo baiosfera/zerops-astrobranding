@@ -230,7 +230,21 @@ class PdfParser:
                 timeout=timeout,
                 check=True,
             )
-            return res.stdout.decode("utf-8", errors="replace").strip()
+            raw_text = res.stdout.decode("utf-8", errors="replace")
+
+            # Filtro estructural de baja densidad (descarte de diapositivas o formularios vacíos)
+            pages = raw_text.split("\x0c")
+            non_empty_pages = [p for p in pages if p.strip()]
+            if len(non_empty_pages) >= 3:
+                total_words = len(raw_text.split())
+                avg_words_per_page = total_words / len(non_empty_pages)
+                if avg_words_per_page < 30:
+                    return ""
+
+            # Limpiar caracteres de control form-feed (\x0c)
+            clean_text = raw_text.replace("\x0c", "\n\n")
+            clean_text = re.sub(r"\n{3,}", "\n\n", clean_text)
+            return clean_text.strip()
         except Exception:
             return ""
 
@@ -410,12 +424,14 @@ class CourseCompactor:
         extracted_sections = []
         toc_entries = []
         total_words = 0
+        seen_content_hashes: Set[str] = set()
 
-        for idx, it in enumerate(sorted_items, 1):
+        for it in sorted_items:
             fpath = it["path"]
             fname = os.path.basename(fpath)
             stem = CourseScanner.extract_lesson_stem(fname)
-            clean_lesson_title = re.sub(r"^[0-9]+[_\s-]+", "", stem).replace("_", " ").replace("-", " ").strip().title()
+            clean_lesson_title = re.sub(r"^[0-9]+[_\s-]+", "", stem).replace("20", " ").replace("_", " ").replace("-", " ").strip().title()
+            clean_lesson_title = re.sub(r"\s+", " ", clean_lesson_title).strip()
             if not clean_lesson_title:
                 clean_lesson_title = stem
 
@@ -427,11 +443,12 @@ class CourseCompactor:
                 else:
                     words = 0
                 total_words += words
-                toc_entries.append(f"{idx}. **{clean_lesson_title}** (~{words} palabras est.)")
-                extracted_sections.append(f"### {idx}. {clean_lesson_title}\n*(Simulación)*")
+                section_idx = len(extracted_sections) + 1
+                toc_entries.append(f"{section_idx}. **{clean_lesson_title}** (~{words} palabras est.)")
+                extracted_sections.append(f"### {section_idx}. {clean_lesson_title}\n*(Simulación)*")
                 continue
 
-            if CourseScanner.is_scaffold_stub(fpath):
+            if CourseScanner.is_scaffold_stub(fpath) or CourseScanner.is_non_llm_auxiliary(fpath):
                 continue
 
             content = TextContentExtractor.extract(fpath)
@@ -442,14 +459,22 @@ class CourseCompactor:
             if len(content.split()) < 30 and ("- **Video" in content or "Subtítulo" in content):
                 continue
 
+            # Deduplicación intra-curso por huella de contenido para evitar secciones duplicadas (ej: 06_Resources repitiendo 01_Overview)
+            norm_content_sample = re.sub(r"\s+", " ", content[:4000]).strip().lower()
+            content_hash = hashlib.sha256(norm_content_sample.encode("utf-8")).hexdigest()
+            if content_hash in seen_content_hashes:
+                continue
+            seen_content_hashes.add(content_hash)
+
             words = len(content.split())
             total_words += words
 
-            toc_entries.append(f"{idx}. **{clean_lesson_title}** ({words} palabras)")
+            section_idx = len(extracted_sections) + 1
+            toc_entries.append(f"{section_idx}. **{clean_lesson_title}** ({words} palabras)")
             rel_source = os.path.relpath(fpath, "/var/www/baiosfera")
 
             section_md = (
-                f"### {idx}. {clean_lesson_title}\n"
+                f"### {section_idx}. {clean_lesson_title}\n"
                 f"*Archivo fuente*: `{rel_source}` | *Formato*: `{it.get('ext', '')}`\n\n"
                 f"{content}\n"
             )
@@ -835,6 +860,15 @@ class CourseScanner:
         "meditaciones", "meditacion", "meditación", "mesmerismo", "paralelo de embrio",
         "chakras", "reiki", "sanacion", "sanación", "magia", "esoterico", "esotérico"
     }
+
+    # Patrones para descartar materiales auxiliares no-LLM (slides, cuadernos de trabajo, checklists impresos)
+    NON_LLM_PATTERNS = [
+        r"slide[-_ 20]*deck", r"slidedeck", r"\bslides\b", r"diapositiva", r"presentaci[oó]n",
+        r"worksheet", r"workbook", r"work[-_ 20]*sheet", r"cuaderno[-_ 20]*de[-_ 20]*trabajo",
+        r"libro[-_ 20]*de[-_ 20]*trabajo", r"hoja[-_ 20]*de[-_ 20]*trabajo", r"hojas[-_ 20]*de[-_ 20]*trabajo",
+        r"checklist", r"cheatsheet", r"cheat[-_ 20]*sheet", r"\bquiz\b",
+        r"ejercicio", r"imprimible", r"audit[-_ 20]*print", r"fillable"
+    ]
 
     # 15 Especialidades Soberanas Canónicas
     THEMATIC_CLUSTERS = {
@@ -1371,6 +1405,55 @@ class CourseScanner:
         return False
 
     @classmethod
+    def is_non_llm_auxiliary(cls, file_path: str) -> bool:
+        """
+        Detecta si un archivo (típicamente PDF o docx) es material auxiliar
+        imprimible o no apto para LLM: diapositivas/slides repetitivas,
+        cuadernos/hojas de trabajo para rellenar, checklists impresos o quizzes.
+        """
+        fname = os.path.basename(file_path)
+        clean_name = fname.replace("20", " ").lower()
+        clean_name = re.sub(r"[-_]+", " ", clean_name)
+        for pat in cls.NON_LLM_PATTERNS:
+            if re.search(pat, clean_name, re.I):
+                return True
+        return False
+
+    @classmethod
+    def detect_course_language(cls, path_or_context: str) -> str:
+        """
+        Detecta si el curso es predominantemente en inglés o español para
+        garantizar consistencia idiomática en la selección de subtítulos.
+        """
+        lower = path_or_context.lower()
+        if "digitalmarketer" in lower:
+            return "en"
+        if "platzi" in lower:
+            return "es"
+
+        # Heurística léxica para CURSOS u otros proveedores
+        norm = re.sub(r"[^a-z\s]", " ", lower)
+        tokens = set(norm.split())
+
+        en_indicators = {
+            "the", "to", "and", "how", "for", "with", "marketing", "your",
+            "of", "in", "from", "accelerator", "workshop", "masterclass",
+            "playbook", "system", "systems", "scale", "traffic", "leads"
+        }
+        es_indicators = {
+            "de", "la", "el", "en", "para", "con", "del", "los", "las",
+            "curso", "taller", "ventas", "como", "crear", "estrategia",
+            "negocio", "negocios", "marca", "embudo", "embudos"
+        }
+
+        en_score = len(tokens.intersection(en_indicators))
+        es_score = len(tokens.intersection(es_indicators))
+
+        if en_score > es_score and es_score == 0:
+            return "en"
+        return "es"
+
+    @classmethod
     def scan_path(
         cls,
         base_dir: str,
@@ -1414,12 +1497,13 @@ class CourseScanner:
                 if not relevant_files:
                     continue
 
-                # 1. Correlación de Documentos Hermanos (Peer-Docs en carpeta padre)
+                # 1. Correlación de Documentos Hermanos (Peer-Docs en carpeta padre) y Detección de Idioma
                 parent_dir = os.path.dirname(current_dir)
                 current_dir_name = os.path.basename(current_dir)
                 has_peer_doc = cls.find_peer_document_in_parent(
                     parent_dir, current_dir_name, parent_cache
                 )
+                course_lang = cls.detect_course_language(current_dir)
 
                 # 2. Agrupación por Stem de Lección en la carpeta actual
                 stem_groups: Dict[str, List[Tuple[os.DirEntry, str]]] = defaultdict(list)
@@ -1434,7 +1518,7 @@ class CourseScanner:
                     audios = [it for it in group if it[1] in (".aac", ".m4a", ".mp3")]
                     videos = [it for it in group if it[1] == ".mp4"]
 
-                    # Separar documentos maestros reales de cascarones de enlaces (scaffold stubs)
+                    # Separar documentos maestros reales de cascarones de enlaces (scaffold stubs) y material auxiliar no-LLM
                     docs = []
                     for entry, ext in raw_docs:
                         if cls.is_scaffold_stub(entry.path):
@@ -1443,6 +1527,14 @@ class CourseScanner:
                                 tier="scaffold_stub",
                                 canonical_upload=False,
                                 reason_detail="Omitido: Archivo esqueleto de enlaces a medios",
+                                has_peer_doc=has_peer_doc
+                            )
+                        elif cls.is_non_llm_auxiliary(entry.path):
+                            cls._register_resource(
+                                resources, entry, ext,
+                                tier="auxiliary_non_llm",
+                                canonical_upload=False,
+                                reason_detail="Omitido: Material auxiliar no apto para LLM (slide deck, cuaderno de trabajo, checklist)",
                                 has_peer_doc=has_peer_doc
                             )
                         else:
@@ -1485,13 +1577,27 @@ class CourseScanner:
 
                     # CASO 2: No hay Documento Maestro, pero hay Subtítulo (.srt, .vtt)
                     elif subs:
-                        # Prioridad: .es.srt > .srt > .es.vtt > .vtt
-                        def sub_prio(item):
-                            n = item[0].name.lower()
-                            if n.endswith(".es.srt"): return 0
-                            if n.endswith(".srt"): return 1
-                            if n.endswith(".es.vtt"): return 2
-                            return 3
+                        # Prioridad según idioma del curso para evitar mezclas Frankenstinianas
+                        if course_lang == "en":
+                            def sub_prio(item):
+                                n = item[0].name.lower()
+                                if n.endswith(".en.vtt"): return 0
+                                if n.endswith(".en.srt"): return 1
+                                if n.endswith(".vtt"): return 2
+                                if n.endswith(".srt"): return 3
+                                if n.endswith(".es.srt"): return 4
+                                if n.endswith(".es.vtt"): return 5
+                                return 6
+                        else:
+                            def sub_prio(item):
+                                n = item[0].name.lower()
+                                if n.endswith(".es.srt"): return 0
+                                if n.endswith(".srt"): return 1
+                                if n.endswith(".es.vtt"): return 2
+                                if n.endswith(".vtt"): return 3
+                                if n.endswith(".en.vtt"): return 4
+                                if n.endswith(".en.srt"): return 5
+                                return 6
 
                         sorted_subs = sorted(subs, key=sub_prio)
                         primary_sub = sorted_subs[0]
@@ -2494,6 +2600,123 @@ En esta clase aprenderemos a construir ofertas de alta conversión y valor irres
         assert sub_item["canonical_upload"], "Falla Test 9: El subtítulo real debió ser promovido a canonical_upload"
         assert sub_item["tier"] == "subtitle_text", f"Falla Test 9: El subtítulo debió ser 'subtitle_text', fue '{sub_item['tier']}'"
     print("✓ [Test 9] Detección de Scaffold Stubs & Promoción de Subtítulo Real: PASSED")
+
+    # Test 10: Detección y Exclusión de Material Auxiliar no-LLM (Slide Decks, Worksheets, Cuadernos de Trabajo)
+    assert CourseScanner.is_non_llm_auxiliary("slides-curso-para-crear-un-brief-creativo.pdf")
+    assert CourseScanner.is_non_llm_auxiliary("innovacion-y-creacion-de-productos_CUADERNO-DE-TRABAJO.pdf")
+    assert CourseScanner.is_non_llm_auxiliary("How20To20Get20The20Most20-20Slide20Deck.pdf")
+    assert CourseScanner.is_non_llm_auxiliary("Automate-Your-Client-On-boarding-Worksheet.pdf")
+    assert CourseScanner.is_non_llm_auxiliary("01a. Libro de Trabajo.pdf")
+    assert CourseScanner.is_non_llm_auxiliary("Marketing-Audit-Printable-Checklist.pdf")
+    assert not CourseScanner.is_non_llm_auxiliary("Guia-Estrategica-Email-Marketing.pdf")
+    assert not CourseScanner.is_non_llm_auxiliary("The-Ultimate-Prompting-Manual.pdf")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        slide_pdf = os.path.join(tmp_dir, "Course_Slide_Deck.pdf")
+        with open(slide_pdf, "w") as f:
+            f.write("dummy pdf")
+        guide_pdf = os.path.join(tmp_dir, "Course_Strategy_Guide.pdf")
+        with open(guide_pdf, "w") as f:
+            f.write("dummy pdf guide")
+
+        scanned = CourseScanner.scan_path(tmp_dir)
+        slide_item = next((i for i in scanned if i["path"] == slide_pdf), None)
+        guide_item = next((i for i in scanned if i["path"] == guide_pdf), None)
+
+        assert slide_item is not None, "Falla Test 10: No se escaneó el slide deck"
+        assert slide_item["tier"] == "auxiliary_non_llm", f"Falla Test 10: El slide debió ser 'auxiliary_non_llm', fue '{slide_item['tier']}'"
+        assert not slide_item["canonical_upload"], "Falla Test 10: El slide deck no debe ser canonical_upload"
+
+        assert guide_item is not None, "Falla Test 10: No se escaneó la guía"
+        assert guide_item["canonical_upload"], "Falla Test 10: La guía real debió ser canonical_upload"
+    print("✓ [Test 10] Detección & Exclusión de Material Auxiliar no-LLM (Slides/Worksheets/Checklists): PASSED")
+
+    # Test 11: Detección de Idioma de Curso y Consistencia de Subtítulos (.en vs .es)
+    assert CourseScanner.detect_course_language("/var/www/baiosfera/DIGITALMARKETER/03_TRAINING/How_To_Scale") == "en"
+    assert CourseScanner.detect_course_language("/var/www/baiosfera/PLATZI/01_CONTENT/Curso_De_Ventas") == "es"
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        en_course = os.path.join(tmp_dir, "DIGITALMARKETER", "Client_Onboarding")
+        os.makedirs(en_course, exist_ok=True)
+        # Crear subtítulos inglés y español para la misma lección
+        with open(os.path.join(en_course, "lesson1.en.vtt"), "w") as f:
+            f.write("WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nWelcome to onboarding automation.")
+        with open(os.path.join(en_course, "lesson1.es.srt"), "w") as f:
+            f.write("1\n00:00:01,000 --> 00:00:04,000\nBienvenido a la automatizacion.")
+
+        scanned_en = CourseScanner.scan_path(en_course)
+        canon_en = [i for i in scanned_en if i.get("canonical_upload", False)]
+        assert len(canon_en) == 1, f"Falla Test 11: Debió seleccionarse 1 subtítulo primario, hubo {len(canon_en)}"
+        assert canon_en[0]["filename"] == "lesson1.en.vtt", (
+            f"Falla Test 11: Curso en inglés debió priorizar .en.vtt sobre .es.srt, pero seleccionó '{canon_en[0]['filename']}'"
+        )
+
+        es_course = os.path.join(tmp_dir, "PLATZI", "Curso_De_Ventas")
+        os.makedirs(es_course, exist_ok=True)
+        with open(os.path.join(es_course, "leccion1.en.vtt"), "w") as f:
+            f.write("WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nWelcome to sales.")
+        with open(os.path.join(es_course, "leccion1.es.srt"), "w") as f:
+            f.write("1\n00:00:01,000 --> 00:00:04,000\nBienvenidos a ventas.")
+
+        scanned_es = CourseScanner.scan_path(es_course)
+        canon_es = [i for i in scanned_es if i.get("canonical_upload", False)]
+        assert len(canon_es) == 1, f"Falla Test 11: Debió seleccionarse 1 subtítulo primario, hubo {len(canon_es)}"
+        assert canon_es[0]["filename"] == "leccion1.es.srt", (
+            f"Falla Test 11: Curso en español debió priorizar .es.srt sobre .en.vtt, pero seleccionó '{canon_es[0]['filename']}'"
+        )
+    print("✓ [Test 11] Detección de Idioma & Consistencia de Subtítulos (.en vs .es): PASSED")
+
+    # Test 12: Deduplicación Intra-Curso de Secciones Idénticas y Sanitización de Títulos
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        comp_dir = os.path.join(tmp_dir, "output")
+        identical_content = "# Welcome Overview\nHere is the detailed overview of our strategy."
+        items = [
+            {
+                "path": os.path.join(tmp_dir, "01_Overview.md"),
+                "filename": "01_Overview.md",
+                "ext": ".md",
+                "size_bytes": len(identical_content),
+                "canonical_upload": True,
+            },
+            {
+                "path": os.path.join(tmp_dir, "06_Resources20Duplicate.md"),
+                "filename": "06_Resources20Duplicate.md",
+                "ext": ".md",
+                "size_bytes": len(identical_content),
+                "canonical_upload": True,
+            },
+            {
+                "path": os.path.join(tmp_dir, "02_Deep_Dive.md"),
+                "filename": "02_Deep_Dive.md",
+                "ext": ".md",
+                "size_bytes": len(identical_content) + 50,
+                "canonical_upload": True,
+            },
+        ]
+        with open(items[0]["path"], "w") as f:
+            f.write(identical_content)
+        with open(items[1]["path"], "w") as f:
+            f.write(identical_content)  # Duplicado
+        with open(items[2]["path"], "w") as f:
+            f.write("# Deep Dive\nUnique and rich tactical implementation material.")
+
+        comp = CourseCompactor.compact_group(
+            provider="DIGITALMARKETER",
+            cluster="automatizaciones",
+            course_name="Client Onboarding",
+            items=items,
+            output_base_dir=comp_dir,
+        )
+        assert comp is not None, "Falla Test 12: No se generó el compendio"
+        assert comp["lessons_count"] == 2, f"Falla Test 12: Se esperaba dedup a 2 lecciones, hubo {comp['lessons_count']}"
+
+        with open(comp["compendium_path"], "r") as f:
+            body = f.read()
+            # Verificar renumeración continua 1. y 2. sin huecos
+            assert "1. **Overview**" in body
+            assert "2. **Deep Dive**" in body
+            assert "3. **" not in body
+    print("✓ [Test 12] Deduplicación Intra-Curso y Sanitización Continua: PASSED")
 
     print("\n🎉 TODAS LAS PRUEBAS FÍSICAS PASARON CON ÉXITO (EXIT 0).")
     sys.exit(0)
