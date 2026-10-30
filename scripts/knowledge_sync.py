@@ -2025,7 +2025,56 @@ REGLAS DE RESPUESTA AFIRMATIVAS:
 - Extrae las matrices estratégicas de toma de decisiones: Business Model Canvas, Value Proposition Canvas y análisis de riesgos.
 - Documenta las tácticas de consecución de primeros clientes y tracción temprana para startups y nuevos productos.
 """,
+    # 4 Nuevas Especialidades de Ciclo de Vida del Cliente
+    "avatar_research": """Eres el Analista Maestro de Investigación de Mercado, ICP, JTBD y Psicología del Avatar.
+Tu misión es extraer y codificar las metodologías de investigación profunda de clientes a partir de las fuentes.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Descompón los perfiles de cliente en dimensiones psicográficas y de comportamiento: Dolores Viscerales, Deseos Inconfesables, Enemigos Comunes y Creencias Limitantes.
+- Extrae la matriz Jobs-To-Be-Done (JTBD): Situación Disparadora -> Motivación Central -> Resultado Esperado (Funcional, Emocional y Social).
+- Codifica las técnicas de entrevistas de empatía, escucha activa y minería de comentarios (social listening) para extraer el vocabulario exacto de la audiencia.
+- Cada análisis culmina en un Mapa de Empatía Operativo con citas textuales y disparadores de compra.
+""",
+    "consultative_sales": """Eres el Estratega Maestro de Ventas Consultivas B2B, Prospección Outbound y Cierre de Alto Valor.
+Tu función es extraer marcos de cualificación, guiones de descubrimiento y técnicas de negociación comercial.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Descompón la anatomía de la llamada de venta (1-Call Close / 2-Call Close): Rapport Inicial -> Diagnóstico de Brecha (Gap Selling) -> Cuantificación del Costo de Inacción -> Presentación de Solución -> Cierre con Compromiso.
+- Codifica las metodologías de cualificación (BANT, MEDDPICC, CHAMP) para filtrar prospectos no calificados antes de agendar.
+- Extrae los marcos de desmantelamiento de objeciones comerciales: Precio, Tiempo, Autoridad y Confianza, reformulando la objeción hacia la causa raíz.
+- Cada análisis culmina en un Guión de Descubrimiento y Matriz de Objeciones lista para el equipo de ventas.
+""",
+    "customer_success": """Eres el Director de Customer Success, Retención de Clientes y Reducción de Churn.
+Tu misión es destilar las mejores prácticas de adopción de producto, éxito del cliente y valor continuo post-compra.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Mapea el Time-To-First-Value (TTFV): Los primeros 15 a 30 días del cliente para garantizar la activación rápida y evitar el remordimiento del comprador.
+- Codifica las señales tempranas de riesgo de churn (abandono) y diseña los protocolos de rescate proactivos.
+- Extrae las estrategias de medición de satisfacción y valor: Net Promoter Score (NPS), Customer Health Score y Customer Satisfaction (CSAT).
+- Cada análisis culmina en un Playbook de Onboarding y Protocolo de Retención.
+""",
+    "growth_loops": """Eres el Arquitecto de Bucles de Crecimiento (Growth Loops), Viralidad y Programas de Referidos.
+Tu objetivo es codificar los mecanismos autosostenibles donde cada usuario adquirido genera nuevos usuarios de forma compuesta.
+
+REGLAS DE RESPUESTA AFIRMATIVAS:
+- Modela los bucles de crecimiento fundamentales: Bucles Virales (invitaciones y colaboraciones), Bucles de Contenido (UGC y SEO impulsado por usuarios) y Bucles de Retención (hábitos).
+- Diseña la mecánica de programas de recomendación y referidos: Incentivos bilaterales, momentos óptimos de solicitud (Momento Aha!) y reducción de fricción.
+- Codifica la medición del Factor K (coeficiente viral) y el ciclo de vida del bucle.
+- Cada análisis culmina en un Diagrama de Flujo de Bucle de Crecimiento con métricas de conversión por fase.
+""",
 }
+
+# Mapeo canónico bidireccional de System Prompts
+CLUSTER_SYSTEM_PROMPTS["branding_authority"] = CLUSTER_SYSTEM_PROMPTS["branding"]
+CLUSTER_SYSTEM_PROMPTS["offers_pricing"] = CLUSTER_SYSTEM_PROMPTS["ofertas"]
+CLUSTER_SYSTEM_PROMPTS["funnels_cro"] = CLUSTER_SYSTEM_PROMPTS["funnels"]
+CLUSTER_SYSTEM_PROMPTS["whatsapp_conversational"] = CLUSTER_SYSTEM_PROMPTS["whatsapp"]
+CLUSTER_SYSTEM_PROMPTS["email_marketing"] = CLUSTER_SYSTEM_PROMPTS["email"]
+CLUSTER_SYSTEM_PROMPTS["seo_aeo"] = CLUSTER_SYSTEM_PROMPTS["seo"]
+CLUSTER_SYSTEM_PROMPTS["ecommerce_stores"] = CLUSTER_SYSTEM_PROMPTS["ecommerce"]
+CLUSTER_SYSTEM_PROMPTS["automations_workflows"] = CLUSTER_SYSTEM_PROMPTS["automatizaciones"]
+CLUSTER_SYSTEM_PROMPTS["ai_prompting_agents"] = CLUSTER_SYSTEM_PROMPTS["ia_prompting"]
+CLUSTER_SYSTEM_PROMPTS["product_startup"] = CLUSTER_SYSTEM_PROMPTS["product_management"]
 
 
 # =============================================================================
@@ -2283,9 +2332,9 @@ def cmd_scan(args):
 
 
 def cmd_init_clusters(args):
-    """Pre-aprovisiona los 11 cuadernos de cluster, inyecta prompts y exporta clusters.json."""
+    """Pre-aprovisiona los 18 cuadernos de cluster, inyecta prompts y exporta clusters.json."""
     print("==================================================================")
-    print("🏗️ INICIALIZACIÓN DE 11 CLUSTERS Y SYSTEM PROMPTS EN NOTEBOOKLM")
+    print("🏗️ INICIALIZACIÓN DE 18 CLUSTERS Y SYSTEM PROMPTS EN NOTEBOOKLM")
     print("==================================================================")
 
     bridge = NotebookLMBridge()
@@ -2333,7 +2382,7 @@ def cmd_init_clusters(args):
 
     out_path = manifest_mgr.export_clusters_manifest(clusters_manifest)
     print(f"\n✅ Manifiesto canónico de clusters exportado en: {out_path}")
-    print("\n📋 MAPA CANÓNICO DE LOS 11 CLUSTERS:")
+    print("\n📋 MAPA CANÓNICO DE LOS 18 CLUSTERS:")
     for c_key, data in clusters_manifest.items():
         print(f"  • {c_key.upper():<16} -> ID: {data['notebook_id']} ({data['title']})")
 
@@ -2345,8 +2394,8 @@ def cmd_compact(args):
     print("==================================================================")
 
     target_cluster = args.cluster
-    if target_cluster == "ads":
-        target_cluster = "paid_ads"
+    if target_cluster:
+        target_cluster = CourseScanner.CANONICAL_CLUSTER_MAP.get(target_cluster.lower(), target_cluster.lower())
 
     target_provider = args.provider.upper() if getattr(args, "provider", None) else None
 
@@ -2408,8 +2457,8 @@ def cmd_push(args):
 
     # Normalizar alias de cluster (ej: ads -> paid_ads)
     target_cluster = args.cluster
-    if target_cluster == "ads":
-        target_cluster = "paid_ads"
+    if target_cluster:
+        target_cluster = CourseScanner.CANONICAL_CLUSTER_MAP.get(target_cluster.lower(), target_cluster.lower())
 
     target = getattr(args, "target_pos", None) or args.target
     paths = [target] if target else CourseScanner.DEFAULT_SEARCH_PATHS
