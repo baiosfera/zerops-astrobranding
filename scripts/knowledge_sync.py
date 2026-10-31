@@ -2375,10 +2375,13 @@ def cmd_init_clusters(args):
             sources_count = 0
             print(f"  ✓ Creado exitosamente: UUID {nb_id}")
 
-        print(f"  • Configurando system prompt especializado...")
-        configured = bridge.configure_system_prompt(nb_id, cluster_key)
-        if configured:
-            print(f"  ✓ System prompt configurado exitosamente.")
+        if getattr(args, "with_prompts", False):
+            print(f"  • Configurando system prompt especializado...")
+            configured = bridge.configure_system_prompt(nb_id, cluster_key)
+            if configured:
+                print(f"  ✓ System prompt configurado exitosamente.")
+        else:
+            print(f"  ℹ️ System prompt omitido: se inyectará post-ingesta en BAI-406 según inventario real de fuentes.")
 
         clusters_manifest[cluster_key] = {
             "notebook_id": nb_id,
@@ -3139,7 +3142,12 @@ def main():
     # Subcomando: init-clusters
     init_parser = subparsers.add_parser(
         "init-clusters",
-        help="Pre-aprovisiona los 18 cuadernos de cluster, inyecta system prompts y exporta clusters.json",
+        help="Pre-aprovisiona los 18 cuadernos de cluster en NotebookLM y exporta clusters.json",
+    )
+    init_parser.add_argument(
+        "--with-prompts",
+        action="store_true",
+        help="Inyecta los system prompts estáticos prematuramente (por defecto False; la inyección definitiva es post-ingesta en BAI-406)",
     )
 
     # Subcomando: push
