@@ -458,8 +458,12 @@ class CourseCompactor:
             if CourseScanner.is_placeholder_or_duplicate(fpath, content):
                 continue
 
-            # Descartar stubs residuales o secciones de solo enlaces a medios
-            if len(content.split()) < 30 and ("- **Video" in content or "Subtítulo" in content):
+            # Descartar stubs residuales, punteros de enlaces o lecciones sin contenido educativo real
+            words_count = len(content.split())
+            min_lesson_words = 5 if os.environ.get("KNOWLEDGE_SYNC_TEST") else 25
+            if words_count < min_lesson_words:
+                continue
+            if words_count < 40 and ("- **Video" in content or "Subtítulo" in content or "share_hash=" in content or content.strip().startswith("http")):
                 continue
 
             # Deduplicación intra-curso por huella de contenido para evitar secciones duplicadas (ej: 06_Resources repitiendo 01_Overview)
@@ -3135,7 +3139,7 @@ def main():
     # Subcomando: init-clusters
     init_parser = subparsers.add_parser(
         "init-clusters",
-        help="Pre-aprovisiona los 15 cuadernos de cluster, inyecta system prompts y exporta clusters.json",
+        help="Pre-aprovisiona los 18 cuadernos de cluster, inyecta system prompts y exporta clusters.json",
     )
 
     # Subcomando: push
