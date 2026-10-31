@@ -334,7 +334,8 @@ class CourseCompactor:
                 course_name = parts[3]
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2], parts[3])
             elif len(parts) >= 4:
-                course_name = parts[2]
+                stem = os.path.splitext(parts[2])[0]
+                course_name = stem
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2])
             elif len(parts) == 3:
                 stem = os.path.splitext(parts[2])[0]
@@ -347,10 +348,12 @@ class CourseCompactor:
         elif top in ("PLATZI", "DIGITALMARKETER"):
             provider = top
             if len(parts) >= 4 and parts[1].lower() in cls.INTERMEDIATE_TIERS:
-                course_name = parts[2]
+                stem = os.path.splitext(parts[2])[0]
+                course_name = stem
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2])
             elif len(parts) >= 3:
-                course_name = parts[2]
+                stem = os.path.splitext(parts[2])[0]
+                course_name = stem
                 course_dir = os.path.join("/var/www/baiosfera", parts[0], parts[1], parts[2])
             elif len(parts) == 2:
                 stem = os.path.splitext(parts[1])[0]
@@ -381,6 +384,7 @@ class CourseCompactor:
             )
 
         clean_course_name = re.sub(r"^[0-9]+[_\s-]+", "", course_name).strip()
+        clean_course_name = re.sub(r"\.(docx|pdf|txt|md|srt|vtt)$", "", clean_course_name, flags=re.I).strip()
         if provider == "DIGITALMARKETER":
             clean_course_name = re.sub(r"_[a-z0-9\-]+$", "", clean_course_name)
             clean_course_name = clean_course_name.replace("_", " ").strip()
@@ -858,6 +862,12 @@ class CourseScanner:
 
     # Palabras clave y patrones de exclusión para temas ajenos al negocio/marketing
     NON_MARKETING_KEYWORDS = {
+        # Apuestas, casinos, juegos de azar y apuestas deportivas
+        "apuestas", "apuesta", "casas de apuestas", "tipster", "matched betting",
+        "casino", "ruleta", "poker", "loterias", "lotería", "metodo 6k", "método 6k",
+        # Búsqueda de empleo asalariado / Curriculum Vitae
+        "creacion de cv", "creación de cv", "curso de creacion de cv", "curso de creación de cv",
+        "hack the job search", "job search", "entrevista de trabajo", "entrevistas de trabajo",
         # Mindset, Desarrollo Personal, Esoterismo y No-Negocio
         "01. desarrollo personal", "02. seducción", "seduccion", "seducción", "sanar trauma",
         "desarrollo personal", "desarrolo personal", "reprogramate", "reprogramación",
@@ -2559,6 +2569,7 @@ def cmd_push(args):
 
     bridge = None if args.dry_run else NotebookLMBridge()
     success_count = 0
+    existing_sources_cache: Dict[str, Dict[str, str]] = {}
 
     clusters_map = manifest_mgr.load_clusters_manifest()
     resolved_notebooks = {
@@ -2591,12 +2602,36 @@ def cmd_push(args):
                     )
                 nb_id = resolved_notebooks[target_title]
 
+                # Cargar índice de fuentes existentes para Upsert idempotente sin duplicados
+                if nb_id not in existing_sources_cache:
+                    try:
+                        raw_sources = bridge.client.get_notebook_sources_with_types(nb_id)
+                        existing_sources_cache[nb_id] = {
+                            s.get("title", "").strip().lower(): s["id"]
+                            for s in raw_sources
+                            if "id" in s and s.get("title")
+                        }
+                    except Exception:
+                        existing_sources_cache[nb_id] = {}
+
+                # Si el archivo ya existía con el mismo título en el cuaderno, reemplazarlo atómicamente
+                clean_fn = filename.strip().lower()
+                if clean_fn in existing_sources_cache[nb_id]:
+                    old_sid = existing_sources_cache[nb_id][clean_fn]
+                    print(f"    🔄 Reemplazo In-Place (Upsert): Eliminando versión previa obsoleta (Source ID: {old_sid})...")
+                    try:
+                        bridge.client.delete_source(old_sid)
+                    except Exception as e:
+                        print(f"    ⚠️ No se pudo eliminar la fuente anterior: {e}")
+
                 source_id = bridge.upload_source(
                     nb_id,
                     item,
                     dry_run=args.dry_run,
                     upload_delay=args.delay,
                 )
+                if source_id:
+                    existing_sources_cache[nb_id][clean_fn] = str(source_id)
 
             if source_id:
                 if not args.dry_run:
