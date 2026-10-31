@@ -31,6 +31,7 @@ import socket
 import hashlib
 import argparse
 import tempfile
+import shutil
 import unicodedata
 import subprocess
 import zipfile
@@ -301,6 +302,7 @@ class CourseCompactor:
     """
 
     DEFAULT_OUTPUT_DIR = "/var/www/localstorage/knowledge_cache/compendiums"
+    DEFAULT_DRIVE_DIR = "/var/www/baiosfera/PLAYBOOKS/0compendiums"
 
     INTERMEDIATE_TIERS = {
         "vip", "basic", "profesional", "categorias", "author", "archivos",
@@ -735,6 +737,99 @@ class CourseCompactor:
 
         return compendiums
 
+    @classmethod
+    def mirror_to_drive(
+        cls,
+        source_dir: str = DEFAULT_OUTPUT_DIR,
+        drive_dir: str = DEFAULT_DRIVE_DIR,
+        dry_run: bool = False,
+    ) -> int:
+        """
+        Espeja compendios consolidados desde localstorage hacia Google Drive SSoT
+        preservando la estructura de clusters canónicos y actualizando solo archivos nuevos o modificados.
+        """
+        if not os.path.exists(source_dir):
+            return 0
+        drive_parent = os.path.dirname(drive_dir)
+        if not os.path.exists(drive_parent):
+            return 0
+
+        if not dry_run:
+            os.makedirs(drive_dir, exist_ok=True)
+
+        copied = 0
+        for cluster_dir in sorted(os.listdir(source_dir)):
+            src_cluster_path = os.path.join(source_dir, cluster_dir)
+            if not os.path.isdir(src_cluster_path):
+                continue
+
+            dst_cluster_path = os.path.join(drive_dir, cluster_dir)
+            if not dry_run:
+                os.makedirs(dst_cluster_path, exist_ok=True)
+
+            for fname in os.listdir(src_cluster_path):
+                if not fname.endswith(".md"):
+                    continue
+                src_file = os.path.join(src_cluster_path, fname)
+                dst_file = os.path.join(dst_cluster_path, fname)
+
+                # Comprobar si destino ya existe y tiene mismo tamaño para evitar I/O redundante en FUSE
+                if os.path.exists(dst_file):
+                    try:
+                        if os.path.getsize(src_file) == os.path.getsize(dst_file):
+                            continue
+                    except OSError:
+                        pass
+
+                if not dry_run:
+                    shutil.copy2(src_file, dst_file)
+                copied += 1
+
+        return copied
+
+    @classmethod
+    def hydrate_from_drive(
+        cls,
+        source_dir: str = DEFAULT_OUTPUT_DIR,
+        drive_dir: str = DEFAULT_DRIVE_DIR,
+    ) -> int:
+        """
+        Si localstorage está vacío o dañado pero Google Drive contiene compendios,
+        hidrata automáticamente la caché local para operar a máxima velocidad POSIX.
+        """
+        if not os.path.isdir(drive_dir):
+            return 0
+
+        # Verificar si localstorage ya contiene compendios
+        if os.path.isdir(source_dir):
+            existing = [
+                f for root, _, files in os.walk(source_dir)
+                for f in files if f.endswith(".md")
+            ]
+            if len(existing) > 50:
+                return 0  # Ya está poblado con contenido legítimo
+
+        os.makedirs(source_dir, exist_ok=True)
+        hydrated = 0
+        for cluster_dir in sorted(os.listdir(drive_dir)):
+            src_cluster_path = os.path.join(drive_dir, cluster_dir)
+            if not os.path.isdir(src_cluster_path):
+                continue
+
+            dst_cluster_path = os.path.join(source_dir, cluster_dir)
+            os.makedirs(dst_cluster_path, exist_ok=True)
+
+            for fname in os.listdir(src_cluster_path):
+                if not fname.endswith(".md"):
+                    continue
+                src_file = os.path.join(src_cluster_path, fname)
+                dst_file = os.path.join(dst_cluster_path, fname)
+                if not os.path.exists(dst_file) or os.path.getsize(src_file) != os.path.getsize(dst_file):
+                    shutil.copy2(src_file, dst_file)
+                    hydrated += 1
+
+        return hydrated
+
 
 # =============================================================================
 # 4. Componente: Manifiesto Particionado Append-Only & Estado Atómico
@@ -810,9 +905,10 @@ class PartitionedManifest:
 
         os.replace(temp_name, manifest_path)
 
-        # Replicar hacia localstorage si existe
+        # Replicar hacia localstorage solo si estamos operando en la raíz de producción de Drive
+        primary_dir = "/var/www/baiosfera/.knowledge_manifest"
         local_alt = "/var/www/localstorage/.knowledge_manifest"
-        if os.path.isdir(local_alt):
+        if self.manifest_dir == primary_dir and os.path.isdir(local_alt):
             try:
                 alt_path = os.path.join(local_alt, "clusters.json")
                 with tempfile.NamedTemporaryFile("w", dir=local_alt, delete=False, encoding="utf-8") as tf:
@@ -826,10 +922,15 @@ class PartitionedManifest:
 
     def load_clusters_manifest(self) -> Dict[str, Any]:
         """Carga el manifiesto de clusters existente."""
-        for path in [
-            os.path.join(self.manifest_dir, "clusters.json"),
-            "/var/www/localstorage/.knowledge_manifest/clusters.json",
-        ]:
+        primary_dir = "/var/www/baiosfera/.knowledge_manifest"
+        local_alt = "/var/www/localstorage/.knowledge_manifest"
+
+        search_paths = [os.path.join(self.manifest_dir, "clusters.json")]
+        if self.manifest_dir in (primary_dir, local_alt):
+            search_paths.append(os.path.join(local_alt, "clusters.json"))
+            search_paths.append(os.path.join(primary_dir, "clusters.json"))
+
+        for path in search_paths:
             if os.path.isfile(path):
                 try:
                     with open(path, "r", encoding="utf-8") as f:
@@ -2473,6 +2574,14 @@ def cmd_compact(args):
     for c in compendiums:
         print(f"   - [{c['cluster'].upper()}] {c['filename']} ({c['lessons_count']} lecciones, {c['words_count']:,} palabras)")
 
+    if not is_dry_run and output_base_dir == CourseCompactor.DEFAULT_OUTPUT_DIR:
+        print("\n🔄 Espejando compendios hacia Google Drive SSoT (PLAYBOOKS/0compendiums)...")
+        mirrored = CourseCompactor.mirror_to_drive(
+            source_dir=output_base_dir,
+            drive_dir=CourseCompactor.DEFAULT_DRIVE_DIR,
+        )
+        print(f"✓ Espejo completado: {mirrored} archivos sincronizados con Google Drive.")
+
 
 def cmd_push(args):
     """Ejecuta la ingesta idempotente hacia los cuadernos de NotebookLM."""
@@ -2494,6 +2603,14 @@ def cmd_push(args):
 
     if getattr(args, "compendiums", False):
         compendiums_dir = getattr(args, "output_dir", None) or CourseCompactor.DEFAULT_OUTPUT_DIR
+        # Auto-hidratar desde Drive si la caché local está vacía o dañada
+        if compendiums_dir == CourseCompactor.DEFAULT_OUTPUT_DIR:
+            hydrated = CourseCompactor.hydrate_from_drive(
+                source_dir=compendiums_dir,
+                drive_dir=CourseCompactor.DEFAULT_DRIVE_DIR,
+            )
+            if hydrated > 0:
+                print(f"✓ Auto-hidratación completada: {hydrated} compendios restaurados desde Google Drive a localstorage.")
         print(f"• Modo Compendios Activo: Leyendo archivos consolidados desde {compendiums_dir}")
         cluster_dirs = (
             [os.path.join(compendiums_dir, target_cluster.lower())]
