@@ -1294,8 +1294,78 @@ def evaluate_hook(payload: dict) -> dict:
                                     pass
         return {}
 
-    # 1. PostToolUse Handling
-    if "stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload):
+    # 1. PostToolUse Handling (Hot Compilation Sensors - BAI-423)
+    if payload.get("is_post_tool") or ("stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload)):
+        target_path = None
+        tool_call = payload.get("toolCall", {})
+        tool_args = tool_call.get("args", {})
+        for k in ["Path", "path", "file_path", "target_file", "FilePath"]:
+            if k in tool_args and isinstance(tool_args[k], str):
+                target_path = tool_args[k]
+                break
+
+        if target_path and os.path.exists(target_path):
+            # Skip FUSE mounts or oversized files to preserve zero-hang invariant
+            if not target_path.startswith("/var/www/baiosfera") and not target_path.startswith("/mnt/gdrive"):
+                try:
+                    if os.path.getsize(target_path) <= 5 * 1024 * 1024:
+                        if target_path.endswith(".py"):
+                            try:
+                                with open(target_path, "rb") as f:
+                                    py_src = f.read()
+                                compile(py_src, target_path, "exec")
+                            except SyntaxError as se:
+                                return {
+                                    "injectSteps": [
+                                        {
+                                            "ephemeralMessage": (
+                                                f"🚨 [PostToolUse Sensor] SyntaxError en archivo Python modificado ({target_path}:L{se.lineno}): {se.msg}\n"
+                                                f"Línea afectada: {se.text.strip() if se.text else ''}\n"
+                                                "⚠️ Corregí la sintaxis inmediatamente antes de continuar."
+                                            )
+                                        }
+                                    ]
+                                }
+                        elif target_path.endswith(".sh"):
+                            try:
+                                proc = subprocess.run(
+                                    ["bash", "-n", target_path],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=1.5
+                                )
+                                if proc.returncode != 0:
+                                    return {
+                                        "injectSteps": [
+                                            {
+                                                "ephemeralMessage": (
+                                                    f"🚨 [PostToolUse Sensor] Error de sintaxis en script Bash ({target_path}):\n"
+                                                    f"{proc.stderr.strip()}\n"
+                                                    "⚠️ Corregí la sintaxis del script antes de continuar."
+                                                )
+                                            }
+                                        ]
+                                    }
+                            except Exception:
+                                pass
+                        elif target_path.endswith(".json"):
+                            try:
+                                with open(target_path, "r", encoding="utf-8") as f:
+                                    json.load(f)
+                            except json.JSONDecodeError as je:
+                                return {
+                                    "injectSteps": [
+                                        {
+                                            "ephemeralMessage": (
+                                                f"🚨 [PostToolUse Sensor] JSONDecodeError en ({target_path}:L{je.lineno}:C{je.colno}): {je.msg}\n"
+                                                "⚠️ Corregí el archivo JSON antes de continuar."
+                                            )
+                                        }
+                                    ]
+                                }
+                except Exception:
+                    pass
+
         return {}
 
     # 2. PreInvocation Handling (Dynamic Epistemic Radar & Gentle-AI Orchestrator)
@@ -1892,7 +1962,6 @@ def evaluate_hook(payload: dict) -> dict:
             is_bash_script = target_file.endswith(".sh") or (first_line.startswith("#!/") and ("bash" in first_line or "sh" in first_line))
             if is_bash_script and ("/0zcp-123/scripts/" in target_file or "/.bin/" in target_file or "/scripts/" in target_file or target_file.endswith(".sh")):
                 try:
-                    import subprocess
                     proc = subprocess.run(
                         ["bash", "-n"],
                         input=content_to_check.encode('utf-8'),
@@ -2953,6 +3022,68 @@ def run_tests():
             os.remove(dossier_path)
         print("✓ Test 63 Passed: SkillCreationGate in PreToolUse enforces research dossier for new skills (BAI-422)")
 
+        # Test 64: PostToolUse Hot Compilation Sensors catch Python, Bash, and JSON syntax errors (BAI-423)
+        bad_py = "/tmp/test_bad_syntax.py"
+        good_py = "/tmp/test_good_syntax.py"
+        bad_sh = "/tmp/test_bad_syntax.sh"
+        bad_json = "/tmp/test_bad_syntax.json"
+        try:
+            with open(bad_py, "w") as f:
+                f.write("def bad_func(:\n    pass\n")
+            res_bad_py = evaluate_hook({
+                "is_post_tool": True,
+                "stepIdx": 100,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {"Path": bad_py}
+                }
+            })
+            assert "injectSteps" in res_bad_py and any("SyntaxError" in s.get("ephemeralMessage", "") for s in res_bad_py["injectSteps"]), f"Expected SyntaxError injection, got {res_bad_py}"
+
+            with open(bad_sh, "w") as f:
+                f.write("if [ -z \"$1\" ]; then\necho missing fi\n")
+            res_bad_sh = evaluate_hook({
+                "is_post_tool": True,
+                "stepIdx": 101,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {"Path": bad_sh}
+                }
+            })
+            assert "injectSteps" in res_bad_sh and any("Error de sintaxis en script Bash" in s.get("ephemeralMessage", "") for s in res_bad_sh["injectSteps"]), f"Expected Bash syntax error injection, got {res_bad_sh}"
+
+            with open(bad_json, "w") as f:
+                f.write("{\"invalid\": json,}\n")
+            res_bad_json = evaluate_hook({
+                "is_post_tool": True,
+                "stepIdx": 102,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {"Path": bad_json}
+                }
+            })
+            assert "injectSteps" in res_bad_json and any("JSONDecodeError" in s.get("ephemeralMessage", "") for s in res_bad_json["injectSteps"]), f"Expected JSONDecodeError injection, got {res_bad_json}"
+
+            with open(good_py, "w") as f:
+                f.write("def good_func():\n    return 42\n")
+            res_good_py = evaluate_hook({
+                "is_post_tool": True,
+                "stepIdx": 103,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {"Path": good_py}
+                }
+            })
+            assert res_good_py == {}, f"Expected empty dict on valid file, got {res_good_py}"
+        finally:
+            for p in [bad_py, good_py, bad_sh, bad_json]:
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
+        print("✓ Test 64 Passed: PostToolUse Hot Compilation Sensors catch Python, Bash, and JSON syntax errors (BAI-423)")
+
 
     finally:
         if os.path.exists("/tmp/.gov_mutation_stop_force_count"):
@@ -3022,8 +3153,9 @@ def main():
 
     is_post_tool = "--post-tool" in sys.argv or ("stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload))
     if is_post_tool:
-        # Zero-Hang: auto_sync_governance síncrono purgado de PostToolUse para evitar bloqueos por FUSE
-        print(json.dumps({}))
+        payload["is_post_tool"] = True
+        result = evaluate_hook(payload)
+        print(json.dumps(result))
         sys.exit(0)
 
     if "--stop" in sys.argv or "terminationReason" in payload:
