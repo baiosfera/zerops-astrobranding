@@ -1692,6 +1692,11 @@ def evaluate_hook(payload: dict) -> dict:
                 parts = target_file.split("/zerops-astro-skills/")
                 skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
 
+            if not skill_name or skill_name.startswith("."):
+                is_target_skill = False
+
+        if is_target_skill and not payload.get("test_bypass_research"):
+
             # Check if research dossier exists for this skill
             dossier_paths = [
                 f"/var/www/artifacts/research/{skill_name}_dossier.md",
