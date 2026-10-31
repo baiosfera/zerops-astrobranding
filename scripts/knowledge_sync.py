@@ -2107,7 +2107,7 @@ class NotebookLMBridge:
         self,
         target_title: str,
         cluster_key: Optional[str] = None,
-        auto_configure_prompt: bool = True,
+        auto_configure_prompt: bool = False,
     ) -> str:
         """Query-Before-Create: Reutiliza el UUID existente o crea un nuevo cuaderno."""
         all_notebooks = self.client.list_notebooks()
@@ -2587,7 +2587,7 @@ def cmd_push(args):
                     resolved_notebooks[target_title] = bridge.resolve_notebook_id(
                         target_title,
                         cluster_key=cluster_key,
-                        auto_configure_prompt=True,
+                        auto_configure_prompt=False,
                     )
                 nb_id = resolved_notebooks[target_title]
 
