@@ -1590,15 +1590,37 @@ def evaluate_hook(payload: dict) -> dict:
                 )
             }
 
-        # A3.5 Epistemic Grounding First Gate (Supreme Directive F0 & Invariante 5)
+        # A3.5 Skill Creation Gate & Epistemic Grounding First Gate (Supreme Directive F0 & Invariante 5, BAI-422)
         is_target_skill = (
             "/zerops-astro-skills/" in target_file or
             "/.agents/skills/" in target_file
         )
         if is_target_skill and not payload.get("test_bypass_research"):
+            # Extract skill name from path
+            skill_name = ""
+            if "/.agents/skills/" in target_file:
+                parts = target_file.split("/.agents/skills/")
+                skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
+            elif "/zerops-astro-skills/" in target_file:
+                parts = target_file.split("/zerops-astro-skills/")
+                skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
+
+            # Check if research dossier exists for this skill
+            dossier_paths = [
+                f"/var/www/artifacts/research/{skill_name}_dossier.md",
+                f"/var/www/artifacts/{skill_name}_dossier.md",
+                f"/var/www/.agents/skills/{skill_name}/references/usage.md",
+                f"/var/www/zerops-astro-skills/{skill_name}/references/usage.md",
+            ]
+            has_dossier = any(os.path.exists(dp) for dp in dossier_paths)
+
+            skill_dir_local = f"/var/www/.agents/skills/{skill_name}"
+            skill_dir_zas = f"/var/www/zerops-astro-skills/{skill_name}"
+            is_new_skill = not os.path.exists(os.path.join(skill_dir_local, "SKILL.md")) and not os.path.exists(os.path.join(skill_dir_zas, "SKILL.md"))
+
             res_state_file = "/tmp/.research_grounding_state.json"
-            has_research_recent = False
-            if os.path.exists(res_state_file):
+            has_research_recent = has_dossier
+            if not has_research_recent and os.path.exists(res_state_file):
                 try:
                     with open(res_state_file, "r") as f:
                         r_data = json.load(f)
@@ -1618,6 +1640,18 @@ def evaluate_hook(payload: dict) -> dict:
                                     break
                     except Exception:
                         pass
+
+            # Strict SkillCreationGate for new skills (BAI-422)
+            if is_new_skill and not has_dossier and not payload.get("test_allow_new_skill"):
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        f"🏛️ SKILL CREATION GATE / MANDATO EPISTÉMICO F0 (Supreme Directive Invariante 5): "
+                        f"Prohibido crear la nueva skill [{skill_name}] desde memoria estocástica pre-entrenada sin investigación técnica previa. "
+                        f"Es mandatorio compilar previamente el dossier de investigación en '/var/www/artifacts/research/{skill_name}_dossier.md' "
+                        f"mediante un subagente dedicado ('invoke_subagent' con typeName 'research')."
+                    )
+                }
 
             if not has_research_recent:
                 return {
@@ -2588,6 +2622,7 @@ def run_tests():
 
     try:
         res_lf_blocked = evaluate_hook({
+            "test_allow_new_skill": True,
             "toolCall": {
                 "name": "write_to_file",
                 "args": {
@@ -2604,6 +2639,7 @@ def run_tests():
             json.dump({"timestamp": int(time.time() * 1000), "action": "comment", "issueId": "test-id"}, f)
 
         res_lf_allowed = evaluate_hook({
+            "test_allow_new_skill": True,
             "toolCall": {
                 "name": "write_to_file",
                 "args": {
@@ -2663,6 +2699,7 @@ def run_tests():
             json.dump({"timestamp": int(time.time() * 1000), "source": "test_research"}, f)
         res_research_allowed = evaluate_hook({
             "test_bypass_linear": True,
+            "test_allow_new_skill": True,
             "toolCall": {
                 "name": "write_to_file",
                 "args": {
@@ -2876,6 +2913,45 @@ def run_tests():
         assert caps.get("is_single_node") is True
 
         print("✓ Test 62 Passed: Bash AST Command Parser eliminates false positives on string literals (BAI-421)")
+
+        # Test 63: SkillCreationGate in PreToolUse enforces research dossier for new skills (BAI-422)
+        new_skill_path = "/var/www/zerops-astro-skills/test-brand-new-skill/SKILL.md"
+        dossier_path = "/var/www/artifacts/research/test-brand-new-skill_dossier.md"
+        if os.path.exists(dossier_path):
+            os.remove(dossier_path)
+
+        res_new_skill_denied = evaluate_hook({
+            "test_bypass_linear": True,
+            "toolCall": {
+                "name": "write_file",
+                "args": {
+                    "Path": new_skill_path,
+                    "Content": "---\nname: test-brand-new-skill\ndescription: Test\n---\n"
+                }
+            }
+        })
+        assert res_new_skill_denied.get("decision") == "deny" and "SKILL CREATION GATE" in res_new_skill_denied.get("reason", ""), f"Expected deny from SkillCreationGate on new skill, got {res_new_skill_denied}"
+
+        # Create dossier and verify allow
+        os.makedirs(os.path.dirname(dossier_path), exist_ok=True)
+        with open(dossier_path, "w") as f:
+            f.write("# Research Dossier for test-brand-new-skill\n")
+
+        res_new_skill_allowed = evaluate_hook({
+            "test_bypass_linear": True,
+            "toolCall": {
+                "name": "write_file",
+                "args": {
+                    "Path": new_skill_path,
+                    "Content": "---\nname: test-brand-new-skill\ndescription: Test\n---\n"
+                }
+            }
+        })
+        assert res_new_skill_allowed.get("decision") == "allow", f"Expected allow from SkillCreationGate with dossier, got {res_new_skill_allowed}"
+
+        if os.path.exists(dossier_path):
+            os.remove(dossier_path)
+        print("✓ Test 63 Passed: SkillCreationGate in PreToolUse enforces research dossier for new skills (BAI-422)")
 
 
     finally:
