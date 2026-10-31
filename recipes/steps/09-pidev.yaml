@@ -1,0 +1,13 @@
+# Hito 9: Pi Coding Agent & Gentle Shell Developer Runtime (Ubuntu Node.js 26)
+services:
+  - hostname: pidev
+    type: ubuntu/nodejs@26
+    priority: 6
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10

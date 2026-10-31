@@ -27,8 +27,11 @@ Comandos:
   5             Aprovisionar Hito 5: listmonk
   6             Aprovisionar Hito 6: objectstorage + astrobranding
   8             Aprovisionar Hito 8: videoworker (Motor Efímero de Video / Costo Cero)
+  9             Aprovisionar Hito 9: pidev (Pi Coding Agent & Gentle Shell Developer Runtime)
+  10            Aprovisionar Hito 10: paperclip (Paperclip Governance & Spend Caps Watchdog)
+  11            Aprovisionar Hito 11: crewai (CrewAI & PydanticAI Dynamic Swarm Runtime)
   status        Verificar estado físico de los servicios en Zerops
-  test <1-8>    Ejecutar sensor de salud para el hito correspondiente
+  test <1-11>   Ejecutar sensor de salud para el hito correspondiente
   help          Mostrar esta ayuda
 EOF
 }
@@ -139,6 +142,36 @@ case "$STEP" in
         fi
         log_ok "Hito 8 aprovisionado. Listo para renderizar por colas y ser eliminado tras finalizar (costo cero)."
         ;;
+    9)
+        RECIPE="$RECIPES_DIR/09-pidev.yaml"
+        log_info "==> Hito 9: Aprovisionando 'pidev' (Pi Coding Agent & Gentle Shell)..."
+        if command -v zcli >/dev/null 2>&1; then
+            zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
+        else
+            log_info "Receta lista para importar: $RECIPE"
+        fi
+        log_ok "Hito 9 aprovisionado."
+        ;;
+    10)
+        RECIPE="$RECIPES_DIR/10-paperclip.yaml"
+        log_info "==> Hito 10: Aprovisionando 'paperclip' (Governance & Spend Caps)..."
+        if command -v zcli >/dev/null 2>&1; then
+            zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
+        else
+            log_info "Receta lista para importar: $RECIPE"
+        fi
+        log_ok "Hito 10 aprovisionado."
+        ;;
+    11)
+        RECIPE="$RECIPES_DIR/11-crewai.yaml"
+        log_info "==> Hito 11: Aprovisionando 'crewai' (Dynamic Swarm Runtime)..."
+        if command -v zcli >/dev/null 2>&1; then
+            zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
+        else
+            log_info "Receta lista para importar: $RECIPE"
+        fi
+        log_ok "Hito 11 aprovisionado."
+        ;;
     test)
         SUB_STEP="${2:-1}"
         case "$SUB_STEP" in
@@ -185,6 +218,21 @@ case "$STEP" in
                 log_info "Probando sensor de videoworker..."
                 URL="${VIDEOWORKER_URL:-http://videoworker:3000}"
                 curl -fsS --max-time 10 "$URL/health" >/dev/null 2>&1 && log_ok "VideoWorker responde OK" || log_warn "VideoWorker no activo o ya purgado (estado efímero)."
+                ;;
+            9)
+                log_info "Probando sensor de pidev..."
+                URL="${PIDEV_URL:-http://pidev:3000}"
+                curl -fsS --max-time 10 "$URL/healthz" >/dev/null 2>&1 && log_ok "pidev responde OK" || log_warn "pidev no activo o servicio aún inicializándose."
+                ;;
+            10)
+                log_info "Probando sensor de paperclip..."
+                URL="${PAPERCLIP_URL:-http://paperclip:3100}"
+                curl -fsS --max-time 10 "$URL/api/health" >/dev/null 2>&1 && log_ok "paperclip responde OK" || log_warn "paperclip no activo o servicio aún inicializándose."
+                ;;
+            11)
+                log_info "Probando sensor de crewai..."
+                URL="${CREWAI_URL:-http://crewai:8000}"
+                curl -fsS --max-time 10 "$URL/healthz" >/dev/null 2>&1 && log_ok "crewai responde OK" || log_warn "crewai no activo o servicio aún inicializándose."
                 ;;
             *)
                 log_warn "Sensor no definido para el hito $SUB_STEP."

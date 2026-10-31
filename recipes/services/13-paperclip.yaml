@@ -1,0 +1,13 @@
+# Service: Paperclip Governance & Spend Caps Watchdog (Ubuntu Node.js 26)
+services:
+  - hostname: paperclip
+    type: ubuntu/nodejs@26
+    priority: 7
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10
