@@ -1,0 +1,13 @@
+# Service: Qwen Code Developer Runtime (Ubuntu Node.js 26)
+services:
+  - hostname: qwendev
+    type: ubuntu/nodejs@26
+    priority: 6
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.50
+      minFreeRamPercent: 10

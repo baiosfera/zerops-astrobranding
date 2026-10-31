@@ -27,11 +27,11 @@ Comandos:
   5             Aprovisionar Hito 5: listmonk
   6             Aprovisionar Hito 6: objectstorage + astrobranding
   8             Aprovisionar Hito 8: videoworker (Motor Efímero de Video / Costo Cero)
-  9             Aprovisionar Hito 9: pidev (Pi Coding Agent & Gentle Shell Developer Runtime)
+  9 [pi|qwen|goose] Aprovisionar Hito 9: Motor de código (pidev, qwendev o goosedev)
   10            Aprovisionar Hito 10: paperclip (Paperclip Governance & Spend Caps Watchdog)
   11            Aprovisionar Hito 11: crewai (CrewAI & PydanticAI Dynamic Swarm Runtime)
   status        Verificar estado físico de los servicios en Zerops
-  test <1-11>   Ejecutar sensor de salud para el hito correspondiente
+  test <1-11> [flavor]  Ejecutar sensor de salud para el hito correspondiente
   help          Mostrar esta ayuda
 EOF
 }
@@ -143,14 +143,27 @@ case "$STEP" in
         log_ok "Hito 8 aprovisionado. Listo para renderizar por colas y ser eliminado tras finalizar (costo cero)."
         ;;
     9)
-        RECIPE="$RECIPES_DIR/09-pidev.yaml"
-        log_info "==> Hito 9: Aprovisionando 'pidev' (Pi Coding Agent & Gentle Shell)..."
+        FLAVOR="${2:-pi}"
+        case "$FLAVOR" in
+            qwen)
+                RECIPE="$RECIPES_DIR/09-qwendev.yaml"
+                log_info "==> Hito 9 (Opción B): Aprovisionando 'qwendev' (Qwen Code & Gentle-AI)..."
+                ;;
+            goose)
+                RECIPE="$RECIPES_DIR/09-goosedev.yaml"
+                log_info "==> Hito 9 (Opción C): Aprovisionando 'goosedev' (Goose ACP Auditor)..."
+                ;;
+            *)
+                RECIPE="$RECIPES_DIR/09-pidev.yaml"
+                log_info "==> Hito 9 (Opción A): Aprovisionando 'pidev' (Pi Coding Agent & Gentle Shell)..."
+                ;;
+        esac
         if command -v zcli >/dev/null 2>&1; then
             zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
         else
             log_info "Receta lista para importar: $RECIPE"
         fi
-        log_ok "Hito 9 aprovisionado."
+        log_ok "Hito 9 ($FLAVOR) aprovisionado."
         ;;
     10)
         RECIPE="$RECIPES_DIR/10-paperclip.yaml"
@@ -220,9 +233,24 @@ case "$STEP" in
                 curl -fsS --max-time 10 "$URL/health" >/dev/null 2>&1 && log_ok "VideoWorker responde OK" || log_warn "VideoWorker no activo o ya purgado (estado efímero)."
                 ;;
             9)
-                log_info "Probando sensor de pidev..."
-                URL="${PIDEV_URL:-http://pidev:3000}"
-                curl -fsS --max-time 10 "$URL/healthz" >/dev/null 2>&1 && log_ok "pidev responde OK" || log_warn "pidev no activo o servicio aún inicializándose."
+                FLAVOR="${3:-pi}"
+                case "$FLAVOR" in
+                    qwen)
+                        log_info "Probando sensor de qwendev..."
+                        URL="${QWENDEV_URL:-http://qwendev:3000}"
+                        curl -fsS --max-time 10 "$URL/healthz" >/dev/null 2>&1 && log_ok "qwendev responde OK" || log_warn "qwendev no activo o servicio aún inicializándose."
+                        ;;
+                    goose)
+                        log_info "Probando sensor de goosedev..."
+                        URL="${GOOSEDEV_URL:-http://goosedev:8080}"
+                        curl -fsS --max-time 10 "$URL/health" >/dev/null 2>&1 && log_ok "goosedev responde OK" || log_warn "goosedev no activo o servicio aún inicializándose."
+                        ;;
+                    *)
+                        log_info "Probando sensor de pidev..."
+                        URL="${PIDEV_URL:-http://pidev:3000}"
+                        curl -fsS --max-time 10 "$URL/healthz" >/dev/null 2>&1 && log_ok "pidev responde OK" || log_warn "pidev no activo o servicio aún inicializándose."
+                        ;;
+                esac
                 ;;
             10)
                 log_info "Probando sensor de paperclip..."

@@ -1,0 +1,13 @@
+# Hito 9 (Opción C): Goose Headless ACP Auditor & Automation Runtime (Ubuntu Base)
+services:
+  - hostname: goosedev
+    type: ubuntu/base
+    priority: 6
+    startWithoutCode: true
+    enableSubdomainAccess: true
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10
