@@ -1465,6 +1465,23 @@ def evaluate_hook(payload: dict) -> dict:
                         "🏛️ MANDATO DE ESPERA EPISTÉMICA F0: Al despachar subagentes de 'research', aguardá sus reportes antes de redactar planes o tickets."
                     )
 
+                # 5. Dynamic JIT Context Injection for Meta-Skills (BAI-424)
+                meta_skills_intent = {
+                    "meta-system": ["supreme", "agents.md", "directiva", "gobernanza", "reglas", "system prompt", "context architecture"],
+                    "meta-plan": ["plan", "planificar", "linear", "epic", "bai", "roadmap", "master-plan"],
+                    "meta-research": ["investigar", "research", "benchmark", "estado del arte", "comparar tecnologias", "fuente primaria"],
+                    "meta-skill": ["crear skill", "author skill", "auditar skill", "refactor skill", "dual-rag", "meta-skill"],
+                    "meta-script": ["script", "tool-guard", "harness", "hook", "pre-tool", "post-tool", "meta-script"],
+                    "meta-gitops": ["commit", "gitops", "ssot-parity", "work-unit", "conventional commit", "meta-gitops"]
+                }
+                active_meta_hints = []
+                for meta_name, keywords in meta_skills_intent.items():
+                    if meta_name in matched_skills or any(kw in prompt_lower for kw in keywords):
+                        active_meta_hints.append(f"• JIT Meta-Skill [{meta_name}]: Activá /var/www/.agents/skills/{meta_name}/SKILL.md para gobernanza de esta tarea.")
+
+                if active_meta_hints:
+                    ephemeral_msgs.append("🧭 RECONOCIMIENTO DE INTENCIÓN JIT (Meta-Orquestación):\n" + "\n".join(active_meta_hints[:3]))
+
                 if ephemeral_msgs and "--test" not in sys.argv:
                     try:
                         with open(notice_state_file, "w") as f:
@@ -1829,6 +1846,47 @@ def evaluate_hook(payload: dict) -> dict:
                         "'references/usage.md' o 'references/infra.md' respetando la revelación progresiva."
                     )
                 }
+
+        # A5.2.1 Governance Rules Size Budget Gate (00-SUPREME <= 600 words, AGENTS.md custom <= 800 words - BAI-424)
+        if target_file.endswith("00-SUPREME-DIRECTIVE.md") and tool_name in ["write_to_file", "write_file", "edit_file", "replace_file_content"]:
+            check_text = content_to_check
+            if tool_name in ["edit_file", "replace_file_content"] and os.path.exists(target_file):
+                try:
+                    with open(target_file, "r", encoding="utf-8") as f:
+                        check_text = f.read()
+                except Exception:
+                    pass
+            supreme_words = len(check_text.split())
+            if supreme_words > 600:
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        f"Contrato CoHaLo Governance Size Budget (BAI-424): '00-SUPREME-DIRECTIVE.md' tiene {supreme_words} palabras "
+                        "(límite: 600 palabras). Mantené el router canónico condensado y derivá especificaciones "
+                        "hacia 'supreme_directive_encyclopedia.md' respetando Dual-RAG."
+                    )
+                }
+
+        if target_file.endswith("AGENTS.md") and tool_name in ["write_to_file", "write_file", "edit_file", "replace_file_content"]:
+            check_text = content_to_check
+            if tool_name in ["edit_file", "replace_file_content"] and os.path.exists(target_file):
+                try:
+                    with open(target_file, "r", encoding="utf-8") as f:
+                        check_text = f.read()
+                except Exception:
+                    pass
+            custom_match = re.search(r'<!-- CUSTOM:BEGIN -->(.*?)<!-- CUSTOM:END -->', check_text, re.DOTALL)
+            if custom_match:
+                custom_words = len(custom_match.group(1).split())
+                if custom_words > 800:
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            f"Contrato CoHaLo Governance Size Budget (BAI-424): La sección CUSTOM de 'AGENTS.md' tiene {custom_words} palabras "
+                            "(límite: 800 palabras). Mantené las directivas de plataforma esenciales y derivá detalles "
+                            "hacia 'meta-system/references/infra.md'."
+                        )
+                    }
 
         # A5.2.5 Macro-Visión 360 Dependency Radar
         if "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/" in target_file and tool_name in ("write_to_file", "replace_file_content", "write_file", "edit_file"):
@@ -3083,6 +3141,44 @@ def run_tests():
                     except Exception:
                         pass
         print("✓ Test 64 Passed: PostToolUse Hot Compilation Sensors catch Python, Bash, and JSON syntax errors (BAI-423)")
+
+        # Test 65: Governance Rules Size Budget Gate & JIT Meta-Skills Injection (BAI-424)
+        oversized_supreme = "---\nname: 00-supreme-directive\n---\n" + ("palabra " * 650)
+        res_ov_sup = evaluate_hook({
+            "test_bypass_linear": True,
+            "toolCall": {
+                "name": "write_file",
+                "args": {
+                    "Path": "/var/www/.agents/rules/00-SUPREME-DIRECTIVE.md",
+                    "Content": oversized_supreme
+                }
+            }
+        })
+        assert res_ov_sup.get("decision") == "deny" and "Governance Size Budget" in res_ov_sup.get("reason", ""), f"Expected deny on oversized supreme directive, got {res_ov_sup}"
+
+        oversized_agents = "<!-- ZCP:BEGIN -->\nZCP\n<!-- ZCP:END -->\n<!-- CUSTOM:BEGIN -->\n" + ("palabra " * 850) + "\n<!-- CUSTOM:END -->"
+        res_ov_agents = evaluate_hook({
+            "test_bypass_linear": True,
+            "toolCall": {
+                "name": "write_file",
+                "args": {
+                    "Path": "/var/www/AGENTS.md",
+                    "Content": oversized_agents
+                }
+            }
+        })
+        assert res_ov_agents.get("decision") == "deny" and "Governance Size Budget" in res_ov_agents.get("reason", ""), f"Expected deny on oversized AGENTS.md custom section, got {res_ov_agents}"
+
+        # JIT Meta-Skills Intent in PreInvocation
+        res_jit_meta = evaluate_hook({
+            "invocationNum": 200,
+            "test_bypass_dedup": True,
+            "test_force_notice": True,
+            "userPrompt": "vamos a crear una nueva skill y auditarla con dual-rag"
+        })
+        steps_jit = res_jit_meta.get("injectSteps", [])
+        assert len(steps_jit) > 0 and any("JIT Meta-Skill [meta-skill]" in s.get("ephemeralMessage", "") for s in steps_jit), f"Expected JIT Meta-Skill injection, got {res_jit_meta}"
+        print("✓ Test 65 Passed: Governance Rules Size Budget Gate & JIT Meta-Skills Injection (BAI-424)")
 
 
     finally:
