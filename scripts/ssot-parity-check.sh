@@ -15,6 +15,15 @@ if [ "${1:-}" = "--fix" ]; then
 fi
 
 ERRORS=0
+AUTO_FIX_MODE=false
+for _arg in "$@"; do
+    if [ "$_arg" = "--fix" ]; then
+        AUTO_FIX_MODE=true
+    fi
+done
+if [ "${AUTO_FIX:-0}" = "1" ] || [ "${AUTO_FIX:-false}" = "true" ]; then
+    AUTO_FIX_MODE=true
+fi
 
 # Invariante de permisos: asegurar propiedad no-root en espacio de trabajo local
 if command -v sudo >/dev/null 2>&1; then
@@ -47,7 +56,7 @@ compare_files() {
         echo "✓ Parity verified: $label"
     else
         # Auto-heal hot edits between ZCP and Drive SSoT (ZCP-First & SSoT Invariant)
-        if [ "${AUTO_FIX:-0}" = "1" ] || [ "${1:-}" = "--fix" ] || [ "$label" = "skill-registry.md" ]; then
+        if [ "$AUTO_FIX_MODE" = true ] || [ "$label" = "skill-registry.md" ]; then
             if [ -f "$local_file" ] && ([ "$local_file" -nt "$drive_file" ] || [ "$label" = "skill-registry.md" ]); then
                 echo "⚡ Auto-healing SSoT hot edit to Drive: $label"
                 cp -f "$local_file" "$drive_file" 2>/dev/null || true

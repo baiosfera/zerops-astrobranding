@@ -52,9 +52,10 @@ for core_cli in "engram-sync:engram-sync" "ssot-parity-check:ssot-parity-check.s
     if [ -f "$SCRIPT_DIR/$cli_src_file" ]; then
         cp -f "$SCRIPT_DIR/$cli_src_file" "$PERSISTENT_BIN/$cli_name"
         chmod +x "$PERSISTENT_BIN/$cli_name"
-        cp "$PERSISTENT_BIN/$cli_name" "$HOME/.local/bin/$cli_name" 2>/dev/null || true
-        cp "$PERSISTENT_BIN/$cli_name" "/home/zerops/.local/bin/$cli_name" 2>/dev/null || true
-        sudo ln -sf "$PERSISTENT_BIN/$cli_name" "/usr/local/bin/$cli_name" 2>/dev/null || true
+        mkdir -p "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
+        ln -sfn "$PERSISTENT_BIN/$cli_name" "$HOME/.local/bin/$cli_name" 2>/dev/null || true
+        ln -sfn "$PERSISTENT_BIN/$cli_name" "/home/zerops/.local/bin/$cli_name" 2>/dev/null || true
+        sudo ln -sfn "$PERSISTENT_BIN/$cli_name" "/usr/local/bin/$cli_name" 2>/dev/null || true
     fi
 done
 

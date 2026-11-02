@@ -3275,6 +3275,19 @@ def run_tests():
         assert res_engram_stop.get("engramSyncTriggered") is True and res_engram_stop.get("source") == "stop", f"Expected engram sync on Stop event, got {res_engram_stop}"
         print("✓ Test 66 Passed: Engram 3-Tier Background Auto-Sync triggers on MCP writes and Stop (BAI-425)")
 
+        # Test 67: Bootstrap Self-Reexec & SSoT Parity Unbound-Var / Shadow Guards (BAI-425)
+        parity_sh = "/var/www/zerops-astrobranding/scripts/ssot-parity-check.sh"
+        iniciar_sh = "/var/www/zerops-astrobranding/iniciar.sh"
+        if os.path.isfile(parity_sh) and os.path.isfile(iniciar_sh):
+            with open(parity_sh, "r", encoding="utf-8") as fp:
+                parity_src = fp.read()
+            assert "AUTO_FIX_MODE=" in parity_src and '"$AUTO_FIX" = true' not in parity_src, "ssot-parity-check.sh must not reference unbound $AUTO_FIX under set -u"
+            assert "Auto-healed stale PATH shadow" in parity_src, "ssot-parity-check.sh must auto-heal ~/.local/bin PATH shadows"
+            with open(iniciar_sh, "r", encoding="utf-8") as fi:
+                iniciar_src = fi.read()
+            assert "INICIAR_REEXEC=1" in iniciar_src and 'exec bash "$REPO_DIR/iniciar.sh"' in iniciar_src, "iniciar.sh must re-exec after git self-update"
+        print("✓ Test 67 Passed: Bootstrap Self-Reexec & SSoT Parity Unbound-Var / Shadow Guards (BAI-425)")
+
 
     finally:
         if os.path.exists("/tmp/.gov_mutation_stop_force_count"):

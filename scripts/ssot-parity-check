@@ -10,6 +10,15 @@ LOCAL_BASE="/var/www"
 DRIVE_BASE="/var/www/baiosfera/0ZEROPS-AGY/0zcp-123"
 
 ERRORS=0
+AUTO_FIX_MODE=false
+for _arg in "$@"; do
+    if [ "$_arg" = "--fix" ]; then
+        AUTO_FIX_MODE=true
+    fi
+done
+if [ "${AUTO_FIX:-0}" = "1" ] || [ "${AUTO_FIX:-false}" = "true" ]; then
+    AUTO_FIX_MODE=true
+fi
 
 # Invariante de permisos: asegurar propiedad no-root en espacio de trabajo local
 if command -v sudo >/dev/null 2>&1; then
@@ -42,7 +51,7 @@ compare_files() {
         echo "✓ Parity verified: $label"
     else
         # Auto-heal hot edits between ZCP and Drive SSoT (ZCP-First & SSoT Invariant)
-        if [ "${AUTO_FIX:-0}" = "1" ] || [ "${1:-}" = "--fix" ] || [ "$label" = "skill-registry.md" ]; then
+        if [ "$AUTO_FIX_MODE" = true ] || [ "$label" = "skill-registry.md" ]; then
             if [ -f "$local_file" ] && ([ "$local_file" -nt "$drive_file" ] || [ "$label" = "skill-registry.md" ]); then
                 echo "⚡ Auto-healing SSoT hot edit to Drive: $label"
                 cp -f "$local_file" "$drive_file" 2>/dev/null || true
@@ -136,7 +145,7 @@ EXPECTED_IDENTITY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]
 if [ -n "$EXPECTED_IDENTITY" ] && [ "$EXPECTED_IDENTITY" != "zerops-astrobranding" ]; then
     AGENT_DB="/home/zerops/.engram/engram.db"
     if [ -L "$AGENT_DB" ]; then
-        if [ "$AUTO_FIX" = true ] && command -v engram-sync >/dev/null; then
+        if [ "$AUTO_FIX_MODE" = true ] && command -v engram-sync >/dev/null; then
             echo "🔧 Auto-fixing legacy Engram FUSE symlink into local POSIX DB ($EXPECTED_IDENTITY)..."
             engram-sync --pull --project "$EXPECTED_IDENTITY" --quiet || true
         fi
@@ -147,7 +156,7 @@ if [ -n "$EXPECTED_IDENTITY" ] && [ "$EXPECTED_IDENTITY" != "zerops-astrobrandin
     elif [ -f "$AGENT_DB" ]; then
         echo "✓ Engram Hot DB verified on local POSIX disk (anti-WAL-corruption): $AGENT_DB"
         COLD_ENGRAM_JSON="/var/www/baiosfera/0ZEROPS-AGY/${EXPECTED_IDENTITY}/engram/engram_ssot.json"
-        if [ ! -f "$COLD_ENGRAM_JSON" ] && [ "$AUTO_FIX" = true ] && command -v engram-sync >/dev/null; then
+        if [ ! -f "$COLD_ENGRAM_JSON" ] && [ "$AUTO_FIX_MODE" = true ] && command -v engram-sync >/dev/null; then
             engram-sync --push --project "$EXPECTED_IDENTITY" --quiet || true
         fi
         if [ -f "$COLD_ENGRAM_JSON" ]; then
@@ -214,6 +223,20 @@ SYMLINKS=(
 for symlink in "${SYMLINKS[@]}"; do
     bin_path="/usr/local/bin/$symlink"
     local_bin="/var/www/.bin/$symlink"
+    if [ -x "$local_bin" ]; then
+        for shadow_dir in "/home/zerops/.local/bin" "${HOME:-/home/zerops}/.local/bin"; do
+            shadow_bin="$shadow_dir/$symlink"
+            if [ -f "$shadow_bin" ] && [ ! -L "$shadow_bin" ] && ! cmp -s "$shadow_bin" "$local_bin"; then
+                if [ "$AUTO_FIX_MODE" = true ]; then
+                    ln -sfn "$local_bin" "$shadow_bin" 2>/dev/null || true
+                    echo "⚡ Auto-healed stale PATH shadow into symlink: $shadow_bin -> $local_bin"
+                else
+                    echo "❌ Stale PATH shadow detected in $shadow_bin (differs from $local_bin)"
+                    ERRORS=$((ERRORS + 1))
+                fi
+            fi
+        done
+    fi
     if [ ! -x "$bin_path" ] && [ ! -x "$local_bin" ]; then
         echo "❌ Missing or non-executable binary/symlink in PATH/.bin: $symlink"
         ERRORS=$((ERRORS + 1))
