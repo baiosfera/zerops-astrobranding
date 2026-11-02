@@ -1220,7 +1220,7 @@ def evaluate_hook(payload: dict) -> dict:
                 user_prompt = payload.get("test_user_prompt") or extract_user_prompt(payload)
                 CORRECTION_PATTERNS = re.compile(
                     r'\b(falta|falt[oó]|olvidaste|olvid[oó]|correg[ií]|corrige|modific[aá]|cambi[aá]|agreg[aá]|quit[aá]|'
-                    r'revis[aá]|incomplet[oa]|err[oó]ne[oa]|inefica[zs]|actualiz[aá].*plan|ajust[aá]|te comiste|'
+                    r'revis[aá].*plan|incomplet[oa]|err[oó]ne[oa]|inefica[zs]|actualiz[aá].*plan|ajust[aá]|te comiste|'
                     r'no pusiste|no incluiste|a[ñn]ad[eí]|agrega esto|falto agregar)\b',
                     re.IGNORECASE
                 )

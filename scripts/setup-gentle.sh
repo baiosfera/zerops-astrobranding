@@ -318,11 +318,7 @@ if [ -d "$HOME/.gemini/antigravity-cli" ]; then
     cp -f "$PROJECT_ROOT/.agents/references/"*_encyclopedia.md "$HOME/.gemini/antigravity-cli/references/" 2>/dev/null || true
 fi
 mkdir -p "$HOME/.gemini/config" 2>/dev/null || true
-if [ -f "$PROJECT_ROOT/.agents/hooks.json" ]; then
-    cp -f "$PROJECT_ROOT/.agents/hooks.json" "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
-elif [ -f "$ZCP_ROOT/.agents/hooks.json" ]; then
-    cp -f "$ZCP_ROOT/.agents/hooks.json" "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
-fi
+echo '{}' > "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
 
 # 6. Configuración Idempotente de Exclusiones de File Watchers en Code-Server / VS Code
 echo "• Configurando exclusiones dinámicas de observadores de archivos (VS Code / Code-Server)..."

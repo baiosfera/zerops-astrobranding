@@ -661,7 +661,7 @@ if [ "$UPDATE_MODE" = true ]; then
         fi
         if [ -n "$SRC_HOOKS" ]; then
             cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || sudo cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || true
-            cp -f "$SRC_HOOKS" "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
+            echo '{}' > "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
             [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents" ] && cp -f "$SRC_HOOKS" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json" 2>/dev/null || true
         fi
     fi
