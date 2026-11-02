@@ -9,6 +9,11 @@ set -euo pipefail
 LOCAL_BASE="/var/www"
 DRIVE_BASE="/var/www/baiosfera/0ZEROPS-AGY/0zcp-123"
 
+AUTO_FIX_MODE="${AUTO_FIX:-0}"
+if [ "${1:-}" = "--fix" ]; then
+    AUTO_FIX_MODE="1"
+fi
+
 ERRORS=0
 
 # Invariante de permisos: asegurar propiedad no-root en espacio de trabajo local
@@ -136,7 +141,7 @@ EXPECTED_IDENTITY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]
 if [ -n "$EXPECTED_IDENTITY" ] && [ "$EXPECTED_IDENTITY" != "zerops-astrobranding" ]; then
     AGENT_DB="/home/zerops/.engram/engram.db"
     if [ -L "$AGENT_DB" ]; then
-        if [ "$AUTO_FIX" = true ] && command -v engram-sync >/dev/null; then
+        if [ "$AUTO_FIX_MODE" = "1" ] && command -v engram-sync >/dev/null; then
             echo "🔧 Auto-fixing legacy Engram FUSE symlink into local POSIX DB ($EXPECTED_IDENTITY)..."
             engram-sync --pull --project "$EXPECTED_IDENTITY" --quiet || true
         fi
@@ -147,7 +152,7 @@ if [ -n "$EXPECTED_IDENTITY" ] && [ "$EXPECTED_IDENTITY" != "zerops-astrobrandin
     elif [ -f "$AGENT_DB" ]; then
         echo "✓ Engram Hot DB verified on local POSIX disk (anti-WAL-corruption): $AGENT_DB"
         COLD_ENGRAM_JSON="/var/www/baiosfera/0ZEROPS-AGY/${EXPECTED_IDENTITY}/engram/engram_ssot.json"
-        if [ ! -f "$COLD_ENGRAM_JSON" ] && [ "$AUTO_FIX" = true ] && command -v engram-sync >/dev/null; then
+        if [ ! -f "$COLD_ENGRAM_JSON" ] && [ "$AUTO_FIX_MODE" = "1" ] && command -v engram-sync >/dev/null; then
             engram-sync --push --project "$EXPECTED_IDENTITY" --quiet || true
         fi
         if [ -f "$COLD_ENGRAM_JSON" ]; then
@@ -214,6 +219,14 @@ SYMLINKS=(
 for symlink in "${SYMLINKS[@]}"; do
     bin_path="/usr/local/bin/$symlink"
     local_bin="/var/www/.bin/$symlink"
+    shadow_bin="$HOME/.local/bin/$symlink"
+
+    # Auto-healed stale PATH shadow
+    if [ -f "$shadow_bin" ] && [ ! -L "$shadow_bin" ]; then
+        rm -f "$shadow_bin"
+        echo "⚡ Auto-healed stale PATH shadow: $shadow_bin"
+    fi
+
     if [ ! -x "$bin_path" ] && [ ! -x "$local_bin" ]; then
         echo "❌ Missing or non-executable binary/symlink in PATH/.bin: $symlink"
         ERRORS=$((ERRORS + 1))

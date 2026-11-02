@@ -45,6 +45,7 @@ DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
 SSOT_SCRIPTS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/scripts"
 
 # Manejo de argumentos opcionales (--update, --keys, --project, --repo)
+ORIG_ARGS=("$@")
 KEYS_FILE_ARG=""
 PROJECT_NAME_ARG=""
 UPDATE_MODE=false
@@ -454,12 +455,34 @@ fi
 # 1. Asegurar clonación del repositorio de la aplicación
 if [ ! -d "$REPO_DIR" ]; then
     echo "• [1/4] Clonando repositorio de aplicación ($REPO_URL)..."
-    git clone "$REPO_URL" "$REPO_DIR"
+    GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="" SSH_ASKPASS="" VSCODE_GIT_IPC_HANDLE="" git clone "$REPO_URL" "$REPO_DIR"
 else
     echo "• [1/4] Repositorio detectado en $REPO_DIR. Sincronizando con origen..."
-    git -C "$REPO_DIR" fetch origin main 2>/dev/null || true
-    git -C "$REPO_DIR" reset --hard origin/main 2>/dev/null || git -C "$REPO_DIR" pull --ff-only 2>/dev/null || true
+    PRE_HEAD="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)"
+    GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="" SSH_ASKPASS="" VSCODE_GIT_IPC_HANDLE="" git -C "$REPO_DIR" fetch origin main 2>/dev/null || true
+    git -C "$REPO_DIR" reset --hard origin/main 2>/dev/null || GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="" SSH_ASKPASS="" VSCODE_GIT_IPC_HANDLE="" git -C "$REPO_DIR" pull --ff-only 2>/dev/null || true
+    POST_HEAD="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)"
+    if [ -z "${INICIAR_REEXEC:-}" ] && [ -n "$PRE_HEAD" ] && [ -n "$POST_HEAD" ] && [ "$PRE_HEAD" != "$POST_HEAD" ] && [ -f "$REPO_DIR/iniciar.sh" ]; then
+        echo "  🔄 iniciar.sh auto-actualizado desde GitHub ($PRE_HEAD -> $POST_HEAD). Re-ejecutando versión canónica..."
+        export INICIAR_REEXEC=1
+        exec bash "$REPO_DIR/iniciar.sh" "${ORIG_ARGS[@]}"
+    fi
 fi
+
+# 1b. Hidratar inmediatamente CLIs y sensores soberanos en .bin, /usr/local/bin y ~/.local/bin (elimina shadows obsoletos en PATH)
+mkdir -p "$PROJECT_ROOT/.bin" "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
+for _core_pair in "engram-sync:engram-sync" "ssot-parity-check:ssot-parity-check.sh" "skills-suite-validate:skills-suite-validate.sh" "astrobranding-check:astrobranding-check.sh" "zcp-sync:zcp-sync"; do
+    _c_name="${_core_pair%%:*}"
+    _c_src="${_core_pair#*:}"
+    if [ -f "$REPO_DIR/scripts/$_c_src" ]; then
+        cp -f "$REPO_DIR/scripts/$_c_src" "$PROJECT_ROOT/.bin/$_c_name" 2>/dev/null || sudo cp -f "$REPO_DIR/scripts/$_c_src" "$PROJECT_ROOT/.bin/$_c_name" 2>/dev/null || true
+        chmod +x "$PROJECT_ROOT/.bin/$_c_name" 2>/dev/null || sudo chmod +x "$PROJECT_ROOT/.bin/$_c_name" 2>/dev/null || true
+        ln -sfn "$PROJECT_ROOT/.bin/$_c_name" "$HOME/.local/bin/$_c_name" 2>/dev/null || true
+        ln -sfn "$PROJECT_ROOT/.bin/$_c_name" "/home/zerops/.local/bin/$_c_name" 2>/dev/null || true
+        sudo ln -sfn "$PROJECT_ROOT/.bin/$_c_name" "/usr/local/bin/$_c_name" 2>/dev/null || true
+    fi
+done
+hash -r 2>/dev/null || true
 
 # 2. Asegurar montaje de Google Drive SSoT vía gdrive.sh
 if [ ! -d "$DRIVE_MOUNT/0ZEROPS-AGY" ]; then
@@ -609,7 +632,7 @@ if [ "$UPDATE_MODE" = true ]; then
     # Sincronizar scripts actualizados hacia SSoT en Google Drive si está montado
     if [ -d "$SSOT_SCRIPTS" ]; then
         echo "• Sincronizando scripts SSoT hacia Google Drive..."
-        for s in iniciar.sh gdrive.sh setup-zcp.sh setup-astrokey.sh unisetup.sh skills-suite-validate.sh ssot-parity-check.sh astrobranding-check.sh engram-sync; do
+        for s in iniciar.sh gdrive.sh setup-zcp.sh setup-astrokey.sh unisetup.sh skills-suite-validate.sh ssot-parity-check.sh ssot-parity-check astrobranding-check.sh engram-sync; do
             [ -f "$REPO_DIR/scripts/$s" ] && cp -f "$REPO_DIR/scripts/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
             [ -f "$REPO_DIR/$s" ] && cp -f "$REPO_DIR/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
         done
@@ -684,24 +707,28 @@ if [ "$UPDATE_MODE" = true ]; then
         fi
     fi
 
-    # Desplegar CLIs esenciales en PATH y .bin
+    # Desplegar CLIs esenciales en PATH y .bin (incluyendo limpieza de shadows en ~/.local/bin)
+    mkdir -p "$PROJECT_ROOT/.bin" "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
     for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync engram-sync knowledge-sync anti-slop-linter; do
         src_cli=""
-        if [ -f "$REPO_DIR/scripts/$cli" ]; then
-            src_cli="$REPO_DIR/scripts/$cli"
-        elif [ -f "$REPO_DIR/scripts/$cli.sh" ]; then
+        if [ -f "$REPO_DIR/scripts/$cli.sh" ]; then
             src_cli="$REPO_DIR/scripts/$cli.sh"
+        elif [ -f "$REPO_DIR/scripts/$cli" ]; then
+            src_cli="$REPO_DIR/scripts/$cli"
         elif [ -f "$REPO_DIR/scripts/$cli.py" ]; then
             src_cli="$REPO_DIR/scripts/$cli.py"
         elif [ -f "$REPO_DIR/scripts/${cli//-/_}.py" ]; then
             src_cli="$REPO_DIR/scripts/${cli//-/_}.py"
         fi
         if [ -n "$src_cli" ]; then
-            cp -f "$src_cli" "$PROJECT_ROOT/.bin/$cli" 2>/dev/null || true
-            chmod +x "$PROJECT_ROOT/.bin/$cli" 2>/dev/null || true
-            sudo ln -sf "$PROJECT_ROOT/.bin/$cli" "/usr/local/bin/$cli" 2>/dev/null || true
+            cp -f "$src_cli" "$PROJECT_ROOT/.bin/$cli" 2>/dev/null || sudo cp -f "$src_cli" "$PROJECT_ROOT/.bin/$cli" 2>/dev/null || true
+            chmod +x "$PROJECT_ROOT/.bin/$cli" 2>/dev/null || sudo chmod +x "$PROJECT_ROOT/.bin/$cli" 2>/dev/null || true
+            ln -sfn "$PROJECT_ROOT/.bin/$cli" "$HOME/.local/bin/$cli" 2>/dev/null || true
+            ln -sfn "$PROJECT_ROOT/.bin/$cli" "/home/zerops/.local/bin/$cli" 2>/dev/null || true
+            sudo ln -sfn "$PROJECT_ROOT/.bin/$cli" "/usr/local/bin/$cli" 2>/dev/null || true
         fi
     done
+    hash -r 2>/dev/null || true
 
     # Refrescar memoria LTM de Engram si existe
     if command -v engram-sync >/dev/null 2>&1; then
@@ -724,8 +751,10 @@ UEOF
     fi
 
     echo "• Verificando paridad SSoT..."
-    if command -v ssot-parity-check >/dev/null 2>&1; then
-        ssot-parity-check --fix
+    if [ -x "$PROJECT_ROOT/.bin/ssot-parity-check" ]; then
+        "$PROJECT_ROOT/.bin/ssot-parity-check" --fix
+    elif [ -f "$REPO_DIR/scripts/ssot-parity-check.sh" ]; then
+        bash "$REPO_DIR/scripts/ssot-parity-check.sh" --fix
     elif [ -f "$SSOT_SCRIPTS/ssot-parity-check.sh" ]; then
         bash "$SSOT_SCRIPTS/ssot-parity-check.sh" --fix
     fi
@@ -943,10 +972,12 @@ rm -rf "$PROJECT_ROOT/.agents/skills/docu/scripts" 2>/dev/null || true
 rm -rf "$PROJECT_ROOT/.agents/skills/research/scripts" 2>/dev/null || true
 rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/raw" 2>/dev/null || true
 rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/pipeline/synthesis.py" 2>/dev/null || true
-if command -v ssot-parity-check >/dev/null 2>&1; then
-    ssot-parity-check
+if [ -x "$PROJECT_ROOT/.bin/ssot-parity-check" ]; then
+    "$PROJECT_ROOT/.bin/ssot-parity-check" --fix
+elif [ -f "$REPO_DIR/scripts/ssot-parity-check.sh" ]; then
+    bash "$REPO_DIR/scripts/ssot-parity-check.sh" --fix
 elif [ -f "$SSOT_SCRIPTS/ssot-parity-check.sh" ]; then
-    bash "$SSOT_SCRIPTS/ssot-parity-check.sh"
+    bash "$SSOT_SCRIPTS/ssot-parity-check.sh" --fix
 fi
 
 # 4b. Purga obligatoria de archivos de entorno efímeros y residuales en raíz
