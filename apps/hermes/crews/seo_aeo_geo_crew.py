@@ -13,7 +13,7 @@ logger = logging.getLogger("hermes.crews.seo_aeo_geo")
 
 def create_seo_aeo_geo_crew(topic: str, context: Optional[Dict[str, Any]] = None, tier: str = "free"):
     """
-    Creates a dedicated 2-agent CrewAI team for SEO/AEO/GEO optimization of Catalina Glamur.
+    Creates a dedicated 2-agent CrewAI team for SEO/AEO/GEO optimization of any digital brand or storefront.
     Runs on Bifrost -> FreeLLMAPI ($0 pool) by default.
     """
     try:
