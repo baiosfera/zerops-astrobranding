@@ -1,0 +1,14 @@
+zerops:
+  - setup: paperclip
+    build:
+      base: ubuntu/nodejs@26
+      prepareCommands:
+        - npm install -g paperclipai
+      deployFiles:
+        - .
+    run:
+      base: ubuntu/nodejs@26
+      ports:
+        - port: 3100
+          httpSupport: true
+      start: node src/server.mjs

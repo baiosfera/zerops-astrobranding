@@ -1,7 +1,7 @@
 {
   "name": "agentdev",
-  "version": "2.0.0",
-  "description": "Consolidated Agent Runtime: Paperclip Governance & Spend Caps Watchdog + PiDev Coding Agent Worker",
+  "version": "2.1.0",
+  "description": "Consolidated Agent Runtime: Native Paperclip AI Platform & PiDev Coding Agent Worker",
   "type": "module",
   "main": "src/server.mjs",
   "scripts": {
@@ -9,6 +9,7 @@
     "test": "node --check src/server.mjs"
   },
   "dependencies": {
-    "nats": "^2.29.3"
+    "nats": "^2.29.3",
+    "paperclipai": "latest"
   }
 }
