@@ -1008,7 +1008,7 @@ def get_pending_research_subagents(transcript_path: str) -> list:
     return pending
 
 def extract_user_prompt(payload: dict) -> str:
-    user_prompt = payload.get("userPrompt") or payload.get("lastUserInput") or ""
+    user_prompt = payload.get("test_user_prompt") or payload.get("userPrompt") or payload.get("lastUserInput") or ""
     if user_prompt:
         return user_prompt
     common = payload.get("common", {})
@@ -1354,47 +1354,6 @@ def evaluate_hook(payload: dict) -> dict:
                                 except Exception:
                                     pass
 
-            # 0.5.4 Anti-AMN Architectural Gate: Block responses recommending Object Storage when localstorage is active (BAI-426)
-            if not payload.get("test_bypass_amn_gate"):
-                user_prompt = payload.get("test_user_prompt") or extract_user_prompt(payload)
-                INFRA_KEYWORDS = re.compile(
-                    r'(?i)\b(storage|almacenamiento|objectstorage|object-storage|localstorage|s3|disco|servicios|zerops|desplegar|despliegue|infraestructura|creditos|recursos)\b'
-                )
-                if INFRA_KEYWORDS.search(user_prompt):
-                    env_state = get_physical_environment_state()
-                    if env_state["has_localstorage"]:
-                        transcript_path = payload.get("transcriptPath", "")
-                        has_amn_violation = payload.get("test_has_amn_violation", False)
-                        if transcript_path and os.path.exists(transcript_path) and not has_amn_violation:
-                            try:
-                                with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
-                                    t_lines = f.readlines()
-                                    recent_agent_texts = []
-                                    for tl in reversed(t_lines):
-                                        if '"type":"USER_INPUT"' in tl or '"source":"USER_EXPLICIT"' in tl:
-                                            break
-                                        recent_agent_texts.append(tl)
-                                    joined_text = " ".join(recent_agent_texts)
-                                    if re.search(r'(?i)\b(object-?storage|s3)\b.*?\b(im[aá]genes|archivos|assets|pdfs|descargables|media)\b|\b(im[aá]genes|archivos|assets|pdfs|descargables|media)\b.*?\b(object-?storage|s3)\b', joined_text):
-                                        if not re.search(r'(?i)\blocalstorage\b', joined_text):
-                                            has_amn_violation = True
-                            except Exception:
-                                pass
-
-                        if has_amn_violation:
-                            return {
-                                "decision": "CONTINUE",
-                                "reason": (
-                                    "🚨 [Anti-AMN Architectural Gate - BAI-426]: "
-                                    "Se detectó recomendación de 'Object Storage / S3' para assets o archivos cuando "
-                                    "'localstorage' (/var/www/localstorage) está activo y es el estándar de persistencia POSIX del proyecto. "
-                                    "Queda prohibido responder con sesgo AMN sin contrastar la infraestructura real. "
-                                    "Corregí tu afirmación basándote en la infraestructura real (/var/www/localstorage y plantilla-universal-web-zerops-v4.md)."
-                                ),
-                                "stopResult": {
-                                    "decision": "CONTINUE"
-                                }
-                            }
         triggered_stop_sync = trigger_engram_background_sync(payload, source="stop")
         if payload.get("test_inspect_engram_sync"):
             return {"engramSyncTriggered": triggered_stop_sync, "source": "stop"}
@@ -1551,14 +1510,13 @@ def evaluate_hook(payload: dict) -> dict:
             is_notice_cooling = (now_ts - last_notice_ts) < 20 and not payload.get("test_force_notice") and "--test" not in sys.argv and not is_infra_query
 
             if not is_notice_cooling:
-                # 0. Active Physical Environment Grounding (Anti-AMN Frugal)
+                # 0. Active Physical Environment Grounding (CoHaLo Positivo)
                 env_state = get_physical_environment_state()
                 if env_state["has_localstorage"]:
                     ephemeral_msgs.append(
-                        "🏛️ REALITY GROUNDING FÍSICO (Anti-AMN Soberano):\n"
-                        "• Storage Soberano: 'localstorage' (/var/www/localstorage) ACTIVO con POSIX NVMe.\n"
-                        "• Regla Inviolable: Toda persistencia starter/lean de assets, PDFs y fotos va en 'localstorage'.\n"
-                        "• Prohibido proponer Object Storage (S3) salvo requerimiento multi-nodo explícito. Ejecutá 'zerops_discover' o leé templates locales ante dudas."
+                        "🏛️ GROUNDING DE INFRAESTRUCTURA (CoHaLo Positivo):\n"
+                        "• Entorno físico verificado: 'localstorage' disponible en /var/www/localstorage (POSIX NVMe).\n"
+                        "• Service Discovery: Consultá 'zerops_discover' para validar los servicios activos en este proyecto antes de emitir juicios arquitectónicos."
                     )
                 # 1. Epistemic Grounding Radar (F0 Positive Guidance & Anti-AMN)
                 is_skill_task = any(k in prompt_lower for k in ["skill", "skills", "meta-skill", "docu", "cohalo", "crear skill", "arreglar skill", "auditar skill", "actualizar skill"])
@@ -3360,29 +3318,14 @@ def run_tests():
             assert "INICIAR_REEXEC=1" in iniciar_src and 'exec bash "$REPO_DIR/iniciar.sh"' in iniciar_src, "iniciar.sh must re-exec after git self-update"
         print("✓ Test 67 Passed: Bootstrap Self-Reexec & SSoT Parity Unbound-Var / Shadow Guards (BAI-425)")
 
-        # Test 68: Anti-AMN Architectural Gate & Storage SSoT (BAI-426)
-        res_amn_block = evaluate_hook({
-            "is_stop_event": True,
-            "terminationReason": "NO_TOOL_CALL",
-            "test_user_prompt": "cómo almacenar imágenes para ahorrar recursos y créditos",
-            "test_has_amn_violation": True,
-            "test_bypass_linear": True,
-            "test_bypass_correction_gate": True,
-            "test_bypass_gov_gate": True
+        # Test 68: CoHaLo Positive Infrastructure Grounding Radar
+        res_pi_infra = evaluate_hook({
+            "invocationNum": 10,
+            "test_bypass_dedup": True,
+            "test_user_prompt": "cómo almacenar imágenes para ahorrar recursos y créditos"
         })
-        assert res_amn_block.get("decision") == "CONTINUE" and "Anti-AMN Architectural Gate" in res_amn_block.get("reason", ""), f"Expected Anti-AMN Stop Gate to block with CONTINUE, got {res_amn_block}"
-
-        res_amn_allow = evaluate_hook({
-            "is_stop_event": True,
-            "terminationReason": "NO_TOOL_CALL",
-            "test_user_prompt": "cómo almacenar imágenes para ahorrar recursos y créditos",
-            "test_has_amn_violation": False,
-            "test_bypass_linear": True,
-            "test_bypass_correction_gate": True,
-            "test_bypass_gov_gate": True
-        })
-        assert res_amn_allow.get("decision") != "CONTINUE", f"Expected Anti-AMN Stop Gate to allow stop, got {res_amn_allow}"
-        print("✓ Test 68 Passed: Anti-AMN Architectural Gate & Storage SSoT Grounding (BAI-426)")
+        assert any("GROUNDING DE INFRAESTRUCTURA" in msg.get("ephemeralMessage", "") for msg in res_pi_infra.get("injectSteps", [])), f"Expected positive infrastructure grounding in PreInvocation, got {res_pi_infra}"
+        print("✓ Test 68 Passed: CoHaLo Positive Infrastructure Grounding Radar")
 
 
     finally:
