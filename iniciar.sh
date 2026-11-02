@@ -245,7 +245,7 @@ if [ "$LOCALSTORAGE_FOUND" = false ]; then
     for cand in "${STORAGE_CANDIDATES[@]}"; do
         [ -z "$cand" ] && continue
         for attempt in $(seq 1 10); do
-            if timeout 5s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=3 "$cand" "test -d /data" 2>/dev/null; then
+            if timeout 5s ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o ConnectTimeout=3 "$cand" "test -d /data" 2>/dev/null; then
                 LOCALSTORAGE_FOUND=true
                 LOCALSTORAGE_HOST="$cand"
                 break 2
@@ -260,8 +260,8 @@ ensure_storage_symlink() {
     local target_src="$1"
     local link_dst="$2"
 
-    # 1. Si existe un montaje físico previo en link_dst (y NO es un symlink), desmontar
-    if [ ! -L "$link_dst" ] && (grep -q " ${link_dst} " /proc/mounts 2>/dev/null || mountpoint -q "$link_dst" 2>/dev/null); then
+    # 1. Si existe un montaje físico previo en link_dst (y NO es un symlink) o está inaccesible/roto, desmontar
+    if [ ! -L "$link_dst" ] && (grep -q " ${link_dst} " /proc/mounts 2>/dev/null || mountpoint -q "$link_dst" 2>/dev/null || ! ls -ld "$link_dst" >/dev/null 2>&1); then
         echo "  • Limpiando montaje físico FUSE previo en $link_dst..."
         fusermount3 -uz "$link_dst" 2>/dev/null || sudo fusermount3 -uz "$link_dst" 2>/dev/null || sudo umount -l "$link_dst" 2>/dev/null || true
     fi
@@ -278,15 +278,30 @@ ensure_storage_symlink() {
     fi
 
     # 3. Crear enlace simbólico atómico garantizando permisos
-    sudo ln -sfn "$target_src" "$link_dst" 2>/dev/null || ln -sfn "$target_src" "$link_dst"
+    sudo ln -sfn "$target_src" "$link_dst" 2>/dev/null || ln -sfn "$target_src" "$link_dst" 2>/dev/null || true
 }
 
 if [ "$LOCALSTORAGE_FOUND" = true ]; then
     echo "  ✓ Servicio persistente '$LOCALSTORAGE_HOST' detectado y accesible vía red."
-    sudo mkdir -p "/mnt/$LOCALSTORAGE_HOST"
+
+    # Limpiar montajes FUSE huérfanos, rotos o sin permisos en /mnt/$LOCALSTORAGE_HOST
+    if grep -q " /mnt/$LOCALSTORAGE_HOST " /proc/mounts 2>/dev/null || mountpoint -q "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || [ -e "/mnt/$LOCALSTORAGE_HOST" ] || [ -d "/mnt/$LOCALSTORAGE_HOST" ]; then
+        if ! ls -ld "/mnt/$LOCALSTORAGE_HOST" >/dev/null 2>&1; then
+            echo "  • Limpiando montaje FUSE huérfano o inaccesible en /mnt/$LOCALSTORAGE_HOST..."
+            fusermount3 -uz "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || sudo fusermount3 -uz "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || sudo umount -l "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || true
+        fi
+    fi
+
+    # Asegurar existencia de directorio de montaje sin romper por permisos de stat previos
+    if [ ! -d "/mnt/$LOCALSTORAGE_HOST" ] || ! mountpoint -q "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null; then
+        sudo mkdir -p "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || true
+        sudo chown -R "$(id -un):$(id -gn)" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || true
+    fi
+
     if ! mountpoint -q "/mnt/$LOCALSTORAGE_HOST"; then
         echo "  • Montando $LOCALSTORAGE_HOST:/data en /mnt/$LOCALSTORAGE_HOST vía SSHFS..."
-        sudo sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" || true
+        sudo sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || \
+        sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || true
     fi
 
     # Validar que el punto de montaje esté activo y funcional
@@ -304,7 +319,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStartPre=/bin/mkdir -p /mnt/$LOCALSTORAGE_HOST
+ExecStartPre=-/bin/mkdir -p /mnt/$LOCALSTORAGE_HOST
 ExecStart=/bin/bash -c 'if ! mountpoint -q /mnt/$LOCALSTORAGE_HOST; then for i in \$(seq 1 15); do /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 $LOCALSTORAGE_HOST:/data /mnt/$LOCALSTORAGE_HOST 2>/dev/null && break; sleep 2; done; fi; if [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && mountpoint -q $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null; then /usr/bin/fusermount3 -uz $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; if [ -d $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ]; then rmdir $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; ln -sfn /mnt/$LOCALSTORAGE_HOST $PROJECT_ROOT/$LOCALSTORAGE_HOST'
 ExecStop=/bin/bash -c 'if mountpoint -q /mnt/$LOCALSTORAGE_HOST; then /usr/bin/fusermount3 -uz /mnt/$LOCALSTORAGE_HOST || true; fi'
 TimeoutStartSec=60
@@ -321,7 +336,7 @@ LSEOF
         sudo tee /etc/profile.d/zerops-localstorage.sh > /dev/null << PSEOF
 # Auto-sanación y verificación de volumen persistente localstorage
 if [ -d "/mnt/$LOCALSTORAGE_HOST" ] && ! mountpoint -q "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null; then
-    if timeout 2s ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes "$LOCALSTORAGE_HOST" "test -d /data" 2>/dev/null; then
+    if timeout 2s ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes "$LOCALSTORAGE_HOST" "test -d /data" 2>/dev/null; then
         sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || true
     fi
 fi

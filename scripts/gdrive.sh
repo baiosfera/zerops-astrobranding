@@ -215,7 +215,7 @@ discover_tripartite_storage() {
     echo "[ZCP-BOOT] Probing and waiting for persistent localstorage (timeout 15s)..."
     for cand in "localstorage" "storage" "sharedfiles" "sharedstorage" "vol" "volume" "data" "disk"; do
         for attempt in $(seq 1 15); do
-            if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -o BatchMode=yes "$cand" "test -d /data" 2>/dev/null; then
+            if ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -o BatchMode=yes "$cand" "test -d /data" 2>/dev/null; then
                 DISCOVERED_TARGET="$cand"
                 STORAGE_TYPE="local-storage"
                 echo "[ZCP-BOOT] Persistent local-storage target ready: $cand (connected in ${attempt}s)"
@@ -228,7 +228,7 @@ discover_tripartite_storage() {
     # 3. Probe any *_hostname environment variable for local-storage
     for var in $(env | grep -E '_hostname=' | sed 's/.*_hostname=//' || true); do
         if [ "$var" != "zcp" ] && [ "$var" != "core" ]; then
-            if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -o BatchMode=yes "$var" "test -d /data" 2>/dev/null; then
+            if ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -o BatchMode=yes "$var" "test -d /data" 2>/dev/null; then
                 DISCOVERED_TARGET="$var"
                 STORAGE_TYPE="local-storage"
                 return 0
