@@ -310,11 +310,42 @@ zerops:
         NATS_URL: ${nats_connectionString}
         ZCP_NATS_URL: ${nats_connectionString}
         LOCAL_STORAGE_PATH: "/mnt/localstorage/hermes"
-      start: supervisord -c /var/www/apps/hermes/supervisord.conf -n
+      start: python3 apps/hermes/main.py
       healthCheck:
         httpGet:
           port: 8000
-          path: /healthz
+          path: /
+
+  # 5b. Consolidated Coding & Governance Runtime: Paperclip & PiDev (Node.js 26 Ubuntu)
+  - setup: agentdev
+    build:
+      base: ubuntu/nodejs@26
+      deployFiles:
+        - apps/agentdev
+    run:
+      base: ubuntu/nodejs@26
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
+      ports:
+        - port: 3100
+          httpSupport: true
+      initCommands:
+        - sudo mkdir -p /mnt/localstorage/paperclip /mnt/localstorage/pidev && sudo chown -R zerops:zerops /mnt/localstorage/paperclip /mnt/localstorage/pidev
+      envVariables:
+        PORT: "3100"
+        HOST: "0.0.0.0"
+        NODE_ENV: "production"
+        DATABASE_URL: ${database_connectionString}
+        NATS_URL: ${nats_connectionString}
+        LOCAL_STORAGE_PATH: "/mnt/localstorage/paperclip"
+        SKILLS_PATH: "/mnt/localstorage/skills"
+      start: node apps/agentdev/src/server.mjs
+      healthCheck:
+        httpGet:
+          port: 3100
+          path: /
 
   # 6. Listmonk Sovereign Email Marketing & Transactional Engine (Go 1.22 Alpine)
   - setup: listmonk

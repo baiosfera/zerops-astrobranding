@@ -43,6 +43,43 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def do_POST(self):
+        if self.path in ("/api/crews/kickoff", "/crews/kickoff"):
+            try:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len).decode("utf-8")
+                payload = json.loads(body) if body else {}
+                
+                crew_name = payload.get("crew", "")
+                skills = payload.get("skills", [])
+                goal = payload.get("goal") or payload.get("topic") or "General task"
+                tier = payload.get("tier", "free")
+                
+                try:
+                    from crews.crew_factory import CrewFactory
+                except ImportError:
+                    from .crews.crew_factory import CrewFactory
+
+                if skills and isinstance(skills, list):
+                    output = CrewFactory.execute_skills_crew(skills, goal, tier=tier)
+                elif crew_name:
+                    output = CrewFactory.execute(crew_name, goal, tier=tier)
+                else:
+                    output = "Error: Parámetros inválidos. Especificá 'crew' o lista de 'skills'."
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "ok", "result": output}).encode("utf-8"))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode("utf-8"))
+        else:
+            self.send_response(404)
+            self.end_headers()
+
     def log_message(self, format, *args):
         # Quiet standard logging
         pass

@@ -606,7 +606,25 @@ class HermesAgent:
                         }
                     )
                     if res.status_code != 200:
-                        return f"[Hermes] Error from AI Gateway: {res.status_code}"
+                        logger.warning(f"[Hermes] Primary gateway status {res.status_code}. Retrying with pro failover...")
+                        res = await client.post(
+                            f"{BIFROST_URL}/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {self.bifrost_key}",
+                                "x-force-deepseek": "true",
+                                "x-routing-tier": "pro"
+                            },
+                            json={
+                                "model": MODEL_NAME,
+                                "messages": messages,
+                                "tools": self.tools,
+                                "temperature": 0.3,
+                            },
+                            timeout=120.0
+                        )
+                        if res.status_code != 200:
+                            logger.error(f"[Hermes] Gateway fallback failed: {res.status_code} - {res.text}")
+                            return "⚠️ El gateway de inferencia está experimentando alta demanda temporal. Por favor intentá nuevamente en unos momentos."
                     
                     data = res.json()
                     msg = data["choices"][0]["message"]

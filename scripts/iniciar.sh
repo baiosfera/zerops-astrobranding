@@ -661,7 +661,7 @@ if [ "$UPDATE_MODE" = true ]; then
         fi
         if [ -n "$SRC_HOOKS" ]; then
             cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || sudo cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || true
-            cp -f "$SRC_HOOKS" "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
+            echo '{}' > "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
             [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents" ] && cp -f "$SRC_HOOKS" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json" 2>/dev/null || true
         fi
     fi
@@ -954,7 +954,13 @@ if [ -f "$REPO_DIR/scripts/unisetup.sh" ] || [ -f "$SSOT_SCRIPTS/unisetup.sh" ];
     if ! command -v bifrost-cli >/dev/null 2>&1; then
         echo "• [3c/4] Instalando @maximhq/bifrost-cli como puente agéntico de desarrollo..."
         sudo npm install -g @maximhq/bifrost-cli >/dev/null 2>&1 || true
-        [ -f /usr/bin/bifrost ] && sudo ln -sf /usr/bin/bifrost /usr/local/bin/bifrost-cli || true
+        /usr/bin/bifrost --help >/dev/null 2>&1 || true
+        if [ -f "$HOME/.bifrost/bin/bifrost" ]; then
+            sudo ln -sf "$HOME/.bifrost/bin/bifrost" /usr/local/bin/bifrost
+            sudo ln -sf "$HOME/.bifrost/bin/bifrost" /usr/local/bin/bifrost-cli
+        elif [ -f /usr/bin/bifrost ]; then
+            sudo ln -sf /usr/bin/bifrost /usr/local/bin/bifrost-cli
+        fi
     fi
 else
     echo "❌ Error: unisetup.sh no disponible ni en repositorio ($REPO_DIR/scripts) ni en Drive ($SSOT_SCRIPTS)."

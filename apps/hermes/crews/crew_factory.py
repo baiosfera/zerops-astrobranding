@@ -1,5 +1,6 @@
 """
-Dynamic Crew Factory & Unified Bifrost LLM Provider
+Dynamic Crew Factory & Universal CoHaLo Skill Harness Integration
+Unified Bifrost LLM Provider ($0 FreeLLMAPI default, DeepSeek failover).
 """
 import os
 import json
@@ -25,7 +26,7 @@ def get_bifrost_llm(tier: str = "free"):
 
     if tier == "pro":
         model_name = "openai/deepseek-chat"
-        extra_headers = {"x-routing-tier": "pro", "x-tier": "production"}
+        extra_headers = {"x-routing-tier": "pro", "x-force-deepseek": "true"}
     else:
         model_name = "openai/auto"
         extra_headers = {"x-routing-tier": "free"}
@@ -48,23 +49,61 @@ class CrewFactory:
 
     @classmethod
     def list_crews(cls) -> List[str]:
-        return list(cls._registry.keys())
+        # Return registered crews + available sovereign skills
+        base_crews = list(cls._registry.keys())
+        try:
+            from .universal_harness import UniversalSkillHarness
+            skills = UniversalSkillHarness.list_available_skills()
+            return sorted(list(set(base_crews + skills)))
+        except Exception:
+            return base_crews
 
     @classmethod
     def execute(cls, crew_name: str, topic: str, context: Optional[Dict[str, Any]] = None, tier: str = "free") -> str:
         key = crew_name.lower().strip()
-        if key not in cls._registry:
-            available = ", ".join(cls._registry.keys())
-            return f"Error: Crew '{crew_name}' no existe. Equipos disponibles: {available}"
         
-        builder = cls._registry[key]
-        crew_instance = builder(topic=topic, context=context or {}, tier=tier)
+        # 1. Registered builder function check
+        if key in cls._registry:
+            builder = cls._registry[key]
+            crew_instance = builder(topic=topic, context=context or {}, tier=tier)
+            try:
+                result = crew_instance.kickoff()
+                return str(result)
+            except Exception as e:
+                logger.error(f"Error executing crew '{crew_name}': {e}")
+                return f"Error ejecutando cuadrilla {crew_name}: {str(e)}"
+
+        # 2. Universal CoHaLo Dynamic Skill Harness check (141 skills)
         try:
-            result = crew_instance.kickoff()
-            return str(result)
+            from .universal_harness import UniversalSkillHarness
+            available_skills = UniversalSkillHarness.list_available_skills()
+            if key in available_skills or key.replace("_", "-") in available_skills:
+                actual_skill = key if key in available_skills else key.replace("_", "-")
+                logger.info(f"Routing crew execution '{crew_name}' through UniversalSkillHarness for skill '{actual_skill}'")
+                return UniversalSkillHarness.create_multi_skill_crew(
+                    skill_names=[actual_skill],
+                    mission_goal=topic,
+                    tier=tier,
+                    context=context
+                )
         except Exception as e:
-            logger.error(f"Error executing crew '{crew_name}': {e}")
-            return f"Error ejecutando cuadrilla {crew_name}: {str(e)}"
+            logger.warning(f"UniversalSkillHarness fallback failed for {key}: {e}")
+
+        available = ", ".join(cls.list_crews()[:20]) + "..."
+        return f"Error: Crew '{crew_name}' no existe. Opciones disponibles: {available}"
+
+    @classmethod
+    def execute_skills_crew(cls, skill_names: List[str], goal: str, tier: str = "free") -> str:
+        """Executes a multi-agent crew composed dynamically from 1 to N sovereign skills."""
+        try:
+            from .universal_harness import UniversalSkillHarness
+            return UniversalSkillHarness.create_multi_skill_crew(
+                skill_names=skill_names,
+                mission_goal=goal,
+                tier=tier
+            )
+        except Exception as e:
+            return f"Error instanciando cuadrilla multi-skill: {str(e)}"
 
     @classmethod
     def create_dynamic_crew(cls, goal: str, roles: List[Dict[str, str]], tier: str = "free") -> str:

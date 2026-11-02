@@ -287,7 +287,7 @@
     "circuit_breaker_config": {
       "policies": [
         {
-          "name": "freellmapi-429-exhaustion-breaker",
+          "name": "freellmapi-exhaustion-breaker",
           "enabled": true,
           "primary_provider": "freellmapi",
           "primary_model": "*",
@@ -299,19 +299,24 @@
               {
                 "source": "response_header",
                 "header_name": "retry-after"
+              },
+              {
+                "source": "response_header",
+                "header_name": "x-ratelimit-remaining",
+                "header_value": "0"
               }
             ]
           },
-          "default_cooldown": "120s",
+          "default_cooldown": "60s",
           "cooldown_header": "retry-after"
         }
       ]
     },
     "routing_rules": [
       {
-        "id": "rule-coding-and-reasoning-to-deepseek",
-        "name": "Route Coding, Complex Reasoning & Pro Tier Directly to DeepSeek",
-        "cel_expression": "model.contains('deepseek') || model.contains('code') || model.contains('reason') || headers['x-tier'] == 'production' || headers['x-routing-tier'] == 'pro'",
+        "id": "rule-explicit-pro-override",
+        "name": "Route Explicit Pro Tier Requests Directly to DeepSeek",
+        "cel_expression": "headers['x-force-deepseek'] == 'true' || headers['x-tier'] == 'pro' || headers['x-routing-tier'] == 'pro'",
         "targets": [
           {
             "provider": "deepseek",
@@ -324,8 +329,8 @@
         "priority": 0
       },
       {
-        "id": "rule-freellm-zero-cost-priority",
-        "name": "Prioritize FreeLLMAPI with Paid Commercial Failover",
+        "id": "rule-zero-cost-freellm-universal",
+        "name": "Prioritize FreeLLMAPI ($0) for All Models (Chat, Code, Reasoning) with Paid Failover",
         "cel_expression": "true",
         "targets": [
           {
