@@ -45,6 +45,19 @@ if [ -f "$SCRIPT_DIR/zcp-sync" ]; then
     sudo ln -sf "$PERSISTENT_BIN/zcp-sync" /usr/local/bin/zcp-sync 2>/dev/null || true
 fi
 
+# 1.3 Despliegue de Sincronizador 3-Tier Zero-Data-Loss de Engram (engram-sync) y Sensores Soberanos
+for core_cli in "engram-sync:engram-sync" "ssot-parity-check:ssot-parity-check.sh" "skills-suite-validate:skills-suite-validate.sh"; do
+    cli_name="${core_cli%%:*}"
+    cli_src_file="${core_cli#*:}"
+    if [ -f "$SCRIPT_DIR/$cli_src_file" ]; then
+        cp -f "$SCRIPT_DIR/$cli_src_file" "$PERSISTENT_BIN/$cli_name"
+        chmod +x "$PERSISTENT_BIN/$cli_name"
+        cp "$PERSISTENT_BIN/$cli_name" "$HOME/.local/bin/$cli_name" 2>/dev/null || true
+        cp "$PERSISTENT_BIN/$cli_name" "/home/zerops/.local/bin/$cli_name" 2>/dev/null || true
+        sudo ln -sf "$PERSISTENT_BIN/$cli_name" "/usr/local/bin/$cli_name" 2>/dev/null || true
+    fi
+done
+
 # 2. Despliegue de Utilidad Soberana MCV Downloader (mcv-download)
 # Asegurar dependencias de sistema y navegador para MCV en ZCP limpio con guardas de idempotencia
 if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v 7z >/dev/null 2>&1 || ! command -v unrar >/dev/null 2>&1 || ! command -v megatools >/dev/null 2>&1 || ! command -v pdftotext >/dev/null 2>&1; then

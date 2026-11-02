@@ -221,13 +221,44 @@ if [ "$RUN_ALL" = true ]; then
     echo "------------------------------------------------------------"
     echo "  [Paso 7/7] Verificación Integral de Capacidades & Registry"
     echo "------------------------------------------------------------"
-    # Sincronización e Ingestión de Memoria LTM Engram (Aislamiento Soberano Multi-Proyecto)
+    # Sincronización e Ingestión de Memoria LTM Engram (Aislamiento Soberano Multi-Proyecto 3-Tier)
     ACTIVE_PROJECT="${ENGRAM_PROJECT:-${PROJECT_NAME:-}}"
     if [ -z "$ACTIVE_PROJECT" ] || [ "$ACTIVE_PROJECT" = "zerops-astrobranding" ] || [ "$ACTIVE_PROJECT" = "default" ]; then
+        if [ -x "$SCRIPT_DIR/engram-sync" ] || [ -f "$SCRIPT_DIR/engram-sync" ]; then
+            mkdir -p "$PROJECT_ROOT/.bin"
+            cp -f "$SCRIPT_DIR/engram-sync" "$PROJECT_ROOT/.bin/engram-sync"
+            chmod +x "$PROJECT_ROOT/.bin/engram-sync"
+            sudo ln -sf "$PROJECT_ROOT/.bin/engram-sync" /usr/local/bin/engram-sync 2>/dev/null || true
+        fi
         ZCLI_BIN=""
         [ -x "/opt/zerops/bin/zcli" ] && ZCLI_BIN="/opt/zerops/bin/zcli"
         command -v zcli >/dev/null 2>&1 && ZCLI_BIN="$(command -v zcli)"
-        if [ -n "$ZCLI_BIN" ]; then
+        if [ -x "/usr/local/bin/zcp" ] && command -v python3 >/dev/null 2>&1; then
+            DETECTED_ZPROJ=$(python3 -B -c '
+import subprocess, json
+try:
+    proc = subprocess.Popen(["/usr/local/bin/zcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    def rpc(m):
+        proc.stdin.write(json.dumps(m) + "\n"); proc.stdin.flush()
+        while True:
+            l = proc.stdout.readline()
+            if not l: return None
+            try:
+                d = json.loads(l)
+                if d.get("id") == m.get("id"): return d
+            except Exception: pass
+    rpc({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"unisetup","version":"2.0"}}})
+    proc.stdin.write(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}) + "\n"); proc.stdin.flush()
+    res = rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_discover","arguments":{}}})
+    proc.terminate()
+    name = json.loads(res["result"]["content"][0]["text"]).get("project", {}).get("name", "")
+    if name: print(name.strip())
+except Exception: pass
+' 2>/dev/null || true)
+            if [ -n "$DETECTED_ZPROJ" ] && [ "$DETECTED_ZPROJ" != "default" ]; then
+                ACTIVE_PROJECT="$(echo "$DETECTED_ZPROJ" | tr '[:upper:]' '[:lower:]')"
+            fi
+        elif [ -n "$ZCLI_BIN" ]; then
             DETECTED_ZPROJ=$(ZEROPS_TOKEN="${ZCP_API_KEY:-${ZEROPS_TOKEN:-}}" "$ZCLI_BIN" project list 2>/dev/null | awk -F'│' 'NR>3 && $3 ~ /[a-zA-Z0-9]/ {gsub(/^[ \t]+|[ \t]+$/, "", $3); print $3; exit}' || true)
             if [ -n "$DETECTED_ZPROJ" ] && [ "$DETECTED_ZPROJ" != "default" ]; then
                 ACTIVE_PROJECT="$(echo "$DETECTED_ZPROJ" | tr '[:upper:]' '[:lower:]')"
@@ -235,41 +266,40 @@ if [ "$RUN_ALL" = true ]; then
         fi
     fi
     ACTIVE_PROJECT="${ACTIVE_PROJECT:-zerops-astrobranding}"
-    mkdir -p "$PROJECT_ROOT/.engram"
-    echo "{\"project_name\": \"$ACTIVE_PROJECT\"}" > "$PROJECT_ROOT/.engram/config.json"
+    ACTIVE_LOWER="$(echo "$ACTIVE_PROJECT" | tr '[:upper:]' '[:lower:]')"
+    mkdir -p "$PROJECT_ROOT/.engram" "$PROJECT_ROOT/.bin"
+    echo "{\"project_name\": \"$ACTIVE_LOWER\"}" > "$PROJECT_ROOT/.engram/config.json"
 
-    if [ "$ACTIVE_PROJECT" = "zerops-astrobranding" ]; then
-        # Upstream Template: Restaurar memoria basal de desarrollo soberano
+    if [ -f "$SCRIPT_DIR/engram-sync" ]; then
+        cp -f "$SCRIPT_DIR/engram-sync" "$PROJECT_ROOT/.bin/engram-sync"
+        chmod +x "$PROJECT_ROOT/.bin/engram-sync"
+        sudo ln -sf "$PROJECT_ROOT/.bin/engram-sync" /usr/local/bin/engram-sync 2>/dev/null || true
+    fi
+
+    if [ "$ACTIVE_LOWER" = "zerops-astrobranding" ]; then
+        # Upstream Template: Restaurar memoria basal de desarrollo soberano en disco POSIX local
         ENGRAM_DUMP="$ZCP_ROOT/engram_baseline.json"
         [ ! -f "$ENGRAM_DUMP" ] && ENGRAM_DUMP="$ZCP_ROOT/engram_ssot.json"
         if [ -f "$ENGRAM_DUMP" ]; then
-            echo "• Sincronizando memoria basal upstream de $ACTIVE_PROJECT desde SSoT..."
+            echo "• Sincronizando memoria basal upstream de $ACTIVE_LOWER desde SSoT..."
             "$PROJECT_ROOT/.bin/engram" import "$ENGRAM_DUMP" 2>/dev/null || engram import "$ENGRAM_DUMP" 2>/dev/null || true
         fi
     else
-        # Proyecto Downstream / Cliente (ej: client_app): Aislamiento absoluto anti-contaminación
-        ACTIVE_LOWER="$(echo "$ACTIVE_PROJECT" | tr '[:upper:]' '[:lower:]')"
-        CLIENT_DUMP=""
-        for candidate in \
-            "$ZCP_ROOT/../${ACTIVE_LOWER}/engram/engram_ssot.json" \
-            "$ZCP_ROOT/../${ACTIVE_PROJECT}/engram/engram_ssot.json" \
+        # Proyecto Downstream / Cliente (glamur, elplacerdc, damaren o cualquier nuevo): Hidratación aditiva Zero-Data-Loss 3-Tier
+        echo "• Hidratando memoria LTM 3-Tier Zero-Data-Loss para proyecto $ACTIVE_LOWER..."
+        if command -v engram-sync >/dev/null 2>&1; then
+            engram-sync --pull --project "$ACTIVE_LOWER" || true
+        elif [ -f "$SCRIPT_DIR/engram-sync" ]; then
+            bash "$SCRIPT_DIR/engram-sync" --pull --project "$ACTIVE_LOWER" || true
+        fi
+        # Compatibilidad adicional con dumps legacy en users-apis si existiesen
+        for legacy_cand in \
             "$ZCP_ROOT/../${ACTIVE_LOWER}/engram/engram_${ACTIVE_LOWER}.json" \
             "$ZCP_ROOT/../users-apis/${ACTIVE_PROJECT}/engram_${ACTIVE_PROJECT}.json"; do
-            if [ -f "$candidate" ]; then
-                CLIENT_DUMP="$candidate"
-                break
+            if [ -f "$legacy_cand" ]; then
+                "$PROJECT_ROOT/.bin/engram" import "$legacy_cand" 2>/dev/null || engram import "$legacy_cand" 2>/dev/null || true
             fi
         done
-        if [ -n "$CLIENT_DUMP" ]; then
-            echo "• Sincronizando memoria LTM dedicada para cliente $ACTIVE_PROJECT desde SSoT ($CLIENT_DUMP)..."
-            "$PROJECT_ROOT/.bin/engram" import "$CLIENT_DUMP" 2>/dev/null || engram import "$CLIENT_DUMP" 2>/dev/null || true
-        elif [ -f "$SCRIPT_DIR/engram-sync" ]; then
-            echo "• Intentando hidratación Tiered Cold->Hot para $ACTIVE_PROJECT..."
-            bash "$SCRIPT_DIR/engram-sync" --pull --project "$ACTIVE_PROJECT" 2>/dev/null || true
-        else
-            echo "• Inicializando espacio de nombres LTM limpio y aislado para $ACTIVE_PROJECT..."
-            engram save "Init: Bootstrap Soberano de $ACTIVE_PROJECT" "What: Inicializado espacio de nombres aislado para $ACTIVE_PROJECT.\nWhy: Adopcion limpia sin contaminacion de memoria upstream.\nWhere: /var/www\nLearned: Espacio de nombres LTM aislado y blindado contra cross-contamination." --project "$ACTIVE_PROJECT" --scope project 2>/dev/null || true
-        fi
     fi
 
     # Auto-siembra e hidratación soberana de LocalStorage SSoT por proyecto

@@ -130,27 +130,38 @@ if [ -f "$LOCAL_BASE/zerops-astrobranding/scripts/engram-sync" ]; then
     compare_files "engram-sync" "$LOCAL_BASE/zerops-astrobranding/scripts/engram-sync" "$DRIVE_BASE/scripts/engram-sync"
 fi
 
-# 2.0b Canonical Project Identity & Engram Anti-Split Invariant
-echo "--- Checking Canonical Project Identity & Engram Anti-Split Invariant ---"
-EXPECTED_IDENTITY="${ENGRAM_PROJECT:-${PROJECT_NAME:-}}"
+# 2.0b Canonical Project Identity & Engram 3-Tier Local-POSIX Invariant
+echo "--- Checking Canonical Project Identity & Engram 3-Tier Invariant ---"
+EXPECTED_IDENTITY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
 if [ -n "$EXPECTED_IDENTITY" ] && [ "$EXPECTED_IDENTITY" != "zerops-astrobranding" ]; then
     AGENT_DB="/home/zerops/.engram/engram.db"
     if [ -L "$AGENT_DB" ]; then
-        LINK_TARGET="$(readlink "$AGENT_DB")"
-        EXPECTED_TARGET="/var/www/localstorage/engram/${EXPECTED_IDENTITY}/engram.db"
-        if [ "$LINK_TARGET" != "$EXPECTED_TARGET" ]; then
-            echo "❌ Identity DRIFT: /home/zerops/.engram/engram.db points to '$LINK_TARGET' but active project is '$EXPECTED_IDENTITY' (expected '$EXPECTED_TARGET')"
-            ERRORS=$((ERRORS + 1))
+        if [ "$AUTO_FIX" = true ] && command -v engram-sync >/dev/null; then
+            echo "🔧 Auto-fixing legacy Engram FUSE symlink into local POSIX DB ($EXPECTED_IDENTITY)..."
+            engram-sync --pull --project "$EXPECTED_IDENTITY" --quiet || true
+        fi
+    fi
+    if [ -L "$AGENT_DB" ]; then
+        echo "❌ Anti-Corruption Violation: /home/zerops/.engram/engram.db is a symlink ($(readlink "$AGENT_DB")) instead of local POSIX regular file"
+        ERRORS=$((ERRORS + 1))
+    elif [ -f "$AGENT_DB" ]; then
+        echo "✓ Engram Hot DB verified on local POSIX disk (anti-WAL-corruption): $AGENT_DB"
+        COLD_ENGRAM_JSON="/var/www/baiosfera/0ZEROPS-AGY/${EXPECTED_IDENTITY}/engram/engram_ssot.json"
+        if [ ! -f "$COLD_ENGRAM_JSON" ] && [ "$AUTO_FIX" = true ] && command -v engram-sync >/dev/null; then
+            engram-sync --push --project "$EXPECTED_IDENTITY" --quiet || true
+        fi
+        if [ -f "$COLD_ENGRAM_JSON" ]; then
+            echo "✓ Engram Cold SSoT JSON present in Google Drive: $COLD_ENGRAM_JSON"
         else
-            echo "✓ Engram storage symlink aligned with active project: $EXPECTED_IDENTITY"
+            echo "❌ Missing Engram Cold SSoT JSON in Google Drive: $COLD_ENGRAM_JSON"
+            ERRORS=$((ERRORS + 1))
         fi
     else
-        echo "⚠️ /home/zerops/.engram/engram.db is not a symlink to localstorage"
-        ERRORS=$((ERRORS + 1))
+        echo "ℹ️ Engram Hot DB not yet initialized for virgin project: $EXPECTED_IDENTITY"
     fi
 
     if [ -d "/var/www/localstorage/engram" ]; then
-        ORPHAN_DIRS=$(find "/var/www/localstorage/engram" -mindepth 1 -maxdepth 1 -type d ! -name "$EXPECTED_IDENTITY" -exec basename {} \; 2>/dev/null || true)
+        ORPHAN_DIRS=$(find "/var/www/localstorage/engram" -mindepth 1 -maxdepth 1 -type d ! -name "$EXPECTED_IDENTITY" -exec basename {} \; || true)
         if [ -n "$ORPHAN_DIRS" ]; then
             echo "❌ Orphan/split engram directories detected in localstorage: $ORPHAN_DIRS"
             ERRORS=$((ERRORS + 1))
@@ -197,6 +208,7 @@ SYMLINKS=(
     "ssot-parity-check"
     "astrobranding-check"
     "zcp-sync"
+    "engram-sync"
 )
 
 for symlink in "${SYMLINKS[@]}"; do

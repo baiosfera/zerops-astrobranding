@@ -21,7 +21,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "write_file|edit_file|write_to_file|replace_file_content",
+        "matcher": "write_file|edit_file|write_to_file|replace_file_content|call_mcp_tool",
         "hooks": [
           {
             "type": "command",

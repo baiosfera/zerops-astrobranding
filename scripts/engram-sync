@@ -1,55 +1,117 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# engram-sync — Sincronizador Atómico Tiered Hot/Cold para Memoria Engram
-# Versión: v1.0 | SSoT Governance Track A
+# engram-sync — Sincronizador Atómico 3-Tier (Zero-Data-Loss & Additive Merge)
+# Versión: v2.0 | Local POSIX Hot + Zerops LocalStorage Warm + Google Drive Cold
 # ==============================================================================
 set -euo pipefail
 
-# 1. Determinar identidad del proyecto
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
-APP_IDENTITY="${ENGRAM_PROJECT:-}"
+AGENT_ENGRAM_DIR="${ENGRAM_DATA_DIR:-/home/zerops/.engram}"
+AGENT_DB="${AGENT_ENGRAM_DIR}/engram.db"
+LOCALSTORAGE_DIR="${LOCALSTORAGE_DIR:-/var/www/localstorage}"
+DRIVE_AGY_ROOT="${DRIVE_AGY_ROOT:-/var/www/baiosfera/0ZEROPS-AGY}"
 
-if [ -z "$APP_IDENTITY" ] && [ -f "$PROJECT_ROOT/.env" ]; then
-    APP_IDENTITY="$(grep -E '^ENGRAM_PROJECT=' "$PROJECT_ROOT/.env" 2>/dev/null | head -n1 | cut -d'=' -f2- | tr -d '\"'\'' ' || true)"
-fi
+ENGRAM_BIN=""
+for cand_bin in "/var/www/.bin/engram" "/usr/local/bin/engram" "$(command -v engram 2>/dev/null || true)"; do
+    if [ -n "$cand_bin" ] && [ -x "$cand_bin" ]; then
+        ENGRAM_BIN="$cand_bin"
+        break
+    fi
+done
 
-if [ -z "$APP_IDENTITY" ] && [ -f "$PROJECT_ROOT/.engram/config.json" ]; then
-    APP_IDENTITY="$(grep -o '"project_name": *"[^"]*"' "$PROJECT_ROOT/.engram/config.json" 2>/dev/null | head -n1 | cut -d'"' -f4 || true)"
-fi
+resolve_project_identity() {
+    local explicit_arg="${1:-}"
+    local resolved="${explicit_arg}"
 
-if [ -z "$APP_IDENTITY" ]; then
-    APP_IDENTITY="${PROJECT_NAME:-${CLIENT_NAME:-}}"
-fi
+    if [ -z "$resolved" ]; then
+        resolved="${ENGRAM_PROJECT:-}"
+    fi
 
-# Auto-detección dinámica desde Zerops CLI si no hay identidad explícita o se heredó el chasis
-if [ -z "$APP_IDENTITY" ] || [ "$APP_IDENTITY" = "zerops-astrobranding" ] || [ "$APP_IDENTITY" = "default" ]; then
-    ZCLI_BIN=""
-    [ -x "/opt/zerops/bin/zcli" ] && ZCLI_BIN="/opt/zerops/bin/zcli"
-    command -v zcli >/dev/null 2>&1 && ZCLI_BIN="$(command -v zcli)"
-    if [ -n "$ZCLI_BIN" ]; then
-        DETECTED_ZPROJ=$(ZEROPS_TOKEN="${ZCP_API_KEY:-${ZEROPS_TOKEN:-}}" "$ZCLI_BIN" project list 2>/dev/null | awk -F'│' 'NR>3 && $3 ~ /[a-zA-Z0-9]/ {gsub(/^[ \t]+|[ \t]+$/, "", $3); print $3; exit}' || true)
-        if [ -n "$DETECTED_ZPROJ" ] && [ "$DETECTED_ZPROJ" != "default" ]; then
-            APP_IDENTITY="$DETECTED_ZPROJ"
+    if [ -z "$resolved" ] || [ "$resolved" = "zerops-astrobranding" ] || [ "$resolved" = "default" ]; then
+        if [ -f "$PROJECT_ROOT/.engram/config.json" ]; then
+            local cfg_proj
+            cfg_proj="$(grep -o '"project_name": *"[^"]*"' "$PROJECT_ROOT/.engram/config.json" 2>/dev/null | head -n1 | cut -d'"' -f4 || true)"
+            if [ -n "$cfg_proj" ] && [ "$cfg_proj" != "zerops-astrobranding" ] && [ "$cfg_proj" != "default" ]; then
+                resolved="$cfg_proj"
+            fi
         fi
     fi
-fi
 
-APP_IDENTITY="${APP_IDENTITY:-zerops-astrobranding}"
+    if [ -z "$resolved" ] || [ "$resolved" = "zerops-astrobranding" ] || [ "$resolved" = "default" ]; then
+        if [ -f /etc/environment ]; then
+            local env_proj
+            env_proj="$(grep -E '^(ENGRAM_PROJECT|PROJECT_NAME)=' /etc/environment 2>/dev/null | head -n1 | cut -d'=' -f2- | tr -d '\"'\'' ' || true)"
+            if [ -n "$env_proj" ] && [ "$env_proj" != "zerops-astrobranding" ] && [ "$env_proj" != "default" ]; then
+                resolved="$env_proj"
+            fi
+        fi
+    fi
 
-# Normalización canónica obligatoria a minúsculas para el filesystem
-APP_IDENTITY_LOWER="$(echo "$APP_IDENTITY" | tr '[:upper:]' '[:lower:]')"
+    if [ -z "$resolved" ] || [ "$resolved" = "zerops-astrobranding" ] || [ "$resolved" = "default" ]; then
+        resolved="${PROJECT_NAME:-${CLIENT_NAME:-}}"
+    fi
 
-# 2. Rutas canónicas
-LOCALSTORAGE_DIR="/var/www/localstorage"
-HOT_DIR="${LOCALSTORAGE_DIR}/engram/${APP_IDENTITY_LOWER}"
-HOT_DB="${HOT_DIR}/engram.db"
-COLD_DIR="/var/www/baiosfera/0ZEROPS-AGY/${APP_IDENTITY_LOWER}/engram"
-COLD_DB="${COLD_DIR}/engram.db"
-AGENT_ENGRAM_DIR="/home/zerops/.engram"
-AGENT_DB="${AGENT_ENGRAM_DIR}/engram.db"
+    # Detección determinista del contenedor propio vía ZCP zerops_discover (inmune a tokens multi-proyecto)
+    if [ -z "$resolved" ] || [ "$resolved" = "zerops-astrobranding" ] || [ "$resolved" = "default" ]; then
+        if [ -x "/usr/local/bin/zcp" ] && command -v python3 >/dev/null 2>&1; then
+            local zcp_proj
+            zcp_proj="$(python3 -B -c '
+import subprocess, json, os
+try:
+    proc = subprocess.Popen(["/usr/local/bin/zcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    def rpc(m):
+        proc.stdin.write(json.dumps(m) + "\n")
+        proc.stdin.flush()
+        while True:
+            l = proc.stdout.readline()
+            if not l:
+                return None
+            try:
+                d = json.loads(l)
+                if d.get("id") == m.get("id"):
+                    return d
+            except Exception:
+                pass
+    rpc({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"engram-sync","version":"2.0"}}})
+    proc.stdin.write(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}) + "\n")
+    proc.stdin.flush()
+    res = rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_discover","arguments":{}}})
+    proc.terminate()
+    txt = res["result"]["content"][0]["text"]
+    name = json.loads(txt).get("project", {}).get("name", "")
+    if name:
+        print(name.strip())
+except Exception:
+    pass
+' 2>/dev/null || true)"
+            if [ -n "$zcp_proj" ] && [ "$zcp_proj" != "default" ]; then
+                resolved="$zcp_proj"
+            fi
+        fi
+    fi
 
-# Parsear argumentos
+    # Fallback secundario a zcli project list si zcp no estuviera disponible
+    if [ -z "$resolved" ] || [ "$resolved" = "zerops-astrobranding" ] || [ "$resolved" = "default" ]; then
+        local zcli_bin=""
+        [ -x "/opt/zerops/bin/zcli" ] && zcli_bin="/opt/zerops/bin/zcli"
+        command -v zcli >/dev/null 2>&1 && zcli_bin="$(command -v zcli)"
+        if [ -n "$zcli_bin" ]; then
+            local detected_zproj
+            detected_zproj="$(ZEROPS_TOKEN="${ZCP_API_KEY:-${ZEROPS_TOKEN:-}}" "$zcli_bin" project list 2>/dev/null | awk -F'│' 'NR>3 && $3 ~ /[a-zA-Z0-9]/ {gsub(/^[ \t]+|[ \t]+$/, "", $3); print $3; exit}' || true)"
+            if [ -n "$detected_zproj" ] && [ "$detected_zproj" != "default" ]; then
+                resolved="$detected_zproj"
+            fi
+        fi
+    fi
+
+    resolved="${resolved:-zerops-astrobranding}"
+    echo "$resolved" | tr '[:upper:]' '[:lower:]'
+}
+
 ACTION="status"
+PROJECT_ARG=""
+QUIET=false
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --push|-p)
@@ -62,106 +124,436 @@ while [[ $# -gt 0 ]]; do
             ACTION="status"
             shift ;;
         --project)
-            APP_IDENTITY="$2"
-            APP_IDENTITY_LOWER="$(echo "$APP_IDENTITY" | tr '[:upper:]' '[:lower:]')"
-            HOT_DIR="${LOCALSTORAGE_DIR}/engram/${APP_IDENTITY_LOWER}"
-            HOT_DB="${HOT_DIR}/engram.db"
-            COLD_DIR="/var/www/baiosfera/0ZEROPS-AGY/${APP_IDENTITY_LOWER}/engram"
-            COLD_DB="${COLD_DIR}/engram.db"
+            PROJECT_ARG="${2:-}"
             shift 2 ;;
+        --quiet|-q)
+            QUIET=true
+            shift ;;
         *)
-            echo "Uso: engram-sync [--push | --pull | --status] [--project <nombre>]"
+            echo "Uso: engram-sync [--push | --pull | --status] [--project <nombre>] [--quiet]"
             exit 1 ;;
     esac
 done
 
-do_push() {
-    echo "• [engram-sync] Ejecutando volcado Hot (localstorage) -> Cold (Google Drive SSoT)..."
-    
-    # Si la base reside en el home y no se ha movido aún a HOT_DIR, migrarla primero
-    if [ ! -f "$HOT_DB" ] && [ -f "$AGENT_DB" ] && [ ! -L "$AGENT_DB" ]; then
-        mkdir -p "$HOT_DIR"
-        cp -p "$AGENT_DB" "$HOT_DB"
-        ln -sfn "$HOT_DB" "$AGENT_DB"
+log_info() {
+    if [ "$QUIET" = false ]; then
+        echo "$@"
+    fi
+}
+
+APP_IDENTITY_LOWER="$(resolve_project_identity "$PROJECT_ARG")"
+HOT_DIR="${LOCALSTORAGE_DIR}/engram/${APP_IDENTITY_LOWER}"
+HOT_DB="${HOT_DIR}/engram.db"
+WARM_JSON="${HOT_DIR}/engram_ssot.json"
+COLD_DIR="${DRIVE_AGY_ROOT}/${APP_IDENTITY_LOWER}/engram"
+COLD_DB="${COLD_DIR}/engram.db"
+COLD_JSON="${COLD_DIR}/engram_ssot.json"
+
+# Garantiza que /home/zerops/.engram/engram.db sea SIEMPRE un archivo regular en disco POSIX local (nunca symlink sobre FUSE/SSHFS)
+ensure_local_posix_db() {
+    mkdir -p "$AGENT_ENGRAM_DIR"
+    if [ -L "$AGENT_ENGRAM_DIR/protocol-mode.json" ]; then
+        local pm_target
+        pm_target="$(readlink -f "$AGENT_ENGRAM_DIR/protocol-mode.json" 2>/dev/null || true)"
+        rm -f "$AGENT_ENGRAM_DIR/protocol-mode.json"
+        if [ -n "$pm_target" ] && [ -f "$pm_target" ]; then
+            cp -f "$pm_target" "$AGENT_ENGRAM_DIR/protocol-mode.json" 2>/dev/null || true
+        fi
     fi
 
-    if [ ! -f "$HOT_DB" ]; then
-        echo "  ⚠️ No existe base de datos Hot en: $HOT_DB. Nada que sincronizar."
+    if [ -L "$AGENT_DB" ]; then
+        local link_target
+        link_target="$(readlink "$AGENT_DB" 2>/dev/null || true)"
+        log_info "• [engram-sync] Materializando enlace simbólico legacy ($link_target) hacia disco POSIX local ($AGENT_DB)..."
+        if [ -n "$link_target" ] && [ -f "$link_target" ]; then
+            local tmp_mat="/tmp/engram_materialize_$$.db"
+            rm -f "$tmp_mat"
+            if python3 -B - "$link_target" "$tmp_mat" << 'PY'
+import sys, sqlite3
+src, dst = sys.argv[1], sys.argv[2]
+s = sqlite3.connect(src, timeout=10)
+d = sqlite3.connect(dst, timeout=10)
+s.backup(d)
+d.close()
+s.close()
+chk = sqlite3.connect(dst)
+res = chk.execute("PRAGMA integrity_check").fetchone()[0]
+chk.close()
+sys.exit(0 if res == "ok" else 1)
+PY
+            then
+                rm -f "$AGENT_DB"
+                mv -f "$tmp_mat" "$AGENT_DB"
+                chmod 644 "$AGENT_DB" 2>/dev/null || true
+            else
+                rm -f "$tmp_mat" "$AGENT_DB"
+            fi
+        else
+            rm -f "$AGENT_DB"
+        fi
+    fi
+}
+
+# Detecta si un proceso 'engram mcp' preexistente aún mantiene descriptores abiertos sobre $HOT_DB (sesión de transición)
+sync_legacy_open_warm_db() {
+    local has_open
+    has_open="$(python3 -B - "$APP_IDENTITY_LOWER" << 'PY'
+import os, sys
+proj = sys.argv[1]
+needle = f"/engram/{proj}/engram.db"
+found = False
+for pid in os.listdir("/proc"):
+    if not pid.isdigit():
+        continue
+    fd_dir = f"/proc/{pid}/fd"
+    try:
+        for fd in os.listdir(fd_dir):
+            target = os.readlink(f"{fd_dir}/{fd}")
+            if needle in target and ("localstorage" in target or "/mnt/" in target):
+                found = True
+                break
+    except Exception:
+        continue
+    if found:
+        break
+print("1" if found else "0")
+PY
+)"
+    if [ "$has_open" = "1" ] && [ -n "$ENGRAM_BIN" ] && [ -f "$HOT_DB" ]; then
+        local tmp_leg="/tmp/engram_legacy_warm_$$.json"
+        if ENGRAM_DATA_DIR="$HOT_DIR" "$ENGRAM_BIN" export "$tmp_leg" >/dev/null 2>&1; then
+            ENGRAM_DATA_DIR="$AGENT_ENGRAM_DIR" "$ENGRAM_BIN" import "$tmp_leg" >/dev/null 2>&1 || true
+        fi
+        rm -f "$tmp_leg"
+        return 0
+    fi
+    return 1
+}
+
+import_json_filtered() {
+    local src_json="$1"
+    [ ! -f "$src_json" ] && return 0
+    [ -z "$ENGRAM_BIN" ] && return 0
+
+    local tmp_filtered="/tmp/engram_import_filtered_$$.json"
+    if python3 -B - "$src_json" "$tmp_filtered" "$APP_IDENTITY_LOWER" << 'PY'
+import json, sys
+src, dst, proj = sys.argv[1], sys.argv[2], sys.argv[3].lower()
+with open(src, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+def keep(item):
+    if not isinstance(item, dict):
+        return False
+    p = str(item.get("project") or "").strip().lower()
+    return p in ("", proj)
+
+filtered = {
+    "version": data.get("version", "0.1.0"),
+    "exported_at": data.get("exported_at", ""),
+    "sessions": [s for s in (data.get("sessions") or []) if keep(s)],
+    "observations": [o for o in (data.get("observations") or []) if keep(o)],
+    "prompts": [pr for pr in (data.get("prompts") or []) if keep(pr)] or None,
+}
+if not filtered["observations"] and not filtered["sessions"] and not filtered["prompts"]:
+    sys.exit(2)
+with open(dst, "w", encoding="utf-8") as f:
+    json.dump(filtered, f, ensure_ascii=False, indent=2)
+PY
+    then
+        ENGRAM_DATA_DIR="$AGENT_ENGRAM_DIR" "$ENGRAM_BIN" import "$tmp_filtered" >/dev/null 2>&1 || true
+    fi
+    rm -f "$tmp_filtered"
+}
+
+do_push() {
+    local lock_file="/tmp/.engram_sync_${APP_IDENTITY_LOWER}.lock"
+    exec 9>"$lock_file"
+    flock -w 10 9 || return 0
+
+    log_info "• [engram-sync] Sincronizando Hot POSIX ($AGENT_DB) -> Warm (localstorage) + Cold (Google Drive SSoT) [$APP_IDENTITY_LOWER]..."
+    ensure_local_posix_db
+
+    local warm_held_open=false
+    if sync_legacy_open_warm_db; then
+        warm_held_open=true
+    fi
+
+    if [ ! -f "$AGENT_DB" ]; then
+        log_info "  ℹ️ No existe base Hot local en $AGENT_DB aún. Nada que exportar."
         return 0
     fi
 
-    mkdir -p "$COLD_DIR"
-    if command -v sqlite3 >/dev/null 2>&1; then
-        sqlite3 "$HOT_DB" ".backup '$COLD_DB'"
-    else
-        cp -f "$HOT_DB" "$COLD_DB"
+    # Salvaguarda Zero-Data-Loss: si Cold o Warm contienen sync_ids históricos ausentes en Hot (ej. ZCP recién reseteado), fusionarlos aditivamente ANTES de exportar
+    if [ -n "$ENGRAM_BIN" ]; then
+        local pre_check_json="/tmp/engram_precheck_$$.json"
+        if ENGRAM_DATA_DIR="$AGENT_ENGRAM_DIR" "$ENGRAM_BIN" export "$pre_check_json" >/dev/null 2>&1; then
+            for tier_json in "$COLD_JSON" "$WARM_JSON"; do
+                if [ -f "$tier_json" ]; then
+                    local needs_merge
+                    needs_merge="$(python3 -B - "$pre_check_json" "$tier_json" "$APP_IDENTITY_LOWER" << 'PY'
+import json, sys
+hot_p, tier_p, proj = sys.argv[1], sys.argv[2], sys.argv[3].lower()
+try:
+    with open(hot_p, "r", encoding="utf-8") as f:
+        hot_d = json.load(f)
+    with open(tier_p, "r", encoding="utf-8") as f:
+        tier_d = json.load(f)
+    hot_ids = {x.get("sync_id") for x in (hot_d.get("observations") or []) if x.get("sync_id")}
+    missing = [
+        x.get("sync_id") for x in (tier_d.get("observations") or [])
+        if x.get("sync_id")
+        and not x.get("deleted_at")
+        and str(x.get("project") or "").strip().lower() in ("", proj)
+        and x.get("sync_id") not in hot_ids
+    ]
+    print("1" if missing else "0")
+except Exception:
+    print("0")
+PY
+)"
+                    if [ "$needs_merge" = "1" ]; then
+                        log_info "  • Fusionando memorias históricas de $tier_json antes del volcado (Zero-Data-Loss)..."
+                        import_json_filtered "$tier_json"
+                    fi
+                fi
+            done
+        fi
+        rm -f "$pre_check_json"
     fi
 
-    # Copiar configuración si existe
-    if command -v engram >/dev/null 2>&1; then
-        ENGRAM_DATA_DIR="$HOT_DIR" engram export "$COLD_DIR/engram_ssot.json" >/dev/null 2>&1 || true
-    fi
-    if [ -f "$AGENT_ENGRAM_DIR/protocol-mode.json" ]; then
-        cp -f "$AGENT_ENGRAM_DIR/protocol-mode.json" "$HOT_DIR/" 2>/dev/null || true
-        cp -f "$AGENT_ENGRAM_DIR/protocol-mode.json" "$COLD_DIR/" 2>/dev/null || true
+    local tmp_dir
+    tmp_dir="$(mktemp -d /tmp/engram_push_XXXXXX)"
+
+    # 1. Exportar JSON portable filtrado por proyecto (engram_ssot.json)
+    local has_json=false
+    if [ -n "$ENGRAM_BIN" ] && ENGRAM_DATA_DIR="$AGENT_ENGRAM_DIR" "$ENGRAM_BIN" export "$tmp_dir/raw.json" >/dev/null 2>&1; then
+        if python3 -B - "$tmp_dir/raw.json" "$tmp_dir/engram_ssot.json" "$APP_IDENTITY_LOWER" << 'PY'
+import json, sys
+src, dst, proj = sys.argv[1], sys.argv[2], sys.argv[3].lower()
+with open(src, "r", encoding="utf-8") as f:
+    data = json.load(f)
+def keep(item):
+    if not isinstance(item, dict):
+        return False
+    p = str(item.get("project") or "").strip().lower()
+    return p in ("", proj)
+out = {
+    "version": data.get("version", "0.1.0"),
+    "exported_at": data.get("exported_at", ""),
+    "sessions": [s for s in (data.get("sessions") or []) if keep(s)],
+    "observations": [o for o in (data.get("observations") or []) if keep(o)],
+    "prompts": [pr for pr in (data.get("prompts") or []) if keep(pr)] or None,
+}
+with open(dst, "w", encoding="utf-8") as f:
+    json.dump(out, f, ensure_ascii=False, indent=2)
+PY
+        then
+            has_json=true
+        fi
     fi
 
-    echo "  ✓ Volcado atómico completado con éxito:"
-    echo "    Hot : $HOT_DB ($(stat -c%s "$HOT_DB" 2>/dev/null || ls -l "$HOT_DB" | awk '{print $5}') bytes)"
-    echo "    Cold: $COLD_DB ($(stat -c%s "$COLD_DB" 2>/dev/null || ls -l "$COLD_DB" | awk '{print $5}') bytes)"
+    # 2. Crear snapshot SQLite limpio y autocontenido (journal_mode=DELETE, 0 archivos -wal/-shm) vía sqlite3.backup()
+    local has_snap=false
+    if python3 -B - "$AGENT_DB" "$tmp_dir/engram_snap.db" << 'PY'
+import sys, sqlite3
+src, dst = sys.argv[1], sys.argv[2]
+s = sqlite3.connect(src, timeout=10)
+d = sqlite3.connect(dst, timeout=10)
+s.backup(d)
+d.close()
+s.close()
+c = sqlite3.connect(dst, timeout=10)
+c.execute("PRAGMA journal_mode=DELETE")
+c.commit()
+ic = c.execute("PRAGMA integrity_check").fetchone()[0]
+c.close()
+sys.exit(0 if ic == "ok" else 1)
+PY
+    then
+        has_snap=true
+    fi
+
+    # 3. Volcar hacia Warm (Zerops LocalStorage)
+    if [ -d "$LOCALSTORAGE_DIR" ]; then
+        mkdir -p "$HOT_DIR"
+        if [ "$has_json" = true ]; then
+            cp -f "$tmp_dir/engram_ssot.json" "$WARM_JSON.tmp" && mv -f "$WARM_JSON.tmp" "$WARM_JSON"
+        fi
+        if [ "$has_snap" = true ]; then
+            if [ "$warm_held_open" = true ]; then
+                cp -f "$tmp_dir/engram_snap.db" "$HOT_DIR/engram_snapshot.db.tmp" && mv -f "$HOT_DIR/engram_snapshot.db.tmp" "$HOT_DIR/engram_snapshot.db"
+            else
+                cp -f "$tmp_dir/engram_snap.db" "$HOT_DB.tmp" && mv -f "$HOT_DB.tmp" "$HOT_DB"
+                rm -f "${HOT_DB}-wal" "${HOT_DB}-shm" "$HOT_DIR/engram_snapshot.db" 2>/dev/null || true
+            fi
+        fi
+        if [ -f "$AGENT_ENGRAM_DIR/protocol-mode.json" ]; then
+            cp -f "$AGENT_ENGRAM_DIR/protocol-mode.json" "$HOT_DIR/protocol-mode.json" 2>/dev/null || true
+        fi
+    fi
+
+    # 4. Volcar hacia Cold (Google Drive SSoT — auto-crea carpeta para cualquier proyecto nuevo o existente)
+    if [ -d "$DRIVE_AGY_ROOT" ]; then
+        mkdir -p "$COLD_DIR"
+        if [ "$has_json" = true ]; then
+            cp -f "$tmp_dir/engram_ssot.json" "$COLD_JSON"
+        fi
+        if [ "$has_snap" = true ]; then
+            cp -f "$tmp_dir/engram_snap.db" "$COLD_DB"
+            rm -f "${COLD_DB}-wal" "${COLD_DB}-shm" 2>/dev/null || true
+        fi
+        if [ -f "$AGENT_ENGRAM_DIR/protocol-mode.json" ]; then
+            cp -f "$AGENT_ENGRAM_DIR/protocol-mode.json" "$COLD_DIR/protocol-mode.json" 2>/dev/null || true
+        fi
+    fi
+
+    rm -rf "$tmp_dir"
+    log_info "  ✓ Volcado atómico 3-Tier completado para proyecto: $APP_IDENTITY_LOWER"
 }
 
 do_pull() {
-    echo "• [engram-sync] Ejecutando hidratación Cold (Google Drive SSoT) -> Hot (localstorage)..."
-    if [ ! -f "$COLD_DB" ]; then
-        echo "  ℹ️ No existe backup previo en Cold SSoT ($COLD_DB). Proyecto virgen."
+    local lock_file="/tmp/.engram_sync_${APP_IDENTITY_LOWER}.lock"
+    exec 9>"$lock_file"
+    flock -w 10 9 || return 0
+
+    log_info "• [engram-sync] Ejecutando hidratación aditiva Zero-Data-Loss (Cold + Warm -> Local POSIX Hot) [$APP_IDENTITY_LOWER]..."
+    ensure_local_posix_db
+
+    # 1. Si no existe DB local POSIX aún (arranque en frío de contenedor virgen), sembrar desde snapshot válido vía /tmp
+    if [ ! -f "$AGENT_DB" ]; then
+        for seed_db in "$COLD_DB" "$HOT_DIR/engram_snapshot.db" "$HOT_DB"; do
+            if [ -f "$seed_db" ]; then
+                local tmp_seed="/tmp/engram_seed_$$.db"
+                cp -f "$seed_db" "$tmp_seed" 2>/dev/null || continue
+                if python3 -B - "$tmp_seed" << 'PY'
+import sys, sqlite3
+p = sys.argv[1]
+try:
+    c = sqlite3.connect(p, timeout=5)
+    ic = c.execute("PRAGMA integrity_check").fetchone()[0]
+    c.execute("PRAGMA journal_mode=WAL")
+    c.commit()
+    c.close()
+    sys.exit(0 if ic == "ok" else 1)
+except Exception:
+    sys.exit(1)
+PY
+                then
+                    mv -f "$tmp_seed" "$AGENT_DB"
+                    chmod 644 "$AGENT_DB" 2>/dev/null || true
+                    log_info "  ✓ Base POSIX local inicializada desde snapshot íntegro: $seed_db"
+                    break
+                else
+                    rm -f "$tmp_seed"
+                fi
+            fi
+        done
+    fi
+
+    # 2. Fusión 100% aditiva e idempotente por sync_id desde Cold SSoT y Warm LocalStorage (NUNCA sobrescribe destructivamente)
+    local found_any=false
+    if [ -f "$COLD_JSON" ]; then
+        import_json_filtered "$COLD_JSON"
+        found_any=true
+    elif [ -f "$COLD_DB" ] && [ -n "$ENGRAM_BIN" ]; then
+        local tmp_cold_dir
+        tmp_cold_dir="$(mktemp -d /tmp/engram_cold_XXXXXX)"
+        cp -f "$COLD_DB" "$tmp_cold_dir/engram.db" 2>/dev/null || true
+        if ENGRAM_DATA_DIR="$tmp_cold_dir" "$ENGRAM_BIN" export "$tmp_cold_dir/cold.json" >/dev/null 2>&1; then
+            import_json_filtered "$tmp_cold_dir/cold.json"
+            found_any=true
+        fi
+        rm -rf "$tmp_cold_dir"
+    fi
+
+    if [ -f "$WARM_JSON" ]; then
+        import_json_filtered "$WARM_JSON"
+        found_any=true
+    fi
+
+    sync_legacy_open_warm_db || true
+
+    for pm_src in "$COLD_DIR/protocol-mode.json" "$HOT_DIR/protocol-mode.json"; do
+        if [ -f "$pm_src" ] && [ ! -f "$AGENT_ENGRAM_DIR/protocol-mode.json" ]; then
+            cp -f "$pm_src" "$AGENT_ENGRAM_DIR/protocol-mode.json" 2>/dev/null || true
+            break
+        fi
+    done
+
+    if [ -d "$PROJECT_ROOT" ]; then
+        mkdir -p "$PROJECT_ROOT/.engram" 2>/dev/null || true
+        echo "{\"project_name\": \"$APP_IDENTITY_LOWER\"}" > "$PROJECT_ROOT/.engram/config.json" 2>/dev/null || true
+    fi
+
+    if [ "$found_any" = false ] && [ ! -f "$AGENT_DB" ]; then
+        log_info "  ℹ️ Proyecto virgen ($APP_IDENTITY_LOWER): listo para inicializar y sincronizar automáticamente en primer guardado."
+        mkdir -p "$HOT_DIR" 2>/dev/null || true
+        [ -d "$DRIVE_AGY_ROOT" ] && mkdir -p "$COLD_DIR" 2>/dev/null || true
         return 0
     fi
 
-    mkdir -p "$HOT_DIR"
-    if command -v sqlite3 >/dev/null 2>&1; then
-        sqlite3 "$COLD_DB" ".backup '$HOT_DB'"
-    else
-        cp -f "$COLD_DB" "$HOT_DB"
-    fi
+    # 3. Liberar lock de pull y converger los 3 niveles al superconjunto fusionado
+    flock -u 9 || true
+    do_push
+    log_info "  ✓ Hidratación aditiva completada sin pérdida para proyecto: $APP_IDENTITY_LOWER"
+}
 
-    if [ -f "$COLD_DIR/protocol-mode.json" ]; then
-        cp -f "$COLD_DIR/protocol-mode.json" "$HOT_DIR/" 2>/dev/null || true
-    fi
+count_json_obs() {
+    local jf="$1"
+    [ ! -f "$jf" ] && { echo "0"; return; }
+    python3 -B -c 'import json,sys; d=json.load(open(sys.argv[1])); print(len(d.get("observations") or []))' "$jf" 2>/dev/null || echo "0"
+}
 
-    mkdir -p "$AGENT_ENGRAM_DIR"
-    ln -sfn "$HOT_DB" "$AGENT_DB"
-    if [ -f "$HOT_DIR/protocol-mode.json" ]; then
-        ln -sfn "$HOT_DIR/protocol-mode.json" "$AGENT_ENGRAM_DIR/protocol-mode.json" 2>/dev/null || true
-    fi
-
-    echo "  ✓ Hidratación completada para proyecto: $APP_IDENTITY_LOWER"
+count_db_obs() {
+    local dbf="$1"
+    [ ! -f "$dbf" ] && { echo "0"; return; }
+    python3 -B - "$dbf" << 'PY' 2>/dev/null || echo "0"
+import sys, sqlite3, shutil, tempfile, os
+src = sys.argv[1]
+tmp = src
+cleanup = False
+if src.startswith("/var/www/baiosfera") or src.startswith("/mnt/"):
+    fd, tmp = tempfile.mkstemp(suffix=".db", dir="/tmp")
+    os.close(fd)
+    shutil.copy2(src, tmp)
+    cleanup = True
+try:
+    c = sqlite3.connect(tmp, timeout=5)
+    n = c.execute("SELECT COUNT(*) FROM observations WHERE deleted_at IS NULL").fetchone()[0]
+    c.close()
+    print(n)
+finally:
+    if cleanup and os.path.exists(tmp):
+        os.remove(tmp)
+PY
 }
 
 do_status() {
     echo "============================================================"
-    echo "  🧠 Engram Tiered Storage Status [Proyecto: $APP_IDENTITY_LOWER]"
+    echo "  🧠 Engram 3-Tier Storage Status [Proyecto: $APP_IDENTITY_LOWER]"
     echo "============================================================"
-    echo "• Identidad normalizada: $APP_IDENTITY_LOWER"
-    echo "• Hot Path (localstorage): $HOT_DB"
-    if [ -f "$HOT_DB" ]; then
-        echo "  ✓ Estado: PRESENTE ($(stat -c%s "$HOT_DB" 2>/dev/null || ls -l "$HOT_DB" | awk '{print $5}') bytes)"
-    else
-        echo "  ✗ Estado: NO ENCONTRADO"
-    fi
+    echo "• Identidad canónica     : $APP_IDENTITY_LOWER"
 
-    echo "• Cold Path (Drive SSoT) : $COLD_DB"
-    if [ -f "$COLD_DB" ]; then
-        echo "  ✓ Estado: PRESENTE ($(stat -c%s "$COLD_DB" 2>/dev/null || ls -l "$COLD_DB" | awk '{print $5}') bytes)"
-    else
-        echo "  ✗ Estado: NO ENCONTRADO"
-    fi
-
-    echo "• Agent Link Target     : $AGENT_DB"
+    echo "• Tier 1 Hot (POSIX)     : $AGENT_DB"
     if [ -L "$AGENT_DB" ]; then
-        echo "  ✓ Estado: ENLACE SIMBÓLICO -> $(readlink "$AGENT_DB")"
+        echo "  ⚠️ Estado: ENLACE SIMBÓLICO LEGACY -> $(readlink "$AGENT_DB") (ejecutá --pull o --push para migrar)"
     elif [ -f "$AGENT_DB" ]; then
-        echo "  ⚠️ Estado: ARCHIVO REGULAR (No enlazado a localstorage)"
+        echo "  ✓ Estado: ARCHIVO REGULAR POSIX ($(stat -c%s "$AGENT_DB" 2>/dev/null || echo 0) bytes, $(count_db_obs "$AGENT_DB") obs activas)"
+    else
+        echo "  ✗ Estado: NO INICIALIZADO AÚN"
+    fi
+
+    echo "• Tier 2 Warm (Storage)  : $HOT_DIR"
+    if [ -f "$WARM_JSON" ] || [ -f "$HOT_DB" ]; then
+        echo "  ✓ Estado: PRESENTE (JSON: $(count_json_obs "$WARM_JSON") obs | DB: $(stat -c%s "$HOT_DB" 2>/dev/null || echo 0) bytes)"
+    else
+        echo "  ✗ Estado: NO ENCONTRADO"
+    fi
+
+    echo "• Tier 3 Cold (Drive)    : $COLD_DIR"
+    if [ -f "$COLD_JSON" ] || [ -f "$COLD_DB" ]; then
+        echo "  ✓ Estado: PRESENTE (JSON: $(count_json_obs "$COLD_JSON") obs | DB: $(stat -c%s "$COLD_DB" 2>/dev/null || echo 0) bytes)"
     else
         echo "  ✗ Estado: NO ENCONTRADO"
     fi

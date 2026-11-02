@@ -106,7 +106,39 @@ if [ -z "$TARGET_PROJECT" ] && [ -n "${ENGRAM_PROJECT:-}" ] && [ "$ENGRAM_PROJEC
     TARGET_PROJECT="$ENGRAM_PROJECT"
 fi
 
-# 3. Detección física directa desde Zerops CLI si está disponible
+# 3. Detección física directa desde el plano ZCP propio (zerops_discover) antes de fallback a Zerops CLI
+if [ -z "$TARGET_PROJECT" ] && [ -x "/usr/local/bin/zcp" ] && command -v python3 >/dev/null 2>&1; then
+    DETECTED_ZCP_PROJ=$(python3 -B -c '
+import subprocess, json
+try:
+    proc = subprocess.Popen(["/usr/local/bin/zcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    def rpc(m):
+        proc.stdin.write(json.dumps(m) + "\n")
+        proc.stdin.flush()
+        while True:
+            l = proc.stdout.readline()
+            if not l: return None
+            try:
+                d = json.loads(l)
+                if d.get("id") == m.get("id"): return d
+            except Exception: pass
+    rpc({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"iniciar-id","version":"2.0"}}})
+    proc.stdin.write(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}) + "\n")
+    proc.stdin.flush()
+    res = rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_discover","arguments":{}}})
+    proc.terminate()
+    name = json.loads(res["result"]["content"][0]["text"]).get("project", {}).get("name", "")
+    if name: print(name.strip())
+except Exception:
+    pass
+' 2>/dev/null || true)
+    if [ -n "$DETECTED_ZCP_PROJ" ] && [ "$DETECTED_ZCP_PROJ" != "default" ]; then
+        TARGET_PROJECT="$DETECTED_ZCP_PROJ"
+        echo "• [iniciar.sh] Identidad canónica detectada desde ZCP propio (zerops_discover): $TARGET_PROJECT"
+    fi
+fi
+
+# 3b. Fallback secundario desde Zerops CLI si zcp stdio no reportó proyecto
 if [ -z "$TARGET_PROJECT" ]; then
     ZCLI_BIN=""
     if command -v zcli >/dev/null 2>&1; then
@@ -298,7 +330,7 @@ if [ "$LOCALSTORAGE_FOUND" = true ]; then
         sudo chown -R "$(id -un):$(id -gn)" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || true
     fi
 
-    if ! mountpoint -q "/mnt/$LOCALSTORAGE_HOST"; then
+    if ! mountpoint -q "/mnt/$LOCALSTORAGE_HOST" && ! grep -q " /mnt/$LOCALSTORAGE_HOST " /proc/mounts 2>/dev/null; then
         echo "  • Montando $LOCALSTORAGE_HOST:/data en /mnt/$LOCALSTORAGE_HOST vía SSHFS..."
         sudo sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || \
         sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || true
@@ -320,7 +352,7 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=-/bin/mkdir -p /mnt/$LOCALSTORAGE_HOST
-ExecStart=/bin/bash -c 'if ! mountpoint -q /mnt/$LOCALSTORAGE_HOST; then for i in \$(seq 1 15); do /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 $LOCALSTORAGE_HOST:/data /mnt/$LOCALSTORAGE_HOST 2>/dev/null && break; sleep 2; done; fi; if [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && mountpoint -q $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null; then /usr/bin/fusermount3 -uz $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; if [ -d $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ]; then rmdir $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; ln -sfn /mnt/$LOCALSTORAGE_HOST $PROJECT_ROOT/$LOCALSTORAGE_HOST'
+ExecStart=/bin/bash -c 'if ! mountpoint -q /mnt/$LOCALSTORAGE_HOST && ! grep -q " /mnt/$LOCALSTORAGE_HOST " /proc/mounts 2>/dev/null; then for i in \$(seq 1 15); do /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 $LOCALSTORAGE_HOST:/data /mnt/$LOCALSTORAGE_HOST 2>/dev/null && break; sleep 2; done; fi; if [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && mountpoint -q $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null; then /usr/bin/fusermount3 -uz $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; if [ -d $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ]; then rmdir $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; ln -sfn /mnt/$LOCALSTORAGE_HOST $PROJECT_ROOT/$LOCALSTORAGE_HOST'
 ExecStop=/bin/bash -c 'if mountpoint -q /mnt/$LOCALSTORAGE_HOST; then /usr/bin/fusermount3 -uz /mnt/$LOCALSTORAGE_HOST || true; fi'
 TimeoutStartSec=60
 TimeoutStopSec=15
@@ -459,8 +491,14 @@ if [ ! -L "$LOCAL_ARTIFACTS" ]; then
 fi
 echo "  ✓ Symlink de /artifacts verificado -> $SSOT_ARTIFACTS"
 
-# 2a-bis. Aprovisionar Persistencia Híbrida Hot/Cold de Engram
-echo "• [2a-bis] Verificando persistencia híbrida Hot/Cold para Engram ($APP_IDENTITY_LOWER)..."
+# 2a-bis. Aprovisionar Persistencia Híbrida 3-Tier Zero-Data-Loss de Engram
+echo "• [2a-bis] Verificando persistencia 3-Tier Zero-Data-Loss para Engram ($APP_IDENTITY_LOWER)..."
+if [ -f "$REPO_DIR/scripts/engram-sync" ]; then
+    mkdir -p "$PROJECT_ROOT/.bin" 2>/dev/null || true
+    cp -f "$REPO_DIR/scripts/engram-sync" "$PROJECT_ROOT/.bin/engram-sync" 2>/dev/null || true
+    chmod +x "$PROJECT_ROOT/.bin/engram-sync" 2>/dev/null || true
+    sudo ln -sf "$PROJECT_ROOT/.bin/engram-sync" /usr/local/bin/engram-sync 2>/dev/null || true
+fi
 if command -v engram-sync >/dev/null 2>&1; then
     engram-sync --pull --project "$APP_IDENTITY_LOWER" || true
     engram-sync --status --project "$APP_IDENTITY_LOWER" || true
@@ -489,8 +527,43 @@ if [ -d "$SKILLS_LOCAL_DIR" ]; then
         [ -d "$sk_dir" ] || continue
         sk_name=$(basename "$sk_dir")
         [[ "$sk_name" =~ ^(\.git|bak|_shared)$ ]] && continue
-        cp -rn "$sk_dir" "$PROJECT_ROOT/.agents/skills/" 2>/dev/null || true
-        cp -rn "$sk_dir" "/home/zerops/.gemini/antigravity-cli/skills/" 2>/dev/null || true
+        if command -v rsync >/dev/null 2>&1; then
+            rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
+            rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
+        else
+            mkdir -p "$PROJECT_ROOT/.agents/skills/$sk_name" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
+            cp -rf "$sk_dir"* "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
+            cp -rf "$sk_dir"* "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
+        fi
+    done
+    # Sincronizar las 4 skills core hacia Drive SSoT (acotado para evitar latencia FUSE)
+    if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
+        for sk in oraculo docu research planner; do
+            if [ -d "$SKILLS_LOCAL_DIR/$sk" ]; then
+                mkdir -p "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk" 2>/dev/null || true
+                rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$SKILLS_LOCAL_DIR/$sk/" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills/$sk/" 2>/dev/null || true
+            fi
+        done
+    fi
+fi
+
+# 2b-bis. Desplegar skills de Drive SSoT que no residen en zerops-astro-skills (ej. directus)
+if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
+    echo "• Sincronizando catálogo completo de custom skills desde Google Drive SSoT..."
+    for d_sk in "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills"/*/; do
+        [ -d "$d_sk" ] || continue
+        sk_name=$(basename "$d_sk")
+        [[ "$sk_name" =~ ^(\.git|bak|_shared)$ ]] && continue
+        if [ ! -d "$PROJECT_ROOT/.agents/skills/$sk_name" ] || [ ! -f "$PROJECT_ROOT/.agents/skills/$sk_name/SKILL.md" ]; then
+            mkdir -p "$PROJECT_ROOT/.agents/skills/$sk_name" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
+            if command -v rsync >/dev/null 2>&1; then
+                rsync -a --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$d_sk/" "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
+                rsync -a --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$d_sk/" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
+            else
+                cp -rf "$d_sk"* "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
+                cp -rf "$d_sk"* "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
+            fi
+        fi
     done
 fi
 
@@ -527,14 +600,108 @@ if [ "$UPDATE_MODE" = true ]; then
     echo "  ⚡ ACTUALIZACIÓN RÁPIDA ZCP (iniciar.sh --update)"
     echo "============================================================"
 
+    # Invariante de permisos: asegurar que el usuario actual posea .agents y .bin
+    if command -v sudo >/dev/null 2>&1; then
+        sudo chown -R "$(id -un):$(id -gn)" "$PROJECT_ROOT/.agents" "$PROJECT_ROOT/.bin" 2>/dev/null || true
+        [ -d "$HOME/.gemini" ] && sudo chown -R "$(id -un):$(id -gn)" "$HOME/.gemini" 2>/dev/null || true
+    fi
+
     # Sincronizar scripts actualizados hacia SSoT en Google Drive si está montado
     if [ -d "$SSOT_SCRIPTS" ]; then
         echo "• Sincronizando scripts SSoT hacia Google Drive..."
-        for s in iniciar.sh gdrive.sh setup-zcp.sh setup-astrokey.sh unisetup.sh skills-suite-validate.sh; do
+        for s in iniciar.sh gdrive.sh setup-zcp.sh setup-astrokey.sh unisetup.sh skills-suite-validate.sh ssot-parity-check.sh astrobranding-check.sh engram-sync; do
             [ -f "$REPO_DIR/scripts/$s" ] && cp -f "$REPO_DIR/scripts/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
             [ -f "$REPO_DIR/$s" ] && cp -f "$REPO_DIR/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
         done
+
+        # Asegurar tool-guard.py en SSoT y local
+        mkdir -p "$SSOT_SCRIPTS/hooks" "$PROJECT_ROOT/.bin/hooks" 2>/dev/null || true
+        SRC_TOOL_GUARD=""
+        if [ -f "$REPO_DIR/scripts/hooks/tool-guard.py" ]; then
+            SRC_TOOL_GUARD="$REPO_DIR/scripts/hooks/tool-guard.py"
+        elif [ -f "$SSOT_SCRIPTS/hooks/tool-guard.py" ]; then
+            SRC_TOOL_GUARD="$SSOT_SCRIPTS/hooks/tool-guard.py"
+        fi
+        if [ -n "$SRC_TOOL_GUARD" ]; then
+            cp -f "$SRC_TOOL_GUARD" "$PROJECT_ROOT/.bin/hooks/tool-guard.py" 2>/dev/null || sudo cp -f "$SRC_TOOL_GUARD" "$PROJECT_ROOT/.bin/hooks/tool-guard.py" 2>/dev/null || true
+            cp -f "$SRC_TOOL_GUARD" "$SSOT_SCRIPTS/hooks/tool-guard.py" 2>/dev/null || true
+            chmod +x "$PROJECT_ROOT/.bin/hooks/tool-guard.py" 2>/dev/null || true
+        fi
+
+        # Asegurar hooks.json en SSoT, local y perfil Antigravity
+        mkdir -p "$PROJECT_ROOT/.agents" "$HOME/.gemini/config" 2>/dev/null || true
+        SRC_HOOKS=""
+        if [ -f "$REPO_DIR/.agents/hooks.json" ]; then
+            SRC_HOOKS="$REPO_DIR/.agents/hooks.json"
+        elif [ -f "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json" ]; then
+            SRC_HOOKS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json"
+        fi
+        if [ -n "$SRC_HOOKS" ]; then
+            cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || sudo cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || true
+            cp -f "$SRC_HOOKS" "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
+            [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents" ] && cp -f "$SRC_HOOKS" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json" 2>/dev/null || true
+        fi
     fi
+
+    # Sincronizar reglas de gobernanza (AGENTS.md y 00-SUPREME-DIRECTIVE.md) con Drive SSoT
+    DRIVE_SSOT_DIR="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123"
+    if [ -d "$DRIVE_SSOT_DIR" ]; then
+        echo "• Sincronizando gobernanza (AGENTS.md, 00-SUPREME-DIRECTIVE.md) desde SSoT..."
+        # AGENTS.md: sincronización bidireccional por timestamp
+        if [ -f "$DRIVE_SSOT_DIR/AGENTS.md" ] && [ -f "$PROJECT_ROOT/AGENTS.md" ]; then
+            if [ "$DRIVE_SSOT_DIR/AGENTS.md" -nt "$PROJECT_ROOT/AGENTS.md" ]; then
+                cp -f "$DRIVE_SSOT_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null || true
+            elif [ "$PROJECT_ROOT/AGENTS.md" -nt "$DRIVE_SSOT_DIR/AGENTS.md" ]; then
+                cp -f "$PROJECT_ROOT/AGENTS.md" "$DRIVE_SSOT_DIR/AGENTS.md" 2>/dev/null || true
+            fi
+        elif [ -f "$DRIVE_SSOT_DIR/AGENTS.md" ]; then
+            cp -f "$DRIVE_SSOT_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null || true
+        fi
+
+        # 00-SUPREME-DIRECTIVE.md: sincronización bidireccional por timestamp
+        mkdir -p "$PROJECT_ROOT/.agents/rules" "$HOME/.gemini/antigravity-cli/rules" 2>/dev/null || true
+        if [ -f "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" ] && [ -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
+            if [ "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" -nt "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
+                cp -f "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
+            elif [ "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" -nt "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
+                cp -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
+            fi
+        elif [ -f "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
+            cp -f "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
+        fi
+        [ -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ] && cp -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$HOME/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
+
+        # Referencias y enciclopedias
+        if [ -d "$DRIVE_SSOT_DIR/.agents/references" ]; then
+            mkdir -p "$PROJECT_ROOT/.agents/references" "$HOME/.gemini/antigravity-cli/references" 2>/dev/null || true
+            cp -f "$DRIVE_SSOT_DIR/.agents/references/"*.md "$PROJECT_ROOT/.agents/references/" 2>/dev/null || true
+            cp -f "$DRIVE_SSOT_DIR/.agents/references/"*_encyclopedia.md "$HOME/.gemini/antigravity-cli/references/" 2>/dev/null || true
+        fi
+
+        # Auto-curar deriva de custom skills hacia SSoT
+        if [ -f "$REPO_DIR/scripts/lib/fast-parity.py" ]; then
+            python3 "$REPO_DIR/scripts/lib/fast-parity.py" "$DRIVE_SSOT_DIR" "$PROJECT_ROOT" --fix 2>/dev/null || true
+        fi
+    fi
+
+    # Desplegar CLIs esenciales en PATH y .bin
+    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync engram-sync knowledge-sync anti-slop-linter; do
+        src_cli=""
+        if [ -f "$REPO_DIR/scripts/$cli" ]; then
+            src_cli="$REPO_DIR/scripts/$cli"
+        elif [ -f "$REPO_DIR/scripts/$cli.sh" ]; then
+            src_cli="$REPO_DIR/scripts/$cli.sh"
+        elif [ -f "$REPO_DIR/scripts/$cli.py" ]; then
+            src_cli="$REPO_DIR/scripts/$cli.py"
+        elif [ -f "$REPO_DIR/scripts/${cli//-/_}.py" ]; then
+            src_cli="$REPO_DIR/scripts/${cli//-/_}.py"
+        fi
+        if [ -n "$src_cli" ]; then
+            cp -f "$src_cli" "$PROJECT_ROOT/.bin/$cli" 2>/dev/null || true
+            chmod +x "$PROJECT_ROOT/.bin/$cli" 2>/dev/null || true
+            sudo ln -sf "$PROJECT_ROOT/.bin/$cli" "/usr/local/bin/$cli" 2>/dev/null || true
+        fi
+    done
 
     # Refrescar memoria LTM de Engram si existe
     if command -v engram-sync >/dev/null 2>&1; then
@@ -558,9 +725,9 @@ UEOF
 
     echo "• Verificando paridad SSoT..."
     if command -v ssot-parity-check >/dev/null 2>&1; then
-        ssot-parity-check
+        ssot-parity-check --fix
     elif [ -f "$SSOT_SCRIPTS/ssot-parity-check.sh" ]; then
-        bash "$SSOT_SCRIPTS/ssot-parity-check.sh"
+        bash "$SSOT_SCRIPTS/ssot-parity-check.sh" --fix
     fi
 
     echo "============================================================"

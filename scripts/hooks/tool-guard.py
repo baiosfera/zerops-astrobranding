@@ -1024,6 +1024,47 @@ def extract_user_prompt(payload: dict) -> str:
             pass
     return ""
 
+ENGRAM_WRITE_TOOLS = {
+    "mem_save",
+    "mem_session_summary",
+    "mem_update",
+    "mem_delete",
+    "mem_capture_passive",
+    "mem_save_prompt",
+    "mem_session_end",
+    "mem_merge_projects",
+}
+
+def trigger_engram_background_sync(payload: dict, source: str = "post_tool") -> bool:
+    """
+    Spawns non-blocking background 'engram-sync --push --quiet' (<2ms overhead)
+    so every Engram write tool and turn completion atomically flushes local POSIX Hot DB
+    out to Zerops LocalStorage (Warm) and Google Drive SSoT (Cold).
+    """
+    if "--test" in sys.argv or payload.get("test_mode"):
+        return True
+
+    sync_candidates = [
+        "/usr/local/bin/engram-sync",
+        "/var/www/.bin/engram-sync",
+        "/var/www/zerops-astrobranding/scripts/engram-sync",
+    ]
+    sync_bin = next((c for c in sync_candidates if os.path.isfile(c) and os.access(c, os.X_OK)), None)
+    if not sync_bin:
+        return False
+
+    try:
+        subprocess.Popen(
+            [sync_bin, "--push", "--quiet"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        return True
+    except Exception:
+        return False
+
 def evaluate_hook(payload: dict) -> dict:
     # 0. SessionStart Handling (Mandatory Anti-AMN Recall with Multi-Hook Deduplication)
     if payload.get("session_start") or payload.get("event") == "SessionStart" or payload.get("hookType") == "SessionStart":
@@ -1292,13 +1333,28 @@ def evaluate_hook(payload: dict) -> dict:
                                     os.remove(gov_counter_file)
                                 except Exception:
                                     pass
+        triggered_stop_sync = trigger_engram_background_sync(payload, source="stop")
+        if payload.get("test_inspect_engram_sync"):
+            return {"engramSyncTriggered": triggered_stop_sync, "source": "stop"}
         return {}
 
-    # 1. PostToolUse Handling (Hot Compilation Sensors - BAI-423)
+    # 1. PostToolUse Handling (Hot Compilation Sensors - BAI-423 & Engram Auto-Sync - BAI-425)
     if payload.get("is_post_tool") or ("stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload)):
         target_path = None
         tool_call = payload.get("toolCall", {})
         tool_args = tool_call.get("args", {})
+
+        # 1a. Non-blocking Engram 3-Tier Push on MCP Memory Mutations (BAI-425)
+        if tool_call.get("name") == "call_mcp_tool":
+            mcp_srv = str(tool_args.get("ServerName", "")).strip().lower()
+            mcp_tool = str(tool_args.get("ToolName", "")).strip()
+            if mcp_srv == "engram" and mcp_tool in ENGRAM_WRITE_TOOLS:
+                triggered_mcp_sync = trigger_engram_background_sync(payload, source=f"post_tool:{mcp_tool}")
+                if payload.get("test_inspect_engram_sync"):
+                    return {"engramSyncTriggered": triggered_mcp_sync, "source": f"post_tool:{mcp_tool}"}
+                return {}
+            if payload.get("test_inspect_engram_sync"):
+                return {"engramSyncTriggered": False, "source": f"ignored:{mcp_srv}:{mcp_tool}"}
         for k in ["Path", "path", "file_path", "target_file", "FilePath"]:
             if k in tool_args and isinstance(tool_args[k], str):
                 target_path = tool_args[k]
@@ -3184,6 +3240,40 @@ def run_tests():
         steps_jit = res_jit_meta.get("injectSteps", [])
         assert len(steps_jit) > 0 and any("JIT Meta-Skill [meta-skill]" in s.get("ephemeralMessage", "") for s in steps_jit), f"Expected JIT Meta-Skill injection, got {res_jit_meta}"
         print("✓ Test 65 Passed: Governance Rules Size Budget Gate & JIT Meta-Skills Injection (BAI-424)")
+
+        # Test 66: Engram 3-Tier Background Auto-Sync on PostToolUse Write Tools & Stop (BAI-425)
+        res_engram_write = evaluate_hook({
+            "is_post_tool": True,
+            "stepIdx": 210,
+            "test_inspect_engram_sync": True,
+            "toolCall": {
+                "name": "call_mcp_tool",
+                "args": {"ServerName": "engram", "ToolName": "mem_save", "Arguments": {"title": "Test"}}
+            }
+        })
+        assert res_engram_write.get("engramSyncTriggered") is True and res_engram_write.get("source") == "post_tool:mem_save", f"Expected engram sync on mem_save, got {res_engram_write}"
+
+        res_engram_read = evaluate_hook({
+            "is_post_tool": True,
+            "stepIdx": 211,
+            "test_inspect_engram_sync": True,
+            "toolCall": {
+                "name": "call_mcp_tool",
+                "args": {"ServerName": "engram", "ToolName": "mem_context", "Arguments": {}}
+            }
+        })
+        assert res_engram_read.get("engramSyncTriggered") is False, f"Expected no engram sync on read-only mem_context, got {res_engram_read}"
+
+        res_engram_stop = evaluate_hook({
+            "is_stop_event": True,
+            "terminationReason": "NO_TOOL_CALL",
+            "test_bypass_linear": True,
+            "test_bypass_correction_gate": True,
+            "test_bypass_gov_gate": True,
+            "test_inspect_engram_sync": True
+        })
+        assert res_engram_stop.get("engramSyncTriggered") is True and res_engram_stop.get("source") == "stop", f"Expected engram sync on Stop event, got {res_engram_stop}"
+        print("✓ Test 66 Passed: Engram 3-Tier Background Auto-Sync triggers on MCP writes and Stop (BAI-425)")
 
 
     finally:

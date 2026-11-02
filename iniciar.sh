@@ -106,7 +106,39 @@ if [ -z "$TARGET_PROJECT" ] && [ -n "${ENGRAM_PROJECT:-}" ] && [ "$ENGRAM_PROJEC
     TARGET_PROJECT="$ENGRAM_PROJECT"
 fi
 
-# 3. Detección física directa desde Zerops CLI si está disponible
+# 3. Detección física directa desde el plano ZCP propio (zerops_discover) antes de fallback a Zerops CLI
+if [ -z "$TARGET_PROJECT" ] && [ -x "/usr/local/bin/zcp" ] && command -v python3 >/dev/null 2>&1; then
+    DETECTED_ZCP_PROJ=$(python3 -B -c '
+import subprocess, json
+try:
+    proc = subprocess.Popen(["/usr/local/bin/zcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    def rpc(m):
+        proc.stdin.write(json.dumps(m) + "\n")
+        proc.stdin.flush()
+        while True:
+            l = proc.stdout.readline()
+            if not l: return None
+            try:
+                d = json.loads(l)
+                if d.get("id") == m.get("id"): return d
+            except Exception: pass
+    rpc({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"iniciar-id","version":"2.0"}}})
+    proc.stdin.write(json.dumps({"jsonrpc":"2.0","method":"notifications/initialized"}) + "\n")
+    proc.stdin.flush()
+    res = rpc({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"zerops_discover","arguments":{}}})
+    proc.terminate()
+    name = json.loads(res["result"]["content"][0]["text"]).get("project", {}).get("name", "")
+    if name: print(name.strip())
+except Exception:
+    pass
+' 2>/dev/null || true)
+    if [ -n "$DETECTED_ZCP_PROJ" ] && [ "$DETECTED_ZCP_PROJ" != "default" ]; then
+        TARGET_PROJECT="$DETECTED_ZCP_PROJ"
+        echo "• [iniciar.sh] Identidad canónica detectada desde ZCP propio (zerops_discover): $TARGET_PROJECT"
+    fi
+fi
+
+# 3b. Fallback secundario desde Zerops CLI si zcp stdio no reportó proyecto
 if [ -z "$TARGET_PROJECT" ]; then
     ZCLI_BIN=""
     if command -v zcli >/dev/null 2>&1; then
@@ -298,7 +330,7 @@ if [ "$LOCALSTORAGE_FOUND" = true ]; then
         sudo chown -R "$(id -un):$(id -gn)" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || true
     fi
 
-    if ! mountpoint -q "/mnt/$LOCALSTORAGE_HOST"; then
+    if ! mountpoint -q "/mnt/$LOCALSTORAGE_HOST" && ! grep -q " /mnt/$LOCALSTORAGE_HOST " /proc/mounts 2>/dev/null; then
         echo "  • Montando $LOCALSTORAGE_HOST:/data en /mnt/$LOCALSTORAGE_HOST vía SSHFS..."
         sudo sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || \
         sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$LOCALSTORAGE_HOST:/data" "/mnt/$LOCALSTORAGE_HOST" 2>/dev/null || true
@@ -320,7 +352,7 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=-/bin/mkdir -p /mnt/$LOCALSTORAGE_HOST
-ExecStart=/bin/bash -c 'if ! mountpoint -q /mnt/$LOCALSTORAGE_HOST; then for i in \$(seq 1 15); do /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 $LOCALSTORAGE_HOST:/data /mnt/$LOCALSTORAGE_HOST 2>/dev/null && break; sleep 2; done; fi; if [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && mountpoint -q $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null; then /usr/bin/fusermount3 -uz $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; if [ -d $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ]; then rmdir $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; ln -sfn /mnt/$LOCALSTORAGE_HOST $PROJECT_ROOT/$LOCALSTORAGE_HOST'
+ExecStart=/bin/bash -c 'if ! mountpoint -q /mnt/$LOCALSTORAGE_HOST && ! grep -q " /mnt/$LOCALSTORAGE_HOST " /proc/mounts 2>/dev/null; then for i in \$(seq 1 15); do /usr/bin/sshfs -o StrictHostKeyChecking=no,UserKnownHostsFile=/dev/null,allow_other,default_permissions,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 $LOCALSTORAGE_HOST:/data /mnt/$LOCALSTORAGE_HOST 2>/dev/null && break; sleep 2; done; fi; if [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && mountpoint -q $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null; then /usr/bin/fusermount3 -uz $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; if [ -d $PROJECT_ROOT/$LOCALSTORAGE_HOST ] && [ ! -L $PROJECT_ROOT/$LOCALSTORAGE_HOST ]; then rmdir $PROJECT_ROOT/$LOCALSTORAGE_HOST 2>/dev/null || true; fi; ln -sfn /mnt/$LOCALSTORAGE_HOST $PROJECT_ROOT/$LOCALSTORAGE_HOST'
 ExecStop=/bin/bash -c 'if mountpoint -q /mnt/$LOCALSTORAGE_HOST; then /usr/bin/fusermount3 -uz /mnt/$LOCALSTORAGE_HOST || true; fi'
 TimeoutStartSec=60
 TimeoutStopSec=15
@@ -459,8 +491,14 @@ if [ ! -L "$LOCAL_ARTIFACTS" ]; then
 fi
 echo "  ✓ Symlink de /artifacts verificado -> $SSOT_ARTIFACTS"
 
-# 2a-bis. Aprovisionar Persistencia Híbrida Hot/Cold de Engram
-echo "• [2a-bis] Verificando persistencia híbrida Hot/Cold para Engram ($APP_IDENTITY_LOWER)..."
+# 2a-bis. Aprovisionar Persistencia Híbrida 3-Tier Zero-Data-Loss de Engram
+echo "• [2a-bis] Verificando persistencia 3-Tier Zero-Data-Loss para Engram ($APP_IDENTITY_LOWER)..."
+if [ -f "$REPO_DIR/scripts/engram-sync" ]; then
+    mkdir -p "$PROJECT_ROOT/.bin" 2>/dev/null || true
+    cp -f "$REPO_DIR/scripts/engram-sync" "$PROJECT_ROOT/.bin/engram-sync" 2>/dev/null || true
+    chmod +x "$PROJECT_ROOT/.bin/engram-sync" 2>/dev/null || true
+    sudo ln -sf "$PROJECT_ROOT/.bin/engram-sync" /usr/local/bin/engram-sync 2>/dev/null || true
+fi
 if command -v engram-sync >/dev/null 2>&1; then
     engram-sync --pull --project "$APP_IDENTITY_LOWER" || true
     engram-sync --status --project "$APP_IDENTITY_LOWER" || true
@@ -647,7 +685,7 @@ if [ "$UPDATE_MODE" = true ]; then
     fi
 
     # Desplegar CLIs esenciales en PATH y .bin
-    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync knowledge-sync anti-slop-linter; do
+    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync engram-sync knowledge-sync anti-slop-linter; do
         src_cli=""
         if [ -f "$REPO_DIR/scripts/$cli" ]; then
             src_cli="$REPO_DIR/scripts/$cli"
