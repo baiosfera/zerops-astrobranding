@@ -5,7 +5,10 @@ import os
 import re
 import json
 import uuid
+import logging
 import httpx
+
+logger = logging.getLogger("hermes.agent")
 try:
     from prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt
     from tools import (
