@@ -1,4 +1,8 @@
 # Service: Paperclip Governance & Spend Caps Watchdog (Ubuntu Node.js 26)
+# SSoT Persistence Contract:
+# - PostgreSQL 18 managed database: DATABASE_URL disables @embedded-postgres saving ~400 MB RAM.
+# - LocalStorage volume: Mounts at /mnt/localstorage in zerops.yaml (run.volume).
+# - Zero ObjectStorage Redundancy: Native local_disk provider on persistent NVMe volume.
 services:
   - hostname: paperclip
     type: ubuntu/nodejs@26
@@ -11,3 +15,12 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.25
       minFreeRamPercent: 10
+    envVariables:
+      PORT: "3100"
+      HOST: "0.0.0.0"
+      NODE_ENV: "production"
+      DATABASE_URL: ${database_connectionString}
+      PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
+      PAPERCLIP_STORAGE_PROVIDER: "local_disk"
+      PAPERCLIP_STORAGE_LOCAL_DIR: "/mnt/localstorage/paperclip/storage"
+      PAPERCLIP_SECRETS_MASTER_KEY_FILE: "/mnt/localstorage/paperclip/secrets/master.key"

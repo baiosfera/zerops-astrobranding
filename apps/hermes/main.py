@@ -10,10 +10,11 @@ import time
 import uuid
 import queue
 import asyncio
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import threading
 
 ACTIVE_RUNS = {}
+_MAX_CONCURRENT_RUNS = 10
 
 try:
     from agent import HermesAgent
@@ -135,6 +136,21 @@ class HealthHandler(BaseHTTPRequestHandler):
 
         # 1. Paperclip Gateway Run Dispatch: /v1/runs
         if clean_path == "/v1/runs":
+            now = time.time()
+            # Stale runs sweep (TTL > 1 hour)
+            stale_keys = [rid for rid, rinfo in ACTIVE_RUNS.items() if now - rinfo.get("created_at", now) > 3600]
+            for rid in stale_keys:
+                ACTIVE_RUNS.pop(rid, None)
+
+            # Concurrency protection
+            running_runs = [r for r in ACTIVE_RUNS.values() if not r.get("terminal")]
+            if len(running_runs) >= _MAX_CONCURRENT_RUNS:
+                self.send_response(429)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Demasiadas ejecuciones concurrentes en Hermes (máximo 10). Intentá nuevamente en unos momentos."}).encode("utf-8"))
+                return
+
             run_id = f"run_{uuid.uuid4().hex[:12]}"
             crew_header = self.headers.get("x-crew-name") or self.headers.get("X-Crew-Name")
             crew_name = payload.get("crew_name") or crew_header
@@ -147,7 +163,7 @@ class HealthHandler(BaseHTTPRequestHandler):
                 "queue": run_queue,
                 "terminal": False,
                 "crew_name": crew_name,
-                "created_at": time.time()
+                "created_at": now
             }
 
             def worker():
@@ -190,7 +206,11 @@ class HealthHandler(BaseHTTPRequestHandler):
                         "data": {
                             "status": "completed",
                             "output": output_text,
-                            "usage": {"input_tokens": 150, "output_tokens": len(output_text.split())}
+                            "usage": {
+                                "input_tokens": 150,
+                                "output_tokens": len(output_text.split()),
+                                "cost_cents": 0
+                            }
                         }
                     })
                 except Exception as err:
@@ -274,8 +294,9 @@ class HealthHandler(BaseHTTPRequestHandler):
         pass
 
 def run_health_server(port: int = 8000):
-    server = HTTPServer(("0.0.0.0", port), HealthHandler)
-    print(f"[Hermes-Agent] Health server listening on port {port}")
+    server = ThreadingHTTPServer(("0.0.0.0", port), HealthHandler)
+    server.daemon_threads = True
+    print(f"[Hermes-Agent] Threading health server listening on port {port}")
     server.serve_forever()
 
 async def handle_astrology_request(msg):

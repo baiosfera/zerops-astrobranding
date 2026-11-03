@@ -21,8 +21,10 @@ try:
         search_web, fetch_web_page, download_file,
         describe_store_schema, execute_store_query,
         create_store_product, set_site_image,
-        get_store_products, update_product_price, get_makeup_services,
-        update_service_price, get_recent_orders, get_makeup_bookings,
+        get_store_products, update_product_price,
+        get_store_services, get_makeup_services,
+        update_service_price, get_recent_orders,
+        get_store_bookings, get_makeup_bookings,
         run_crew_ai, extract_structured_data,
         list_available_crews, get_paperclip_status
     )
@@ -38,8 +40,10 @@ except (ImportError, ValueError):
         search_web, fetch_web_page, download_file,
         describe_store_schema, execute_store_query,
         create_store_product, set_site_image,
-        get_store_products, update_product_price, get_makeup_services,
-        update_service_price, get_recent_orders, get_makeup_bookings,
+        get_store_products, update_product_price,
+        get_store_services, get_makeup_services,
+        update_service_price, get_recent_orders,
+        get_store_bookings, get_makeup_bookings,
         run_crew_ai, extract_structured_data,
         list_available_crews, get_paperclip_status
     )
@@ -451,94 +455,62 @@ def extract_tool_calls(msg: dict) -> list[dict]:
 
     return tool_calls
 
+TOOL_DISPATCH = {
+    "describe_store_schema": lambda a: describe_store_schema(),
+    "create_store_product": lambda a: create_store_product(
+        a.get("name", ""), int(a.get("base_price", 0)), int(a.get("stock", 1)),
+        a.get("image_filename_or_url", ""), a.get("category", "activewear"), a.get("description", "")
+    ),
+    "set_site_image": lambda a: set_site_image(
+        a.get("key", "hero_image"), a.get("image_filename_or_url", ""),
+        a.get("alt", ""), a.get("title", ""), a.get("badge", ""), a.get("price", "")
+    ),
+    "execute_store_query": lambda a: execute_store_query(a.get("query", ""), a.get("explanation", "")),
+    "get_store_products": lambda a: get_store_products(a.get("category", "")),
+    "update_product_price": lambda a: update_product_price(a.get("product_name", ""), int(a.get("new_price", 0))),
+    "get_store_services": lambda a: get_store_services(),
+    "get_makeup_services": lambda a: get_store_services(),
+    "update_service_price": lambda a: update_service_price(a.get("service_name", ""), int(a.get("new_price", 0))),
+    "get_recent_orders": lambda a: get_recent_orders(int(a.get("limit", 5))),
+    "get_store_bookings": lambda a: get_store_bookings(int(a.get("limit", 5))),
+    "get_makeup_bookings": lambda a: get_store_bookings(int(a.get("limit", 5))),
+    "start_zerops_service": lambda a: start_zerops_service(a.get("service_name", "")),
+    "stop_zerops_service": lambda a: stop_zerops_service(a.get("service_name", "")),
+    "delete_zerops_service": lambda a: delete_zerops_service(a.get("service_name", "")),
+    "list_zerops_services": lambda a: list_zerops_services(),
+    "get_zerops_service_status": lambda a: get_zerops_service_status(a.get("service_name", "")),
+    "read_web_file": lambda a: read_web_file(a.get("relative_path", "")),
+    "edit_web_file": lambda a: edit_web_file(a.get("relative_path", ""), a.get("new_content", "")),
+    "git_web_status": lambda a: git_web_status(),
+    "git_web_diff": lambda a: git_web_diff(),
+    "deploy_webdev_preview": lambda a: deploy_webdev_preview(a.get("commit_message", "chore: preview update from telegram")),
+    "promote_to_production_webprod": lambda a: promote_to_production_webprod(a.get("commit_message", "release: promote to production from telegram")),
+    "git_web_log": lambda a: git_web_log(a.get("branch_or_range", "main..dev")),
+    "git_web_diff_branches": lambda a: git_web_diff_branches(a.get("base_branch", "main"), a.get("target_branch", "dev")),
+    "read_file": lambda a: read_file(a.get("path", "")),
+    "write_file": lambda a: write_file(a.get("path", ""), a.get("content", "")),
+    "edit_file": lambda a: edit_file(a.get("path", ""), a.get("target", ""), a.get("replacement", "")),
+    "list_directory": lambda a: list_directory(a.get("path", "/mnt/localstorage")),
+    "run_command": lambda a: run_command(a.get("command", "")),
+    "search_web": lambda a: search_web(a.get("query", ""), a.get("max_results", 5)),
+    "fetch_web_page": lambda a: fetch_web_page(a.get("url", "")),
+    "download_file": lambda a: download_file(a.get("url", ""), a.get("destination_path", "")),
+    "run_crew_ai": lambda a: run_crew_ai(a.get("mission", ""), a.get("roles", []), a.get("tier", "free")),
+    "extract_structured_data": lambda a: extract_structured_data(a.get("fields_spec", {}), a.get("user_input", ""), a.get("tier", "free")),
+    "list_available_crews": lambda a: list_available_crews(),
+    "get_paperclip_status": lambda a: get_paperclip_status(),
+}
+
 async def execute_tool(fn_name: str, fn_args: dict) -> str:
     try:
-        if fn_name == "describe_store_schema":
-            raw_res = await describe_store_schema()
-        elif fn_name == "create_store_product":
-            raw_res = await create_store_product(
-                fn_args.get("name", ""),
-                int(fn_args.get("base_price", 0)),
-                int(fn_args.get("stock", 1)),
-                fn_args.get("image_filename_or_url", ""),
-                fn_args.get("category", "activewear"),
-                fn_args.get("description", "")
-            )
-        elif fn_name == "set_site_image":
-            raw_res = await set_site_image(
-                fn_args.get("key", "hero_image"),
-                fn_args.get("image_filename_or_url", ""),
-                fn_args.get("alt", ""),
-                fn_args.get("title", ""),
-                fn_args.get("badge", ""),
-                fn_args.get("price", "")
-            )
-        elif fn_name == "execute_store_query":
-            raw_res = await execute_store_query(fn_args.get("query", ""), fn_args.get("explanation", ""))
-        elif fn_name == "get_store_products":
-            raw_res = await get_store_products(fn_args.get("category", ""))
-        elif fn_name == "update_product_price":
-            raw_res = await update_product_price(fn_args.get("product_name", ""), int(fn_args.get("new_price", 0)))
-        elif fn_name == "get_makeup_services":
-            raw_res = await get_makeup_services()
-        elif fn_name == "update_service_price":
-            raw_res = await update_service_price(fn_args.get("service_name", ""), int(fn_args.get("new_price", 0)))
-        elif fn_name == "get_recent_orders":
-            raw_res = await get_recent_orders(int(fn_args.get("limit", 5)))
-        elif fn_name == "get_makeup_bookings":
-            raw_res = await get_makeup_bookings(int(fn_args.get("limit", 5)))
-        elif fn_name == "start_zerops_service":
-            raw_res = start_zerops_service(fn_args.get("service_name", ""))
-        elif fn_name == "stop_zerops_service":
-            raw_res = stop_zerops_service(fn_args.get("service_name", ""))
-        elif fn_name == "delete_zerops_service":
-            raw_res = delete_zerops_service(fn_args.get("service_name", ""))
-        elif fn_name == "list_zerops_services":
-            raw_res = list_zerops_services()
-        elif fn_name == "get_zerops_service_status":
-            raw_res = get_zerops_service_status(fn_args.get("service_name", ""))
-        elif fn_name == "read_web_file":
-            raw_res = read_web_file(fn_args.get("relative_path", ""))
-        elif fn_name == "edit_web_file":
-            raw_res = edit_web_file(fn_args.get("relative_path", ""), fn_args.get("new_content", ""))
-        elif fn_name == "git_web_status":
-            raw_res = git_web_status()
-        elif fn_name == "git_web_diff":
-            raw_res = git_web_diff()
-        elif fn_name == "deploy_webdev_preview":
-            raw_res = deploy_webdev_preview(fn_args.get("commit_message", "chore: preview update from telegram"))
-        elif fn_name == "promote_to_production_webprod":
-            raw_res = promote_to_production_webprod(fn_args.get("commit_message", "release: promote to production from telegram"))
-        elif fn_name == "git_web_log":
-            raw_res = git_web_log(fn_args.get("branch_or_range", "main..dev"))
-        elif fn_name == "git_web_diff_branches":
-            raw_res = git_web_diff_branches(fn_args.get("base_branch", "main"), fn_args.get("target_branch", "dev"))
-        elif fn_name == "read_file":
-            raw_res = read_file(fn_args.get("path", ""))
-        elif fn_name == "write_file":
-            raw_res = write_file(fn_args.get("path", ""), fn_args.get("content", ""))
-        elif fn_name == "edit_file":
-            raw_res = edit_file(fn_args.get("path", ""), fn_args.get("target", ""), fn_args.get("replacement", ""))
-        elif fn_name == "list_directory":
-            raw_res = list_directory(fn_args.get("path", "/mnt/localstorage"))
-        elif fn_name == "run_command":
-            raw_res = run_command(fn_args.get("command", ""))
-        elif fn_name == "search_web":
-            raw_res = search_web(fn_args.get("query", ""), fn_args.get("max_results", 5))
-        elif fn_name == "fetch_web_page":
-            raw_res = fetch_web_page(fn_args.get("url", ""))
-        elif fn_name == "download_file":
-            raw_res = download_file(fn_args.get("url", ""), fn_args.get("destination_path", ""))
-        elif fn_name == "run_crew_ai":
-            raw_res = await run_crew_ai(fn_args.get("mission", ""), fn_args.get("roles", []), fn_args.get("tier", "free"))
-        elif fn_name == "extract_structured_data":
-            raw_res = await extract_structured_data(fn_args.get("fields_spec", {}), fn_args.get("user_input", ""), fn_args.get("tier", "free"))
-        elif fn_name == "list_available_crews":
-            raw_res = list_available_crews()
-        elif fn_name == "get_paperclip_status":
-            raw_res = await get_paperclip_status()
+        handler = TOOL_DISPATCH.get(fn_name)
+        if not handler:
+            return f"Herramienta desconocida: {fn_name}"
+        res = handler(fn_args)
+        if asyncio.iscoroutine(res):
+            raw_res = await res
         else:
-            raw_res = f"Herramienta desconocida: {fn_name}"
+            raw_res = res
         
         # Pointer Pattern: If tool output exceeds 8000 characters, persist to localstorage
         res_str = str(raw_res)

@@ -833,7 +833,7 @@ async def update_product_price(product_name: str, new_price: int) -> str:
     except Exception as e:
         return f"❌ Error actualizando precio: {str(e)}"
 
-async def get_makeup_services() -> str:
+async def get_store_services() -> str:
     """Lists active services and pricing."""
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
@@ -845,12 +845,15 @@ async def get_makeup_services() -> str:
         await conn.close()
         if not rows:
             return "No hay servicios activos."
-        out = ["💅 **Catálogo de Servicios:**"]
+        out = ["💼 **Catálogo de Servicios:**"]
         for r in rows:
             out.append(f"• **{r['name']}**: ${r['price']:,} COP")
         return "\n".join(out)
     except Exception as e:
         return f"❌ Error consultando servicios: {str(e)}"
+
+# Retrocompatibility alias
+get_makeup_services = get_store_services
 
 async def update_service_price(service_name: str, new_price: int) -> str:
     """Updates the price of a service in the live database."""
@@ -892,8 +895,8 @@ async def get_recent_orders(limit: int = 5) -> str:
     except Exception as e:
         return f"❌ Error consultando pedidos: {str(e)}"
 
-async def get_makeup_bookings(limit: int = 5) -> str:
-    """Lists upcoming or recent makeup appointment bookings."""
+async def get_store_bookings(limit: int = 5) -> str:
+    """Lists upcoming or recent appointment bookings."""
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         return "❌ Error: DATABASE_URL no está configurada."
@@ -903,13 +906,16 @@ async def get_makeup_bookings(limit: int = 5) -> str:
         rows = await conn.fetch("SELECT id, customer_name, customer_phone, service_name, appointment_date, status FROM bookings ORDER BY created_at DESC LIMIT $1", limit)
         await conn.close()
         if not rows:
-            return "No hay citas de maquillaje registradas todavía."
-        out = [f"📅 **Citas de Maquillaje ({len(rows)}):**"]
+            return "No hay citas ni reservas registradas todavía."
+        out = [f"📅 **Citas / Reservas ({len(rows)}):**"]
         for r in rows:
             out.append(f"• {r['customer_name']} ({r['customer_phone'] or 'Sin tel'}): {r['service_name']} - Fecha: {r['appointment_date']} [{r['status']}]")
         return "\n".join(out)
     except Exception as e:
         return f"❌ Error consultando citas: {str(e)}"
+
+# Retrocompatibility alias
+get_makeup_bookings = get_store_bookings
 
 # --- Dynamic AI Swarms (CrewAI) & Structured Validation (PydanticAI) ---
 

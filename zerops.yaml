@@ -332,7 +332,7 @@ zerops:
         - port: 3100
           httpSupport: true
       initCommands:
-        - sudo mkdir -p /mnt/localstorage/paperclip /mnt/localstorage/pidev && sudo chown -R zerops:zerops /mnt/localstorage/paperclip /mnt/localstorage/pidev
+        - sudo mkdir -p /mnt/localstorage/paperclip/storage /mnt/localstorage/paperclip/secrets /mnt/localstorage/pidev && sudo chown -R zerops:zerops /mnt/localstorage/paperclip /mnt/localstorage/pidev
       envVariables:
         PORT: "3100"
         HOST: "0.0.0.0"
@@ -341,6 +341,10 @@ zerops:
         NATS_URL: ${nats_connectionString}
         LOCAL_STORAGE_PATH: "/mnt/localstorage/paperclip"
         SKILLS_PATH: "/mnt/localstorage/skills"
+        PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
+        PAPERCLIP_STORAGE_PROVIDER: "local_disk"
+        PAPERCLIP_STORAGE_LOCAL_DIR: "/mnt/localstorage/paperclip/storage"
+        PAPERCLIP_SECRETS_MASTER_KEY_FILE: "/mnt/localstorage/paperclip/secrets/master.key"
       start: node apps/agentdev/src/server.mjs
       healthCheck:
         httpGet:

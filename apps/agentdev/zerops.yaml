@@ -8,7 +8,22 @@ zerops:
         - .
     run:
       base: ubuntu/nodejs@26
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
       ports:
         - port: 3100
           httpSupport: true
+      initCommands:
+        - sudo mkdir -p /mnt/localstorage/paperclip/storage /mnt/localstorage/paperclip/secrets && sudo chown -R zerops:zerops /mnt/localstorage/paperclip
+      envVariables:
+        PORT: "3100"
+        HOST: "0.0.0.0"
+        NODE_ENV: "production"
+        DATABASE_URL: ${database_connectionString}
+        PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
+        PAPERCLIP_STORAGE_PROVIDER: "local_disk"
+        PAPERCLIP_STORAGE_LOCAL_DIR: "/mnt/localstorage/paperclip/storage"
+        PAPERCLIP_SECRETS_MASTER_KEY_FILE: "/mnt/localstorage/paperclip/secrets/master.key"
       start: node src/server.mjs
