@@ -2660,6 +2660,7 @@ def cmd_push(args):
                         "fingerprint": fp,
                     })
     else:
+        seen_content_hashes: Dict[Tuple[int, str], str] = {}
         for p in paths:
             if not os.path.exists(p):
                 continue
@@ -2672,6 +2673,9 @@ def cmd_push(args):
                 if item["tier"] == "video_residual":
                     continue
 
+                if item["filename"] in ("arbol_estructura.txt", "estructura.txt", "indices.txt") or item["filename"].startswith("arbol_"):
+                    continue
+
                 # Formatos redundantes (ya cubiertos por formato superior) se omiten
                 if item["tier"] == "format_redundant" or not item.get("canonical_upload", False):
                     if item["tier"] == "orphan_video" and getattr(args, "convert_orphan_videos", False):
@@ -2682,6 +2686,19 @@ def cmd_push(args):
                 # Videos huérfanos se procesan solo con flag explícito
                 if item["tier"] == "orphan_video" and not getattr(args, "convert_orphan_videos", False):
                     continue
+
+                # Deduplicación por hash binario de contenido (elimina copias exactas con diferente prefijo)
+                try:
+                    p_item = item["path"]
+                    sz_item = item["size_bytes"]
+                    with open(p_item, "rb") as fp_c:
+                        s_item = fp_c.read(65536)
+                    h_item = (sz_item, hashlib.md5(s_item).hexdigest())
+                    if h_item in seen_content_hashes:
+                        continue
+                    seen_content_hashes[h_item] = p_item
+                except Exception:
+                    pass
 
                 fp = MetadataFingerprint.compute_from_stat(
                     os.path.relpath(item["path"], "/var/www/baiosfera"),
@@ -2728,7 +2745,10 @@ def cmd_push(args):
                 print(f"    [DRY-RUN] Simulación: Subiría {filename} -> {target_title} (Tier: {item['tier']})")
             else:
                 if target_title not in resolved_notebooks:
-                    print(f"    • Verificando cuaderno en Google NotebookLM...")
+                    if cluster_key in resolved_notebooks:
+                        resolved_notebooks[target_title] = resolved_notebooks[cluster_key]
+                    else:
+                        print(f"    • Verificando cuaderno en Google NotebookLM...")
                     resolved_notebooks[target_title] = bridge.resolve_notebook_id(
                         target_title,
                         cluster_key=cluster_key,
