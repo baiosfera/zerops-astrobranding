@@ -111,6 +111,30 @@ for p in patterns:
                     fp.write(c)
 ' 2>/dev/null || true
 
+# 1.2 Parche Idempotente Anti-OOM en LXC: flags de frugalidad y memoria en cdp.py
+python3 -c '
+import glob, os
+patterns = [
+    "/home/*/.local/share/uv/tools/notebooklm-mcp-cli/lib/python*/site-packages/notebooklm_tools/utils/cdp.py",
+    "/root/.local/share/uv/tools/notebooklm-mcp-cli/lib/python*/site-packages/notebooklm_tools/utils/cdp.py",
+]
+target = "\"--remote-allow-origins=http://127.0.0.1:{port}\","
+replacement = """\"--remote-allow-origins=http://127.0.0.1:{port}\",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        "--no-sandbox","""
+for p in patterns:
+    for f in glob.glob(p):
+        if os.path.exists(f):
+            with open(f, "r") as fp:
+                c = fp.read()
+            if target in c and "--disable-dev-shm-usage" not in c:
+                c = c.replace(target, replacement)
+                with open(f, "w") as fp:
+                    fp.write(c)
+' 2>/dev/null || true
+
 # 1b. Instalación Idempotente de lunar-mcp-server (Motor MCP Lunar & BaZi)
 echo "• Verificando motor de lunar-mcp-server..."
 if ! command -v lunar-mcp-server &>/dev/null && [ ! -f "$PERSISTENT_BIN/lunar-mcp-server" ] && [ ! -f "$HOME/.local/bin/lunar-mcp-server" ] && [ ! -f "/home/zerops/.local/bin/lunar-mcp-server" ]; then
