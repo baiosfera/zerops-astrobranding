@@ -256,7 +256,7 @@ def deploy_webdev_preview(commit_message: str) -> str:
         return f"❌ Error en deploy_webdev_preview: {str(e)}"
 
 def promote_to_production_webprod(commit_message: str) -> str:
-    """Merges 'dev' into 'main' and pushes to GitHub, triggering the GitHub Actions CI/CD to deploy to webprod (catalinaglamur.com)."""
+    """Merges 'dev' into 'main' and pushes to GitHub, triggering the GitHub Actions CI/CD to deploy to webprod."""
     if not os.path.exists(WEB_REPO_DIR):
         return "❌ Repositorio web no encontrado."
     try:
@@ -265,7 +265,7 @@ def promote_to_production_webprod(commit_message: str) -> str:
         merge_res = subprocess.run(["git", "merge", "dev", "-m", commit_message], cwd=WEB_REPO_DIR, capture_output=True, text=True)
         push_res = subprocess.run(["git", "push", "origin", "main"], cwd=WEB_REPO_DIR, capture_output=True, text=True)
         subprocess.run(["git", "checkout", "dev"], cwd=WEB_REPO_DIR, check=True)
-        return f"🌟 ¡Promoción a PRODUCCIÓN disparada!\nMerge: {merge_res.stdout.strip()}\nGitHub Push: {push_res.stdout.strip()}\nGitHub Actions está desplegando ahora en catalinaglamur.com."
+        return f"🌟 ¡Promoción a PRODUCCIÓN disparada!\nMerge: {merge_res.stdout.strip()}\nGitHub Push: {push_res.stdout.strip()}\nGitHub Actions está desplegando la nueva versión en producción."
     except Exception as e:
         subprocess.run(["git", "checkout", "dev"], cwd=WEB_REPO_DIR)
         return f"❌ Error en promote_to_production_webprod: {str(e)}"
@@ -301,7 +301,7 @@ def git_web_diff_branches(base_branch: str = "main", target_branch: str = "dev")
 # --- Universal AGY-Twin Engineering & File Tools ---
 
 def read_file(path: str) -> str:
-    """Reads any file in the workspace or localstorage (e.g. '/mnt/localstorage/CATALINAGLAMUR/dev/...', '/mnt/localstorage/web/...', or '/var/www/...')."""
+    """Reads any file in the workspace or localstorage (e.g. '/mnt/localstorage/...', or '/var/www/...')."""
     path = os.path.normpath(path)
     if not os.path.exists(path):
         return f"❌ El archivo '{path}' no existe."
@@ -793,7 +793,7 @@ async def get_store_products(category: str = "") -> str:
         await conn.close()
         if not rows:
             return "No hay productos activos en el catálogo."
-        out = ["🛍️ **Catálogo de Prendas Activas (catalinaglamur.com):**"]
+        out = ["🛍️ **Catálogo de Productos:**"]
         for r in rows:
             out.append(f"• **{r['name']}**: ${r['base_price']:,} COP")
         return "\n".join(out)
@@ -801,7 +801,7 @@ async def get_store_products(category: str = "") -> str:
         return f"❌ Error consultando catálogo: {str(e)}"
 
 async def update_product_price(product_name: str, new_price: int) -> str:
-    """Updates the price of a product in the live store database. Impacts catalinaglamur.com in real-time."""
+    """Updates the price of a product in the live store database."""
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         return "❌ Error: DATABASE_URL no está configurada."
@@ -815,13 +815,13 @@ async def update_product_price(product_name: str, new_price: int) -> str:
         row = await conn.fetchrow("SELECT name, base_price FROM products WHERE name ILIKE $1 LIMIT 1", f"%{product_name.strip()}%")
         await conn.close()
         if row:
-            return f"✅ Precio actualizado con éxito en vivo:\n• **{row['name']}**: ${row['base_price']:,} COP\nEl cambio ya es visible en catalinaglamur.com (SSR en tiempo real)."
+            return f"✅ Precio actualizado con éxito en vivo:\n• **{row['name']}**: ${row['base_price']:,} COP\nEl cambio ya es visible en la tienda en tiempo real."
         return f"❌ No se encontró ningún producto que coincida con '{product_name}'."
     except Exception as e:
         return f"❌ Error actualizando precio: {str(e)}"
 
 async def get_makeup_services() -> str:
-    """Lists active professional makeup services and pricing."""
+    """Lists active services and pricing."""
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         return "❌ Error: DATABASE_URL no está configurada."
@@ -831,16 +831,16 @@ async def get_makeup_services() -> str:
         rows = await conn.fetch("SELECT name, price, is_active FROM services WHERE is_active = 1 ORDER BY price ASC")
         await conn.close()
         if not rows:
-            return "No hay servicios de maquillaje activos."
-        out = ["💄 **Atelier de Maquillaje Profesional (catalinaglamur.com):**"]
+            return "No hay servicios activos."
+        out = ["💅 **Catálogo de Servicios:**"]
         for r in rows:
             out.append(f"• **{r['name']}**: ${r['price']:,} COP")
         return "\n".join(out)
     except Exception as e:
-        return f"❌ Error consultando servicios de maquillaje: {str(e)}"
+        return f"❌ Error consultando servicios: {str(e)}"
 
 async def update_service_price(service_name: str, new_price: int) -> str:
-    """Updates the price of a makeup service in the live database."""
+    """Updates the price of a service in the live database."""
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         return "❌ Error: DATABASE_URL no está configurada."
@@ -854,7 +854,7 @@ async def update_service_price(service_name: str, new_price: int) -> str:
         row = await conn.fetchrow("SELECT name, price FROM services WHERE name ILIKE $1 LIMIT 1", f"%{service_name.strip()}%")
         await conn.close()
         if row:
-            return f"✅ Servicio de maquillaje actualizado en vivo:\n• **{row['name']}**: ${row['price']:,} COP\nEl cambio ya es visible en catalinaglamur.com/servicios."
+            return f"✅ Servicio actualizado en vivo:\n• **{row['name']}**: ${row['price']:,} COP\nEl cambio ya es visible en la tienda."
         return f"❌ No se encontró ningún servicio que coincida con '{service_name}'."
     except Exception as e:
         return f"❌ Error actualizando servicio: {str(e)}"
@@ -916,3 +916,32 @@ async def extract_structured_data(fields_spec: dict, user_input: str, tier: str 
         return await _extract(fields_spec=fields_spec, user_input=user_input, tier=tier)
     except Exception as e:
         return f"❌ Error extrayendo datos con PydanticAI: {str(e)}"
+
+def list_available_crews() -> str:
+    """Lists all registered CrewAI squads and dynamic multi-agent capabilities."""
+    return (
+        "🤖 **Cuadrillas Autónomas de CrewAI Registradas:**\n"
+        "1. **`seo_aeo_geo`** (Slugs: `seo`, `seo_aeo_geo`): Enjambre de 2 agentes para optimización en Google, SearchGPT y Perplexity (Schema.org RDF @graph, /llms.txt v2, OpenGraph <300KB WhatsApp budget y reglas Edge Cloudflare).\n"
+        "2. **`general_research`**: Enjambre de investigación web profunda, síntesis documental y triangulación de fuentes.\n"
+        "3. **`astrology_timing`**: Enjambre de cálculo y timing eleccional (Helenístico, Védico, BaZi).\n"
+        "4. **`google_seo`**: Enjambre de auditoría técnica y palabras clave tradicionales.\n\n"
+        "✨ **Enjambres Dinámicos CoHaLo (141 Skills):** Puedo instanciar en tiempo de ejecución cualquier skill del catálogo (`.atl/skill-registry.md`) llamando a `run_crew_ai(mission, roles)`."
+    )
+
+async def get_paperclip_status() -> str:
+    """Queries Paperclip AI board at http://paperclip:3100 to check company and agent status."""
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get("http://paperclip:3100/api/health")
+            if res.status_code == 200:
+                return (
+                    "📋 **Paperclip AI Board (http://paperclip:3100):**\n"
+                    "• Estado: ACTIVO (Node.js 26 + PostgreSQL)\n"
+                    "• Dashboard: https://paperclip-252-3100.ny1.zerops.app/\n"
+                    "• Agentes Registrados: Hermes Autonomous Agent (`hermes_gateway`), CrewAI SEO-AEO-GEO (`hermes_gateway`)\n"
+                    "• Rol: Gobernanza agéntica, organigrama, aprobación de tareas y control presupuestario."
+                )
+            return f"⚠️ Paperclip responde con estado {res.status_code}"
+    except Exception as e:
+        return f"❌ Error conectando con Paperclip: {str(e)}"

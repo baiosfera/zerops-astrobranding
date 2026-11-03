@@ -23,7 +23,8 @@ try:
         create_store_product, set_site_image,
         get_store_products, update_product_price, get_makeup_services,
         update_service_price, get_recent_orders, get_makeup_bookings,
-        run_crew_ai, extract_structured_data
+        run_crew_ai, extract_structured_data,
+        list_available_crews, get_paperclip_status
     )
 except (ImportError, ValueError):
     from .prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt
@@ -39,7 +40,8 @@ except (ImportError, ValueError):
         create_store_product, set_site_image,
         get_store_products, update_product_price, get_makeup_services,
         update_service_price, get_recent_orders, get_makeup_bookings,
-        run_crew_ai, extract_structured_data
+        run_crew_ai, extract_structured_data,
+        list_available_crews, get_paperclip_status
     )
 
 BIFROST_URL = os.getenv("HERMES_MODEL_ENDPOINT", "http://bifrost:8080/v1")
@@ -334,6 +336,28 @@ ZEROPS_TOOLS = ECOMMERCE_TOOLS + [
                 "required": ["fields_spec", "user_input"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_available_crews",
+            "description": "Lista todas las cuadrillas autónomas de CrewAI pre-registradas (seo_aeo_geo, general_research, astrology_timing, google_seo) y la capacidad de orquestar las 141 skills de CoHaLo.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_paperclip_status",
+            "description": "Consulta el estado en vivo de la plataforma Paperclip AI (http://paperclip:3100), incluyendo los agentes registrados (Hermes y CrewAI), tareas y salud del board.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
     }
 ]
 
@@ -490,6 +514,10 @@ async def execute_tool(fn_name: str, fn_args: dict) -> str:
             raw_res = await run_crew_ai(fn_args.get("mission", ""), fn_args.get("roles", []), fn_args.get("tier", "free"))
         elif fn_name == "extract_structured_data":
             raw_res = await extract_structured_data(fn_args.get("fields_spec", {}), fn_args.get("user_input", ""), fn_args.get("tier", "free"))
+        elif fn_name == "list_available_crews":
+            raw_res = list_available_crews()
+        elif fn_name == "get_paperclip_status":
+            raw_res = await get_paperclip_status()
         else:
             raw_res = f"Herramienta desconocida: {fn_name}"
         

@@ -137,11 +137,11 @@ if (process.env.FRAPPE_URL && process.env.FRAPPE_API_KEY) {
 
 ```bash
 # Identidad y Presencia
-PROJECT_NAME="catalinaglamur"
+PROJECT_NAME="<project_name>"
 BRAND_PRESENCE_MODEL="service_area_business" # o physical_storefront / pure_online_national
 
 # Telemetría y Píxeles
-META_PIXEL_ID="1547000523905487"
+META_PIXEL_ID="<meta_pixel_id>"
 META_CAPI_ACCESS_TOKEN="<secret>"
 GOOGLE_ADS_CONVERSION_ID="AW-XXXXXXXXX"
 TIKTOK_PIXEL_ID="XXXXXXXXXXXXXX"
@@ -149,7 +149,7 @@ TIKTOK_EVENTS_TOKEN="<secret>"
 GTM_ID="GTM-XXXXXXX"
 
 # Conexión Opcional Frappe Cloud (Fail-Safe)
-FRAPPE_URL="https://catalinaglamur.v.frappe.cloud"
+FRAPPE_URL="https://<tenant>.v.frappe.cloud"
 FRAPPE_API_KEY="<secret>"
 FRAPPE_API_SECRET="<secret>"
 FRAPPE_SITE_NAME="frontend"
