@@ -305,7 +305,15 @@ async def run_bot():
 
     try:
         while True:
-            await asyncio.sleep(60)
+            await asyncio.sleep(10)
+            for app in apps:
+                if app.updater and not app.updater.running:
+                    logger.warning("⚠️ Telegram updater stopped! Attempting recovery...")
+                    try:
+                        await app.updater.start_polling(drop_pending_updates=True)
+                        logger.info("✅ Telegram updater recovered successfully.")
+                    except Exception as poll_err:
+                        logger.error(f"Failed to recover telegram polling: {poll_err}")
     finally:
         for app in apps:
             try:

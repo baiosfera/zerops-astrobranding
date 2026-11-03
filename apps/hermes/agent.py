@@ -13,7 +13,7 @@ try:
     from prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt
     from tools import (
         get_system_health, calculate_natal_chart, send_whatsapp_otp,
-        list_zerops_services, start_zerops_service, stop_zerops_service, get_zerops_service_status,
+        list_zerops_services, start_zerops_service, stop_zerops_service, delete_zerops_service, get_zerops_service_status,
         read_web_file, edit_web_file, git_web_status, git_web_diff,
         deploy_webdev_preview, promote_to_production_webprod,
         git_web_log, git_web_diff_branches,
@@ -30,7 +30,7 @@ except (ImportError, ValueError):
     from .prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt
     from .tools import (
         get_system_health, calculate_natal_chart, send_whatsapp_otp,
-        list_zerops_services, start_zerops_service, stop_zerops_service, get_zerops_service_status,
+        list_zerops_services, start_zerops_service, stop_zerops_service, delete_zerops_service, get_zerops_service_status,
         read_web_file, edit_web_file, git_web_status, git_web_diff,
         deploy_webdev_preview, promote_to_production_webprod,
         git_web_log, git_web_diff_branches,
@@ -150,6 +150,23 @@ ZEROPS_TOOLS = ECOMMERCE_TOOLS + [
                     "service_name": {
                         "type": "string",
                         "description": "The exact service name, e.g. 'webdev'"
+                    }
+                },
+                "required": ["service_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_zerops_service",
+            "description": "Delete or permanently remove a Zerops service stack by name (e.g. 'videoworker', 'brand'). Use this when the user explicitly asks to delete or remove a service.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service_name": {
+                        "type": "string",
+                        "description": "The exact service name, e.g. 'videoworker'"
                     }
                 },
                 "required": ["service_name"]
@@ -474,6 +491,8 @@ async def execute_tool(fn_name: str, fn_args: dict) -> str:
             raw_res = start_zerops_service(fn_args.get("service_name", ""))
         elif fn_name == "stop_zerops_service":
             raw_res = stop_zerops_service(fn_args.get("service_name", ""))
+        elif fn_name == "delete_zerops_service":
+            raw_res = delete_zerops_service(fn_args.get("service_name", ""))
         elif fn_name == "list_zerops_services":
             raw_res = list_zerops_services()
         elif fn_name == "get_zerops_service_status":

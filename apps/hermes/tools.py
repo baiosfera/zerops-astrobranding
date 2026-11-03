@@ -174,6 +174,19 @@ def stop_zerops_service(service_name: str) -> str:
         return f"🛑 El servicio '{service_name}' está siendo detenido en Zerops (comando enviado con éxito)."
     return f"❌ Error deteniendo '{service_name}': {res.stderr.strip()}"
 
+def delete_zerops_service(service_name: str) -> str:
+    """Deletes/removes a Zerops service stack by name (e.g. 'videoworker', 'brand').
+    Uses non-interactive confirmation to avoid terminal prompt hangs."""
+    service_name = _clean_service_name(service_name)
+    project_id = os.getenv("projectId", "I6YfEvtmRgivAAYYXm537A")
+    res = subprocess.run(
+        ["/opt/zerops/bin/zcli", "service", "delete", service_name, "--confirm", f"--projectId={project_id}"],
+        capture_output=True, text=True, timeout=25
+    )
+    if res.returncode == 0:
+        return f"🗑️ El servicio '{service_name}' fue eliminado exitosamente en Zerops."
+    return f"❌ Error eliminando '{service_name}': {res.stderr.strip() or res.stdout.strip()}"
+
 def get_zerops_service_status(service_name: str) -> str:
     """Checks current status of a specific Zerops service."""
     service_name = _clean_service_name(service_name)
