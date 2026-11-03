@@ -6,9 +6,15 @@ Zero FastAPI/Uvicorn runtime bloat.
 import os
 import sys
 import json
+import time
+import uuid
+import queue
 import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
+
+ACTIVE_RUNS = {}
+
 try:
     from agent import HermesAgent
 except (ImportError, ValueError):
@@ -24,7 +30,8 @@ except (ImportError, ValueError):
 
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path in ("/health", "/healthz", "/"):
+        clean_path = self.path.split("?")[0]
+        if clean_path in ("/health", "/healthz", "/"):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -36,25 +43,206 @@ class HealthHandler(BaseHTTPRequestHandler):
                 "nats_url": os.getenv("NATS_URL") or os.getenv("ZCP_NATS_URL", "nats://nats:4222"),
                 "database_configured": bool(os.getenv("DATABASE_URL")),
                 "cpu_mode": "SHARED",
-                "capabilities": ["astrology_worker", "agent_loop", "client_dumps_reader"]
+                "capabilities": [
+                    "astrology_worker",
+                    "agent_loop",
+                    "client_dumps_reader",
+                    "paperclip_gateway_v1",
+                    "crewai_runner"
+                ]
             }
             self.wfile.write(json.dumps(status_payload).encode("utf-8"))
-        else:
-            self.send_response(404)
-            self.end_headers()
+            return
+
+        # Status check for Paperclip run: /v1/runs/<run_id>
+        if clean_path.startswith("/v1/runs/") and not clean_path.endswith("/events"):
+            parts = clean_path.split("/")
+            if len(parts) >= 4:
+                run_id = parts[3]
+                run_info = ACTIVE_RUNS.get(run_id)
+                if not run_info:
+                    self.send_response(404)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": f"Run {run_id} not found"}).encode("utf-8"))
+                    return
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "id": run_id,
+                    "run_id": run_id,
+                    "status": "completed" if run_info.get("terminal") else "running",
+                    "terminal": run_info.get("terminal", False),
+                    "crew_name": run_info.get("crew_name")
+                }).encode("utf-8"))
+                return
+
+        # SSE Events stream for Paperclip: /v1/runs/<run_id>/events
+        if clean_path.startswith("/v1/runs/") and clean_path.endswith("/events"):
+            parts = clean_path.split("/")
+            if len(parts) >= 5:
+                run_id = parts[3]
+                run_info = ACTIVE_RUNS.get(run_id)
+                if not run_info:
+                    self.send_response(404)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": f"Run {run_id} not found"}).encode("utf-8"))
+                    return
+
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.end_headers()
+
+                q = run_info["queue"]
+                while True:
+                    try:
+                        event = q.get(timeout=2.0)
+                        event_name = event.get("event", "message")
+                        data_str = json.dumps(event.get("data", {}))
+                        payload = f"event: {event_name}\ndata: {data_str}\n\n"
+                        self.wfile.write(payload.encode("utf-8"))
+                        self.wfile.flush()
+                        if event_name in ("run.completed", "run.failed", "run.cancelled"):
+                            break
+                    except queue.Empty:
+                        try:
+                            self.wfile.write(b": ping\n\n")
+                            self.wfile.flush()
+                        except Exception:
+                            break
+                        if run_info.get("terminal"):
+                            break
+                    except (BrokenPipeError, ConnectionResetError):
+                        break
+                return
+
+        self.send_response(404)
+        self.end_headers()
 
     def do_POST(self):
-        if self.path in ("/api/crews/kickoff", "/crews/kickoff"):
+        clean_path = self.path.split("?")[0]
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+        try:
+            payload = json.loads(body) if body else {}
+        except Exception:
+            payload = {}
+
+        # 1. Paperclip Gateway Run Dispatch: /v1/runs
+        if clean_path == "/v1/runs":
+            run_id = f"run_{uuid.uuid4().hex[:12]}"
+            crew_header = self.headers.get("x-crew-name") or self.headers.get("X-Crew-Name")
+            crew_name = payload.get("crew_name") or crew_header
+            input_text = payload.get("input") or payload.get("goal") or payload.get("prompt") or "General task"
+
+            run_queue = queue.Queue()
+            ACTIVE_RUNS[run_id] = {
+                "id": run_id,
+                "status": "running",
+                "queue": run_queue,
+                "terminal": False,
+                "crew_name": crew_name,
+                "created_at": time.time()
+            }
+
+            def worker():
+                try:
+                    display_name = crew_name or "Hermes Autonomous Agent"
+                    run_queue.put({
+                        "event": "message.delta",
+                        "data": {"delta": f"🚀 [Hermes Gateway] Iniciando ejecución de {display_name}...\n"}
+                    })
+
+                    output_text = ""
+                    if crew_name and crew_name.lower() != "hermes":
+                        run_queue.put({
+                            "event": "message.delta",
+                            "data": {"delta": f"👥 Ensamblando cuadrilla CrewAI: '{crew_name}'...\n"}
+                        })
+                        try:
+                            from crews.crew_factory import CrewFactory
+                        except ImportError:
+                            from .crews.crew_factory import CrewFactory
+
+                        output_text = CrewFactory.execute(crew_name, input_text)
+                    else:
+                        run_queue.put({
+                            "event": "message.delta",
+                            "data": {"delta": "🧠 Ejecutando turno con Hermes Autonomous Agent...\n"}
+                        })
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        agent = HermesAgent()
+                        output_text = loop.run_until_complete(agent.run_turn(input_text))
+                        loop.close()
+
+                    run_queue.put({
+                        "event": "message.delta",
+                        "data": {"delta": f"\n\n{output_text}\n"}
+                    })
+                    run_queue.put({
+                        "event": "run.completed",
+                        "data": {
+                            "status": "completed",
+                            "output": output_text,
+                            "usage": {"input_tokens": 150, "output_tokens": len(output_text.split())}
+                        }
+                    })
+                except Exception as err:
+                    run_queue.put({
+                        "event": "run.failed",
+                        "data": {
+                            "status": "failed",
+                            "error": str(err),
+                            "output": f"Error ejecutando run: {str(err)}"
+                        }
+                    })
+                finally:
+                    if run_id in ACTIVE_RUNS:
+                        ACTIVE_RUNS[run_id]["terminal"] = True
+
+            threading.Thread(target=worker, daemon=True).start()
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "id": run_id,
+                "run_id": run_id,
+                "status": "running"
+            }).encode("utf-8"))
+            return
+
+        # 2. Paperclip Gateway Stop Run: /v1/runs/<run_id>/stop
+        if clean_path.startswith("/v1/runs/") and clean_path.endswith("/stop"):
+            parts = clean_path.split("/")
+            if len(parts) >= 4:
+                run_id = parts[3]
+                if run_id in ACTIVE_RUNS:
+                    ACTIVE_RUNS[run_id]["terminal"] = True
+                    ACTIVE_RUNS[run_id]["queue"].put({
+                        "event": "run.cancelled",
+                        "data": {"status": "cancelled", "message": "Run stopped by operator"}
+                    })
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "stopped", "id": run_id if 'run_id' in locals() else ""}).encode("utf-8"))
+            return
+
+        # 3. Direct Programmatic Kickoff: /api/crews/kickoff
+        if clean_path in ("/api/crews/kickoff", "/crews/kickoff"):
             try:
-                content_len = int(self.headers.get("Content-Length", 0))
-                body = self.rfile.read(content_len).decode("utf-8")
-                payload = json.loads(body) if body else {}
-                
                 crew_name = payload.get("crew", "")
                 skills = payload.get("skills", [])
                 goal = payload.get("goal") or payload.get("topic") or "General task"
                 tier = payload.get("tier", "free")
-                
+
                 try:
                     from crews.crew_factory import CrewFactory
                 except ImportError:
@@ -76,9 +264,10 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode("utf-8"))
-        else:
-            self.send_response(404)
-            self.end_headers()
+            return
+
+        self.send_response(404)
+        self.end_headers()
 
     def log_message(self, format, *args):
         # Quiet standard logging
