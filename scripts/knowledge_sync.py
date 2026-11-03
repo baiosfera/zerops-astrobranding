@@ -2723,11 +2723,12 @@ def cmd_push(args):
     existing_sources_cache: Dict[str, Dict[str, str]] = {}
 
     clusters_map = manifest_mgr.load_clusters_manifest()
-    resolved_notebooks = {
-        data["title"]: data["notebook_id"]
-        for data in clusters_map.values()
-        if "title" in data and "notebook_id" in data
-    }
+    resolved_notebooks = {}
+    for c_k, data in clusters_map.items():
+        if "notebook_id" in data:
+            resolved_notebooks[c_k] = data["notebook_id"]
+            if "title" in data:
+                resolved_notebooks[data["title"]] = data["notebook_id"]
 
     for idx, item in enumerate(candidates, 1):
         target_title = item["target_notebook"]
@@ -2744,17 +2745,18 @@ def cmd_push(args):
                 source_id = f"dry-run-src-{idx}"
                 print(f"    [DRY-RUN] Simulación: Subiría {filename} -> {target_title} (Tier: {item['tier']})")
             else:
-                if target_title not in resolved_notebooks:
-                    if cluster_key in resolved_notebooks:
-                        resolved_notebooks[target_title] = resolved_notebooks[cluster_key]
-                    else:
-                        print(f"    • Verificando cuaderno en Google NotebookLM...")
-                    resolved_notebooks[target_title] = bridge.resolve_notebook_id(
+                if cluster_key in resolved_notebooks:
+                    nb_id = resolved_notebooks[cluster_key]
+                elif target_title in resolved_notebooks:
+                    nb_id = resolved_notebooks[target_title]
+                else:
+                    print(f"    • Verificando cuaderno en Google NotebookLM...")
+                    nb_id = bridge.resolve_notebook_id(
                         target_title,
                         cluster_key=cluster_key,
                         auto_configure_prompt=False,
                     )
-                nb_id = resolved_notebooks[target_title]
+                    resolved_notebooks[target_title] = nb_id
 
                 # Cargar índice de fuentes existentes para Upsert idempotente sin duplicados
                 if nb_id not in existing_sources_cache:
