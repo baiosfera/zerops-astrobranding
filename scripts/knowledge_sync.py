@@ -861,7 +861,7 @@ class PartitionedManifest:
         source_id: str,
         source_type: str,
     ):
-        """Registra un evento de subida exitosa de forma append-only."""
+        """Registra un evento de subida exitosa de forma append-only con tolerancia a FUSE/rclone."""
         event = {
             "version": "1.2",
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -873,8 +873,21 @@ class PartitionedManifest:
             "source_id": source_id,
             "source_type": source_type,
         }
-        with open(self.event_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        line = json.dumps(event, ensure_ascii=False) + "\n"
+        try:
+            with open(self.event_file, "a", encoding="utf-8") as f:
+                f.write(line)
+        except (OSError, PermissionError):
+            # Fallback seguro para filesystems FUSE/rclone que no soportan O_APPEND directo
+            existing = ""
+            if os.path.exists(self.event_file):
+                try:
+                    with open(self.event_file, "r", encoding="utf-8", errors="replace") as f:
+                        existing = f.read()
+                except Exception:
+                    pass
+            with open(self.event_file, "w", encoding="utf-8") as f:
+                f.write(existing + line)
 
     def get_uploaded_fingerprints(self) -> Dict[str, Dict[str, Any]]:
         """Lee todos los archivos de eventos y consolida los fingerprints ya procesados."""
@@ -2280,6 +2293,7 @@ class NotebookLMBridge:
         resource: Dict[str, Any],
         dry_run: bool = False,
         upload_delay: float = 5.0,
+        wait: bool = True,
     ) -> Optional[str]:
         """Sube una fuente aplicando la transformación adecuada según su tipo."""
         path = resource["path"]
@@ -2315,7 +2329,7 @@ class NotebookLMBridge:
                 res = self.client.add_file(
                     notebook_id,
                     aac_path,
-                    wait=True,
+                    wait=wait,
                     wait_timeout=600.0,
                 )
                 source_id = getattr(res, "id", None) or (res.get("id") if isinstance(res, dict) else None)
@@ -2329,7 +2343,7 @@ class NotebookLMBridge:
             res = self.client.add_file(
                 notebook_id,
                 path,
-                wait=True,
+                wait=wait,
                 wait_timeout=timeout,
             )
             return getattr(res, "id", None) or (res.get("id") if isinstance(res, dict) else None)

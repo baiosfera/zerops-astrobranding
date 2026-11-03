@@ -151,6 +151,24 @@ def run_sync(dry_run: bool = False, limit: int = None, delay: float = 3.0):
         if not dry_run and clean_title in existing_titles:
             src_id = existing_titles[clean_title]
             print(f"    ⏭️ Ya presente en NotebookLM (Source ID: {src_id}), omitiendo...")
+            if os.path.exists(master_path):
+                try:
+                    st = os.stat(master_path)
+                    fp = MetadataFingerprint.compute_from_stat(
+                        os.path.relpath(master_path, "/var/www"),
+                        st.st_size,
+                        int(st.st_mtime)
+                    )
+                    manifest_mgr.record_upload(
+                        fingerprint=fp,
+                        relative_path=f"localstorage/knowledge_cache/velocity_compendiums/{master_name}",
+                        notebook_id=NOTEBOOK_ID,
+                        notebook_title=NOTEBOOK_TITLE,
+                        source_id=str(src_id),
+                        source_type="direct_audio",
+                    )
+                except Exception as e:
+                    print(f"    ⚠️ Warning al registrar manifiesto para {master_name}: {e}")
             success_count += 1
             continue
 
@@ -164,36 +182,42 @@ def run_sync(dry_run: bool = False, limit: int = None, delay: float = 3.0):
                 "filename": master_name,
                 "tier": "direct_audio",
             }
-            print(f"    🚀 Ingestando audio maestro en NotebookLM (con transcripción)...")
+            print(f"    🚀 Ingestando audio maestro en NotebookLM (asíncrono)...")
             try:
                 source_id = bridge.upload_source(
                     NOTEBOOK_ID,
                     item,
                     dry_run=False,
                     upload_delay=delay,
+                    wait=False,
                 )
                 if source_id:
-                    st = os.stat(master_path)
-                    fp = MetadataFingerprint.compute_from_stat(
-                        os.path.relpath(master_path, "/var/www"),
-                        st.st_size,
-                        int(st.st_mtime)
-                    )
-                    manifest_mgr.record_upload(
-                        fingerprint=fp,
-                        relative_path=f"localstorage/knowledge_cache/velocity_compendiums/{master_name}",
-                        notebook_id=NOTEBOOK_ID,
-                        notebook_title=NOTEBOOK_TITLE,
-                        source_id=str(source_id),
-                        source_type="direct_audio",
-                    )
+                    try:
+                        st = os.stat(master_path)
+                        fp = MetadataFingerprint.compute_from_stat(
+                            os.path.relpath(master_path, "/var/www"),
+                            st.st_size,
+                            int(st.st_mtime)
+                        )
+                        manifest_mgr.record_upload(
+                            fingerprint=fp,
+                            relative_path=f"localstorage/knowledge_cache/velocity_compendiums/{master_name}",
+                            notebook_id=NOTEBOOK_ID,
+                            notebook_title=NOTEBOOK_TITLE,
+                            source_id=str(source_id),
+                            source_type="direct_audio",
+                        )
+                    except Exception as me:
+                        print(f"    ⚠️ Warning al registrar manifiesto para {master_name}: {me}")
                     existing_titles[clean_title] = str(source_id)
                     success_count += 1
                     print(f"    ✅ Ingesta exitosa (Source ID: {source_id})")
                 else:
                     print(f"    ⚠️ Timeout o sin confirmación de ID para: {master_name}")
             except Exception as e:
+                import traceback
                 print(f"    ❌ Error en subida de {master_name}: {e}")
+                traceback.print_exc()
 
     print("\n==================================================================")
     print(f"🏁 SINCRONIZACIÓN FINALIZADA: {success_count}/{len(groups)} compendios procesados.")
