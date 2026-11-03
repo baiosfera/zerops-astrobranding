@@ -353,7 +353,30 @@ def extract_tool_calls(msg: dict) -> list[dict]:
         return tool_calls
 
     content = msg.get("content") or ""
-    if "invoke name=" in content or "DSML" in content or "function_call" in content:
+    if not content:
+        return []
+
+    # 1. ChatML format: <|tool_call|><|tool_name|>NAME<|tool_name|><|parameters|>JSON<|parameters|>
+    chatml_matches = re.findall(
+        r"<[\||\s]*tool_call[\||\s]*>\s*<[\||\s]*tool_name[\||\s]*>([^<]+)<[\||\s]*/tool_name[\||\s]*>\s*<[\||\s]*parameters[\||\s]*>(.*?)<[\||\s]*/parameters[\||\s]*>",
+        content,
+        re.DOTALL | re.IGNORECASE
+    )
+    for name, body in chatml_matches:
+        params = {}
+        try:
+            params = json.loads(body.strip())
+        except Exception:
+            raw_params = re.findall(r"\"([^\"]+)\"\s*:\s*\"([^\"]+)\"", body)
+            params = dict(raw_params)
+        tool_calls.append({
+            "id": str(uuid.uuid4()),
+            "name": name.strip(),
+            "args": params if isinstance(params, dict) else {}
+        })
+
+    # 2. XML invoke format: <invoke name="NAME">...</invoke> (including <dots_function_call>)
+    if "<invoke" in content or "invoke name=" in content or "dots_function_call" in content:
         invokes = re.findall(r"<[^>]*invoke\s+name=\"([^\"]+)\"[^>]*>(.*?)</[^>]*invoke>", content, re.DOTALL | re.IGNORECASE)
         for name, body in invokes:
             raw_params = re.findall(r"<[^>]*parameter\s+name=\"([^\"]+)\"[^>]*>(.*?)</[^>]*parameter>", body, re.DOTALL | re.IGNORECASE)
@@ -370,6 +393,21 @@ def extract_tool_calls(msg: dict) -> list[dict]:
                 "name": name.strip(),
                 "args": {k.strip(): v.strip() if isinstance(v, str) else v for k, v in params.items()}
             })
+
+    # 3. Standard XML <tool_call><name>...</name><arguments>...</arguments></tool_call>
+    if "<tool_call>" in content and not chatml_matches and not tool_calls:
+        xml_matches = re.findall(r"<tool_call>\s*<(?:name|tool_name)>([^<]+)</(?:name|tool_name)>\s*<(?:arguments|parameters)>(.*?)</(?:arguments|parameters)>\s*</tool_call>", content, re.DOTALL | re.IGNORECASE)
+        for name, body in xml_matches:
+            try:
+                params = json.loads(body.strip())
+            except Exception:
+                params = {}
+            tool_calls.append({
+                "id": str(uuid.uuid4()),
+                "name": name.strip(),
+                "args": params if isinstance(params, dict) else {}
+            })
+
     return tool_calls
 
 async def execute_tool(fn_name: str, fn_args: dict) -> str:
@@ -637,10 +675,45 @@ class HermesAgent:
                         raw_content = msg.get("content") or ""
                         cleaned = re.sub(r"<[^>]*function_call.*?</[^>]*function_call>", "", raw_content, flags=re.DOTALL | re.IGNORECASE)
                         cleaned = re.sub(r"<[^>]*tool_call.*?</[^>]*tool_call>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+                        cleaned = re.sub(r"<[\||\s]*tool_calls?[\||\s]*>.*?</[\||\s]*tool_calls?[\||\s]*>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+                        cleaned = re.sub(r"<dots_function_call>.*?</dots_function_call>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
                         cleaned = re.sub(r"<[^>]*invoke.*?</[^>]*invoke>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
-                        cleaned = re.sub(r"<[｜|\s]*DSML.*?</[｜|\s]*DSML[｜|\s]*tool_calls>", "", cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
+                        cleaned = re.sub(r"<[｜|\s]*DSML.*?</[｜|\s]*DSML[｜|\s]*tool_calls>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+                        cleaned = re.sub(r"<[\||\s]*(?:tool_calls?|tool_name|parameters)[\||\s]*>", "", cleaned, flags=re.IGNORECASE)
+                        cleaned = re.sub(r"</[\||\s]*(?:tool_calls?|tool_name|parameters)[\||\s]*>", "", cleaned, flags=re.IGNORECASE)
+                        cleaned = re.sub(r"</?dots_function_call>", "", cleaned, flags=re.IGNORECASE).strip()
                         final_content = cleaned if cleaned else raw_content
-                        break
+                        if not final_content.strip() or ("<|" in final_content and "|>" in final_content):
+                            logger.warning("[Hermes] Model output contained corrupted or unparsed tool syntax. Retrying with pro failover...")
+                            res_pro = await client.post(
+                                f"{BIFROST_URL}/chat/completions",
+                                headers={
+                                    "Authorization": f"Bearer {self.bifrost_key}",
+                                    "x-force-deepseek": "true",
+                                    "x-routing-tier": "pro"
+                                },
+                                json={
+                                    "model": MODEL_NAME,
+                                    "messages": messages,
+                                    "tools": self.tools,
+                                    "temperature": 0.3,
+                                },
+                                timeout=120.0
+                            )
+                            if res_pro.status_code == 200:
+                                data_pro = res_pro.json()
+                                msg_pro = data_pro["choices"][0]["message"]
+                                parsed_pro = extract_tool_calls(msg_pro)
+                                if parsed_pro:
+                                    parsed_tool_calls = parsed_pro
+                                    msg = msg_pro
+                                else:
+                                    final_content = (msg_pro.get("content") or "").strip()
+                                    break
+                            else:
+                                break
+                        else:
+                            break
                     
                     assistant_msg = {"role": "assistant"}
                     if msg.get("tool_calls"):
