@@ -939,9 +939,14 @@ async def get_paperclip_status() -> str:
                     "📋 **Paperclip AI Board (http://paperclip:3100):**\n"
                     "• Estado: ACTIVO (Node.js 26 + PostgreSQL)\n"
                     "• Dashboard: https://paperclip-252-3100.ny1.zerops.app/\n"
-                    "• Agentes Registrados: Hermes Autonomous Agent (`hermes_gateway`), CrewAI SEO-AEO-GEO (`hermes_gateway`)\n"
+                    "• Agentes en Tablero:\n"
+                    "  - Hermes Autonomous Agent (`hermes_gateway`): ACTIVO (Orquestador principal)\n"
+                    "  - CrewAI SEO-AEO-GEO (`hermes_gateway`): PAUSADO (Despertar bajo demanda)\n"
+                    "  - CrewAI General Research (`hermes_gateway`): PAUSADO (Despertar bajo demanda)\n"
+                    "  - CrewAI Astrology Timing (`hermes_gateway`): PAUSADO (Despertar bajo demanda)\n"
+                    "  - CrewAI Google SEO (`hermes_gateway`): PAUSADO (Despertar bajo demanda)\n"
                     "• Rol: Gobernanza agéntica, organigrama, aprobación de tareas y control presupuestario."
                 )
             return f"⚠️ Paperclip responde con estado {res.status_code}"
     except Exception as e:
-        return f"❌ Error conectando con Paperclip: {str(e)}"
+        return f"❌ Error conectando a Paperclip: {str(e)}"
