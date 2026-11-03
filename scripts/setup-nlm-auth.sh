@@ -137,16 +137,16 @@ if "location /novnc/" not in text and target in text:
 # 2. Función: Configurar Cron Job de Auto-Refresco Desatendido
 # ------------------------------------------------------------------------------
 setup_cron() {
-    echo "• Verificando cron job de auto-refresco (nlm auth refresh)..."
-    local cron_cmd="*/15 * * * * /home/zerops/.local/bin/nlm auth refresh >/dev/null 2>&1"
+    echo "• Configurando cron job de auto-refresco higiénico (nlm auth refresh)..."
+    local cron_cmd="0 */12 * * * /home/zerops/.local/bin/nlm auth refresh >/dev/null 2>&1"
     local current_cron
-    current_cron="$(crontab -u zerops -l 2>/dev/null || true)"
+    current_cron="$(crontab -u zerops -l 2>/dev/null | grep -v "nlm auth refresh" || true)"
 
-    if ! echo "$current_cron" | grep -Fq "nlm auth refresh"; then
-        echo "  ⏰ Configurando tarea de refresco cada 15 min en crontab (zerops)..."
+    echo "  ⏰ Configurando tarea de refresco cada 12 horas en crontab (zerops)..."
+    if [ -n "$current_cron" ]; then
         (echo "$current_cron"; echo "$cron_cmd") | crontab -u zerops -
     else
-        echo "  ℹ️ Cron job de refresco ya configurado en crontab."
+        echo "$cron_cmd" | crontab -u zerops -
     fi
 
     if command -v service >/dev/null 2>&1; then
@@ -261,7 +261,10 @@ run_interactive_vnc_login() {
     # Limpieza garantizada al salir (0 MB en reposo)
     cleanup_vnc() {
         echo ""
-        echo "🧹 Limpiando procesos gráficos efímeros (Zero Overhead Invariant)..."
+        echo "🧹 Limpiando procesos gráficos efímeros y navegador (Zero Overhead Invariant)..."
+        echo "  🛑 Terminando procesos de Google Chrome y liberando RAM..."
+        pkill -9 -f "google-chrome" 2>/dev/null || true
+        pkill -9 -f "chrome" 2>/dev/null || true
         [ -n "${WEBSOCK_PID:-}" ] && kill -15 "$WEBSOCK_PID" 2>/dev/null || true
         [ -n "${X11VNC_PID:-}" ] && kill -15 "$X11VNC_PID" 2>/dev/null || true
         [ -n "${OPENBOX_PID:-}" ] && kill -15 "$OPENBOX_PID" 2>/dev/null || true
@@ -271,10 +274,8 @@ run_interactive_vnc_login() {
         pkill -f "websockify.*${NOVNC_PORT:-6080}" 2>/dev/null || true
         pkill -f "openbox" 2>/dev/null || true
         rm -f "/tmp/.X${DISPLAY_NUM#:}-lock" "/tmp/.X11-unix/X${DISPLAY_NUM#:}" 2>/dev/null || true
-        if ! pgrep -f "google-chrome" >/dev/null 2>&1; then
-            rm -f "$NLM_LOCAL_DIR/chrome-profiles/default/Singleton"* 2>/dev/null || true
-        fi
-        echo "✅ Recursos gráficos liberados (0 MB RAM)."
+        rm -f "$NLM_LOCAL_DIR/chrome-profiles/default/Singleton"* 2>/dev/null || true
+        echo "✅ Recursos gráficos y navegador liberados (0 MB RAM residual)."
     }
     trap cleanup_vnc EXIT INT TERM
 
