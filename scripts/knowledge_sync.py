@@ -958,7 +958,7 @@ class CourseScanner:
         "Live_Calls", "Start_Here_5-Min_Plan", "changelogs", "bienvenidas",
         "onboarding", "community", "comunidad", "avisos", "foro", "foros",
         "recursos_adicionales", "__pycache__", "node_modules", "vendor",
-        ".git", ".rclone"
+        ".git", ".rclone", "09_biblioteca_prompts"
     }
 
     # Palabras clave y patrones de exclusión para temas ajenos al negocio/marketing
@@ -993,7 +993,7 @@ class CourseScanner:
         r"worksheet", r"workbook", r"work[-_ 20]*sheet", r"cuaderno[-_ 20]*de[-_ 20]*trabajo",
         r"libro[-_ 20]*de[-_ 20]*trabajo", r"hoja[-_ 20]*de[-_ 20]*trabajo", r"hojas[-_ 20]*de[-_ 20]*trabajo",
         r"checklist", r"cheatsheet", r"cheat[-_ 20]*sheet", r"\bquiz\b",
-        r"ejercicio", r"imprimible", r"audit[-_ 20]*print", r"fillable"
+        r"ejercicio", r"imprimible", r"audit[-_ 20]*print", r"fillable", r"plantilla", r"template"
     ]
 
     # 18 Especialidades Soberanas Canónicas (Customer Value Journey & Business Life Cycle)
@@ -1130,6 +1130,8 @@ class CourseScanner:
     # Mapa de Normalización Canónica (18 Especialidades SSoT)
     CANONICAL_CLUSTER_MAP = {
         # Canónicos directos
+        "categoria_de_uno": "categoria_de_uno",
+        "influence": "categoria_de_uno",
         "avatar_research": "avatar_research",
         "branding_authority": "branding_authority",
         "offers_pricing": "offers_pricing",
@@ -1471,6 +1473,11 @@ class CourseScanner:
             if c_dm:
                 canon = cls.CANONICAL_CLUSTER_MAP.get(c_dm, c_dm)
                 return (canon, f"DigitalMarketer curso: '{clean_dm_title}'")
+
+        # ESTRATEGIA INFLUENCE -> Categoría de Uno (Crown Notebook)
+        if "INFLUENCE" in parts:
+            canon = cls.CANONICAL_CLUSTER_MAP.get("categoria_de_uno", "categoria_de_uno")
+            return (canon, "Influence: Categoría de Uno y Autoridad")
 
         # 6. ESTRATEGIA LUIS-INESTROSA
         if "LUIS-INESTROSA" in parts:
@@ -1834,12 +1841,22 @@ class CourseScanner:
 
                     # CASO 1: Existe Documento Maestro (.md, .docx, .pdf, .txt)
                     if docs:
-                        for entry, ext in docs:
+                        doc_priority = {".md": 1, ".pdf": 2, ".docx": 3, ".txt": 4}
+                        sorted_docs = sorted(docs, key=lambda d: (doc_priority.get(d[1], 99), len(d[0].name)))
+                        best_doc = sorted_docs[0]
+                        cls._register_resource(
+                            resources, best_doc[0], best_doc[1],
+                            tier="direct_document",
+                            canonical_upload=True,
+                            reason_detail=None,
+                            has_peer_doc=has_peer_doc
+                        )
+                        for redundant_entry, redundant_ext in sorted_docs[1:]:
                             cls._register_resource(
-                                resources, entry, ext,
-                                tier="direct_document",
-                                canonical_upload=True,
-                                reason_detail=None,
+                                resources, redundant_entry, redundant_ext,
+                                tier="format_redundant",
+                                canonical_upload=False,
+                                reason_detail=f"Omitido: Documento redundante con mismo stem (preferido {best_doc[1]})",
                                 has_peer_doc=has_peer_doc
                             )
                         for entry, ext in subs:
