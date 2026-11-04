@@ -23,6 +23,15 @@ class WorkbenchHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=STATIC_DIR, **kwargs)
 
+    def end_headers(self):
+        # Force no-cache on HTML so browsers never serve stale UI versions
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path.endswith(".html") or parsed.path == "/" or parsed.path.endswith("/"):
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+        super().end_headers()
+
     def do_HEAD(self):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path.endswith("/api/render") or parsed.path.endswith("/api/extract"):
@@ -114,6 +123,9 @@ class WorkbenchHandler(http.server.SimpleHTTPRequestHandler):
                 title = item.get("title", "Fuente Envato")
                 font_preview = item.get("fontPreview") or {}
                 variants = font_preview.get("variants", [])
+                item_attributes = item.get("itemAttributes") or {}
+                total_style_count = font_preview.get("totalStyleCount", len(variants))
+                default_style_name = font_preview.get("defaultStyleName", "Regular")
                 
                 if not item_uuid:
                     raise ValueError("No se pudo obtener el itemUuid del ítem")
@@ -156,6 +168,17 @@ class WorkbenchHandler(http.server.SimpleHTTPRequestHandler):
                     "itemUuid": item_uuid,
                     "url": envato_url,
                     "text": brand_text,
+                    "totalStyleCount": total_style_count,
+                    "defaultStyleName": default_style_name,
+                    "itemAttributes": {
+                        "ligatures": item_attributes.get("ligatures", False),
+                        "stylisticSet": item_attributes.get("stylisticSet", False),
+                        "alternates": item_attributes.get("alternates", False),
+                        "spacing": item_attributes.get("spacing", []),
+                        "serifSansSerif": item_attributes.get("serifSansSerif", ""),
+                        "fontUsage": item_attributes.get("fontUsage", []),
+                        "supportedLanguages": item_attributes.get("supportedLanguages", [])
+                    },
                     "variants": results
                 }
                 
