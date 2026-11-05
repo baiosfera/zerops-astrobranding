@@ -248,46 +248,30 @@ Todo producto construido bajo esta plantilla debe orquestar el ecosistema de 141
 
 ---
 
-## 5. Protocolo de Linear Automatizado (`linear-scaffold.ts`) & Malla Lego Desacoplada
+## 5. Gobernanza de Linear Dinámica (`meta-plan` & `planner`) y Malla Lego Desacoplada
 
-La creación y seguimiento de tareas se rige por el estándar **Project-as-Code** mediante el manifiesto declarativo [`linear_template.json`](file:///var/www/artifacts/templates/linear_template.json) y el script ejecutable `linear-scaffold.ts`:
+La creación y seguimiento de tareas en Linear se rige por **`meta-plan` (v1.1)** y **`planner` (v10.0)**.
+Se erradican taxativamente los checklists monolíticos artificiales y las plantillas rígidas pre-fabricadas:
 
-```bash
-# Simulación determinista previa (sin mutar Linear)
-node --experimental-strip-types scripts/linear-scaffold.ts <APP_IDENTITY> "<PROJECT_NAME>" --dry-run --profile <minimal|content|ecommerce|full-mesh>
-
-# Aprovisionamiento real con gating de dependencias en Linear
-node --experimental-strip-types scripts/linear-scaffold.ts <APP_IDENTITY> "<PROJECT_NAME>" --profile <perfil>
-```
-
-> [!IMPORTANT]
-> **Mandato de Trazabilidad Viva en Linear (Anti-Checklist Theater & Blindaje de Contexto):**
-> Las issues creadas en Linear (`BAI-*`) NO son un registro pasivo post-facto; son el **motor de ejecución y guía obligatoria del agente**:
-> 1. **Inicio de Hito:** Transicionar el estado inmediatamente vía `linear-cli update-status <ID> "In Progress"`.
-> 2. **Ejecución y DoD:** Toda acción de código se guía por los criterios de la Definition of Done de la issue en Linear para no perder contexto ni mutilar funcionalidades.
-> 3. **Cierre con Sensor Físico:** Al terminar, es OBLIGATORIO registrar comentario con la prueba física (`linear-cli comment <ID> "✅ Atestación física exit 0: [detalles]"`) y transicionar a `linear-cli update-status <ID> "Done"`.
-> 4. **Respeto a Bloqueos:** Prohibido tocar o dar por iniciada una tarea bloqueada (`gate:blocked`) hasta que su dependencia directa esté en `Done`.
-> 5. **Soberanía de Linear-CLI y Direct GraphQL API:** Linear opera exclusivamente mediante el binario físico `/usr/local/bin/linear-cli` o consumo directo de la API GraphQL (`https://api.linear.app/graphql`), garantizando respuestas deterministas en <200ms con cero latencia y preservación absoluta de tokens de contexto.
-
-### Taxonomía de los 7 Hitos Lego (`BAI-0` a `BAI-6`)
-
-Los hitos se clasifican estrictamente en **CORE** (invariantes arquitectónicos obligatorios) y **OPT-IN** (módulos activados exclusivamente según la necesidad del proyecto):
-
-| Hito | Tipo | Nombre / Alcance | Bloqueado Por | Salida / DoD |
-|---|---|---|---|---|
-| **`BAI-0`** | `[CORE]` | **Scope, Topología Lego & Clasificación** | *(Ninguno)* | Greenfield vs Brownfield resuelto, perfil Lego seleccionado, servicios base activos en Zerops. |
-| **`BAI-1`** | `[CORE]` | **Chasis Astro 5 SSR, Tokens & GitOps** | `BAI-0` | Repositorio downstream enlazado a upstream, tokens W3C DTCG transpilados a Tailwind 4 `@theme`, build limpio en Bun 1.3. |
-| **`BAI-2`** | `[OPT-IN]` | **Contratos de Datos, Persistencia PostgreSQL 18 & Mesh API** | `BAI-1` | Modelado relacional en PostgreSQL 18, upsert defensivo anti-500, normalización E.164, endpoints `/api/*` probados con Zod. Cero mocks antes de UI. |
-| **`BAI-3`** | `[CORE]` | **Landings de Alto Impacto, Server Islands & Anti-Slop** | `BAI-2` *(o `BAI-1` en minimal)* | Server Islands (`server:defer`), diales calibrados (Variance 8, Motion 6, Density 4), microinteracciones GSAP 60fps, CLS = 0. |
-| **`BAI-4`** | `[OPT-IN]` | **Motor Transaccional, Checkout Funnels & Pasarelas** | `BAI-3` | Funnels con debounce anti-doble clic, firmas criptográficas SHA-256 (Wompi/ePayco/Stripe), idempotencia en Valkey (60s lock). |
-| **`BAI-5`** | `[OPT-IN]` | **Automatización Omnicanal & Asistentes de IA** | `BAI-3` | WhatsApp ágil con EvolutionGo (:8085), Email documental Listmonk (<85KB), Virtual Keys en Bifrost AI Gateway (:8080). |
-| **`BAI-6`** | `[CORE]` | **Atestación Física Multi-Superficie, SEO-AEO-GEO & Go-Live** | `BAI-3` / `BAI-4` / `BAI-5` | Habilitar Ingress (`zerops_subdomain action="enable"`), Atestación Pública (HTTP 200 en URL externa), Playwright E2E exit code 0, Schema.org, OpenGraph <300KB. |
+1. **Creación Dinámica de Proyecto (Invariante Zero-Orphan):**
+   Toda iniciativa o entrega de cliente se agrupa bajo un Proyecto padre creado en Linear en Fase F4:
+   ```bash
+   linear-cli create-project "<PROJECT_NAME>" "<DESCRIPCIÓN DEL PROYECTO>"
+   linear-cli set-project "<PROJECT_NAME>"
+   ```
+2. **Desglose Atómico por Slots de Capacidad:**
+   Los issues `BAI-*` se crean de forma dinámica según los subsistemas y runtimes realmente activados para el caso de uso (Frontend Astro, Persistencia, Checkout, Telemetría, etc.), nunca mediante listas fijas de 7 tareas.
+   ```bash
+   linear-cli create "[<BRAND>] <Título del Hito>" "<Descripción y Definition of Done comprobable>"
+   ```
+3. **Ejecución y Cierre con Sensor Físico:**
+   - Inicio: `linear-cli update-status <ID> "In Progress"`.
+   - Cierre: Es OBLIGATORIO validar con comando físico y registrar evidencia real:
+     `linear-cli update-status <ID> "Done" --evidence "<comando_y_logs_exit_0>"`
 
 ### Modelo Lego Desacoplado por Slots de Capacidad (Soberanía Frugal)
 
-> [!WARNING]
-> **Deconstrucción de Perfiles Rígidos y Pipelines Waterfall:**
-> Los perfiles predefinidos (`minimal`, `content`, `ecommerce`, `full-mesh`) son **arquetipos referenciales de conveniencia**, NO verdades absolutas ni camisas de fuerza.
+> [!NOTE]
 > En Zerops, imponer stacks completos artificiales genera desperdicio de recursos y fragilidad operativa.
 > El estándar real es el **Aprovisionamiento Frugal por Slots de Capacidad**: el agente evalúa la intención de negocio y cablea exclusivamente los bloques funcionales que el caso de uso requiere hoy.
 
