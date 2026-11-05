@@ -497,6 +497,14 @@ for _core_pair in \
 done
 hash -r 2>/dev/null || true
 
+# 1c. Asegurar dependencias de sistema y runtime para apotelos CLI (pdftotext y pydantic v2)
+if ! command -v pdftotext >/dev/null 2>&1; then
+    sudo apt-get install -y -qq poppler-utils 2>/dev/null || true
+fi
+if ! python3 -c "import pydantic" >/dev/null 2>&1; then
+    pip install --quiet --break-system-packages "pydantic>=2.0.0" 2>/dev/null || true
+fi
+
 # 2. Asegurar montaje de Google Drive SSoT vía gdrive.sh
 if [ ! -d "$DRIVE_MOUNT/0ZEROPS-AGY" ]; then
     echo "• [2/4] Google Drive no montado. Ejecutando gdrive.sh..."
