@@ -278,9 +278,13 @@ When the user requests an SDD/ODD change, phase agent delegation, or Agent Teams
 file:///home/zerops/.gemini/antigravity-cli/skills/_shared/sdd-orchestrator-full.md
 {end_marker}"""
             new_content = content[:start_idx] + replacement + content[end_idx + len(end_marker):]
+            rule_target = "- Verify technical claims before stating them. If unsure, investigate first."
+            rule_add = "- Explicit visible paths in chat: never output bare markdown links where the URL is hidden behind the file name (e.g. [file.md](...)). Always print the full absolute path in plain text or code blocks so it can be seen and copied directly in the terminal."
+            if rule_target in new_content and rule_add not in new_content:
+                new_content = new_content.replace(rule_target, f"{rule_target}\n{rule_add}")
             with open(gemini_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
-            print("  ✓ GEMINI.md optimizado: orchestrator offloaded a Dual-RAG JIT (-14.000 tokens).")
+            print("  ✓ GEMINI.md optimizado: orchestrator offloaded a Dual-RAG JIT y regla de rutas visibles inyectada.")
 EOF_OPT
     fi
 fi
