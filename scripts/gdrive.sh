@@ -397,10 +397,10 @@ After=$AFTER_SERVICES
 Type=simple
 TimeoutStartSec=30
 TimeoutStopSec=15
-ExecStartPre=/bin/bash -c '(umount -l /mnt/*/baiosfera 2>/dev/null || true); (fusermount3 -uz $MOUNT_DIR 2>/dev/null || true); (umount -l $MOUNT_DIR 2>/dev/null || true)'
+ExecStartPre=/bin/bash -c 'mkdir -p /var/cache/rclone; (umount -l /mnt/*/baiosfera 2>/dev/null || true); (fusermount3 -uz $MOUNT_DIR 2>/dev/null || true); (umount -l $MOUNT_DIR 2>/dev/null || true)'
 ExecStart=$LOCAL_ROOT/bin/rclone mount ${GDRIVE_REMOTE_NAME}: $MOUNT_DIR \\
     --config $RCLONE_CONF \\
-    --cache-dir /var/www/localstorage/rclone_vault \\
+    --cache-dir /var/cache/rclone \\
     --vfs-cache-mode full \\
     --vfs-cache-max-size 15G \\
     --vfs-cache-max-age 5m \\

@@ -471,7 +471,20 @@ fi
 
 # 1b. Hidratar inmediatamente CLIs y sensores soberanos en .bin, /usr/local/bin y ~/.local/bin (elimina shadows obsoletos en PATH)
 mkdir -p "$PROJECT_ROOT/.bin" "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
-for _core_pair in "engram-sync:engram-sync" "ssot-parity-check:ssot-parity-check.sh" "skills-suite-validate:skills-suite-validate.sh" "astrobranding-check:astrobranding-check.sh" "zcp-sync:zcp-sync"; do
+for _core_pair in \
+    "engram-sync:engram-sync" \
+    "ssot-parity-check:ssot-parity-check.sh" \
+    "skills-suite-validate:skills-suite-validate.sh" \
+    "astrobranding-check:astrobranding-check.sh" \
+    "zcp-sync:zcp-sync" \
+    "apotelos:apotelos" \
+    "linear-cli:linear-cli" \
+    "anti-slop-linter:anti-slop-linter" \
+    "knowledge-sync:knowledge-sync" \
+    "zcp-wa:zcp-wa.sh" \
+    "zcp-mail:zcp-mail.sh" \
+    "zcp-preflight-gate:zcp-preflight-gate.sh" \
+    "zeropsenv:zeropsenv"; do
     _c_name="${_core_pair%%:*}"
     _c_src="${_core_pair#*:}"
     if [ -f "$REPO_DIR/scripts/$_c_src" ]; then
@@ -709,7 +722,7 @@ if [ "$UPDATE_MODE" = true ]; then
 
     # Desplegar CLIs esenciales en PATH y .bin (incluyendo limpieza de shadows en ~/.local/bin)
     mkdir -p "$PROJECT_ROOT/.bin" "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
-    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync engram-sync knowledge-sync anti-slop-linter; do
+    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync engram-sync knowledge-sync anti-slop-linter apotelos linear-cli zcp-wa zcp-mail zcp-preflight-gate zeropsenv; do
         src_cli=""
         if [ -f "$REPO_DIR/scripts/$cli.sh" ]; then
             src_cli="$REPO_DIR/scripts/$cli.sh"

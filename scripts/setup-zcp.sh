@@ -36,6 +36,15 @@ if [ -f "$SCRIPT_DIR/linear-cli" ]; then
     sudo ln -sf "$PERSISTENT_BIN/linear-cli" /usr/local/bin/linear-cli 2>/dev/null || true
 fi
 
+# 1.1b Despliegue de Herramienta Soberana Apotelos CLI (apotelos)
+if [ -f "$SCRIPT_DIR/apotelos" ]; then
+    cp -f "$SCRIPT_DIR/apotelos" "$PERSISTENT_BIN/apotelos"
+    chmod +x "$PERSISTENT_BIN/apotelos"
+    cp "$PERSISTENT_BIN/apotelos" "$HOME/.local/bin/apotelos" 2>/dev/null || true
+    cp "$PERSISTENT_BIN/apotelos" "/home/zerops/.local/bin/apotelos" 2>/dev/null || true
+    sudo ln -sf "$PERSISTENT_BIN/apotelos" /usr/local/bin/apotelos 2>/dev/null || true
+fi
+
 # 1.2 Despliegue de Utilidad Universal de Sincronización (zcp-sync)
 if [ -f "$SCRIPT_DIR/zcp-sync" ]; then
     cp -f "$SCRIPT_DIR/zcp-sync" "$PERSISTENT_BIN/zcp-sync"

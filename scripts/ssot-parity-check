@@ -218,6 +218,10 @@ SYMLINKS=(
     "astrobranding-check"
     "zcp-sync"
     "engram-sync"
+    "apotelos"
+    "linear-cli"
+    "anti-slop-linter"
+    "knowledge-sync"
 )
 
 for symlink in "${SYMLINKS[@]}"; do

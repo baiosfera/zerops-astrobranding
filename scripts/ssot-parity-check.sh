@@ -9,11 +9,6 @@ set -euo pipefail
 LOCAL_BASE="/var/www"
 DRIVE_BASE="/var/www/baiosfera/0ZEROPS-AGY/0zcp-123"
 
-AUTO_FIX_MODE="${AUTO_FIX:-0}"
-if [ "${1:-}" = "--fix" ]; then
-    AUTO_FIX_MODE="1"
-fi
-
 ERRORS=0
 AUTO_FIX_MODE=false
 for _arg in "$@"; do
@@ -150,7 +145,7 @@ EXPECTED_IDENTITY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]
 if [ -n "$EXPECTED_IDENTITY" ] && [ "$EXPECTED_IDENTITY" != "zerops-astrobranding" ]; then
     AGENT_DB="/home/zerops/.engram/engram.db"
     if [ -L "$AGENT_DB" ]; then
-        if [ "$AUTO_FIX_MODE" = "1" ] && command -v engram-sync >/dev/null; then
+        if [ "$AUTO_FIX_MODE" = true ] && command -v engram-sync >/dev/null; then
             echo "🔧 Auto-fixing legacy Engram FUSE symlink into local POSIX DB ($EXPECTED_IDENTITY)..."
             engram-sync --pull --project "$EXPECTED_IDENTITY" --quiet || true
         fi
@@ -161,7 +156,7 @@ if [ -n "$EXPECTED_IDENTITY" ] && [ "$EXPECTED_IDENTITY" != "zerops-astrobrandin
     elif [ -f "$AGENT_DB" ]; then
         echo "✓ Engram Hot DB verified on local POSIX disk (anti-WAL-corruption): $AGENT_DB"
         COLD_ENGRAM_JSON="/var/www/baiosfera/0ZEROPS-AGY/${EXPECTED_IDENTITY}/engram/engram_ssot.json"
-        if [ ! -f "$COLD_ENGRAM_JSON" ] && [ "$AUTO_FIX_MODE" = "1" ] && command -v engram-sync >/dev/null; then
+        if [ ! -f "$COLD_ENGRAM_JSON" ] && [ "$AUTO_FIX_MODE" = true ] && command -v engram-sync >/dev/null; then
             engram-sync --push --project "$EXPECTED_IDENTITY" --quiet || true
         fi
         if [ -f "$COLD_ENGRAM_JSON" ]; then
@@ -223,19 +218,29 @@ SYMLINKS=(
     "astrobranding-check"
     "zcp-sync"
     "engram-sync"
+    "apotelos"
+    "linear-cli"
+    "anti-slop-linter"
+    "knowledge-sync"
 )
 
 for symlink in "${SYMLINKS[@]}"; do
     bin_path="/usr/local/bin/$symlink"
     local_bin="/var/www/.bin/$symlink"
-    shadow_bin="$HOME/.local/bin/$symlink"
-
-    # Auto-healed stale PATH shadow
-    if [ -f "$shadow_bin" ] && [ ! -L "$shadow_bin" ]; then
-        rm -f "$shadow_bin"
-        echo "⚡ Auto-healed stale PATH shadow: $shadow_bin"
+    if [ -x "$local_bin" ]; then
+        for shadow_dir in "/home/zerops/.local/bin" "${HOME:-/home/zerops}/.local/bin"; do
+            shadow_bin="$shadow_dir/$symlink"
+            if [ -f "$shadow_bin" ] && [ ! -L "$shadow_bin" ] && ! cmp -s "$shadow_bin" "$local_bin"; then
+                if [ "$AUTO_FIX_MODE" = true ]; then
+                    ln -sfn "$local_bin" "$shadow_bin" 2>/dev/null || true
+                    echo "⚡ Auto-healed stale PATH shadow into symlink: $shadow_bin -> $local_bin"
+                else
+                    echo "❌ Stale PATH shadow detected in $shadow_bin (differs from $local_bin)"
+                    ERRORS=$((ERRORS + 1))
+                fi
+            fi
+        done
     fi
-
     if [ ! -x "$bin_path" ] && [ ! -x "$local_bin" ]; then
         echo "❌ Missing or non-executable binary/symlink in PATH/.bin: $symlink"
         ERRORS=$((ERRORS + 1))
