@@ -14,9 +14,17 @@ import base64
 import re
 import os
 import sys
+import mimetypes
+
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("font/woff", ".woff")
+mimetypes.add_type("font/ttf", ".ttf")
+mimetypes.add_type("font/otf", ".otf")
+mimetypes.add_type("image/svg+xml", ".svg")
 
 PORT = 8888
 STATIC_DIR = "/var/www/font_previews"
+CATALOG_FILE = os.path.join(STATIC_DIR, "catalog.json")
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 class WorkbenchHandler(http.server.SimpleHTTPRequestHandler):
@@ -24,6 +32,8 @@ class WorkbenchHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=STATIC_DIR, **kwargs)
 
     def end_headers(self):
+        # Allow CORS on all endpoints and static assets (fonts, svgs, etc.)
+        self.send_header("Access-Control-Allow-Origin", "*")
         # Force no-cache on HTML so browsers never serve stale UI versions
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path.endswith(".html") or parsed.path == "/" or parsed.path.endswith("/"):
@@ -32,17 +42,86 @@ class WorkbenchHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Expires", "0")
         super().end_headers()
 
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Accept")
+        self.end_headers()
+
     def do_HEAD(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path.endswith("/api/render") or parsed.path.endswith("/api/extract"):
+        if parsed.path.endswith("/api/render") or parsed.path.endswith("/api/extract") or parsed.path.endswith("/api/fonts") or parsed.path.endswith("/api/catalog"):
             self.send_response(200)
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             return
         return super().do_HEAD()
 
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path.endswith("/api/fonts") or parsed.path.endswith("/api/catalog"):
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length).decode("utf-8")
+                payload = json.loads(body)
+                fonts = None
+                if isinstance(payload, dict) and "fonts" in payload:
+                    fonts = payload["fonts"]
+                elif isinstance(payload, list):
+                    fonts = payload
+                
+                if isinstance(fonts, list):
+                    # Backup old catalog before overwriting
+                    if os.path.exists(CATALOG_FILE):
+                        try:
+                            with open(CATALOG_FILE, "r", encoding="utf-8") as f_old:
+                                old_data = f_old.read()
+                            with open(CATALOG_FILE + ".bak", "w", encoding="utf-8") as f_bak:
+                                f_bak.write(old_data)
+                        except Exception:
+                            pass
+                    with open(CATALOG_FILE, "w", encoding="utf-8") as f:
+                        json.dump(fonts, f, indent=2, ensure_ascii=False)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"ok": True, "count": len(fonts)}).encode("utf-8"))
+                    return
+                else:
+                    raise ValueError("Se esperaba lista de fuentes en 'fonts'")
+            except Exception as e:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": False, "error": str(e)}).encode("utf-8"))
+                return
+        self.send_response(404)
+        self.end_headers()
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        
+        # 0. Endpoint Catálogo Persistente de Fuentes
+        if parsed.path.endswith("/api/fonts") or parsed.path.endswith("/api/catalog"):
+            try:
+                fonts = []
+                if os.path.exists(CATALOG_FILE):
+                    with open(CATALOG_FILE, "r", encoding="utf-8") as f:
+                        fonts = json.load(f)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True, "fonts": fonts}).encode("utf-8"))
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": False, "error": str(e)}).encode("utf-8"))
+                return
         
         # 1. Endpoint Proxy SVG para renderizar cualquier texto con fuente Envato (Sin problemas de CORS)
         if parsed.path.endswith("/api/render"):
@@ -181,6 +260,33 @@ class WorkbenchHandler(http.server.SimpleHTTPRequestHandler):
                     },
                     "variants": results
                 }
+
+                # Auto-persist extracted font into CATALOG_FILE
+                try:
+                    font_entry = {
+                        "id": f"envato_{item_uuid}",
+                        "title": title,
+                        "url": envato_url,
+                        "itemUuid": item_uuid,
+                        "totalStyleCount": total_style_count,
+                        "defaultStyleName": default_style_name,
+                        "itemAttributes": response_data["itemAttributes"],
+                        "variants": results,
+                        "previewSvg": results[0]["svgContent"] if results else ""
+                    }
+                    catalog = []
+                    if os.path.exists(CATALOG_FILE):
+                        with open(CATALOG_FILE, "r", encoding="utf-8") as cf:
+                            catalog = json.load(cf)
+                    existing_idx = next((i for i, f in enumerate(catalog) if f.get("id") == font_entry["id"]), -1)
+                    if existing_idx != -1:
+                        catalog[existing_idx] = font_entry
+                    else:
+                        catalog.insert(0, font_entry)
+                    with open(CATALOG_FILE, "w", encoding="utf-8") as cf:
+                        json.dump(catalog, cf, indent=2, ensure_ascii=False)
+                except Exception as cat_err:
+                    print("Error auto-guardando en catalog.json:", cat_err)
                 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
