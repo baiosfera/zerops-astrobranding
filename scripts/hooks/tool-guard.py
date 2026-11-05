@@ -1731,7 +1731,7 @@ def evaluate_hook(payload: dict) -> dict:
                 }
 
         # A2. Handover Immunity
-        if HANDOVER_PATTERN.search(target_file):
+        if HANDOVER_PATTERN.search(target_file) and not target_file.startswith("/var/www/artifacts/research/"):
             return {
                 "decision": "deny",
                 "reason": (

@@ -1,0 +1,339 @@
+#!/usr/bin/env python3
+"""
+Apotelos Universal CLI — Sovereign Reverse Causality & Multi-Agent Mesh
+Part of Zerops Astrobranding & Universal Upstream Tooling.
+"""
+
+import os
+import sys
+import json
+import argparse
+import urllib.request
+import urllib.error
+from pathlib import Path
+from typing import Dict, Any, Optional
+
+try:
+    from pydantic import BaseModel, Field
+except ImportError:
+    print("❌ Error: pydantic is required for apotelos CLI. Run 'pip install pydantic' or execute inside container.")
+    sys.exit(1)
+
+# --- MODELS & SCHEMAS ---
+
+class CommercialFunnelType:
+    DIRECT_CHECKOUT = "direct_checkout"
+    LEAD_GENERATION = "lead_generation"
+    BOOKING_CALENDAR = "booking_calendar"
+    SUBSCRIPTION = "subscription"
+    CONTENT_COMMUNITY = "content_community"
+
+class DynamicVerticalSpec(BaseModel):
+    vertical_slug: str
+    display_name: str
+    funnel_type: str = CommercialFunnelType.DIRECT_CHECKOUT
+    target_avatar: Dict[str, Any] = Field(default_factory=dict)
+    unique_mechanism: Dict[str, Any] = Field(default_factory=dict)
+    primary_offer: Dict[str, Any] = Field(default_factory=dict)
+    conversion_events: list = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+class UniversalBrandEcosystem(BaseModel):
+    brand_slug: str
+    umbrella_name: Optional[str] = None
+    design_tokens_ref: Optional[str] = "brandbook.json"
+    verticals: Dict[str, DynamicVerticalSpec] = Field(default_factory=dict)
+
+# --- CASCADING DISCOVERY ---
+
+def get_workspace_root() -> Path:
+    # Priority: current dir or standard /var/www / repo paths
+    candidates = [Path.cwd(), Path("/var/www/zerops-astrobranding"), Path("/var/www")]
+    for c in candidates:
+        if (c / "brandbook.json").exists() or (c / ".apotelos").exists() or (c / "zerops.yaml").exists():
+            return c
+    return Path.cwd()
+
+def get_local_storage_path() -> Path:
+    env_path = os.getenv("LOCAL_STORAGE_PATH")
+    if env_path and Path(env_path).exists():
+        return Path(env_path)
+    if Path("/mnt/localstorage").exists():
+        return Path("/mnt/localstorage")
+    if Path("/var/www/localstorage").exists():
+        return Path("/var/www/localstorage")
+    return Path("/tmp/localstorage")
+
+def discover_ecosystem() -> UniversalBrandEcosystem:
+    root = get_workspace_root()
+    ls_path = get_local_storage_path()
+    
+    # 1. Native .apotelos/ecosystem.json or .yaml
+    p1_json = root / ".apotelos" / "ecosystem.json"
+    if p1_json.exists():
+        try:
+            data = json.loads(p1_json.read_text(encoding="utf-8"))
+            return UniversalBrandEcosystem.model_validate(data)
+        except Exception as e:
+            print(f"⚠️ Warning: Error parsing {p1_json}: {e}")
+
+    # 2. brandbook.json with "verticals"
+    bb_path = root / "brandbook.json"
+    if bb_path.exists():
+        try:
+            bb_data = json.loads(bb_path.read_text(encoding="utf-8"))
+            brand_name = bb_data.get("identity", {}).get("brandName", bb_data.get("brand_name", root.name))
+            brand_slug = brand_name.lower().replace(" ", "-")
+            verticals_dict = {}
+            if "verticals" in bb_data and isinstance(bb_data["verticals"], dict):
+                for vslug, vdata in bb_data["verticals"].items():
+                    vdata["vertical_slug"] = vslug
+                    if "display_name" not in vdata:
+                        vdata["display_name"] = vslug.replace("-", " ").title()
+                    verticals_dict[vslug] = DynamicVerticalSpec.model_validate(vdata)
+                return UniversalBrandEcosystem(brand_slug=brand_slug, umbrella_name=brand_name, verticals=verticals_dict)
+        except Exception as e:
+            print(f"⚠️ Warning: Error reading brandbook: {e}")
+
+    # 3. Persistent LocalStorage NVMe
+    p3 = ls_path / "brand" / "ecosystem.json"
+    if p3.exists():
+        try:
+            data = json.loads(p3.read_text(encoding="utf-8"))
+            return UniversalBrandEcosystem.model_validate(data)
+        except Exception:
+            pass
+
+    # 4. Zero-Config Fallback (Auto-Inferred root_vertical)
+    default_name = root.name if root.name not in ("www", "var") else "default-brand"
+    return UniversalBrandEcosystem(
+        brand_slug=default_name.lower().replace(" ", "-"),
+        umbrella_name=default_name.title(),
+        verticals={
+            "root_vertical": DynamicVerticalSpec(
+                vertical_slug="root_vertical",
+                display_name=f"{default_name.title()} Principal",
+                funnel_type=CommercialFunnelType.DIRECT_CHECKOUT,
+                target_avatar={"pain_points": ["Genérico / Auto-inferido"], "desires": ["Solución directa"]},
+                unique_mechanism={"name": "Mecanismo Central", "contrast": "Alternativas genéricas"},
+                primary_offer={"structure": "Oferta Base", "pricing": {"currency": "COP", "amount": 0}},
+                conversion_events=["Purchase"]
+            )
+        }
+    )
+
+# --- SUBCOMMAND IMPLEMENTATIONS ---
+
+def cmd_list(args):
+    eco = discover_ecosystem()
+    print(f"\n🏛️ Ecosistema Activo: [{eco.brand_slug}] — Matriz: {eco.umbrella_name or 'Mono-marca'}")
+    print("=" * 70)
+    print(f"{'SLUG':<20} | {'DISPLAY NAME':<25} | {'FUNNEL TYPE':<18}")
+    print("-" * 70)
+    for slug, vert in eco.verticals.items():
+        print(f"{slug:<20} | {vert.display_name:<25} | {vert.funnel_type:<18}")
+    print("=" * 70)
+    print(f"Total: {len(eco.verticals)} vertical(es) descubierta(s) en cascada.\n")
+
+def cmd_add_vertical(args):
+    root = get_workspace_root()
+    apotelos_dir = root / ".apotelos"
+    apotelos_dir.mkdir(parents=True, exist_ok=True)
+    eco_file = apotelos_dir / "ecosystem.json"
+
+    eco = discover_ecosystem()
+    slug = args.slug.lower().strip()
+    name = args.name or slug.replace("-", " ").title()
+    funnel = args.funnel or CommercialFunnelType.DIRECT_CHECKOUT
+
+    new_vert = DynamicVerticalSpec(
+        vertical_slug=slug,
+        display_name=name,
+        funnel_type=funnel,
+        target_avatar={"pain_points": ["Definir dolor raíz"], "desires": ["Definir transformación"]},
+        unique_mechanism={"name": f"Mecanismo {name}", "contrast": "Frente a competidores"},
+        primary_offer={"structure": f"Oferta {name}", "pricing": {"currency": "COP", "amount": 100000}},
+        conversion_events=["Purchase" if funnel == CommercialFunnelType.DIRECT_CHECKOUT else "Lead"]
+    )
+    eco.verticals[slug] = new_vert
+    
+    with open(eco_file, "w", encoding="utf-8") as f:
+        json.dump(eco.model_dump(), f, indent=2, ensure_ascii=False)
+    
+    print(f"✅ Vertical '{slug}' ({name}) registrada con éxito en: {eco_file}")
+
+def cmd_audit(args):
+    eco = discover_ecosystem()
+    target_v = args.vertical
+    if not target_v:
+        target_v = list(eco.verticals.keys())[0] if eco.verticals else "root_vertical"
+    
+    if target_v not in eco.verticals:
+        print(f"❌ Error: Vertical '{target_v}' no encontrada en el ecosistema. Disponibles: {list(eco.verticals.keys())}")
+        sys.exit(1)
+
+    vert = eco.verticals[target_v]
+    print(f"\n🔍 Auditando Contrato Estático Pydantic para: [{eco.brand_slug}] -> [{vert.vertical_slug}]")
+    print("-" * 60)
+    
+    # Assertions
+    errors = []
+    if not vert.unique_mechanism.get("name"):
+        errors.append("unique_mechanism.name está vacío o no definido")
+    if not vert.primary_offer.get("structure"):
+        errors.append("primary_offer.structure está vacío")
+    if not vert.target_avatar.get("pain_points"):
+        errors.append("target_avatar.pain_points no contiene dolores listados")
+
+    if errors:
+        print("❌ Fallas de contrato detectadas:")
+        for err in errors:
+            print(f"  • {err}")
+        sys.exit(1)
+    
+    print("✅ Contrato Pydantic v2 validado al 100% (exit code 0)")
+    print(f"  • Display Name: {vert.display_name}")
+    print(f"  • Funnel Type:  {vert.funnel_type}")
+    print(f"  • Mecanismo:    {vert.unique_mechanism.get('name')}")
+    print(f"  • Eventos Tele: {vert.conversion_events}\n")
+
+def cmd_plan(args):
+    eco = discover_ecosystem()
+    target_v = args.vertical or (list(eco.verticals.keys())[0] if eco.verticals else "root_vertical")
+    vert = eco.verticals.get(target_v)
+    if not vert:
+        print(f"❌ Vertical '{target_v}' no existe.")
+        sys.exit(1)
+
+    print(f"\n🗺️ Árbol de Regresión Causal Inversa (Apoτέlοs): [{eco.brand_slug}:{vert.vertical_slug}]")
+    print("=" * 65)
+    print("Dominó 4 (τε-Final): Conversión y Cobro")
+    print(f"  └── Funnel: {vert.funnel_type} | Oferta: {vert.primary_offer.get('structure')}")
+    print("Dominó 3 (τε-1): Telemetría y Atribución")
+    print(f"  └── Eventos: {vert.conversion_events} | CAPI, TikTok & GTM 1st-party cookies")
+    print("Dominó 2 (τε-2): Descubrimiento AI-First & SEO Semántico")
+    print(f"  └── /llms.txt + Schema.org @graph ({'Product' if vert.funnel_type == CommercialFunnelType.DIRECT_CHECKOUT else 'LocalBusiness'})")
+    print("Dominó 1 (τε-3): Copywriting Neuro-persuasivo & Ganchos de 3s")
+    print(f"  └── Avatar: {vert.target_avatar.get('pain_points', ['Dolor base'])[0]}")
+    print("Dominó 0 (τε-0): El Primer Dominó — Mecanismo Único Monopolístico")
+    print(f"  └── Monopolio: {vert.unique_mechanism.get('name')}")
+    print("=" * 65 + "\n")
+
+def check_service_health(url: str, timeout_sec: float = 2.0) -> bool:
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout_sec) as response:
+            return response.status in (200, 204)
+    except Exception:
+        return False
+
+def cmd_run(args):
+    eco = discover_ecosystem()
+    target_v = args.vertical or (list(eco.verticals.keys())[0] if eco.verticals else "root_vertical")
+    vert = eco.verticals.get(target_v)
+    if not vert:
+        print(f"❌ Vertical '{target_v}' no existe.")
+        sys.exit(1)
+
+    hermes_url = os.getenv("HERMES_API_URL", "http://hermes:8000")
+    bifrost_url = os.getenv("BIFROST_API_URL", "http://bifrost:8080")
+
+    print(f"\n🚀 Despachando Pipeline Apotelos para: [{eco.brand_slug}:{vert.vertical_slug}]")
+    print(f"🔍 Verificando salud de runtimes en Zerops ({hermes_url}, {bifrost_url})...")
+
+    hermes_alive = check_service_health(f"{hermes_url}/healthz")
+    bifrost_alive = check_service_health(f"{bifrost_url}/health") or check_service_health(f"{bifrost_url}/")
+
+    if not hermes_alive or not bifrost_alive:
+        print("⚠️ Advertencia: Uno o más runtimes requeridos se encuentran detenidos o inaccesibles:")
+        if not hermes_alive:
+            print(f"  • hermes ({hermes_url}): NO RESPONDE (STOPPED)")
+        if not bifrost_alive:
+            print(f"  • bifrost ({bifrost_url}): NO RESPONDE (STOPPED)")
+        print("\n💡 Remediación Autónoma:")
+        print("  Como plano de control ZCP, ejecutá:")
+        print("  zerops_manage(action='start', serviceHostname='bifrost')")
+        print("  zerops_manage(action='start', serviceHostname='hermes')\n")
+        sys.exit(1)
+
+    # Dispatch to Hermes /v1/runs
+    run_payload = {
+        "crew_name": "apotelos",
+        "input": f"Ejecutar protocolo Apotelos inverso para la vertical '{vert.vertical_slug}' de la marca '{eco.brand_slug}'.",
+        "tier": args.tier or "free",
+        "context": {
+            "brand_slug": eco.brand_slug,
+            "vertical": vert.model_dump(),
+            "linear_issue": args.linear_issue
+        }
+    }
+    
+    try:
+        req = urllib.request.Request(
+            f"{hermes_url}/v1/runs",
+            data=json.dumps(run_payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-Crew-Name": "apotelos"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10.0) as resp:
+            res_data = json.loads(resp.read().decode("utf-8"))
+            print(f"✅ Run despachado exitosamente a Hermes!")
+            print(f"  • Run ID:  {res_data.get('id', res_data.get('run_id'))}")
+            print(f"  • Status:  {res_data.get('status')}")
+            print(f"  • Monitor: {hermes_url}/v1/runs/{res_data.get('id')}/events\n")
+    except Exception as ex:
+        print(f"❌ Error despachando run a Hermes: {ex}")
+        sys.exit(1)
+
+# --- CLI ENTRYPOINT ---
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="apotelos",
+        description="Apotelos CLI: Sovereign Reverse Causality & Multi-Agent Mesh for Zerops"
+    )
+    subparsers = parser.add_subparsers(dest="subcommand", required=True)
+
+    # list
+    p_list = subparsers.add_parser("list", help="Lista las marcas y verticales descubiertas en cascada")
+    p_list.set_defaults(func=cmd_list)
+
+    # add-vertical
+    p_add = subparsers.add_parser("add-vertical", help="Agrega una nueva vertical al ecosistema")
+    p_add.add_argument("slug", help="Slug único de la vertical (kebab-case)")
+    p_add.add_argument("--name", help="Nombre descriptivo de la vertical")
+    p_add.add_argument("--funnel", choices=[
+        CommercialFunnelType.DIRECT_CHECKOUT,
+        CommercialFunnelType.LEAD_GENERATION,
+        CommercialFunnelType.BOOKING_CALENDAR,
+        CommercialFunnelType.SUBSCRIPTION,
+        CommercialFunnelType.CONTENT_COMMUNITY
+    ], default=CommercialFunnelType.DIRECT_CHECKOUT)
+    p_add.set_defaults(func=cmd_add_vertical)
+
+    # audit
+    p_audit = subparsers.add_parser("audit", help="Audita el contrato estático Pydantic de una vertical")
+    p_audit.add_argument("--brand", help="Slug de la marca (opcional)")
+    p_audit.add_argument("--vertical", help="Slug de la vertical a auditar")
+    p_audit.set_defaults(func=cmd_audit)
+
+    # plan
+    p_plan = subparsers.add_parser("plan", help="Muestra el árbol de regresión causal inverso")
+    p_plan.add_argument("--brand", help="Slug de la marca (opcional)")
+    p_plan.add_argument("--vertical", help="Slug de la vertical a planificar")
+    p_plan.set_defaults(func=cmd_plan)
+
+    # run
+    p_run = subparsers.add_parser("run", help="Despacha el pipeline causal hacia Hermes/CrewAI")
+    p_run.add_argument("--brand", help="Slug de la marca (opcional)")
+    p_run.add_argument("--vertical", help="Slug de la vertical a ejecutar")
+    p_run.add_argument("--tier", choices=["free", "pro"], default="free", help="Tier de inferencia en Bifrost")
+    p_run.add_argument("--linear-issue", help="ID del ticket Linear (ej: BAI-439)")
+    p_run.add_argument("--headless", action="store_true", help="Ejecución desatendida sin prompts interactivos")
+    p_run.set_defaults(func=cmd_run)
+
+    args = parser.parse_args()
+    args.func(args)
+
+if __name__ == "__main__":
+    main()
