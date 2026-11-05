@@ -187,6 +187,32 @@ class TestApotelosScaffold(unittest.TestCase):
         self.assertIn("Sensor Algorítmico 360", content)                  # Domino 0: Unique mechanism
         self.assertIn("Diagnóstico de 15 Puntos", content)               # Domino 4: Primary offer
 
+    def test_template_hydration(self):
+        """Verify that scaffold hydrates modular components from templates/astro into app workspace."""
+        v = apotelos.DynamicVerticalSpec(
+            vertical_slug="test-hydrated",
+            display_name="Test Hydrated",
+            funnel_type=apotelos.CommercialFunnelType.DIRECT_CHECKOUT,
+            unique_mechanism={"name": "M"},
+            primary_offer={"structure": "O"},
+            target_avatar={"pain_points": ["P"]}
+        )
+        eco = apotelos.UniversalBrandEcosystem(brand_slug="test-brand", verticals={"test-hydrated": v})
+        manifest = apotelos.compile_blackboard_manifest(eco, v)
+
+        app_pages = self.temp_path / "mock-app" / "src" / "pages"
+        app_pages.mkdir(parents=True, exist_ok=True)
+        target_file = app_pages / "test-hydrated.astro"
+
+        apotelos.scaffold_astro_page(manifest, target_file)
+
+        src_dir = target_file.parent.parent
+        self.assertTrue((src_dir / "components" / "SeoHead.astro").exists())
+        self.assertTrue((src_dir / "components" / "CookieConsent.astro").exists())
+        self.assertTrue((src_dir / "actions" / "contact.ts").exists())
+        self.assertTrue((src_dir / "lib" / "phone.ts").exists())
+        self.assertTrue((src_dir / "lib" / "discountStrategy.ts").exists())
+
     def test_anti_chassis_contamination_guard(self):
         """Ensure writing to upstream chassis /var/www/zerops-astrobranding is strictly blocked."""
         v = apotelos.DynamicVerticalSpec(

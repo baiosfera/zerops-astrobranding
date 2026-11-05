@@ -11,6 +11,7 @@ import json
 import re
 import zipfile
 import subprocess
+import shutil
 import xml.etree.ElementTree as ET
 import argparse
 import socket
@@ -748,6 +749,46 @@ def scaffold_astro_page(
             raise
 
     target_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Hydrate modular templates from templates/astro into target app workspace
+    templates_astro = None
+    for cand_t in [Path("/var/www/artifacts/templates/astro"), Path("/var/www/zerops-astrobranding/templates/astro")]:
+        if cand_t.exists() and cand_t.is_dir():
+            templates_astro = cand_t
+            break
+
+    app_src = None
+    if target_file.parent.name == "pages" and target_file.parent.parent.name == "src":
+        app_src = target_file.parent.parent
+    elif "src" in [p.name for p in target_file.parents]:
+        for p in target_file.parents:
+            if p.name == "src":
+                app_src = p
+                break
+
+    if templates_astro and app_src:
+        comp_dir = app_src / "components"
+        actions_dir = app_src / "actions"
+        lib_dir = app_src / "lib"
+        comp_dir.mkdir(parents=True, exist_ok=True)
+        actions_dir.mkdir(parents=True, exist_ok=True)
+        lib_dir.mkdir(parents=True, exist_ok=True)
+
+        for comp in ["SeoHead.astro", "CookieConsent.astro"]:
+            src_f = templates_astro / comp
+            dst_f = comp_dir / comp
+            if src_f.exists() and not dst_f.exists():
+                shutil.copy2(src_f, dst_f)
+        for act in ["ContactAction.ts"]:
+            src_f = templates_astro / act
+            dst_f = actions_dir / "contact.ts"
+            if src_f.exists() and not dst_f.exists():
+                shutil.copy2(src_f, dst_f)
+        for lib in ["phone.ts", "discountStrategy.ts"]:
+            src_f = templates_astro / lib
+            dst_f = lib_dir / lib
+            if src_f.exists() and not dst_f.exists():
+                shutil.copy2(src_f, dst_f)
 
     brand_title = manifest.grounding.get("umbrella_name") or manifest.brand_slug.replace("-", " ").title()
     vert_title = manifest.seo_aeo_spec.get("schema_org", {}).get("name") or manifest.vertical_slug.replace("-", " ").title()
