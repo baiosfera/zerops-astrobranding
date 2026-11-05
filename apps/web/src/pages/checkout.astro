@@ -1,0 +1,607 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import SEO from "../components/SEO.astro";
+
+export const prerender = false;
+---
+
+<BaseLayout
+  title="Checkout Seguro — Catalina Glamur"
+  description="Finaliza tu compra de ropa deportiva femenina de alta compresión. Envíos a todo el país y Pago Contra Entrega exclusivo en Valle del Aburrá Sur."
+>
+  <SEO
+    slot="head"
+    title="Finalizar Compra — Catalina Glamur"
+    description="Checkout seguro para prendas de compresión anatómica Catalina Glamur."
+    canonicalUrl="https://catalinaglamur.com/checkout"
+  />
+
+  <main class="min-h-screen bg-[#07080A] text-[#F7F3FA] py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-3xl mx-auto space-y-10">
+      
+      <div class="text-center space-y-2">
+        <a href="/shop" class="text-xs text-[#8E98A8] hover:text-[#D4AF37] font-mono transition-colors">
+          &larr; Volver a la colección
+        </a>
+        <h1 class="text-3xl sm:text-4xl font-['Monas'] font-medium text-[#F7F3FA]">
+          Finalizar Compra Segura
+        </h1>
+        <p class="text-xs text-[#8E98A8] font-light">
+          Ingresa tus datos de envío. Envíos asegurados a todo Colombia.
+        </p>
+      </div>
+
+      <div class="bg-[#0E1015] border border-[#232833] rounded-3xl p-6 sm:p-10 space-y-8 shadow-2xl">
+        <!-- Resumen del Pedido -->
+        <div class="space-y-4 pb-6 border-b border-[#232833]">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-[#D4AF37]">
+            Tu Selección
+          </h2>
+          <div class="flex items-center justify-between text-sm">
+            <div class="flex items-center gap-4">
+              <img
+                src="/images/products/product-01.jpg"
+                alt="Enterizo Escultor Blanco"
+                class="w-16 h-20 rounded-xl object-cover bg-neutral-900 border border-[#232833]"
+              />
+              <div>
+                <h3 class="font-bold text-[#F7F3FA]">Enterizo Escultor Blanco Studio</h3>
+                <span class="text-xs text-[#8E98A8] block">Talla Única • Compresión Anatómica 380g</span>
+                <span class="text-xs text-emerald-400 font-mono mt-1 block">✓ Squat-Proof Garantizado</span>
+              </div>
+            </div>
+            <span class="text-base font-bold text-[#D4AF37] font-mono">$80.000 COP</span>
+          </div>
+        </div>
+
+        <!-- Order Bump -->
+        <div class="p-4 rounded-2xl bg-[#161A22] border-2 border-dashed border-[#D4AF37]/50 space-y-2">
+          <label class="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              id="checkoutBumpCheck"
+              class="w-5 h-5 mt-0.5 rounded border-[#232833] text-[#D4AF37] focus:ring-[#D4AF37]"
+              onchange="updateTotalWithBump(this.checked)"
+            />
+            <div class="space-y-0.5">
+              <span class="text-xs font-bold text-[#D4AF37] uppercase tracking-wider block">
+                ¡OFERTA 1-CLICK! Top Deportivo a Juego (+$45.000 COP)
+              </span>
+              <p class="text-[11px] text-[#8E98A8] font-light">
+                Agrega el Top Deportivo de compresión con 40% de descuento (Precio normal: $75.000 COP).
+              </p>
+            </div>
+          </label>
+        </div>
+
+        <!-- Formulario de Envío y Pago -->
+        <form id="generalCheckoutForm" class="space-y-6">
+          <div class="space-y-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[#F7F3FA] flex items-center gap-2 border-b border-[#232833] pb-2">
+              <span class="w-5 h-5 rounded-full bg-[#D4AF37] text-[#07080A] inline-flex items-center justify-center text-xs font-bold">1</span>
+              Dirección de Entrega
+            </h3>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-[#8E98A8] mb-1">Nombre Completo *</label>
+                <input
+                  type="text"
+                  required
+                  id="checkoutName"
+                  placeholder="Ej: Carolina Muñoz"
+                  class="w-full bg-[#161A22] border border-[#232833] rounded-xl px-4 py-3 text-xs text-[#F7F3FA] focus:border-[#D4AF37] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label class="block text-xs text-[#8E98A8] mb-1">Teléfono Móvil (WhatsApp) *</label>
+                <input
+                  type="tel"
+                  required
+                  id="checkoutPhone"
+                  placeholder="Ej: 300 123 4567"
+                  class="w-full bg-[#161A22] border border-[#232833] rounded-xl px-4 py-3 text-xs text-[#F7F3FA] focus:border-[#D4AF37] focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs text-[#8E98A8] mb-1">Correo Electrónico (Para guía) *</label>
+              <input
+                type="email"
+                required
+                id="checkoutEmail"
+                placeholder="ejemplo@correo.com"
+                class="w-full bg-[#161A22] border border-[#232833] rounded-xl px-4 py-3 text-xs text-[#F7F3FA] focus:border-[#D4AF37] focus:outline-none"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-[#8E98A8] mb-1">Departamento *</label>
+                <select
+                  id="checkoutDepartment"
+                  class="w-full bg-[#161A22] border border-[#232833] rounded-xl px-4 py-3 text-xs text-[#F7F3FA] focus:border-[#D4AF37] focus:outline-none"
+                  onchange="onDepartmentChange(this.value)"
+                >
+                  <option value="Antioquia" selected>Antioquia</option>
+                  <option value="Bogotá D.C.">Bogotá D.C.</option>
+                  <option value="Cundinamarca">Cundinamarca</option>
+                  <option value="Valle del Cauca">Valle del Cauca</option>
+                  <option value="Atlántico">Atlántico</option>
+                  <option value="Santander">Santander</option>
+                  <option value="Bolívar">Bolívar</option>
+                  <option value="Risaralda">Risaralda</option>
+                  <option value="Caldas">Caldas</option>
+                  <option value="Quindío">Quindío</option>
+                  <option value="Tolima">Tolima</option>
+                  <option value="Norte de Santander">Norte de Santander</option>
+                  <option value="Huila">Huila</option>
+                  <option value="Meta">Meta</option>
+                  <option value="Cesar">Cesar</option>
+                  <option value="Córdoba">Córdoba</option>
+                  <option value="Nariño">Nariño</option>
+                  <option value="Magdalena">Magdalena</option>
+                  <option value="Cauca">Cauca</option>
+                  <option value="Sucre">Sucre</option>
+                  <option value="Boyacá">Boyacá</option>
+                  <option value="La Guajira">La Guajira</option>
+                  <option value="Otro">Otro Departamento</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs text-[#8E98A8] mb-1">Ciudad / Municipio *</label>
+                <select
+                  id="checkoutCity"
+                  class="w-full bg-[#161A22] border border-[#232833] rounded-xl px-4 py-3 text-xs text-[#F7F3FA] focus:border-[#D4AF37] focus:outline-none"
+                  onchange="validateCheckoutAddressAndCod()"
+                >
+                  <option value="Envigado" selected>Envigado (Sede Principal)</option>
+                  <option value="Sabaneta">Sabaneta</option>
+                  <option value="Itagüí">Itagüí</option>
+                  <option value="La Estrella">La Estrella</option>
+                  <option value="Medellín">Medellín</option>
+                  <option value="Bello">Bello</option>
+                  <option value="Rionegro">Rionegro</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs text-[#8E98A8] mb-1">Dirección Exacta *</label>
+              <input
+                type="text"
+                required
+                id="checkoutAddress"
+                placeholder="Calle / Carrera, Número, Edificio / Apto, Barrio"
+                class="w-full bg-[#161A22] border border-[#232833] rounded-xl px-4 py-3 text-xs text-[#F7F3FA] focus:border-[#D4AF37] focus:outline-none"
+                oninput="validateCheckoutAddressAndCod()"
+              />
+            </div>
+          </div>
+
+          <!-- Selección de Método de Pago -->
+          <div class="space-y-4 pt-2">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[#F7F3FA] flex items-center gap-2 border-b border-[#232833] pb-2">
+              <span class="w-5 h-5 rounded-full bg-[#D4AF37] text-[#07080A] inline-flex items-center justify-center text-xs font-bold">2</span>
+              Método de Pago
+            </h3>
+
+            <!-- Alerta informativa de cobertura COD (oculta por defecto) -->
+            <div id="checkoutCodAlert" class="hidden p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center gap-2">
+              <span>✓</span>
+              <span id="checkoutCodAlertText">Pago Contra Entrega exclusivo para Valle del Aburrá Sur (Envigado, Sabaneta, Itagüí, La Estrella). Envíos al resto del país con Pago Seguro en Línea.</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <!-- Opción Pago Seguro en Línea (predeterminada) -->
+              <label
+                id="checkoutOnlineCard"
+                class="border-2 border-[#D4AF37] bg-[#161A22] p-4 rounded-2xl cursor-pointer flex flex-col justify-between gap-2 transition-all"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-[#F7F3FA]">💳 Pago Seguro en Línea</span>
+                  <input type="radio" name="checkoutPayment" id="chkOnline" value="online" checked class="text-[#D4AF37]" onchange="onCheckoutPaymentChange('online')" />
+                </div>
+                <p class="text-[11px] text-[#8E98A8] font-light">
+                  Tarjetas de Crédito, PSE, Nequi o Bancolombia. Para todo el país.
+                </p>
+              </label>
+
+              <!-- Opción Pago Contra Entrega (oculta por defecto hasta validar dirección y ciudad de Valle del Aburrá) -->
+              <label
+                id="checkoutCodCard"
+                class="hidden border border-[#232833] bg-[#0E1015] p-4 rounded-2xl cursor-pointer flex flex-col justify-between gap-2 transition-all"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-[#F7F3FA]">💵 Pago Contra Entrega</span>
+                  <input type="radio" name="checkoutPayment" id="chkCod" value="cod" class="text-[#D4AF37]" onchange="onCheckoutPaymentChange('cod')" />
+                </div>
+                <p class="text-[11px] text-[#8E98A8] font-light">
+                  Pagas en efectivo al recibir tu paquete. Exclusivo Valle del Aburrá Sur (Envigado, Sabaneta, Itagüí, La Estrella).
+                </p>
+              </label>
+            </div>
+          </div>
+
+                    <!-- Cupón de Descuento -->
+          <div class="p-5 rounded-2xl bg-[#161A22] border border-[#232833] space-y-2">
+            <label class="block text-xs font-medium text-[#8E98A8] uppercase tracking-wider">
+              ¿Tienes un cupón de descuento?
+            </label>
+            <div class="flex gap-2">
+              <input
+                type="text"
+                id="checkoutCouponCode"
+                placeholder="Ej: GLAMUR10"
+                class="flex-1 bg-[#0E1015] border border-[#232833] px-3.5 py-2.5 rounded-xl text-xs font-mono uppercase text-[#F7F3FA] placeholder-zinc-600 focus:border-[#D4AF37] focus:outline-none"
+              />
+              <button
+                type="button"
+                id="btnApplyCheckoutCoupon"
+                onclick="handleApplyCheckoutCoupon()"
+                class="px-5 py-2.5 rounded-xl bg-[#232833] hover:bg-[#D4AF37] hover:text-[#07080A] text-[#F7F3FA] text-xs font-mono uppercase tracking-wider font-bold transition-colors cursor-pointer"
+              >
+                Aplicar
+              </button>
+            </div>
+            <div id="checkoutCouponMsg" class="hidden text-xs font-mono"></div>
+          </div>
+
+          <!-- Total a Pagar -->
+          <div class="p-6 rounded-2xl bg-[#161A22] border border-[#232833] space-y-2">
+            <div id="checkoutDiscountRow" class="hidden flex justify-between items-center text-xs text-emerald-400 font-mono">
+              <span id="checkoutDiscountLabel">Descuento aplicado:</span>
+              <span id="checkoutDiscountValue" class="font-bold">-$0 COP</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="text-xs text-[#8E98A8] block">Total de tu Orden</span>
+                <span class="text-xs text-emerald-400 font-medium">Envío Gratis Incluido</span>
+              </div>
+              <span class="text-2xl font-bold text-[#D4AF37] font-mono" id="checkoutTotalText">$80.000 COP</span>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            id="checkoutSubmitBtn"
+            class="w-full py-4 rounded-full bg-gradient-to-r from-[#D4AF37] to-[#F5E08B] text-[#07080A] text-sm font-bold tracking-widest uppercase hover:shadow-xl hover:shadow-[#D4AF37]/30 transition-all cursor-pointer"
+          >
+            Confirmar y Despachar Pedido &rarr;
+          </button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script is:inline>
+    const COLOMBIA_REGIONS = {
+  "Antioquia": [
+    { "name": "Envigado", "label": "Envigado (Sede Principal)" },
+    { "name": "Sabaneta", "label": "Sabaneta" },
+    { "name": "Itagüí", "label": "Itagüí" },
+    { "name": "La Estrella", "label": "La Estrella" },
+    { "name": "Medellín", "label": "Medellín" },
+    { "name": "Bello", "label": "Bello" },
+    { "name": "Rionegro", "label": "Rionegro" }
+  ],
+  "Bogotá D.C.": [
+    { "name": "Bogotá D.C.", "label": "Bogotá D.C." }
+  ],
+  "Cundinamarca": [
+    { "name": "Chía", "label": "Chía" },
+    { "name": "Soacha", "label": "Soacha" },
+    { "name": "Zipaquirá", "label": "Zipaquirá" },
+    { "name": "Facatativá", "label": "Facatativá" }
+  ],
+  "Valle del Cauca": [
+    { "name": "Cali", "label": "Cali" },
+    { "name": "Palmira", "label": "Palmira" },
+    { "name": "Tuluá", "label": "Tuluá" },
+    { "name": "Buenaventura", "label": "Buenaventura" }
+  ],
+  "Atlántico": [
+    { "name": "Barranquilla", "label": "Barranquilla" },
+    { "name": "Soledad", "label": "Soledad" }
+  ],
+  "Santander": [
+    { "name": "Bucaramanga", "label": "Bucaramanga" },
+    { "name": "Floridablanca", "label": "Floridablanca" },
+    { "name": "Girón", "label": "Girón" },
+    { "name": "Piedecuesta", "label": "Piedecuesta" },
+    { "name": "Barrancabermeja", "label": "Barrancabermeja" }
+  ],
+  "Bolívar": [
+    { "name": "Cartagena", "label": "Cartagena" },
+    { "name": "Magangué", "label": "Magangué" }
+  ],
+  "Risaralda": [
+    { "name": "Pereira", "label": "Pereira" },
+    { "name": "Dosquebradas", "label": "Dosquebradas" }
+  ],
+  "Caldas": [
+    { "name": "Manizales", "label": "Manizales" }
+  ],
+  "Quindío": [
+    { "name": "Armenia", "label": "Armenia" }
+  ],
+  "Tolima": [
+    { "name": "Ibagué", "label": "Ibagué" }
+  ],
+  "Norte de Santander": [
+    { "name": "Cúcuta", "label": "Cúcuta" },
+    { "name": "Los Patios", "label": "Los Patios" }
+  ],
+  "Huila": [
+    { "name": "Neiva", "label": "Neiva" }
+  ],
+  "Meta": [
+    { "name": "Villavicencio", "label": "Villavicencio" }
+  ],
+  "Cesar": [
+    { "name": "Valledupar", "label": "Valledupar" }
+  ],
+  "Córdoba": [
+    { "name": "Montería", "label": "Montería" }
+  ],
+  "Nariño": [
+    { "name": "Pasto", "label": "Pasto" }
+  ],
+  "Magdalena": [
+    { "name": "Santa Marta", "label": "Santa Marta" }
+  ],
+  "Cauca": [
+    { "name": "Popayán", "label": "Popayán" }
+  ],
+  "Sucre": [
+    { "name": "Sincelejo", "label": "Sincelejo" }
+  ],
+  "Boyacá": [
+    { "name": "Tunja", "label": "Tunja" },
+    { "name": "Duitama", "label": "Duitama" }
+  ],
+  "La Guajira": [
+    { "name": "Riohacha", "label": "Riohacha" }
+  ],
+  "Otro": [
+    { "name": "Otra Ciudad", "label": "Otra Ciudad Principal" }
+  ]
+};
+
+    function onDepartmentChange(dept) {
+      const citySelect = document.getElementById("checkoutCity");
+      if (!citySelect) return;
+      citySelect.innerHTML = "";
+      const cities = COLOMBIA_REGIONS[dept] || COLOMBIA_REGIONS["Otro"];
+      cities.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.name;
+        opt.textContent = c.label;
+        citySelect.appendChild(opt);
+      });
+      validateCheckoutAddressAndCod();
+    }
+
+    const VALLE_ABURRA_MUNICIPALITIES = [
+      "envigado",
+      "sabaneta",
+      "itagui",
+      "itagüí",
+      "la estrella"
+    ];
+    let basePrice = 80000;
+    let orderBumpActive = false;
+
+        let activeCheckoutCoupon = null;
+
+    function recalculateCheckoutTotal() {
+      const subtotal = orderBumpActive ? basePrice + 45000 : basePrice;
+      let discount = 0;
+      if (activeCheckoutCoupon) {
+        if (activeCheckoutCoupon.discountType === "percentage") {
+          discount = Math.round((subtotal * activeCheckoutCoupon.discountValue) / 100);
+        } else {
+          discount = Math.min(subtotal, activeCheckoutCoupon.discountValue);
+        }
+      }
+      const total = Math.max(0, subtotal - discount);
+      document.getElementById("checkoutTotalText").innerText = "$" + total.toLocaleString("es-CO") + " COP";
+
+      const discountRow = document.getElementById("checkoutDiscountRow");
+      if (discountRow) {
+        if (activeCheckoutCoupon && discount > 0) {
+          discountRow.classList.remove("hidden");
+          document.getElementById("checkoutDiscountLabel").innerText = "Descuento (" + activeCheckoutCoupon.code + "):";
+          document.getElementById("checkoutDiscountValue").innerText = "-$" + discount.toLocaleString("es-CO") + " COP";
+        } else {
+          discountRow.classList.add("hidden");
+        }
+      }
+      return total;
+    }
+
+    async function applyCheckoutCoupon(codeToApply) {
+      const code = (codeToApply || "").trim().toUpperCase();
+      const msgEl = document.getElementById("checkoutCouponMsg");
+      const btn = document.getElementById("btnApplyCheckoutCoupon");
+      const subtotal = orderBumpActive ? basePrice + 45000 : basePrice;
+      if (!code) {
+        if (msgEl) {
+          msgEl.className = "text-xs font-mono text-rose-400 block";
+          msgEl.innerText = "Por favor ingresa un código de cupón.";
+          msgEl.classList.remove("hidden");
+        }
+        return;
+      }
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = "...";
+      }
+      try {
+        const res = await fetch("/api/checkout/coupon", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, orderTotal: subtotal }),
+        });
+        const data = await res.json();
+        if (data.valid) {
+          activeCheckoutCoupon = {
+            code: data.code,
+            discountType: data.discountType,
+            discountValue: data.discountValue,
+          };
+          recalculateCheckoutTotal();
+          if (msgEl) {
+            msgEl.className = "text-xs font-mono text-emerald-400 block font-semibold";
+            msgEl.innerText = "✓ " + data.message;
+            msgEl.classList.remove("hidden");
+          }
+        } else {
+          activeCheckoutCoupon = null;
+          recalculateCheckoutTotal();
+          if (msgEl) {
+            msgEl.className = "text-xs font-mono text-rose-400 block";
+            msgEl.innerText = "✕ " + (data.message || "Cupón no válido.");
+            msgEl.classList.remove("hidden");
+          }
+        }
+      } catch (e) {
+        if (msgEl) {
+          msgEl.className = "text-xs font-mono text-rose-400 block";
+          msgEl.innerText = "Error al verificar el cupón.";
+          msgEl.classList.remove("hidden");
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = "Aplicar";
+        }
+      }
+    }
+
+    function handleApplyCheckoutCoupon() {
+      const input = document.getElementById("checkoutCouponCode");
+      applyCheckoutCoupon(input ? input.value : "");
+    }
+
+    // Auto-apply from URL query params (?cupon=... or ?coupon=...)
+    window.addEventListener("DOMContentLoaded", () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlCoupon = urlParams.get("cupon") || urlParams.get("coupon");
+      if (urlCoupon) {
+        const input = document.getElementById("checkoutCouponCode");
+        if (input) input.value = urlCoupon.toUpperCase();
+        applyCheckoutCoupon(urlCoupon);
+      }
+    });
+
+    function updateTotalWithBump(checked) {
+      orderBumpActive = checked;
+      recalculateCheckoutTotal();
+    }
+
+    function validateCheckoutAddressAndCod() {
+      const city = document.getElementById("checkoutCity")?.value || "";
+      const address = document.getElementById("checkoutAddress")?.value?.trim() || "";
+      const clean = city.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const isAburra = VALLE_ABURRA_MUNICIPALITIES.some((m) => {
+        const cleanM = m.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return clean.includes(cleanM);
+      });
+
+      const codRadio = document.getElementById("chkCod");
+      const onlineRadio = document.getElementById("chkOnline");
+      const codCard = document.getElementById("checkoutCodCard");
+      const alertBox = document.getElementById("checkoutCodAlert");
+      const alertText = document.getElementById("checkoutCodAlertText");
+
+      // Oculto hasta que el usuario coloque dirección y la ciudad coincida con Medellín / Valle del Aburrá
+      const hasAddress = address.length >= 5;
+
+      const dept = document.getElementById("checkoutDepartment")?.value || "";
+      if (hasAddress && isAburra && dept === "Antioquia") {
+        codCard.classList.remove("hidden");
+        alertBox.classList.remove("hidden");
+        alertBox.className = "p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center gap-2";
+        alertText.innerText = "✓ Pago Contra Entrega disponible para tu dirección en " + city + " (Valle del Aburrá Sur). Pagas en efectivo al recibir.";
+      } else {
+        codCard.classList.add("hidden");
+        alertBox.classList.add("hidden");
+
+        // Si estaba seleccionado COD pero la dirección o ciudad no aplica, revertir a Pago Seguro en Línea
+        if (codRadio.checked) {
+          codRadio.checked = false;
+          onlineRadio.checked = true;
+          onCheckoutPaymentChange("online");
+        }
+      }
+    }
+
+    function onCheckoutPaymentChange(option) {
+      const codCard = document.getElementById("checkoutCodCard");
+      const onlineCard = document.getElementById("checkoutOnlineCard");
+
+      if (option === "cod") {
+        codCard.classList.add("border-[#D4AF37]", "bg-[#161A22]");
+        codCard.classList.remove("border-[#232833]", "bg-[#0E1015]");
+        onlineCard.classList.remove("border-[#D4AF37]", "bg-[#161A22]");
+        onlineCard.classList.add("border-[#232833]", "bg-[#0E1015]");
+      } else {
+        onlineCard.classList.add("border-[#D4AF37]", "bg-[#161A22]");
+        onlineCard.classList.remove("border-[#232833]", "bg-[#0E1015]");
+        codCard.classList.remove("border-[#D4AF37]", "bg-[#161A22]");
+        codCard.classList.add("border-[#232833]", "bg-[#0E1015]");
+      }
+    }
+
+    document.getElementById("generalCheckoutForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const city = document.getElementById("checkoutCity").value;
+      const paymentMethod = document.querySelector('input[name="checkoutPayment"]:checked')?.value || "online";
+      const total = recalculateCheckoutTotal();
+
+      try {
+        const res = await fetch("/api/checkout/order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customerName: document.getElementById("checkoutName").value,
+            customerPhone: document.getElementById("checkoutPhone").value,
+            customerEmail: document.getElementById("checkoutEmail").value,
+            shippingDepartment: document.getElementById("checkoutDepartment").value,
+            shippingCity: city,
+            shippingAddress: document.getElementById("checkoutAddress").value,
+            paymentMethod: paymentMethod,
+            totalAmount: total,
+            hasOrderBump: orderBumpActive,
+            couponCode: activeCheckoutCoupon ? activeCheckoutCoupon.code : undefined,
+            items: [{ productId: "enterizo-escultor-blanco", quantity: 1, unitPrice: basePrice }],
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || "Error al procesar el pedido");
+          return;
+        }
+
+        if (data.mode === "cod") {
+          alert("¡Pedido confirmado con éxito! Tu orden #" + data.reference + " será despachada a " + city + " con Pago Contra Entrega.");
+          window.location.href = "https://wa.me/573045781032?text=" + encodeURIComponent("Hola Catalina, acabo de realizar mi pedido contra entrega #" + data.reference + " para " + city);
+        } else if (data.mode === "online" && data.wompiData?.signature) {
+          const redirectParam = data.wompiData.redirectUrl ? "&redirect-url=" + encodeURIComponent(data.wompiData.redirectUrl) : "";
+          window.location.href = "https://checkout.wompi.co/p/?public-key=" + data.wompiData.publicKey + "&currency=COP&amount-in-cents=" + data.wompiData.amountInCents + "&reference=" + data.reference + "&signature:integrity=" + data.wompiData.signature + redirectParam;
+        } else {
+          alert("¡Orden registrada! Referencia: #" + data.reference);
+        }
+      } catch (err) {
+        alert("Error de conexión al procesar checkout.");
+      }
+    });
+
+    validateCheckoutCod(document.getElementById("checkoutCity").value);
+  </script>
+</BaseLayout>

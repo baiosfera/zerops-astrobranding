@@ -1,19 +1,14 @@
 zerops:
-  # 1. Main Sovereign Web Service: Bun 1.3.9 + Astro 5 SSR (Agnostic 'web', 'webstage' & legacy 'astrobranding')
-  - setup: web
+  - setup: webdev
     build:
-      base: ubuntu/bun@1.3.9
+      base: ubuntu/bun@1.3
       envVariables:
         BUN_INSTALL: ./.bun
       buildCommands:
         - bun install
         - bun run build
       deployFiles:
-        - apps
-        - packages
-        - node_modules
-        - package.json
-        - bunfig.toml
+        - .
       cache:
         - node_modules
         - .bun/install/cache
@@ -23,7 +18,11 @@ zerops:
           port: 3000
           path: /health
     run:
-      base: ubuntu/bun@1.3.9
+      base: ubuntu/bun@1.3
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
       ports:
         - port: 3000
           httpSupport: true
@@ -34,33 +33,31 @@ zerops:
         DATABASE_URL: ${database_connectionString}
         VALKEY_URL: ${valkey_connectionString}
         NATS_URL: ${nats_connectionString}
-        BIFROST_GATEWAY_URL: "http://bifrost:8080/v1"
         EVOLUTION_URL: "http://evolution:8085"
-        EVOLUTION_API_URL: "http://evolution:8085"
-        EVOLUTION_GATEWAY_URL: "http://evolution:8085"
-        ASTRO_KEY: ${ASTRO_KEY}
+        WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY}
+        WOMPI_PRIVATE_KEY: ${WOMPI_PRIVATE_KEY}
+        WOMPI_INTEGRITY_SECRET: ${WOMPI_INTEGRITY_SECRET}
+        WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET}
       initCommands:
         - case "$DATABASE_URL" in \${*|"") echo "ℹ️ DB no aprovisionada, omitiendo migración" ;; *) bun run db:migrate || true ;; esac
-      start: sh -c "if [ -f apps/web/dist/server/entry.mjs ]; then exec bun run apps/web/dist/server/entry.mjs; else exec bun run apps/astrobranding/dist/server/entry.mjs; fi"
+      start: zcp-devsup run
       healthCheck:
         httpGet:
           port: 3000
           path: /health
+      prepareCommands:
+        - sudo sh -c 'u=https://github.com/zeropsio/zcp/releases/download/v9.219.0/zcp-devsup-linux-amd64; f=/usr/local/bin/zcp-devsup; if command -v curl >/dev/null; then curl -fsSL "$u" -o "$f"; else wget -qO "$f" "$u"; fi && chmod 0755 "$f"'
 
-  - setup: webstage
+  - setup: webprod
     build:
-      base: ubuntu/bun@1.3.9
+      base: ubuntu/bun@1.3
       envVariables:
         BUN_INSTALL: ./.bun
       buildCommands:
         - bun install
         - bun run build
       deployFiles:
-        - apps
-        - packages
-        - node_modules
-        - package.json
-        - bunfig.toml
+        - .
       cache:
         - node_modules
         - .bun/install/cache
@@ -70,54 +67,11 @@ zerops:
           port: 3000
           path: /health
     run:
-      base: ubuntu/bun@1.3.9
-      ports:
-        - port: 3000
-          httpSupport: true
-      envVariables:
-        PORT: 3000
-        HOST: "0.0.0.0"
-        NODE_ENV: staging
-        DATABASE_URL: ${database_connectionString}
-        VALKEY_URL: ${valkey_connectionString}
-        NATS_URL: ${nats_connectionString}
-        BIFROST_GATEWAY_URL: "http://bifrost:8080/v1"
-        EVOLUTION_URL: "http://evolution:8085"
-        EVOLUTION_API_URL: "http://evolution:8085"
-        EVOLUTION_GATEWAY_URL: "http://evolution:8085"
-        ASTRO_KEY: ${ASTRO_KEY}
-      initCommands:
-        - case "$DATABASE_URL" in \${*|"") echo "ℹ️ DB no aprovisionada, omitiendo migración" ;; *) bun run db:migrate || true ;; esac
-      start: sh -c "if [ -f apps/web/dist/server/entry.mjs ]; then exec bun run apps/web/dist/server/entry.mjs; else exec bun run apps/astrobranding/dist/server/entry.mjs; fi"
-      healthCheck:
-        httpGet:
-          port: 3000
-          path: /health
-
-  - setup: astrobranding
-    build:
-      base: ubuntu/bun@1.3.9
-      envVariables:
-        BUN_INSTALL: ./.bun
-      buildCommands:
-        - bun install
-        - bun run build
-      deployFiles:
-        - apps
-        - packages
-        - node_modules
-        - package.json
-        - bunfig.toml
-      cache:
-        - node_modules
-        - .bun/install/cache
-    deploy:
-      readinessCheck:
-        httpGet:
-          port: 3000
-          path: /health
-    run:
-      base: ubuntu/bun@1.3.9
+      base: ubuntu/bun@1.3
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
       ports:
         - port: 3000
           httpSupport: true
@@ -128,268 +82,15 @@ zerops:
         DATABASE_URL: ${database_connectionString}
         VALKEY_URL: ${valkey_connectionString}
         NATS_URL: ${nats_connectionString}
-        BIFROST_GATEWAY_URL: "http://bifrost:8080/v1"
         EVOLUTION_URL: "http://evolution:8085"
-        EVOLUTION_API_URL: "http://evolution:8085"
-        EVOLUTION_GATEWAY_URL: "http://evolution:8085"
-        ASTRO_KEY: ${ASTRO_KEY}
+        WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY}
+        WOMPI_PRIVATE_KEY: ${WOMPI_PRIVATE_KEY}
+        WOMPI_INTEGRITY_SECRET: ${WOMPI_INTEGRITY_SECRET}
+        WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET}
       initCommands:
         - case "$DATABASE_URL" in \${*|"") echo "ℹ️ DB no aprovisionada, omitiendo migración" ;; *) bun run db:migrate || true ;; esac
-      start: sh -c "if [ -f apps/web/dist/server/entry.mjs ]; then exec bun run apps/web/dist/server/entry.mjs; else exec bun run apps/astrobranding/dist/server/entry.mjs; fi"
+      start: exec bun run apps/web/dist/server/entry.mjs
       healthCheck:
         httpGet:
           port: 3000
           path: /health
-
-  # 2. Maxim AI Bifrost Enterprise AI Gateway (Go v2.2.3)
-  - setup: bifrost
-    build:
-      base: alpine/go@1.22
-      buildCommands:
-        - curl -fsSL -o bifrost https://downloads.getmaxim.ai/bifrost/v2.2.3/linux/amd64/bifrost-http
-        - chmod +x bifrost
-        - mkdir -p data
-        - cp apps/bifrost/config.json data/config.json
-      deployFiles: .
-      cache:
-        - bifrost
-    run:
-      base: alpine/go@1.22
-      volume:
-        hostname: localstorage
-        mountPath: /mnt/localstorage
-        readOnly: false
-      ports:
-        - port: 8080
-          httpSupport: true
-      prepareCommands:
-        - sudo apk add --no-cache ca-certificates tzdata
-      initCommands:
-        - sudo mkdir -p /mnt/localstorage/bifrost && sudo chown -R zerops:zerops /mnt/localstorage/bifrost
-        - cp /var/www/data/config.json /mnt/localstorage/bifrost/config.json
-        - chmod +x /var/www/bifrost
-      start: /var/www/bifrost -app-dir /mnt/localstorage/bifrost -port 8080 -host 0.0.0.0 -log-level info -log-style json
-      healthCheck:
-        httpGet:
-          port: 8080
-          path: /health
-      envVariables:
-        APP_PORT: "8080"
-        APP_HOST: "0.0.0.0"
-        APP_DIR: "/mnt/localstorage/bifrost"
-        GOMEMLIMIT: "900MiB"
-        GOGC: "200"
-        PG_HOST: ${database_hostname}
-        PG_PORT: "5432"
-        PG_USER: ${database_user}
-        PG_PASSWORD: ${database_password}
-        PG_DATABASE: ${database_dbName}
-        DATABASE_URL: ${database_connectionString}
-        BIFROST_DB_TYPE: "postgres"
-        BIFROST_DB_DSN: ${database_connectionString}
-        FREELLMAPI_URL: "http://freellmapi:3001/v1"
-        FREELLMAPI_UNIFIED_KEY: ${FREELLMAPI_UNIFIED_KEY}
-        DEEPSEEK_PRO_KEY: ${DEEPSEEK_API_KEY}
-        BIFROST_VIRTUAL_KEY: "vk-production-main"
-
-  # 3. FreeLLMAPI Multi-Provider Free Inference Proxy (Node.js 24)
-  - setup: freellmapi
-    build:
-      base: ubuntu/nodejs@24
-      buildCommands:
-        - cd apps/freellmapi && npm ci && npm run build
-      deployFiles:
-        - apps/freellmapi
-        - node_modules
-        - package.json
-      cache:
-        - ~/.npm
-    run:
-      base: ubuntu/nodejs@24
-      volume:
-        hostname: localstorage
-        mountPath: /mnt/localstorage
-        readOnly: false
-      ports:
-        - port: 3001
-          httpSupport: true
-      envVariables:
-        PORT: 3001
-        HOST: "0.0.0.0"
-        NODE_ENV: "production"
-        RESPONSE_CACHE: "true"
-        RESPONSE_CACHE_PERSIST: "true"
-        RESPONSE_CACHE_TTL_SECONDS: "86400"
-        FREEAPI_DB_PATH: "/mnt/localstorage/freellmapi/freellmapi.db"
-        FREEAPI_CONFIG_PATH: "/var/www/apps/freellmapi/config.json"
-        ENCRYPTION_KEY: ${FREELLMAPI_ENCRYPTION_KEY}
-      initCommands:
-        - sudo mkdir -p /mnt/localstorage/freellmapi && sudo chown -R zerops:zerops /mnt/localstorage/freellmapi
-        - test -f /var/www/apps/freellmapi/config.json || cp /var/www/apps/freellmapi/config.example.json /var/www/apps/freellmapi/config.json
-      start: node apps/freellmapi/server/dist/index.js
-      healthCheck:
-        httpGet:
-          port: 3001
-          path: /api/ping
-
-  # 4. EvolutionGo WhatsApp Engine (Go 1.22)
-  - setup: evolution
-    build:
-      base: alpine/go@1.22
-      prepareCommands:
-        - sudo apk add --no-cache git gcc musl-dev
-      buildCommands:
-        - test -d src || git clone --depth 1 --branch 0.7.2 https://github.com/evolution-foundation/evolution-go.git src
-        - cd src && CGO_ENABLED=1 go build -ldflags "-s -w" -o ../evolution-go ./cmd/evolution-go
-        - cp -r apps/evolution/manager/dist ./manager_dist 2>/dev/null || cp -r src/manager/dist ./manager_dist
-      deployFiles:
-        - evolution-go
-        - manager_dist
-        - apps/evolution/db_init.sql
-      cache:
-        - /go/pkg/mod
-    deploy:
-      temporaryShutdown: true
-    run:
-      base: alpine@3.21
-      ports:
-        - port: 8085
-          httpSupport: true
-      prepareCommands:
-        - sudo apk add --no-cache ca-certificates tzdata postgresql-client
-        - mkdir -p /var/www/manager && cp -rn /var/www/manager_dist /var/www/manager/dist 2>/dev/null || true
-      initCommands:
-        - zsc execOnce ${appVersionId} -- sh -c 'PGPASSWORD=${database_password} psql -h ${database_hostname} -U ${database_user} -d ${database_dbName} -f /var/www/apps/evolution/db_init.sql || true'
-      envVariables:
-        SERVER_PORT: "8085"
-        CLIENT_NAME: "${APP_IDENTITY:-app}"
-        AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
-        GLOBAL_API_KEY: ${EVOLUTION_API_KEY}
-        POSTGRES_AUTH_DB: "postgresql://${database_user}:${database_password}@database:${database_port}/evogo_auth?sslmode=disable"
-        POSTGRES_USERS_DB: "postgresql://${database_user}:${database_password}@database:${database_port}/evogo_users?sslmode=disable"
-        DATABASE_SAVE_MESSAGES: "true"
-        NATS_URL: ${nats_connectionString}
-      start: ./evolution-go
-      healthCheck:
-        httpGet:
-          port: 8085
-          path: /server/ok
-
-  # 5. Nous Research Hermes-Agent Copilot & MCP Engine (Python 3.12 Ubuntu)
-  - setup: hermes
-    build:
-      base: ubuntu/python@3.12
-      buildCommands:
-        - cd apps/hermes && pip install --upgrade pip setuptools wheel && pip install --target=./vendor -r requirements.txt
-      deployFiles:
-        - apps/hermes
-      cacheFiles:
-        - /root/.cache/pip
-    run:
-      base: ubuntu/python@3.12
-      volume:
-        hostname: localstorage
-        mountPath: /mnt/localstorage
-        readOnly: false
-      ports:
-        - port: 8000
-          httpSupport: true
-      prepareCommands:
-        - sudo apt-get update && sudo apt-get install -y supervisor
-      initCommands:
-        - sudo mkdir -p /mnt/localstorage/hermes && sudo chown -R zerops:zerops /mnt/localstorage/hermes
-      envVariables:
-        PORT: "8000"
-        PYTHONPATH: "./apps/hermes/vendor:./apps/hermes"
-        PATH: "/var/www/apps/hermes/vendor/bin:/usr/local/bin:/usr/bin:/bin"
-        HERMES_MODEL_ENDPOINT: "http://bifrost:8080/v1"
-        HERMES_MODEL_NAME: "hermes-3-llama-3.1-8b"
-        BIFROST_VIRTUAL_KEY: "vk-hermes-agent"
-        DATABASE_URL: ${database_connectionString}
-        SUPERUSER_URL: "postgresql://${database_superUser}:${database_superUserPassword}@${database_hostname}:${database_port}/${database_dbName}"
-        NATS_URL: ${nats_connectionString}
-        ZCP_NATS_URL: ${nats_connectionString}
-        LOCAL_STORAGE_PATH: "/mnt/localstorage/hermes"
-      start: python3 apps/hermes/main.py
-      healthCheck:
-        httpGet:
-          port: 8000
-          path: /
-
-  # 5b. Consolidated Coding & Governance Runtime: Paperclip & PiDev (Node.js 26 Ubuntu)
-  - setup: agentdev
-    build:
-      base: ubuntu/nodejs@26
-      deployFiles:
-        - apps/agentdev
-    run:
-      base: ubuntu/nodejs@26
-      volume:
-        hostname: localstorage
-        mountPath: /mnt/localstorage
-        readOnly: false
-      ports:
-        - port: 3100
-          httpSupport: true
-      initCommands:
-        - sudo mkdir -p /mnt/localstorage/paperclip/storage /mnt/localstorage/paperclip/secrets /mnt/localstorage/pidev && sudo chown -R zerops:zerops /mnt/localstorage/paperclip /mnt/localstorage/pidev
-      envVariables:
-        PORT: "3100"
-        HOST: "0.0.0.0"
-        NODE_ENV: "production"
-        DATABASE_URL: ${database_connectionString}
-        NATS_URL: ${nats_connectionString}
-        LOCAL_STORAGE_PATH: "/mnt/localstorage/paperclip"
-        SKILLS_PATH: "/mnt/localstorage/skills"
-        PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
-        PAPERCLIP_STORAGE_PROVIDER: "local_disk"
-        PAPERCLIP_STORAGE_LOCAL_DIR: "/mnt/localstorage/paperclip/storage"
-        PAPERCLIP_SECRETS_MASTER_KEY_FILE: "/mnt/localstorage/paperclip/secrets/master.key"
-      start: node apps/agentdev/src/server.mjs
-      healthCheck:
-        httpGet:
-          port: 3100
-          path: /
-
-  # 6. Listmonk Sovereign Email Marketing & Transactional Engine (Go 1.22 Alpine)
-  - setup: listmonk
-    build:
-      base: alpine/go@1.22
-      prepareCommands:
-        - sudo apk add --no-cache curl tar ca-certificates
-        - curl -sSL https://github.com/knadh/listmonk/releases/download/v6.2.0/listmonk_6.2.0_linux_amd64.tar.gz -o listmonk.tar.gz
-        - tar -xzf listmonk.tar.gz
-        - chmod +x listmonk
-      deployFiles:
-        - listmonk
-        - static
-        - i18n
-      cache:
-        - listmonk.tar.gz
-    run:
-      base: alpine/go@1.22
-      ports:
-        - port: 9000
-          httpSupport: true
-      prepareCommands:
-        - sudo apk add --no-cache ca-certificates tzdata curl postgresql-client
-      initCommands:
-        - zsc execOnce ${appVersionId} -- sh -c 'PGPASSWORD=${database_password} psql -h ${database_hostname} -U ${database_user} -d ${database_dbName} -c "CREATE SCHEMA IF NOT EXISTS listmonk;"'
-        - zsc execOnce ${appVersionId} -- ./listmonk --install --idempotent --yes --config=""
-        - zsc execOnce ${appVersionId} -- ./listmonk --upgrade --yes --config=""
-      start: ./listmonk --config=""
-      healthCheck:
-        httpGet:
-          port: 9000
-          path: /
-      envVariables:
-        LISTMONK_app__address: "0.0.0.0:9000"
-        LISTMONK_db__host: ${database_hostname}
-        LISTMONK_db__port: "5432"
-        LISTMONK_db__user: ${database_user}
-        LISTMONK_db__password: ${database_password}
-        LISTMONK_db__database: ${database_dbName}
-        LISTMONK_db__params: "search_path=listmonk,public"
-        LISTMONK_db__ssl_mode: "disable"
-        LISTMONK_admin__username: "admin"
-        LISTMONK_admin__password: ${LISTMONK_ADMIN_PASSWORD}

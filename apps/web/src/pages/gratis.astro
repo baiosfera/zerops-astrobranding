@@ -1,0 +1,115 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Carta Natal Gratuita & Diagnóstico — AstroBranding">
+  <div class="max-w-2xl mx-auto px-6 py-16">
+    <a href="/" class="text-xs text-neutral-500 hover:text-neutral-300 font-mono mb-8 inline-block">← Volver al inicio</a>
+
+    <div class="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 shadow-xl">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 text-xs font-semibold mb-4">
+        Paso 1 de 2: Doble Opt-In Secuencial
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-100">
+        Calculá tu Carta Natal & Arquetipo de Marca
+      </h1>
+      <p class="text-sm text-neutral-400 mt-2">
+        Ingresá tus datos natales. Te enviaremos un código de validación por WhatsApp (EvolutionGo) para verificar tu identidad y abrir tu Dossier interactivo.
+      </p>
+
+      <form action="/api/whatsapp/otp" method="POST" class="mt-8 space-y-4">
+        <div>
+          <label for="name" class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1">Nombre Completo</label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            required
+            placeholder="Ej: Sofia Gómez"
+            class="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+          />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label for="phone" class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1">WhatsApp (con código país)</label>
+            <input
+              type="tel"
+              id="phone"
+              name="phone"
+              required
+              placeholder="+573001234567"
+              class="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label for="email" class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1">Correo Electrónico</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              required
+              placeholder="sofia@ejemplo.com"
+              class="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label for="birthDate" class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1">Fecha de Nacimiento</label>
+            <input
+              type="date"
+              id="birthDate"
+              name="birthDate"
+              required
+              class="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label for="birthTime" class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1">Hora Exacta</label>
+            <input
+              type="time"
+              id="birthTime"
+              name="birthTime"
+              required
+              class="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label for="birthCity" class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1">Ciudad de Nacimiento</label>
+            <input
+              type="text"
+              id="birthCity"
+              name="birthCity"
+              required
+              placeholder="Bogotá"
+              class="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label for="birthCountry" class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1">País</label>
+            <input
+              type="text"
+              id="birthCountry"
+              name="birthCountry"
+              required
+              placeholder="Colombia"
+              class="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          class="w-full mt-6 py-3.5 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-sm text-white transition-all shadow-lg shadow-indigo-600/25 cursor-pointer"
+        >
+          Enviar Código de Verificación →
+        </button>
+      </form>
+    </div>
+  </div>
+</BaseLayout>

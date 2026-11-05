@@ -1,7 +1,11 @@
 ---
 export const prerender = false;
 
-import { getDb, products, productVariants, services, bookings, siteSettings, desc, eq } from "@astrobranding/database";
+Astro.response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate");
+Astro.response.headers.set("Pragma", "no-cache");
+Astro.response.headers.set("Expires", "0");
+
+import { getDb, products, productVariants, services, bookings, orders, coupons, siteSettings, desc, asc, eq } from "@astrobranding/database";
 import "../../styles/theme.css";
 
 // Handle direct logout navigation query (?logout=1)
@@ -25,7 +29,7 @@ const db = getDb();
 const isSuperadmin = adminUser.role === "superadmin";
 
 // 1. Fetch Products with Variants
-const catalogItems = await db.select().from(products).orderBy(desc(products.createdAt));
+const catalogItems = await db.select().from(products).orderBy(asc(products.displayOrder), desc(products.createdAt));
 const activeProductsCount = catalogItems.filter((p) => p.isActive === 1).length;
 
 // Collect distinct categories dynamically
@@ -47,7 +51,25 @@ for (const row of settingsRows) {
   settingsMap[row.key] = row.value;
 }
 const heroImage = settingsMap["hero_image"] || { url: "/images/products/product-01.jpg", alt: "Portada Principal" };
+// 6. Fetch Coupons
+const couponsList = await db.select().from(coupons).orderBy(desc(coupons.createdAt));
+
 const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/services/maquillaje-social-1.jpg", alt: "Atelier Social" };
+
+// 5. Fetch Orders & Sales (Exclude draft checkouts)
+const allOrdersRaw = await db.select().from(orders).orderBy(desc(orders.createdAt)).limit(150);
+const allOrders = allOrdersRaw.filter((o) => o.status !== "draft_checkout");
+
+// For Merchant (Catalina), strictly show only real production orders!
+const ordersList = isSuperadmin 
+  ? allOrders 
+  : allOrders.filter((o) => o.environment === "production");
+
+const prodOrdersCount = allOrders.filter((o) => o.environment === "production").length;
+const devOrdersCount = allOrders.filter((o) => o.environment === "development").length;
+const totalRevenueCop = allOrders
+  .filter((o) => o.environment === "production" && (o.status === "approved" || o.status === "pending_cod"))
+  .reduce((acc, o) => acc + (o.totalAmount || 0), 0);
 ---
 
 <!doctype html>
@@ -57,7 +79,7 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Panel de Control 360° | Catalina Glamur</title>
     <meta name="robots" content="noindex, nofollow, noarchive" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
     <style>
       .tab-btn.active {
         background-color: #27272a;
@@ -114,10 +136,10 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-zinc-800">
         <div>
           <h1 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            Panel de Control Soberano
+            Panel de Control
           </h1>
           <p class="text-xs text-zinc-400 mt-1">
-            Gestión completa de catálogo, maquillaje, citas y portadas sin código. Sincronización en vivo con PostgreSQL 18.
+            Gestión comercial de prendas, citas del atelier, cupones y portadas en tiempo real.
           </p>
         </div>
 
@@ -141,6 +163,24 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
 
       <!-- Navigation Tabs -->
       <nav class="flex items-center gap-2 border-b border-zinc-800 pb-3 overflow-x-auto text-xs font-medium">
+        <button
+          type="button"
+          data-target="tab-orders"
+          class="tab-btn px-4 py-2 rounded-xl border border-transparent bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap"
+        >
+          <span>📦 Pedidos & Ventas</span>
+          <span class="bg-zinc-800 text-emerald-400 px-2 py-0.5 rounded-full text-[10px] font-mono border border-emerald-500/20">{ordersList.length}</span>
+        </button>
+
+        <button
+          type="button"
+          data-target="tab-coupons"
+          class="tab-btn px-4 py-2 rounded-xl border border-transparent bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap"
+        >
+          <span>🎟️ Cupones & Descuentos</span>
+          <span class="bg-zinc-800 text-amber-400 px-2 py-0.5 rounded-full text-[10px] font-mono border border-amber-500/20">{couponsList.length}</span>
+        </button>
+
         <button
           type="button"
           data-target="tab-products"
@@ -177,6 +217,368 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
         </button>
       </nav>
 
+      <!-- TAB: PEDIDOS & VENTAS -->
+      <section id="tab-orders" class="tab-pane space-y-4">
+        <!-- Quick Stats Banner -->
+        {isSuperadmin ? (
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div class="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl flex flex-col justify-between">
+              <span class="text-[11px] uppercase tracking-wider text-zinc-400 font-mono">Total Registrados</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span class="text-2xl font-bold text-white">{allOrders.length}</span>
+                <span class="text-xs text-zinc-400">pedidos</span>
+              </div>
+            </div>
+            <div class="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl flex flex-col justify-between">
+              <span class="text-[11px] uppercase tracking-wider text-emerald-400 font-mono">Producción (Reales)</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span class="text-2xl font-bold text-emerald-400">{prodOrdersCount}</span>
+                <span class="text-xs text-zinc-400">pedidos</span>
+              </div>
+            </div>
+            <div class="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl flex flex-col justify-between">
+              <span class="text-[11px] uppercase tracking-wider text-amber-400 font-mono">Pruebas (Dev / Sandbox)</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span class="text-2xl font-bold text-amber-400">{devOrdersCount}</span>
+                <span class="text-xs text-zinc-400">pruebas</span>
+              </div>
+            </div>
+            <div class="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl flex flex-col justify-between">
+              <span class="text-[11px] uppercase tracking-wider text-zinc-400 font-mono">Volumen Real Prod</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span class="text-xl font-bold text-white">
+                  {new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(totalRevenueCop)}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="bg-zinc-900/70 border border-zinc-800 p-5 rounded-xl flex flex-col justify-between">
+              <span class="text-[11px] uppercase tracking-wider text-emerald-400 font-mono font-semibold">Pedidos Reales Confirmados</span>
+              <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-3xl font-bold text-white">{prodOrdersCount}</span>
+                <span class="text-xs text-zinc-400">órdenes despachadas / en camino</span>
+              </div>
+            </div>
+            <div class="bg-zinc-900/70 border border-zinc-800 p-5 rounded-xl flex flex-col justify-between">
+              <span class="text-[11px] uppercase tracking-wider text-amber-400 font-mono font-semibold">Ventas Totales</span>
+              <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-3xl font-bold text-[#D4AF37] font-mono">
+                  {new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(totalRevenueCop)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <!-- Filter bar -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/60 p-3 rounded-2xl border border-zinc-800">
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="order-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/40 cursor-pointer"
+              data-filter="all"
+            >
+              Todos ({ordersList.length})
+            </button>
+            <button
+              type="button"
+              class="order-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-700/60 cursor-pointer"
+              data-filter="production"
+            >
+              🟢 Producción ({prodOrdersCount})
+            </button>
+            <button
+              type="button"
+              class="order-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-700/60 cursor-pointer"
+              data-filter="development"
+            >
+              🟡 Pruebas Dev ({devOrdersCount})
+            </button>
+          </div>
+          <span class="text-[11px] text-zinc-400 font-mono">Actualizado en tiempo real</span>
+        </div>
+
+        <!-- Orders Table -->
+                <!-- GENERADOR DE ENLACES DE CUPONES (1-CLICK) -->
+        <div class="bg-gradient-to-br from-zinc-900/90 to-zinc-950/80 border border-amber-500/30 rounded-2xl p-4 shadow-xl space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-amber-400 text-base">🔗</span>
+              <h4 class="text-xs font-bold uppercase tracking-wider text-amber-300 font-mono">
+                Generador de Enlaces con Cupón Automático
+              </h4>
+            </div>
+            <span class="text-[10px] font-mono text-zinc-400">Aplica el descuento al abrir la tienda</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] font-medium text-zinc-300 mb-1">1. Seleccionar Cupón Activo:</label>
+              <select id="genCouponSelect" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-amber-400 font-mono focus:border-amber-500 focus:outline-none">
+                {couponsList.filter(c => c.isActive === 1).map(c => (
+                  <option value={c.code}>{c.code} ({c.discountType === "percentage" ? `${c.discountValue}% OFF` : `${c.discountValue.toLocaleString("es-CO")}`})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-zinc-300 mb-1">2. Destino del Enlace:</label>
+              <select id="genDestinationSelect" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none">
+                <option value="/shop">Tienda General (/shop)</option>
+                <option value="/checkout">Checkout Directo (/checkout)</option>
+                <optgroup label="Prendas Específicas:">
+                  {catalogItems.map(p => (
+                    <option value={`/p/${p.slug}`}>Prenda: {p.name}</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 bg-zinc-950/90 border border-zinc-800 rounded-xl p-2">
+            <input
+              type="text"
+              id="genCouponResultUrl"
+              readonly
+              value="https://catalinaglamur.com/shop?cupon=GLAMUR10"
+              class="flex-1 bg-transparent border-0 text-xs font-mono text-amber-300 focus:outline-none select-all px-2"
+            />
+            <button
+              type="button"
+              id="btnCopyCouponUrl"
+              class="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-sm shadow-amber-500/20"
+            >
+              <span id="btnCopyCouponIcon">📋</span>
+              <span id="btnCopyCouponText">Copiar Enlace</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-zinc-300">
+              <thead class="bg-zinc-950/80 text-zinc-400 uppercase tracking-wider font-mono text-[10px] border-b border-zinc-800">
+                <tr>
+                  <th class="px-4 py-3.5">Referencia</th>
+                  <th class="px-3 py-3.5">Entorno</th>
+                  <th class="px-4 py-3.5">Cliente</th>
+                  <th class="px-4 py-3.5">WhatsApp / Contacto</th>
+                  <th class="px-4 py-3.5">Destino</th>
+                  <th class="px-4 py-3.5">Método</th>
+                  <th class="px-4 py-3.5">Total (COP)</th>
+                  <th class="px-4 py-3.5">Estado</th>
+                  <th class="px-4 py-3.5 text-right">Fecha</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-zinc-800/60" id="ordersTableBody">
+                {ordersList.length === 0 ? (
+                  <tr>
+                    <td colspan="9" class="px-4 py-8 text-center text-zinc-500">
+                      No hay pedidos registrados en la base de datos todavía.
+                    </td>
+                  </tr>
+                ) : (
+                  ordersList.map((order) => {
+                    const cleanPhone = (order.customerPhone || "").replace(/\D/g, "");
+                    const waLink = cleanPhone ? `https://wa.me/${cleanPhone.startsWith("57") ? cleanPhone : `57${cleanPhone}`}` : null;
+                    const isProd = order.environment === "production";
+                    return (
+                      <tr class="hover:bg-zinc-800/40 transition-colors order-row" data-env={order.environment || "production"}>
+                        <td class="px-4 py-3 font-mono text-[11px] text-amber-400 font-medium whitespace-nowrap">
+                          {order.paymentRef || order.id.slice(0, 8)}
+                        </td>
+                        <td class="px-3 py-3 whitespace-nowrap">
+                          {isProd ? (
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              PRODUCCIÓN
+                            </span>
+                          ) : (
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                              PRUEBA DEV
+                            </span>
+                          )}
+                        </td>
+                        <td class="px-4 py-3 font-medium text-white whitespace-nowrap">
+                          {order.customerName}
+                          {order.customerEmail && (
+                            <div class="text-[10px] text-zinc-400 font-normal font-mono">{order.customerEmail}</div>
+                          )}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                          {waLink ? (
+                            <a
+                              href={waLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-mono transition-colors"
+                            >
+                              <span>{order.customerPhone}</span>
+                              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+                            </a>
+                          ) : (
+                            <span class="text-zinc-500 font-mono text-[11px]">{order.customerPhone || "N/A"}</span>
+                          )}
+                        </td>
+                        <td class="px-4 py-3 text-zinc-400 max-w-xs truncate" title={`${order.shippingAddress || ""}, ${order.shippingCity || ""}`}>
+                          {order.shippingCity ? `${order.shippingCity} • ` : ""}{order.shippingAddress || "Sin dirección"}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                          {order.paymentMethod === "cod" ? (
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-sky-500/10 text-sky-400 border border-sky-500/30">
+                              Contra Entrega
+                            </span>
+                          ) : (
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/30">
+                              Bancolombia Online
+                            </span>
+                          )}
+                        </td>
+                        <td class="px-4 py-3 font-mono font-semibold text-white whitespace-nowrap">
+                          {new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(order.totalAmount)}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                          <span class={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
+                            order.status === "approved"
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                              : order.status === "pending_cod"
+                                ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                                : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                          }`}>
+                            {order.status === "pending_cod" ? "Pendiente COD" : order.status === "approved" ? "Aprobado" : order.status}
+                          </span>
+                        </td>
+                        <td class="px-4 py-3 text-right text-[11px] font-mono text-zinc-400 whitespace-nowrap">
+                          {new Date(order.createdAt).toLocaleDateString("es-CO", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- TAB: CUPONES & DESCUENTOS -->
+      <section id="tab-coupons" class="tab-pane space-y-4">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/60 p-3 rounded-2xl border border-zinc-800">
+          <div>
+            <h3 class="text-sm font-bold text-white">Cupones y Promociones Activas</h3>
+            <p class="text-[11px] text-zinc-400">Creá cupones de descuento porcentual o de monto fijo en COP aplicables en la tienda.</p>
+          </div>
+          <button
+            id="btnOpenNewCouponModal"
+            class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold text-xs px-3.5 py-2 rounded-xl transition-all shadow-md shadow-amber-500/10 flex items-center space-x-1.5 cursor-pointer whitespace-nowrap"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            <span>Nuevo Cupón</span>
+          </button>
+        </div>
+
+        <div class="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-zinc-300">
+              <thead class="bg-zinc-950/80 text-zinc-400 uppercase tracking-wider font-mono text-[10px] border-b border-zinc-800">
+                <tr>
+                  <th class="px-4 py-3.5">Código</th>
+                  <th class="px-4 py-3.5">Descripción</th>
+                  <th class="px-4 py-3.5">Tipo & Descuento</th>
+                  <th class="px-4 py-3.5">Compra Mínima</th>
+                  <th class="px-4 py-3.5">Usos</th>
+                  <th class="px-4 py-3.5">Estado</th>
+                  <th class="px-4 py-3.5 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-zinc-800/60">
+                {couponsList.length === 0 ? (
+                  <tr>
+                    <td colspan="7" class="px-4 py-8 text-center text-zinc-500">
+                      No hay cupones creados aún. Creá tu primer cupón con el botón superior.
+                    </td>
+                  </tr>
+                ) : (
+                  couponsList.map((c) => {
+                    const isPct = c.discountType === "percentage";
+                    const discountDisplay = isPct ? `${c.discountValue}% OFF` : `${c.discountValue.toLocaleString("es-CO")} COP`;
+                    const minFormatted = `${(c.minOrderAmount || 0).toLocaleString("es-CO")} COP`;
+                    const usesDisplay = c.maxUses ? `${c.usedCount} / ${c.maxUses}` : `${c.usedCount} (Ilimitado)`;
+                    return (
+                      <tr class="hover:bg-zinc-800/30 transition-colors">
+                        <td class="px-4 py-3 whitespace-nowrap">
+                          <span class="px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                            {c.code}
+                          </span>
+                        </td>
+                        <td class="px-4 py-3 text-zinc-300 max-w-xs truncate">
+                          {c.description || "Sin descripción"}
+                        </td>
+                        <td class="px-4 py-3 font-semibold text-white whitespace-nowrap">
+                          {discountDisplay}
+                        </td>
+                        <td class="px-4 py-3 font-mono text-zinc-400 whitespace-nowrap">
+                          {c.minOrderAmount > 0 ? minFormatted : "Sin mínimo"}
+                        </td>
+                        <td class="px-4 py-3 font-mono text-zinc-400 whitespace-nowrap">
+                          {usesDisplay}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                          {c.isActive === 1 ? (
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              Activo
+                            </span>
+                          ) : (
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800 text-zinc-500 border border-zinc-700">
+                              Inactivo
+                            </span>
+                          )}
+                        </td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                          <div class="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              class="btn-copy-quick-coupon px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 rounded-lg border border-amber-500/30 transition-colors text-xs cursor-pointer inline-flex items-center gap-1"
+                              data-code={c.code}
+                              title="Copiar enlace directo a la tienda con este cupón"
+                            >
+                              <span>🔗</span> Link
+                            </button>
+                            <button
+                              type="button"
+                              class="btn-edit-coupon px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-lg border border-zinc-700 transition-colors text-xs cursor-pointer"
+                              data-id={c.id}
+                              data-code={c.code}
+                              data-desc={c.description || ""}
+                              data-type={c.discountType}
+                              data-val={c.discountValue}
+                              data-min={c.minOrderAmount}
+                              data-uses={c.maxUses || ""}
+                              data-active={c.isActive}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              class="btn-delete-coupon px-2.5 py-1 bg-red-950/40 hover:bg-red-900/60 text-red-300 rounded-lg border border-red-800/50 transition-colors text-xs cursor-pointer"
+                              data-id={c.id}
+                              data-code={c.code}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <!-- TAB 1: PRENDAS & CATÁLOGO -->
       <section id="tab-products" class="tab-pane active space-y-4">
         <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/60 p-3 rounded-2xl border border-zinc-800">
@@ -200,6 +602,7 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
             <table class="w-full text-left text-xs text-zinc-300">
               <thead class="bg-zinc-950/80 text-zinc-400 uppercase tracking-wider font-mono text-[10px] border-b border-zinc-800">
                 <tr>
+                  <th class="px-3 py-3.5 text-center">Orden</th>
                   <th class="px-4 py-3.5">Prenda</th>
                   <th class="px-4 py-3.5">Categoría</th>
                   <th class="px-4 py-3.5">Precio (COP)</th>
@@ -219,6 +622,31 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
                   const firstImg = imgs[0] || "/placeholder.jpg";
                   return (
                     <tr class="hover:bg-zinc-800/30 transition-colors product-row" data-name={prod.name.toLowerCase()} data-cat={(prod.category || "").toLowerCase()}>
+                      <td class="px-3 py-3 text-center whitespace-nowrap">
+                        <div class="inline-flex items-center gap-1 bg-zinc-950/80 border border-zinc-800 rounded-lg p-1">
+                          <button
+                            type="button"
+                            class="btn-move-order w-6 h-6 rounded flex items-center justify-center text-zinc-400 hover:text-amber-400 hover:bg-zinc-800 transition-colors cursor-pointer text-xs"
+                            data-id={prod.id}
+                            data-direction="up"
+                            title="Mover arriba en la tienda"
+                          >
+                            ▲
+                          </button>
+                          <span class="min-w-6 text-center font-mono font-bold text-amber-400 text-xs px-1">
+                            #{prod.displayOrder ?? 0}
+                          </span>
+                          <button
+                            type="button"
+                            class="btn-move-order w-6 h-6 rounded flex items-center justify-center text-zinc-400 hover:text-amber-400 hover:bg-zinc-800 transition-colors cursor-pointer text-xs"
+                            data-id={prod.id}
+                            data-direction="down"
+                            title="Mover abajo en la tienda"
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      </td>
                       <td class="px-4 py-3">
                         <div class="flex items-center space-x-3">
                           <img
@@ -267,6 +695,23 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
                       </td>
                       <td class="px-4 py-3 text-right">
                         <div class="flex items-center justify-end space-x-2">
+                          {heroImage.productSlug === prod.slug ? (
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-semibold" title="Esta prenda está actualmente fijada en la Portada Principal">
+                              ★ En Portada
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              class="btn-set-hero px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-amber-500 hover:text-zinc-950 text-zinc-300 border border-zinc-700/60 transition-colors cursor-pointer text-[11px] inline-flex items-center gap-1"
+                              data-slug={prod.slug}
+                              data-name={prod.name}
+                              data-price={new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(prod.basePrice)}
+                              data-img={firstImg}
+                              title="Fijar esta prenda y su foto como portada principal de la tienda"
+                            >
+                              <span>★</span> Portada
+                            </button>
+                          )}
                           <button
                             type="button"
                             class="btn-edit-product px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors cursor-pointer"
@@ -276,8 +721,9 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
                             data-price={prod.basePrice}
                             data-category={prod.category}
                             data-stock={prod.stock || 0}
+                            data-order={prod.displayOrder ?? 0}
                             data-description={prod.description || ""}
-                            data-image={firstImg}
+                            data-image={firstImg} data-images={JSON.stringify(imgs)}
                           >
                             Editar
                           </button>
@@ -329,7 +775,7 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
                 <img
                   src={serv.imageUrl || "/images/services/maquillaje-social-1.jpg"}
                   alt={serv.name}
-                  class="w-full h-full object-cover"
+                  class="w-full h-full object-cover object-top"
                 />
                 <span class="absolute top-2.5 right-2.5 bg-black/70 backdrop-blur text-[10px] font-mono text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
                   {serv.badge || "Atelier"}
@@ -501,30 +947,93 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <!-- Hero Banner Principal -->
           <div class="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-5 space-y-4">
-            <h3 class="font-bold text-white text-sm flex items-center justify-between">
-              <span>🖼️ Portada Principal (Hero)</span>
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="font-bold text-white text-sm">🖼️ Portada Principal (Hero)</h3>
+                <p class="text-[11px] text-zinc-400">Prenda activa y foto destacada en la cabecera de la tienda.</p>
+              </div>
               <span class="text-[11px] font-mono text-amber-400">hero_image</span>
-            </h3>
-
-            <div class="aspect-[3/4] max-h-72 w-full bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center">
-              <img id="previewHeroMain" src={heroImage.url} alt="Hero Principal" class="w-full h-full object-cover" />
             </div>
 
-            <div class="space-y-2">
-              <label class="block text-xs font-semibold text-zinc-300">Cambiar Foto (Galería o Archivo)</label>
-              <input
-                type="file"
-                id="fileHeroMain"
-                accept="image/*"
-                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
-              />
+            <!-- Preview Grande de Portada con Datos del Producto Vinculado -->
+            <div class="relative aspect-[3/4] max-h-80 w-full bg-zinc-950 rounded-xl overflow-hidden border border-amber-500/40 flex items-center justify-center">
+              <img id="previewHeroMain" src={heroImage.url} alt="Hero Principal" class="w-full h-full object-cover object-top" />
+              <div class="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
+                <span class="text-[9px] font-mono text-amber-400 uppercase tracking-wider block">Prenda en Portada</span>
+                <p id="previewHeroTitle" class="text-sm font-semibold text-white truncate">
+                  {catalogItems.find(p => p.slug === heroImage.productSlug)?.name || heroImage.title || "Prenda de Tienda"}
+                </p>
+                <div class="flex items-center justify-between pt-0.5">
+                  <span id="previewHeroSlug" class="text-[10px] font-mono text-zinc-400">
+                    /p/{heroImage.productSlug || catalogItems[0]?.slug || ""}
+                  </span>
+                  <span id="previewHeroPrice" class="text-xs font-mono font-bold text-amber-400">
+                    {heroImage.price || (catalogItems.find(p => p.slug === heroImage.productSlug) ? new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(catalogItems.find(p => p.slug === heroImage.productSlug).basePrice) : "")}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Elegir Prenda de la Tienda -->
+            <div class="space-y-3 pt-1">
+              <div class="space-y-1">
+                <label class="block text-xs font-semibold text-zinc-200">
+                  Seleccionar Prenda de la Tienda para Portada:
+                </label>
+                <select
+                  id="heroProductSelect"
+                  class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-amber-400 font-medium focus:outline-none focus:border-amber-500 cursor-pointer"
+                >
+                  {catalogItems.map((p) => {
+                    let pImgs = [];
+                    try { pImgs = Array.isArray(p.images) ? p.images : JSON.parse(p.images); } catch (_) {}
+                    return (
+                      <option
+                        value={p.slug}
+                        data-name={p.name}
+                        data-price={new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(p.basePrice)}
+                        data-img={pImgs[0] || ""}
+                        data-images={JSON.stringify(pImgs)}
+                        selected={heroImage.productSlug === p.slug || (!heroImage.productSlug && p.slug === catalogItems[0]?.slug)}
+                      >
+                        {p.name} (#{p.displayOrder ?? 0}) • {new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(p.basePrice)}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <!-- Fotos de la Prenda Seleccionada para Elegir Cuál Usar de Portada -->
+              <div id="heroProductPhotosContainer" class="space-y-1.5 bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/80">
+                <span class="block text-[11px] text-zinc-300 font-medium">
+                  Fotos disponibles de esta prenda (hacé clic en la que querés de portada):
+                </span>
+                <div id="heroProductPhotosList" class="flex flex-wrap gap-2 pt-1">
+                  <!-- Llenado dinámicamente con JavaScript -->
+                </div>
+              </div>
+
               <button
                 type="button"
                 id="btnSaveHeroMain"
-                class="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors cursor-pointer"
+                class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-lg"
               >
-                Actualizar Portada Principal
+                <span>★</span> Fijar esta Prenda y Foto como Portada Principal
               </button>
+
+              <details class="pt-2 text-xs text-zinc-500 border-t border-zinc-800/60">
+                <summary class="cursor-pointer hover:text-zinc-300 select-none py-1">
+                  Opción secundaria: Subir foto manual externa
+                </summary>
+                <div class="pt-2 space-y-2">
+                  <input
+                    type="file"
+                    id="fileHeroMain"
+                    accept="image/*"
+                    class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
+                  />
+                </div>
+              </details>
             </div>
           </div>
 
@@ -561,6 +1070,176 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
     </main>
 
     <!-- DATALIST PARA CATEGORÍAS DINÁMICAS -->
+    
+    <!-- MODAL: NUEVO CUPÓN -->
+    <div id="modalNewCoupon" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 space-y-4 text-xs">
+        <div class="flex items-center justify-between pb-2 border-b border-zinc-800">
+          <h2 class="text-base font-bold text-white">Crear Nuevo Cupón</h2>
+          <button type="button" class="btn-close-modal text-zinc-400 hover:text-white text-lg">✕</button>
+        </div>
+
+        <form id="formNewCoupon" class="space-y-4">
+          <div>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Código del Cupón (Ej: GLAMUR10)</label>
+            <input
+              type="text"
+              id="newCouponCode"
+              required
+              placeholder="GLAMUR10"
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-amber-400 font-mono uppercase font-bold focus:outline-none focus:border-amber-500 text-sm"
+            />
+          </div>
+
+          <div>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Descripción</label>
+            <input
+              type="text"
+              id="newCouponDesc"
+              placeholder="10% de descuento de bienvenida"
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
+            />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Tipo de Descuento</label>
+              <select
+                id="newCouponType"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
+              >
+                <option value="percentage">Porcentaje (%)</option>
+                <option value="fixed">Monto Fijo (COP)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Valor del Descuento</label>
+              <input
+                type="number"
+                id="newCouponValue"
+                required
+                min="1"
+                placeholder="10 o 20000"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Compra Mínima (COP)</label>
+              <input
+                type="number"
+                id="newCouponMin"
+                value="0"
+                min="0"
+                step="5000"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Límite de Usos (Opcional)</label>
+              <input
+                type="number"
+                id="newCouponMaxUses"
+                placeholder="Ilimitado"
+                min="1"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-zinc-800 flex justify-end space-x-2">
+            <button type="button" class="btn-close-modal px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl">Cancelar</button>
+            <button type="submit" id="btnSaveNewCoupon" class="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl shadow-lg shadow-amber-500/20">Crear Cupón</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: EDITAR CUPÓN -->
+    <div id="modalEditCoupon" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 space-y-4 text-xs">
+        <div class="flex items-center justify-between pb-2 border-b border-zinc-800">
+          <h2 class="text-base font-bold text-white">Editar Cupón</h2>
+          <button type="button" class="btn-close-modal text-zinc-400 hover:text-white text-lg">✕</button>
+        </div>
+
+        <form id="formEditCoupon" class="space-y-4">
+          <input type="hidden" id="editCouponId" />
+
+          <div>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Código del Cupón</label>
+            <input
+              type="text"
+              id="editCouponCode"
+              required
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-amber-400 font-mono uppercase font-bold focus:outline-none focus:border-amber-500 text-sm"
+            />
+          </div>
+
+          <div>
+            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Descripción</label>
+            <input
+              type="text"
+              id="editCouponDesc"
+              class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
+            />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Tipo de Descuento</label>
+              <select
+                id="editCouponType"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
+              >
+                <option value="percentage">Porcentaje (%)</option>
+                <option value="fixed">Monto Fijo (COP)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Valor</label>
+              <input
+                type="number"
+                id="editCouponValue"
+                required
+                min="1"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Compra Mínima (COP)</label>
+              <input
+                type="number"
+                id="editCouponMin"
+                min="0"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Estado</label>
+              <select
+                id="editCouponActive"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs"
+              >
+                <option value="1">🟢 Activo</option>
+                <option value="0">🔴 Inactivo</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-zinc-800 flex justify-end space-x-2">
+            <button type="button" class="btn-close-modal px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl">Cancelar</button>
+            <button type="submit" id="btnSaveEditCoupon" class="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold rounded-xl shadow-lg shadow-amber-500/20">Guardar Cambios</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <datalist id="categoriesList">
       {distinctCategories.map((cat) => (
         <option value={cat} />
@@ -588,7 +1267,7 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
             />
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
               <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Precio COP</label>
               <input
@@ -623,29 +1302,47 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
                 class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs font-mono"
               />
             </div>
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Orden de Visualización (#1 primero, #2 segundo...)</label>
+              <input
+                type="number"
+                id="editProdDisplayOrder"
+                min="0"
+                step="1"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500 text-xs"
+              />
+            </div>
           </div>
 
-          <!-- Selector de Galería de Fotos (Sin capture) -->
-          <div>
-            <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">
-              Foto de la Prenda (Galería de Fotos)
-            </label>
-            <div class="flex items-center space-x-3 mb-2">
-              <img id="editProdImgCurrent" src="/placeholder.jpg" class="h-16 w-12 object-cover rounded-xl border border-zinc-800 bg-zinc-950 flex-shrink-0" />
-              <div class="flex-1">
-                <input
-                  type="file"
-                  id="editProdImgFile"
-                  accept="image/*"
-                  class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
-                />
-                <p class="text-[10px] text-zinc-500 mt-1">Seleccioná una foto de tu galería. Se optimizará sin deformar proporciones.</p>
-              </div>
+          <!-- Galería Multi-Fotos & Selección de Portada -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400">
+                Galería de Fotos (Múltiples fotos permitidas)
+              </label>
+              <span class="text-[10px] text-zinc-500">Tocá una foto para definirla como Portada Principal</span>
             </div>
-            <div id="editProdImgPreviewContainer" class="hidden mt-2 p-2 bg-zinc-950 rounded-xl border border-amber-500/40 flex items-center space-x-3">
-              <img id="editProdImgPreview" class="h-14 w-11 object-cover rounded-lg border border-amber-500/80" />
-              <span class="text-[11px] text-amber-400 font-medium">📸 Foto seleccionada lista para guardar</span>
+
+            <!-- Contenedor dinámico de fotos existentes -->
+            <div id="editProdGallery" class="grid grid-cols-4 sm:grid-cols-5 gap-2 p-2 bg-zinc-950/80 rounded-xl border border-zinc-800 min-h-[70px]">
+              <!-- Inyectado por JS -->
             </div>
+
+            <!-- Subir fotos adicionales -->
+            <div>
+              <label class="block text-[11px] font-medium text-zinc-400 mb-1">
+                + Agregar más fotos (podés seleccionar varias a la vez):
+              </label>
+              <input
+                type="file"
+                id="editProdImgFiles"
+                accept="image/*"
+                multiple
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
+              />
+            </div>
+
+            <div id="editProdNewFilesPreview" class="hidden grid grid-cols-4 gap-2 p-2 bg-zinc-950 rounded-xl border border-amber-500/40"></div>
           </div>
 
           {isSuperadmin && (
@@ -746,6 +1443,17 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
                 placeholder="Elegir o escribir..."
                 value="activewear"
                 class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500 text-xs font-mono"
+              />
+            </div>
+            <div>
+              <label class="block font-semibold uppercase tracking-wider text-zinc-400 mb-1">Orden (#1 primero)</label>
+              <input
+                type="number"
+                id="newProdDisplayOrder"
+                min="0"
+                step="1"
+                placeholder="0"
+                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold focus:outline-none focus:border-amber-500 text-xs"
               />
             </div>
           </div>
@@ -940,6 +1648,32 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
     <script>
       import { actions } from "astro:actions";
 
+
+      // Orders filter
+      const filterBtns = document.querySelectorAll<HTMLButtonElement>(".order-filter-btn");
+      const orderRows = document.querySelectorAll<HTMLTableRowElement>(".order-row");
+
+      filterBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const filter = btn.dataset.filter;
+          filterBtns.forEach((b) => {
+            if (b === btn) {
+              b.className = "order-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/40 cursor-pointer";
+            } else {
+              b.className = "order-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-700/60 cursor-pointer";
+            }
+          });
+
+          orderRows.forEach((row) => {
+            if (filter === "all" || row.dataset.env === filter) {
+              row.style.display = "";
+            } else {
+              row.style.display = "none";
+            }
+          });
+        });
+      });
+
       // 1. TABS SYSTEM WITH URL HASH MEMORY
       const tabButtons = document.querySelectorAll<HTMLButtonElement>(".tab-btn");
       const tabPanes = document.querySelectorAll<HTMLElement>(".tab-pane");
@@ -1034,16 +1768,73 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
         });
       }
 
+            // --- GENERADOR DE ENLACES DE CUPONES ---
+      const genCouponSelect = document.getElementById("genCouponSelect") as HTMLSelectElement | null;
+      const genDestinationSelect = document.getElementById("genDestinationSelect") as HTMLSelectElement | null;
+      const genResultUrl = document.getElementById("genCouponResultUrl") as HTMLInputElement | null;
+      const btnCopyUrl = document.getElementById("btnCopyCouponUrl");
+      const btnCopyIcon = document.getElementById("btnCopyCouponIcon");
+      const btnCopyText = document.getElementById("btnCopyCouponText");
+
+      function updateGeneratedUrl() {
+        if (!genCouponSelect || !genDestinationSelect || !genResultUrl) return;
+        const code = genCouponSelect.value;
+        const dest = genDestinationSelect.value;
+        const host = window.location.origin;
+        genResultUrl.value = `${host}${dest}?cupon=${encodeURIComponent(code)}`;
+      }
+
+      genCouponSelect?.addEventListener("change", updateGeneratedUrl);
+      genDestinationSelect?.addEventListener("change", updateGeneratedUrl);
+      if (genCouponSelect) updateGeneratedUrl();
+
+      btnCopyUrl?.addEventListener("click", async () => {
+        if (!genResultUrl) return;
+        try {
+          await navigator.clipboard.writeText(genResultUrl.value);
+          if (btnCopyIcon && btnCopyText) {
+            btnCopyIcon.textContent = "✓";
+            btnCopyText.textContent = "¡Copiado!";
+            setTimeout(() => {
+              btnCopyIcon.textContent = "📋";
+              btnCopyText.textContent = "Copiar Enlace";
+            }, 2500);
+          }
+          showNotice("success", "✅ Enlace copiado al portapapeles: " + genResultUrl.value);
+        } catch (err) {
+          genResultUrl.select();
+          document.execCommand("copy");
+          showNotice("success", "✅ Enlace copiado al portapapeles.");
+        }
+      });
+
+      document.querySelectorAll<HTMLButtonElement>(".btn-copy-quick-coupon").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const code = btn.dataset.code!;
+          const url = `${window.location.origin}/shop?cupon=${encodeURIComponent(code)}`;
+          try {
+            await navigator.clipboard.writeText(url);
+            showNotice("success", `✅ Enlace de tienda copiado para '${code}': ${url}`);
+          } catch (_) {
+            prompt("Copia este enlace:", url);
+          }
+        });
+      });
+
       // 4. MODALS MANAGEMENT
       const modalEditProduct = document.getElementById("modalEditProduct")!;
       const modalNewProduct = document.getElementById("modalNewProduct")!;
       const modalService = document.getElementById("modalService")!;
+      const modalNewCoupon = document.getElementById("modalNewCoupon");
+      const modalEditCoupon = document.getElementById("modalEditCoupon");
 
       document.querySelectorAll(".btn-close-modal").forEach((btn) => {
         btn.addEventListener("click", () => {
           modalEditProduct.classList.add("hidden");
           modalNewProduct.classList.add("hidden");
           modalService.classList.add("hidden");
+          modalNewCoupon?.classList.add("hidden");
+          modalEditCoupon?.classList.add("hidden");
         });
       });
 
@@ -1086,24 +1877,80 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
         });
       });
 
-      // 7. EDIT PRODUCT
-      let editProdBase64 = "";
-      let editProdFileName = "";
-      const editProdImgFile = document.getElementById("editProdImgFile") as HTMLInputElement;
-      const editProdImgPreviewContainer = document.getElementById("editProdImgPreviewContainer")!;
-      const editProdImgPreview = document.getElementById("editProdImgPreview") as HTMLImageElement;
+      // 7. EDIT PRODUCT (MULTI-FOTO + ORDEN)
+      let currentProdExistingImages: string[] = [];
+      let currentProdNewImages: Array<{ base64: string; name: string }> = [];
 
-      editProdImgFile?.addEventListener("change", async (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (!file) return;
-        try {
-          const compressed = await compressImageStrict(file);
-          editProdBase64 = compressed.base64;
-          editProdFileName = compressed.name;
-          editProdImgPreview.src = compressed.base64;
-          editProdImgPreviewContainer.classList.remove("hidden");
-        } catch (err: any) {
-          showNotice("error", err.message || "Error procesando la foto.");
+      const editProdGallery = document.getElementById("editProdGallery") as HTMLElement;
+      const editProdImgFiles = document.getElementById("editProdImgFiles") as HTMLInputElement;
+      const editProdNewFilesPreview = document.getElementById("editProdNewFilesPreview") as HTMLElement;
+
+      function renderEditProdGallery() {
+        if (!editProdGallery) return;
+        editProdGallery.innerHTML = "";
+        if (currentProdExistingImages.length === 0) {
+          editProdGallery.innerHTML = '<span class="col-span-full text-zinc-500 text-center py-2 italic text-[11px]">Sin fotos registradas</span>';
+          return;
+        }
+
+        currentProdExistingImages.forEach((url, idx) => {
+          const item = document.createElement("div");
+          item.className = "relative group aspect-square rounded-lg overflow-hidden border " + (idx === 0 ? "border-amber-500 ring-1 ring-amber-500/50" : "border-zinc-800");
+          item.innerHTML = `
+            <img src="${url}" class="w-full h-full object-cover object-top" />
+            ${idx === 0 ? '<span class="absolute top-1 left-1 bg-amber-500 text-zinc-950 text-[8px] font-bold px-1 rounded shadow">PORTADA</span>' : ''}
+            <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">
+              ${idx !== 0 ? '<button type="button" class="btn-make-primary text-[9px] bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold px-1.5 py-0.5 rounded cursor-pointer w-full text-center">⭐ Portada</button>' : ''}
+              <button type="button" class="btn-remove-img text-[9px] bg-red-950 text-red-300 px-1.5 py-0.5 rounded cursor-pointer w-full text-center hover:bg-red-900">✕ Quitar</button>
+            </div>
+          `;
+
+          const btnPrimary = item.querySelector(".btn-make-primary");
+          btnPrimary?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const target = currentProdExistingImages.splice(idx, 1)[0];
+            currentProdExistingImages.unshift(target);
+            renderEditProdGallery();
+          });
+
+          const btnRemove = item.querySelector(".btn-remove-img");
+          btnRemove?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            currentProdExistingImages.splice(idx, 1);
+            renderEditProdGallery();
+          });
+
+          editProdGallery.appendChild(item);
+        });
+      }
+
+      editProdImgFiles?.addEventListener("change", async (e) => {
+        const files = (e.target as HTMLInputElement).files;
+        if (!files || files.length === 0) return;
+        currentProdNewImages = [];
+        if (editProdNewFilesPreview) {
+          editProdNewFilesPreview.innerHTML = "";
+          editProdNewFilesPreview.classList.remove("hidden");
+        }
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          try {
+            const compressed = await compressImageStrict(file);
+            currentProdNewImages.push(compressed);
+
+            if (editProdNewFilesPreview) {
+              const previewItem = document.createElement("div");
+              previewItem.className = "relative aspect-square rounded-lg overflow-hidden border border-emerald-500/50";
+              previewItem.innerHTML = `
+                <img src="${compressed.base64}" class="w-full h-full object-cover object-top" />
+                <span class="absolute bottom-0 inset-x-0 bg-emerald-950/90 text-emerald-300 text-[8px] text-center py-0.5 truncate px-1">Nueva</span>
+              `;
+              editProdNewFilesPreview.appendChild(previewItem);
+            }
+          } catch (err: any) {
+            showNotice("error", err.message || "Error procesando una de las fotos.");
+          }
         }
       });
 
@@ -1114,17 +1961,61 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
           (document.getElementById("editProdPrice") as HTMLInputElement).value = btn.dataset.price || "";
           (document.getElementById("editProdStock") as HTMLInputElement).value = btn.dataset.stock || "0";
           (document.getElementById("editProdCategory") as HTMLInputElement).value = btn.dataset.category || "";
+          (document.getElementById("editProdDisplayOrder") as HTMLInputElement).value = btn.dataset.order || "0";
           (document.getElementById("editProdDescription") as HTMLTextAreaElement).value = btn.dataset.description || "";
-          const slugInput = document.getElementById("editProdSlug") as HTMLInputElement;
+          const slugInput = document.getElementById("editProdSlug") as HTMLInputElement | null;
           if (slugInput) slugInput.value = btn.dataset.slug || "";
-          (document.getElementById("editProdImgCurrent") as HTMLImageElement).src = btn.dataset.image || "/placeholder.jpg";
 
-          editProdBase64 = "";
-          editProdFileName = "";
-          editProdImgFile.value = "";
-          editProdImgPreviewContainer.classList.add("hidden");
+          // Cargar galería multi-fotos
+          let imgsArray: string[] = [];
+          try {
+            imgsArray = btn.dataset.images ? JSON.parse(btn.dataset.images) : [];
+          } catch (_) {
+            imgsArray = [];
+          }
+          if (imgsArray.length === 0 && btn.dataset.image) {
+            imgsArray = [btn.dataset.image];
+          }
+
+          currentProdExistingImages = [...imgsArray];
+          currentProdNewImages = [];
+          renderEditProdGallery();
+
+          if (editProdImgFiles) editProdImgFiles.value = "";
+          if (editProdNewFilesPreview) {
+            editProdNewFilesPreview.innerHTML = "";
+            editProdNewFilesPreview.classList.add("hidden");
+          }
 
           modalEditProduct.classList.remove("hidden");
+        });
+      });
+
+      // REORDER PRODUCTS (MOVE UP / DOWN)
+      document.querySelectorAll<HTMLButtonElement>(".btn-move-order").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const productId = btn.dataset.id!;
+          const direction = btn.dataset.direction as "up" | "down";
+          btn.disabled = true;
+          const row = btn.closest("tr");
+          if (row) row.style.opacity = "0.5";
+          try {
+            const { data, error } = await actions.moveProductOrder({ productId, direction });
+            if (error || !data?.success) {
+              showNotice("error", error?.message || "No se pudo actualizar el orden.");
+              if (row) row.style.opacity = "1";
+            } else {
+              showNotice("success", "✅ Posición actualizada en la tienda.");
+              setTimeout(() => {
+                window.location.href = window.location.pathname + "?_t=" + Date.now() + "#tab-products";
+              }, 300);
+            }
+          } catch (err: any) {
+            showNotice("error", err.message || "Error al mover la posición.");
+            if (row) row.style.opacity = "1";
+          } finally {
+            btn.disabled = false;
+          }
         });
       });
 
@@ -1139,8 +2030,9 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
         const basePrice = parseInt((document.getElementById("editProdPrice") as HTMLInputElement).value, 10);
         const stock = parseInt((document.getElementById("editProdStock") as HTMLInputElement).value, 10);
         const category = (document.getElementById("editProdCategory") as HTMLInputElement).value;
+        const displayOrder = parseInt((document.getElementById("editProdDisplayOrder") as HTMLInputElement).value, 10);
         const description = (document.getElementById("editProdDescription") as HTMLTextAreaElement).value;
-        const slugInput = document.getElementById("editProdSlug") as HTMLInputElement;
+        const slugInput = document.getElementById("editProdSlug") as HTMLInputElement | null;
         const slug = slugInput ? slugInput.value : undefined;
 
         try {
@@ -1150,12 +2042,13 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
             basePrice,
             category,
             stock,
+            displayOrder: isNaN(displayOrder) ? 0 : displayOrder,
             description,
             slug,
           };
-          if (editProdBase64 && editProdFileName) {
-            payload.imageBase64 = editProdBase64;
-            payload.imageName = editProdFileName;
+          payload.existingImages = currentProdExistingImages;
+          if (currentProdNewImages.length > 0) {
+            payload.newImages = currentProdNewImages;
           }
 
           const { data, error } = await actions.updateProduct(payload);
@@ -1164,7 +2057,9 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
           } else {
             showNotice("success", "✅ Prenda actualizada exitosamente.");
             modalEditProduct.classList.add("hidden");
-            setTimeout(() => window.location.reload(), 600);
+            setTimeout(() => {
+              window.location.href = window.location.pathname + "?_t=" + Date.now() + "#tab-products";
+            }, 400);
           }
         } catch (err: any) {
           showNotice("error", err.message || "Error de conexión.");
@@ -1210,6 +2105,8 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
         const basePrice = parseInt((document.getElementById("newProdPrice") as HTMLInputElement).value, 10);
         const stock = parseInt((document.getElementById("newProdStock") as HTMLInputElement).value, 10);
         const category = (document.getElementById("newProdCategory") as HTMLInputElement).value;
+        const displayOrderInput = document.getElementById("newProdDisplayOrder") as HTMLInputElement | null;
+        const displayOrderVal = displayOrderInput && displayOrderInput.value ? parseInt(displayOrderInput.value, 10) : undefined;
         const description = (document.getElementById("newProdDescription") as HTMLTextAreaElement).value;
 
         try {
@@ -1220,6 +2117,9 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
             category,
             description,
           };
+          if (displayOrderVal !== undefined && !isNaN(displayOrderVal)) {
+            payload.displayOrder = displayOrderVal;
+          }
           if (newProdBase64 && newProdFileName) {
             payload.imageBase64 = newProdBase64;
             payload.imageName = newProdFileName;
@@ -1430,7 +2330,7 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
         });
       });
 
-      // 12. HERO BANNERS MANAGEMENT
+      // 12. HERO BANNERS & LOOKBOOK MANAGEMENT
       let heroMainBase64 = "";
       let heroMainFileName = "";
       const fileHeroMain = document.getElementById("fileHeroMain") as HTMLInputElement;
@@ -1450,32 +2350,146 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
         }
       });
 
-      btnSaveHeroMain?.addEventListener("click", async () => {
-        if (!heroMainBase64 || !heroMainFileName) {
-          showNotice("error", "Por favor seleccioná una nueva foto antes de guardar.");
-          return;
-        }
-        btnSaveHeroMain.disabled = true;
-        btnSaveHeroMain.innerText = "Subiendo Portada...";
+      // --- HERO PRODUCT PORTADA INTERACTIVE SCRIPT ---
+      let selectedHeroImgUrl = "";
+      const heroProductSelect = document.getElementById("heroProductSelect") as HTMLSelectElement | null;
+      const previewHeroTitle = document.getElementById("previewHeroTitle");
+      const previewHeroSlug = document.getElementById("previewHeroSlug");
+      const previewHeroPrice = document.getElementById("previewHeroPrice");
+      const heroPhotosList = document.getElementById("heroProductPhotosList");
+
+      function renderHeroProductPhotos() {
+        if (!heroProductSelect || !heroPhotosList) return;
+        const opt = heroProductSelect.selectedOptions[0];
+        if (!opt) return;
+
+        const name = opt.getAttribute("data-name") || "";
+        const slug = opt.value;
+        const price = opt.getAttribute("data-price") || "";
+        const firstImg = opt.getAttribute("data-img") || "";
+        let images: string[] = [];
         try {
-          const { data, error } = await actions.uploadBannerImage({
-            targetKey: "hero_image",
-            imageBase64: heroMainBase64,
-            imageName: heroMainFileName,
-            altText: "Portada Principal Catalina Glamur",
+          images = JSON.parse(opt.getAttribute("data-images") || "[]");
+        } catch (_) {
+          images = firstImg ? [firstImg] : [];
+        }
+        if (images.length === 0 && firstImg) images.push(firstImg);
+
+        if (!selectedHeroImgUrl || !images.includes(selectedHeroImgUrl)) {
+          selectedHeroImgUrl = images[0] || firstImg;
+        }
+
+        if (previewHeroMain) previewHeroMain.src = selectedHeroImgUrl;
+        if (previewHeroTitle) previewHeroTitle.textContent = name;
+        if (previewHeroSlug) previewHeroSlug.textContent = "/p/" + slug;
+        if (previewHeroPrice) previewHeroPrice.textContent = price;
+
+        heroPhotosList.innerHTML = "";
+        images.forEach((imgUrl, idx) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          const isSelected = imgUrl === selectedHeroImgUrl;
+          btn.className = `relative w-14 h-16 rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
+            isSelected ? "border-amber-400 ring-2 ring-amber-400/40 scale-105" : "border-zinc-800 hover:border-zinc-500 opacity-70 hover:opacity-100"
+          }`;
+          btn.innerHTML = `<img src="${imgUrl}" class="w-full h-full object-cover object-top" /><span class="absolute bottom-0 inset-x-0 bg-black/80 text-[8px] font-mono text-center text-white py-0.5">#${idx + 1}</span>`;
+          btn.addEventListener("click", () => {
+            selectedHeroImgUrl = imgUrl;
+            if (previewHeroMain) previewHeroMain.src = imgUrl;
+            renderHeroProductPhotos();
           });
+          heroPhotosList.appendChild(btn);
+        });
+      }
+
+      heroProductSelect?.addEventListener("change", () => {
+        selectedHeroImgUrl = "";
+        renderHeroProductPhotos();
+      });
+
+      if (heroProductSelect) {
+        renderHeroProductPhotos();
+      }
+
+      btnSaveHeroMain?.addEventListener("click", async () => {
+        if (!heroProductSelect) return;
+        const opt = heroProductSelect.selectedOptions[0];
+        if (!opt) return;
+
+        const slug = opt.value;
+        const name = opt.getAttribute("data-name") || "";
+        const price = opt.getAttribute("data-price") || "";
+
+        btnSaveHeroMain.disabled = true;
+        btnSaveHeroMain.innerHTML = "<span>⏳</span> Guardando Portada...";
+        try {
+          const payload: any = {
+            targetKey: "hero_image",
+            productSlug: slug,
+            imageUrl: selectedHeroImgUrl || opt.getAttribute("data-img") || "",
+            productName: name,
+            productPrice: price,
+            altText: name,
+          };
+          if (heroMainBase64 && heroMainFileName) {
+            payload.imageBase64 = heroMainBase64;
+            payload.imageName = heroMainFileName;
+          }
+          const { data, error } = await actions.uploadBannerImage(payload);
           if (error || !data?.success) {
             showNotice("error", error?.message || "Error al actualizar portada principal.");
           } else {
-            showNotice("success", "🖼️ ¡Portada principal actualizada con éxito!");
-            setTimeout(() => window.location.reload(), 600);
+            showNotice("success", `🌟 ¡'${name}' fijada como Portada Principal!`);
+            setTimeout(() => {
+              window.location.href = window.location.pathname + "?_t=" + Date.now() + "#tab-hero";
+            }, 400);
           }
         } catch (err: any) {
           showNotice("error", err.message || "Error de conexión.");
         } finally {
           btnSaveHeroMain.disabled = false;
-          btnSaveHeroMain.innerText = "Actualizar Portada Principal";
+          btnSaveHeroMain.innerHTML = "<span>★</span> Fijar esta Prenda y Foto como Portada Principal";
         }
+      });
+
+      // 1-Click Set Hero from Products Table (Tab 1)
+      document.querySelectorAll(".btn-set-hero").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          const target = e.currentTarget as HTMLButtonElement;
+          const slug = target.getAttribute("data-slug");
+          const name = target.getAttribute("data-name") || "";
+          const price = target.getAttribute("data-price") || "";
+          const img = target.getAttribute("data-img") || "";
+
+          if (!slug) return;
+          target.disabled = true;
+          const origText = target.innerHTML;
+          target.innerHTML = "<span>⏳</span> Fijando...";
+          try {
+            const { data, error } = await actions.uploadBannerImage({
+              targetKey: "hero_image",
+              productSlug: slug,
+              imageUrl: img,
+              productName: name,
+              productPrice: price,
+              altText: name,
+            });
+            if (error || !data?.success) {
+              showNotice("error", error?.message || "Error al fijar portada.");
+              target.disabled = false;
+              target.innerText = "★ Portada";
+            } else {
+              showNotice("success", `🌟 ¡'${name}' es ahora la Portada Principal!`);
+              setTimeout(() => {
+                window.location.href = window.location.pathname + "?_t=" + Date.now() + "#tab-products";
+              }, 400);
+            }
+          } catch (err: any) {
+            showNotice("error", err.message || "Error de conexión.");
+            target.disabled = false;
+            target.innerText = "★ Portada";
+          }
+        });
       });
 
       let heroSecBase64 = "";
@@ -1523,6 +2537,127 @@ const heroSecondary = settingsMap["hero_secondary_image"] || { url: "/images/ser
           btnSaveHeroSec.disabled = false;
           btnSaveHeroSec.innerText = "Actualizar Portada Secundaria";
         }
+      });
+
+      // 13. GESTIÓN DE CUPONES & DESCUENTOS
+      const btnOpenNewCouponModal = document.getElementById("btnOpenNewCouponModal");
+      btnOpenNewCouponModal?.addEventListener("click", () => {
+        (document.getElementById("newCouponCode") as HTMLInputElement).value = "";
+        (document.getElementById("newCouponDesc") as HTMLInputElement).value = "";
+        (document.getElementById("newCouponValue") as HTMLInputElement).value = "";
+        (document.getElementById("newCouponMin") as HTMLInputElement).value = "0";
+        (document.getElementById("newCouponMaxUses") as HTMLInputElement).value = "";
+        modalNewCoupon?.classList.remove("hidden");
+      });
+
+      document.getElementById("formNewCoupon")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btnSave = document.getElementById("btnSaveNewCoupon") as HTMLButtonElement;
+        btnSave.disabled = true;
+        btnSave.innerText = "Guardando...";
+
+        const code = (document.getElementById("newCouponCode") as HTMLInputElement).value.trim();
+        const description = (document.getElementById("newCouponDesc") as HTMLInputElement).value.trim();
+        const discountType = (document.getElementById("newCouponType") as HTMLSelectElement).value as "percentage" | "fixed";
+        const discountValue = parseInt((document.getElementById("newCouponValue") as HTMLInputElement).value, 10);
+        const minOrderAmount = parseInt((document.getElementById("newCouponMin") as HTMLInputElement).value, 10) || 0;
+        const maxUsesVal = (document.getElementById("newCouponMaxUses") as HTMLInputElement).value;
+        const maxUses = maxUsesVal ? parseInt(maxUsesVal, 10) : null;
+
+        try {
+          const { data, error } = await actions.createCoupon({
+            code,
+            description,
+            discountType,
+            discountValue,
+            minOrderAmount,
+            maxUses,
+          });
+          if (error || !data?.success) {
+            showNotice("error", error?.message || "Error al crear el cupón.");
+          } else {
+            showNotice("success", `🎟️ ¡Cupón ${code} creado exitosamente!`);
+            modalNewCoupon?.classList.add("hidden");
+            setTimeout(() => window.location.reload(), 600);
+          }
+        } catch (err: any) {
+          showNotice("error", err.message || "Error de conexión.");
+        } finally {
+          btnSave.disabled = false;
+          btnSave.innerText = "Crear Cupón";
+        }
+      });
+
+      document.querySelectorAll<HTMLButtonElement>(".btn-edit-coupon").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          (document.getElementById("editCouponId") as HTMLInputElement).value = btn.dataset.id || "";
+          (document.getElementById("editCouponCode") as HTMLInputElement).value = btn.dataset.code || "";
+          (document.getElementById("editCouponDesc") as HTMLInputElement).value = btn.dataset.desc || "";
+          (document.getElementById("editCouponType") as HTMLSelectElement).value = btn.dataset.type || "percentage";
+          (document.getElementById("editCouponValue") as HTMLInputElement).value = btn.dataset.val || "";
+          (document.getElementById("editCouponMin") as HTMLInputElement).value = btn.dataset.min || "0";
+          (document.getElementById("editCouponActive") as HTMLSelectElement).value = btn.dataset.active || "1";
+          modalEditCoupon?.classList.remove("hidden");
+        });
+      });
+
+      document.getElementById("formEditCoupon")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btnSave = document.getElementById("btnSaveEditCoupon") as HTMLButtonElement;
+        btnSave.disabled = true;
+        btnSave.innerText = "Guardando...";
+
+        const id = (document.getElementById("editCouponId") as HTMLInputElement).value;
+        const code = (document.getElementById("editCouponCode") as HTMLInputElement).value.trim();
+        const description = (document.getElementById("editCouponDesc") as HTMLInputElement).value.trim();
+        const discountType = (document.getElementById("editCouponType") as HTMLSelectElement).value as "percentage" | "fixed";
+        const discountValue = parseInt((document.getElementById("editCouponValue") as HTMLInputElement).value, 10);
+        const minOrderAmount = parseInt((document.getElementById("editCouponMin") as HTMLInputElement).value, 10) || 0;
+        const isActive = parseInt((document.getElementById("editCouponActive") as HTMLSelectElement).value, 10);
+
+        try {
+          const { data, error } = await actions.updateCoupon({
+            id,
+            code,
+            description,
+            discountType,
+            discountValue,
+            minOrderAmount,
+            isActive,
+          });
+          if (error || !data?.success) {
+            showNotice("error", error?.message || "Error al actualizar cupón.");
+          } else {
+            showNotice("success", `🎟️ Cupón ${code} actualizado exitosamente.`);
+            modalEditCoupon?.classList.add("hidden");
+            setTimeout(() => window.location.reload(), 600);
+          }
+        } catch (err: any) {
+          showNotice("error", err.message || "Error de conexión.");
+        } finally {
+          btnSave.disabled = false;
+          btnSave.innerText = "Guardar Cambios";
+        }
+      });
+
+      document.querySelectorAll<HTMLButtonElement>(".btn-delete-coupon").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.id!;
+          const code = btn.dataset.code!;
+          if (!confirm(`¿Eliminar definitivamente el cupón "${code}"?`)) return;
+
+          try {
+            const { data, error } = await actions.deleteCoupon({ id });
+            if (error || !data?.success) {
+              showNotice("error", error?.message || "Error al eliminar cupón.");
+            } else {
+              showNotice("success", `🗑️ Cupón ${code} eliminado.`);
+              setTimeout(() => window.location.reload(), 600);
+            }
+          } catch (err: any) {
+            showNotice("error", err.message || "Error de conexión.");
+          }
+        });
       });
     </script>
   </body>

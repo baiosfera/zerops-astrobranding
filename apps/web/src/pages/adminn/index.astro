@@ -43,7 +43,7 @@ if (Astro.locals.adminUser) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Acceso Administrativo | Catalina Glamur</title>
     <meta name="robots" content="noindex, nofollow, noarchive" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
   </head>
   <body class="h-full flex items-center justify-center p-4 selection:bg-amber-500 selection:text-black">
     <div class="w-full max-w-md bg-zinc-900/90 border border-zinc-800/80 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
@@ -165,7 +165,7 @@ if (Astro.locals.adminUser) {
 
         <details class="text-xs text-zinc-500 pt-1">
           <summary class="cursor-pointer hover:text-zinc-300 transition-colors font-medium text-center">
-            ¿Preferís ingresar con ID numérico y código OTP?
+            ¿Preferís ingresar con ID numérico y código de verificación?
           </summary>
           <div class="mt-4 space-y-4">
             <!-- Request OTP -->
@@ -190,7 +190,7 @@ if (Astro.locals.adminUser) {
                 id="btnTgRequest"
                 class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-semibold py-2.5 px-4 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
               >
-                <span id="btnTgRequestText">Enviar Código OTP</span>
+                <span id="btnTgRequestText">Enviar Código de Verificación</span>
                 <svg id="btnTgRequestSpinner" class="hidden animate-spin h-4 w-4 text-zinc-950" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -260,7 +260,7 @@ if (Astro.locals.adminUser) {
               class="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/50 transition-all font-mono text-sm"
             />
             <p class="text-xs text-zinc-500 mt-2">
-              Recibirás un código OTP de 6 dígitos en tu WhatsApp registrado.
+              Recibirás un código de verificación de 6 dígitos en tu WhatsApp registrado.
             </p>
           </div>
 
