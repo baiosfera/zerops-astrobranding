@@ -58,6 +58,46 @@ class TestApotelosContracts(unittest.TestCase):
         self.assertEqual(eco.brand_slug, "test-brand")
         self.assertIn("v1", eco.verticals)
 
+    def test_polymorphic_messaging_ecosystem(self):
+        """Test polymorphic TOFU/MOFU/BOFU messaging schema and manifest compilation."""
+        vert_checkout = apotelos.DynamicVerticalSpec(
+            vertical_slug="ecommerce-unit",
+            display_name="Tienda Online",
+            funnel_type=apotelos.CommercialFunnelType.DIRECT_CHECKOUT,
+            unique_mechanism={"name": "Formula X"},
+            primary_offer={"structure": "Pack Starter", "pricing": {"currency": "EUR"}},
+            target_avatar={"pain_points": ["Poco tiempo"]}
+        )
+        eco = apotelos.UniversalBrandEcosystem(
+            brand_slug="global-brand",
+            verticals={"ecommerce-unit": vert_checkout}
+        )
+
+        manifest = apotelos.compile_blackboard_manifest(eco, vert_checkout)
+        self.assertIn("messaging_spec", manifest.model_dump())
+        m_spec = manifest.messaging_spec
+        self.assertEqual(m_spec["currency"], "EUR")
+        self.assertIn("tofu", m_spec)
+        self.assertIn("mofu", m_spec)
+        self.assertIn("bofu", m_spec)
+        self.assertIn("post_conversion", m_spec)
+        self.assertTrue(m_spec["anti_collision"]["cross_channel_suppression"])
+        self.assertEqual(m_spec["anti_collision"]["frequency_cap_hours"], 24)
+
+        # Booking calendar vertical test
+        vert_booking = apotelos.DynamicVerticalSpec(
+            vertical_slug="clinic-consulting",
+            display_name="Clinica Estetica",
+            funnel_type=apotelos.CommercialFunnelType.BOOKING_CALENDAR,
+            unique_mechanism={"name": "Diagnostico 3D"},
+            primary_offer={"structure": "Valoracion VIP"},
+            target_avatar={"pain_points": ["Arrugas"]}
+        )
+        manifest_booking = apotelos.compile_blackboard_manifest(eco, vert_booking)
+        m_booking = manifest_booking.messaging_spec
+        self.assertEqual(m_booking["currency"], "USD")
+        self.assertEqual(m_booking["post_conversion"][0]["priority"], "P1_TRANSACTIONAL")
+
 
 class TestZeroHardcoding(unittest.TestCase):
     """Ensure no hardcoded client/brand names exist in the apotelos script."""

@@ -19,6 +19,7 @@ import urllib.parse
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -41,6 +42,47 @@ class CommercialFunnelType:
     CONTENT_COMMUNITY = "content_community"  # Paid newsletter, digital courses, academy
 
 
+class MessagingChannel(str, Enum):
+    EMAIL = "email"
+    WHATSAPP = "whatsapp"
+    SMS = "sms"
+    WEBHOOK = "webhook"
+    PUSH = "push"
+
+
+class MessagePriority(str, Enum):
+    P1_TRANSACTIONAL = "P1_TRANSACTIONAL"
+    P2_LIFECYCLE = "P2_LIFECYCLE"
+    P3_PROMOTIONAL = "P3_PROMOTIONAL"
+
+
+class MessagingSequenceStep(BaseModel):
+    step_order: int = Field(..., description="1-indexed sequence order")
+    channel: str = Field(default=MessagingChannel.EMAIL.value, description="Delivery channel")
+    delay_minutes: int = Field(default=0, description="Trigger offset delay in minutes")
+    priority: str = Field(default=MessagePriority.P2_LIFECYCLE.value, description="Message priority")
+    template_ref: str = Field(..., description="Semantic template identifier (e.g. welcome_email, cart_recovery)")
+    condition: Optional[str] = Field(default=None, description="Optional condition rule (e.g. unconverted, opt_in)")
+
+
+class AntiCollisionPolicy(BaseModel):
+    cross_channel_suppression: bool = Field(default=True, description="Suppress promotional email if conversational channel active")
+    frequency_cap_hours: int = Field(default=24, description="Max promotional dispatches per contact per window")
+    quiet_hours_start: Optional[int] = Field(default=21, description="Local quiet hours start (e.g. 21 = 9 PM)")
+    quiet_hours_end: Optional[int] = Field(default=8, description="Local quiet hours end (e.g. 8 = 8 AM)")
+    fencing_ttl_seconds: int = Field(default=86400, description="Valkey lock TTL in seconds")
+
+
+class MessagingEcosystemSpec(BaseModel):
+    enabled_channels: List[str] = Field(default_factory=lambda: ["email", "whatsapp"])
+    tofu: List[MessagingSequenceStep] = Field(default_factory=list, description="Top of funnel awareness & capture")
+    mofu: List[MessagingSequenceStep] = Field(default_factory=list, description="Middle of funnel consideration & nurture")
+    bofu: List[MessagingSequenceStep] = Field(default_factory=list, description="Bottom of funnel decision & closing")
+    post_conversion: List[MessagingSequenceStep] = Field(default_factory=list, description="Post conversion onboarding & retention")
+    anti_collision: AntiCollisionPolicy = Field(default_factory=AntiCollisionPolicy)
+    currency: str = Field(default="USD")
+
+
 class DynamicVerticalSpec(BaseModel):
     vertical_slug: str = Field(..., description="Unique kebab-case slug for this business vertical")
     display_name: str = Field(..., description="Public human-readable title of the unit")
@@ -49,6 +91,7 @@ class DynamicVerticalSpec(BaseModel):
     unique_mechanism: Dict[str, Any] = Field(default_factory=dict, description="Proprietary mechanism and contrast")
     primary_offer: Dict[str, Any] = Field(default_factory=dict, description="Value proposition structure and pricing")
     conversion_events: List[str] = Field(default_factory=list, description="Telemetry conversion events")
+    messaging_flows: Optional[MessagingEcosystemSpec] = Field(default=None, description="Polymorphic TOFU/MOFU/BOFU messaging ecosystem specification")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Extensible attributes")
 
 
@@ -68,6 +111,7 @@ class ApotelosManifest(BaseModel):
     seo_aeo_spec: Dict[str, Any]    # Step 2: JSON-LD @graph, llms.txt, semantic entities
     telemetry_spec: Dict[str, Any]  # Step 3: Pixel events, CAPI, GTM, 1st-party cookies
     deployment_spec: Dict[str, Any] # Step 4: Checkout endpoints, gateways, components
+    messaging_spec: Dict[str, Any] = Field(default_factory=dict, description="Omnichannel TOFU/MOFU/BOFU lifecycle messaging and anti-collision contracts")
 
 
 # =====================================================================
@@ -615,10 +659,148 @@ def detect_zerops_capabilities(probe_llm: bool = False) -> Dict[str, Any]:
     }
 
 
+def build_default_messaging_spec(funnel_type: str, currency: str = "USD") -> MessagingEcosystemSpec:
+    """Builds an agnostic, industry-tailored TOFU/MOFU/BOFU omnichannel messaging specification."""
+    policy = AntiCollisionPolicy(
+        cross_channel_suppression=True,
+        frequency_cap_hours=24,
+        quiet_hours_start=21,
+        quiet_hours_end=8,
+        fencing_ttl_seconds=86400
+    )
+
+    if funnel_type == CommercialFunnelType.DIRECT_CHECKOUT:
+        return MessagingEcosystemSpec(
+            enabled_channels=["email", "whatsapp"],
+            tofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P3_PROMOTIONAL.value,
+                    template_ref="welcome_series_intro"
+                )
+            ],
+            mofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=1440,
+                    priority=MessagePriority.P3_PROMOTIONAL.value,
+                    template_ref="product_social_proof_benefits"
+                )
+            ],
+            bofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=30,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="cart_assistance_email", condition="cart_unconverted"
+                ),
+                MessagingSequenceStep(
+                    step_order=2, channel="whatsapp", delay_minutes=180,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="concierge_whatsapp_assistance", condition="cart_unconverted_and_unlocked"
+                )
+            ],
+            post_conversion=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="order_confirmation_receipt"
+                ),
+                MessagingSequenceStep(
+                    step_order=2, channel="whatsapp", delay_minutes=5,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="order_tracking_dispatch"
+                )
+            ],
+            anti_collision=policy,
+            currency=currency
+        )
+    elif funnel_type == CommercialFunnelType.BOOKING_CALENDAR:
+        return MessagingEcosystemSpec(
+            enabled_channels=["email", "whatsapp"],
+            tofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P3_PROMOTIONAL.value,
+                    template_ref="diagnostic_report_delivery"
+                )
+            ],
+            mofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=720,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="case_study_authority"
+                ),
+                MessagingSequenceStep(
+                    step_order=2, channel="whatsapp", delay_minutes=1440,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="consultant_booking_invite", condition="unbooked"
+                )
+            ],
+            bofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="whatsapp", delay_minutes=120,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="limited_slots_closing", condition="unbooked"
+                )
+            ],
+            post_conversion=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="calendar_invite_ics"
+                ),
+                MessagingSequenceStep(
+                    step_order=2, channel="whatsapp", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="appointment_reminder_pre_session"
+                )
+            ],
+            anti_collision=policy,
+            currency=currency
+        )
+    else:  # Generic / LEAD_GENERATION / SUBSCRIPTION
+        return MessagingEcosystemSpec(
+            enabled_channels=["email", "whatsapp"],
+            tofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P3_PROMOTIONAL.value,
+                    template_ref="welcome_onboarding_pack"
+                )
+            ],
+            mofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=1440,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="core_transformation_framework"
+                )
+            ],
+            bofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="whatsapp", delay_minutes=360,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="direct_advisor_inquiry", condition="unconverted"
+                )
+            ],
+            post_conversion=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="welcome_membership_credentials"
+                )
+            ],
+            anti_collision=policy,
+            currency=currency
+        )
+
+
 def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerticalSpec) -> ApotelosManifest:
     """Compile the authoritative Reverse Causality Blackboard Manifest (τε-Final -> τε-0)."""
     ts = datetime.now(timezone.utc).isoformat()
-    currency = vert.primary_offer.get("pricing", {}).get("currency", "COP")
+    currency = vert.primary_offer.get("pricing", {}).get("currency") or os.getenv("DEFAULT_CURRENCY", "USD")
+
+    # Polymorphic Messaging Ecosystem (TOFU / MOFU / BOFU / Post-Conversion)
+    messaging_obj = vert.messaging_flows or build_default_messaging_spec(vert.funnel_type, currency=currency)
+    messaging = messaging_obj.model_dump()
 
     # Domino 4 (τε-Final): Conversión y Cobro
     deployment = {
@@ -685,7 +867,8 @@ def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerti
         copy_manifest=copy_m,
         seo_aeo_spec=seo_aeo,
         telemetry_spec=telemetry,
-        deployment_spec=deployment
+        deployment_spec=deployment,
+        messaging_spec=messaging
     )
 
 
