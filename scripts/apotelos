@@ -395,27 +395,36 @@ def cmd_audit(args):
     print(f"  • Eventos Tele: {vert.conversion_events}\n")
 
 def cmd_plan(args):
-    target = getattr(args, "brand", None) or getattr(args, "target", None)
+    target = getattr(args, "target", None) or getattr(args, "brand", None)
     eco, sinfo = discover_ecosystem(target=target)
-    target_v = args.vertical or (list(eco.verticals.keys())[0] if eco.verticals else "root_vertical")
-    vert = eco.verticals.get(target_v)
-    if not vert:
-        print(f"❌ Vertical '{target_v}' no existe.")
-        sys.exit(1)
+    
+    if args.vertical:
+        target_v = args.vertical
+        if target_v not in eco.verticals:
+            print(f"❌ Error: Vertical '{target_v}' no encontrada en el ecosistema. Disponibles: {list(eco.verticals.keys())}")
+            sys.exit(1)
+        plan_verts = {target_v: eco.verticals[target_v]}
+    else:
+        plan_verts = eco.verticals
 
-    print(f"\n🗺️ Árbol de Regresión Causal Inversa (Apoτέlοs): [{eco.brand_slug}:{vert.vertical_slug}]")
-    print("=" * 65)
-    print("Dominó 4 (τε-Final): Conversión y Cobro")
-    print(f"  └── Funnel: {vert.funnel_type} | Oferta: {vert.primary_offer.get('structure')}")
-    print("Dominó 3 (τε-1): Telemetría y Atribución")
-    print(f"  └── Eventos: {vert.conversion_events} | CAPI, TikTok & GTM 1st-party cookies")
-    print("Dominó 2 (τε-2): Descubrimiento AI-First & SEO Semántico")
-    print(f"  └── /llms.txt + Schema.org @graph ({'Product' if vert.funnel_type == CommercialFunnelType.DIRECT_CHECKOUT else 'LocalBusiness'})")
-    print("Dominó 1 (τε-3): Copywriting Neuro-persuasivo & Ganchos de 3s")
-    print(f"  └── Avatar: {vert.target_avatar.get('pain_points', ['Dolor base'])[0]}")
-    print("Dominó 0 (τε-0): El Primer Dominó — Mecanismo Único Monopolístico")
-    print(f"  └── Monopolio: {vert.unique_mechanism.get('name')}")
-    print("=" * 65 + "\n")
+    print(f"\n🗺️ Árbol de Regresión Causal Inversa (Apoτέlοs): [{eco.brand_slug}] — Matriz: {eco.umbrella_name or 'Mono-marca'}")
+    if sinfo:
+        print(f"📁 Fuente Primaria: {sinfo}")
+    print("=" * 70)
+    for vslug, vert in plan_verts.items():
+        print(f"\n📌 Vertical: [{vslug}] — {vert.display_name}")
+        print("-" * 65)
+        print("Dominó 4 (τε-Final): Conversión y Cobro")
+        print(f"  └── Funnel: {vert.funnel_type} | Oferta: {vert.primary_offer.get('structure', 'Oferta Base')}")
+        print("Dominó 3 (τε-1): Telemetría y Atribución")
+        print(f"  └── Eventos: {vert.conversion_events} | CAPI, TikTok & GTM 1st-party cookies")
+        print("Dominó 2 (τε-2): Descubrimiento AI-First & SEO Semántico")
+        print(f"  └── /llms.txt + Schema.org @graph ({'Product' if vert.funnel_type == CommercialFunnelType.DIRECT_CHECKOUT else 'LocalBusiness'})")
+        print("Dominó 1 (τε-3): Copywriting Neuro-persuasivo & Ganchos de 3s")
+        print(f"  └── Avatar: {vert.target_avatar.get('pain_points', ['Dolor base'])[0]}")
+        print("Dominó 0 (τε-0): El Primer Dominó — Mecanismo Único Monopolístico")
+        print(f"  └── Monopolio: {vert.unique_mechanism.get('name')}")
+    print("\n" + "=" * 70 + "\n")
 
 def check_service_health(url: str, timeout_sec: float = 2.0) -> bool:
     try:
@@ -514,18 +523,21 @@ def main():
 
     # audit
     p_audit = subparsers.add_parser("audit", help="Audita el contrato estático Pydantic de una vertical")
+    p_audit.add_argument("target", nargs="?", default=None, help="Ruta específica o proyecto a inspeccionar")
     p_audit.add_argument("--brand", help="Slug de la marca (opcional)")
     p_audit.add_argument("--vertical", help="Slug de la vertical a auditar")
     p_audit.set_defaults(func=cmd_audit)
 
     # plan
     p_plan = subparsers.add_parser("plan", help="Muestra el árbol de regresión causal inverso")
+    p_plan.add_argument("target", nargs="?", default=None, help="Ruta específica o proyecto a inspeccionar")
     p_plan.add_argument("--brand", help="Slug de la marca (opcional)")
     p_plan.add_argument("--vertical", help="Slug de la vertical a planificar")
     p_plan.set_defaults(func=cmd_plan)
 
     # run
     p_run = subparsers.add_parser("run", help="Despacha el pipeline causal hacia Hermes/CrewAI")
+    p_run.add_argument("target", nargs="?", default=None, help="Ruta específica o proyecto a inspeccionar")
     p_run.add_argument("--brand", help="Slug de la marca (opcional)")
     p_run.add_argument("--vertical", help="Slug de la vertical a ejecutar")
     p_run.add_argument("--tier", choices=["free", "pro"], default="free", help="Tier de inferencia en Bifrost")
