@@ -9,6 +9,7 @@ import sys
 import json
 import re
 import zipfile
+import subprocess
 import xml.etree.ElementTree as ET
 import argparse
 import urllib.request
@@ -86,7 +87,8 @@ def extract_verticals_from_files(v_dir: Path):
     if not brand_name:
         brand_name = v_dir.parent.parent.name if v_dir.name in ("verticals", "dev") else v_dir.name
 
-    ignore_words = {"tierra", "agua", "fuego", "aire", "éter", "eter", "material", "mental", "espiritual", "social", "emocional", "intelectual", "faceta", "firma", "elemento", "plano", "vibracion", "vibración", "proyecto"}
+    ignore_words = {"tierra", "agua", "fuego", "aire", "éter", "eter", "material", "mental", "espiritual", "social", "emocional", "intelectual", "faceta", "firma", "elemento", "plano", "vibracion", "vibración", "proyecto", "asociada", "función", "funcion", "impacto", "valor"}
+    bad_exact = {"escritor", "cantante", "entrenador", "sexologista", "mentoria", "mentoría", "mentor de marcas"}
 
     for f in sorted(v_dir.iterdir()):
         if f.name.startswith("."):
@@ -100,43 +102,73 @@ def extract_verticals_from_files(v_dir: Path):
                 rows = re.findall(r'\|\s*([^|\n]+)\s*\|\s*([^|\n]+)\s*\|\s*([^|\n]+)\s*\|\s*([^|\n]+)\s*\|', txt)
                 for r in rows:
                     c1, c2, c3, c4 = [c.strip() for c in r]
-                    for cand in [c3, c2, c1]:
+                    for cand in [c3, c2]:
                         cand_clean = cand.split("(")[0].strip()
-                        words = [w.lower() for w in re.findall(r'\w+', cand_clean)]
-                        if not words or all(w in ignore_words for w in words):
+                        if re.search(r'^\d+(\s*y\s*\d+)?$', cand_clean):
                             continue
-                        if "/" in cand_clean or any(k in cand_clean for k in ["Damaren", "Kreiss", "Sankana", "Bioenka", "Exhalah"]):
-                            if any(bad in cand_clean.lower() for bad in ["escritor", "cantante", "tierra", "eter"]):
+                        parts = [p.strip() for p in cand_clean.split("/")] if "/" in cand_clean else [cand_clean]
+                        for p in parts:
+                            p_clean = p.strip()
+                            words = [w.lower() for w in re.findall(r'\w+', p_clean)]
+                            if not words or all(w in ignore_words for w in words):
                                 continue
-                            slug = re.sub(r'[^a-z0-9]+', '-', cand_clean.lower().split('/')[0].strip()).strip('-')
+                            if p_clean.lower() in bad_exact:
+                                continue
+                            if re.search(r'^\d+(\s*y\s*\d+)?$', p_clean):
+                                continue
+                            slug = re.sub(r'[^a-z0-9]+', '-', p_clean.lower()).strip('-')
                             if slug and slug not in verticals and len(slug) > 2 and slug not in ignore_words:
-                                fn = CommercialFunnelType.BOOKING_CALENDAR if any(k in cand_clean for k in ["Damaren", "Mentor"]) else (CommercialFunnelType.CONTENT_COMMUNITY if any(k in cand_clean for k in ["Kreiss", "Bioenka"]) else CommercialFunnelType.LEAD_GENERATION)
+                                fn = CommercialFunnelType.BOOKING_CALENDAR if "Damaren" in p_clean else (CommercialFunnelType.CONTENT_COMMUNITY if any(k in p_clean for k in ["Kreiss", "Bioenka"]) else CommercialFunnelType.LEAD_GENERATION)
                                 verticals[slug] = DynamicVerticalSpec(
                                     vertical_slug=slug,
-                                    display_name=cand_clean,
+                                    display_name=p_clean,
                                     funnel_type=fn,
-                                    target_avatar={"source_document": f.name},
-                                    unique_mechanism={"name": f"Firma {cand_clean}"},
-                                    primary_offer={"structure": f"Oferta {cand_clean}"},
+                                    target_avatar={"pain_points": [f"Falta de alineación en {p_clean}"], "source_document": f.name},
+                                    unique_mechanism={"name": f"Firma {p_clean}"},
+                                    primary_offer={"structure": f"Oferta {p_clean}"},
                                     conversion_events=["Purchase" if fn == CommercialFunnelType.DIRECT_CHECKOUT else ("Schedule" if fn == CommercialFunnelType.BOOKING_CALENDAR else "Lead")]
                                 )
-                                break
             except Exception as e:
                 print(f"⚠️ Warning reading docx {f.name}: {e}")
         elif f.suffix == ".pdf":
             source_files.append(f.name)
-            title = f.stem.replace("Que es ", "").replace("que es ", "").strip().title()
-            slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
-            if slug and slug not in verticals:
-                verticals[slug] = DynamicVerticalSpec(
-                    vertical_slug=slug,
-                    display_name=title,
-                    funnel_type=CommercialFunnelType.LEAD_GENERATION,
-                    target_avatar={"source_document": f.name},
-                    unique_mechanism={"name": f"Tesis {title}"},
-                    primary_offer={"structure": f"Programa {title}"},
-                    conversion_events=["Lead"]
-                )
+            try:
+                pdf_txt = subprocess.check_output(["pdftotext", str(f), "-"], stderr=subprocess.DEVNULL).decode("utf-8", errors="ignore")
+            except Exception:
+                pdf_txt = ""
+
+            pdf_entities = [
+                ("astrotipia", "Astrotipia / PaaS & Reportes", CommercialFunnelType.LEAD_GENERATION, "Metodología Integrada de Branding Astronumérico", "Reportes Astrotipia (Drip)"),
+                ("synthemika", "Synthemika Engine / Certificación", CommercialFunnelType.SUBSCRIPTION, "Engine de Síntesis e Integración de 6 Sistemas", "Certificación Synthemika Practitioner"),
+                ("numenesis", "Numenesis / Mentoría High Ticket", CommercialFunnelType.BOOKING_CALENDAR, "Activación del Propósito Divino en Marcas Cósmicas", "Mentoría High Ticket ($3,000-$5,000 USD)")
+            ]
+            matched_pdf = False
+            for slug, dname, fn, mech, offer in pdf_entities:
+                if slug in pdf_txt.lower():
+                    matched_pdf = True
+                    if slug not in verticals:
+                        verticals[slug] = DynamicVerticalSpec(
+                            vertical_slug=slug,
+                            display_name=dname,
+                            funnel_type=fn,
+                            target_avatar={"pain_points": [f"Bloqueo de propósito cósmico o integración en {dname}"], "source_document": f.name},
+                            unique_mechanism={"name": mech},
+                            primary_offer={"structure": offer},
+                            conversion_events=["Schedule" if fn == CommercialFunnelType.BOOKING_CALENDAR else ("Purchase" if fn == CommercialFunnelType.DIRECT_CHECKOUT else "Lead")]
+                        )
+            if not matched_pdf:
+                title = f.stem.replace("Que es ", "").replace("que es ", "").strip().title()
+                slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+                if slug and slug not in verticals:
+                    verticals[slug] = DynamicVerticalSpec(
+                        vertical_slug=slug,
+                        display_name=title,
+                        funnel_type=CommercialFunnelType.LEAD_GENERATION,
+                        target_avatar={"source_document": f.name},
+                        unique_mechanism={"name": f"Tesis {title}"},
+                        primary_offer={"structure": f"Programa {title}"},
+                        conversion_events=["Lead"]
+                    )
         elif f.suffix in (".md", ".txt"):
             source_files.append(f.name)
             title = f.stem.replace("-", " ").replace("_", " ").title()
