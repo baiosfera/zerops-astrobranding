@@ -77,23 +77,51 @@ def discover_ecosystem() -> UniversalBrandEcosystem:
         except Exception as e:
             print(f"⚠️ Warning: Error parsing {p1_json}: {e}")
 
-    # 2. brandbook.json with "verticals"
-    bb_path = root / "brandbook.json"
-    if bb_path.exists():
-        try:
-            bb_data = json.loads(bb_path.read_text(encoding="utf-8"))
-            brand_name = bb_data.get("identity", {}).get("brandName", bb_data.get("brand_name", root.name))
-            brand_slug = brand_name.lower().replace(" ", "-")
-            verticals_dict = {}
-            if "verticals" in bb_data and isinstance(bb_data["verticals"], dict):
-                for vslug, vdata in bb_data["verticals"].items():
-                    vdata["vertical_slug"] = vslug
-                    if "display_name" not in vdata:
-                        vdata["display_name"] = vslug.replace("-", " ").title()
-                    verticals_dict[vslug] = DynamicVerticalSpec.model_validate(vdata)
-                return UniversalBrandEcosystem(brand_slug=brand_slug, umbrella_name=brand_name, verticals=verticals_dict)
-        except Exception as e:
-            print(f"⚠️ Warning: Error reading brandbook: {e}")
+    # 2. brandbook.json in workspace or localstorage (Dynamic Project Resolution)
+    project_env = os.getenv("PROJECT_NAME", "")
+    bb_candidates = [
+        root / "brandbook.json",
+        ls_path / project_env / "dev" / "brandbook.json",
+        ls_path / project_env / "brandbook.json",
+        ls_path / "CATALINAGLAMUR" / "dev" / "brandbook.json",
+        ls_path / "brand" / "brandbook.json"
+    ]
+    # Scan localstorage subdirs if not found yet
+    if ls_path.exists():
+        for sub in ls_path.iterdir():
+            if sub.is_dir() and (sub / "dev" / "brandbook.json").exists():
+                bb_candidates.append(sub / "dev" / "brandbook.json")
+
+    for bb_path in bb_candidates:
+        if bb_path and bb_path.exists():
+            try:
+                bb_data = json.loads(bb_path.read_text(encoding="utf-8"))
+                brand_name = bb_data.get("metadata", {}).get("brand_name") or bb_data.get("identity", {}).get("brandName", bb_data.get("brand_name", ""))
+                if not brand_name and project_env:
+                    brand_name = project_env
+                if brand_name:
+                    brand_slug = brand_name.lower().replace(" ", "-")
+                    verticals_dict = {}
+                    if "verticals" in bb_data and isinstance(bb_data["verticals"], dict):
+                        for vslug, vdata in bb_data["verticals"].items():
+                            vdata["vertical_slug"] = vslug
+                            if "display_name" not in vdata:
+                                vdata["display_name"] = vslug.replace("-", " ").title()
+                            verticals_dict[vslug] = DynamicVerticalSpec.model_validate(vdata)
+                    else:
+                        # Auto-infer root vertical for the actual identified brand
+                        verticals_dict["root_vertical"] = DynamicVerticalSpec(
+                            vertical_slug="root_vertical",
+                            display_name=f"{brand_name} Principal",
+                            funnel_type=CommercialFunnelType.DIRECT_CHECKOUT,
+                            target_avatar={"pain_points": ["Dolor de avatar no registrado"], "desires": ["Transformación de marca"]},
+                            unique_mechanism={"name": f"Mecanismo {brand_name}", "contrast": "Alternativas convencionales"},
+                            primary_offer={"structure": "Catálogo Directo", "pricing": {"currency": "COP", "amount": 0}},
+                            conversion_events=["Purchase", "InitiateCheckout"]
+                        )
+                    return UniversalBrandEcosystem(brand_slug=brand_slug, umbrella_name=brand_name, verticals=verticals_dict)
+            except Exception as e:
+                print(f"⚠️ Warning: Error reading brandbook from {bb_path}: {e}")
 
     # 3. Persistent LocalStorage NVMe
     p3 = ls_path / "brand" / "ecosystem.json"

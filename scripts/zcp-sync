@@ -50,10 +50,13 @@ sync_project() {
     local drive_dir="$DRIVE_BASE/$proj"
     local storage_dir="$STORAGE_BASE/$proj"
 
-    # Resolver coincidencia insensible a mayúsculas si no coincide exacto
+    # Resolver coincidencia insensible a mayúsculas y subcadenas si no coincide exacto
     if [ ! -d "$drive_dir" ]; then
+        local p_norm="$(echo "$proj" | tr '[:lower:]' '[:upper:]' | tr -cd '[:alnum:]')"
         for d in "$DRIVE_BASE"/*; do
-            if [ -d "$d" ] && [ "$(basename "$d" | tr '[:lower:]' '[:upper:]')" = "$(echo "$proj" | tr '[:lower:]' '[:upper:]')" ]; then
+            [ -d "$d" ] || continue
+            local d_norm="$(basename "$d" | tr '[:lower:]' '[:upper:]' | tr -cd '[:alnum:]')"
+            if [ "$d_norm" = "$p_norm" ] || [[ "$d_norm" == *"$p_norm"* ]] || [[ "$p_norm" == *"$d_norm"* ]]; then
                 drive_dir="$d"
                 proj="$(basename "$d")"
                 storage_dir="$STORAGE_BASE/$proj"

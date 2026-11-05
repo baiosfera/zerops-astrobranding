@@ -527,6 +527,12 @@ if [ ! -L "$LOCAL_ARTIFACTS" ]; then
 fi
 echo "  ✓ Symlink de /artifacts verificado -> $SSOT_ARTIFACTS"
 
+# 2a-ter. Sincronización automática de datos de marca desde Drive SSoT hacia Local Storage
+if [ -n "${TARGET_PROJECT:-}" ] && [ -f "$REPO_DIR/scripts/zcp-sync" ]; then
+    echo "• [2a-ter] Sincronizando datos de marca ($TARGET_PROJECT) desde Google Drive hacia Local Storage..."
+    bash "$REPO_DIR/scripts/zcp-sync" "$TARGET_PROJECT" 2>/dev/null || true
+fi
+
 # 2a-bis. Aprovisionar Persistencia Híbrida 3-Tier Zero-Data-Loss de Engram
 echo "• [2a-bis] Verificando persistencia 3-Tier Zero-Data-Loss para Engram ($APP_IDENTITY_LOWER)..."
 if [ -f "$REPO_DIR/scripts/engram-sync" ]; then
