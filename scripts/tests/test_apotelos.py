@@ -187,6 +187,32 @@ class TestApotelosScaffold(unittest.TestCase):
         self.assertIn("Sensor Algorítmico 360", content)                  # Domino 0: Unique mechanism
         self.assertIn("Diagnóstico de 15 Puntos", content)               # Domino 4: Primary offer
 
+    def test_anti_chassis_contamination_guard(self):
+        """Ensure writing to upstream chassis /var/www/zerops-astrobranding is strictly blocked."""
+        v = apotelos.DynamicVerticalSpec(
+            vertical_slug="test-v",
+            display_name="Test",
+            funnel_type=apotelos.CommercialFunnelType.DIRECT_CHECKOUT,
+            unique_mechanism={"name": "M"},
+            primary_offer={"structure": "O"},
+            target_avatar={"pain_points": ["P"]}
+        )
+        eco = apotelos.UniversalBrandEcosystem(brand_slug="test-brand", verticals={"test-v": v})
+        manifest = apotelos.compile_blackboard_manifest(eco, v)
+
+        # 1. Target resolution never returns upstream chassis
+        resolved_dir = apotelos.resolve_scaffold_target_dir("test-brand")
+        self.assertFalse(
+            "/var/www/zerops-astrobranding/apps/astrobranding" in str(resolved_dir),
+            f"Resolved dir contaminated upstream chassis: {resolved_dir}"
+        )
+
+        # 2. Direct attempt to write inside upstream chassis raises ValueError
+        contaminated_file = Path("/var/www/zerops-astrobranding/apps/astrobranding/src/pages/test.astro")
+        with self.assertRaises(ValueError) as ctx:
+            apotelos.scaffold_astro_page(manifest, contaminated_file)
+        self.assertIn("CONTAMINATION HAZARD", str(ctx.exception))
+
 
 class TestDynamicZeropsDiscovery(unittest.TestCase):
     """Test runtime discovery and blackboard compilation."""

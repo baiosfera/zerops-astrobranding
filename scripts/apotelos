@@ -691,6 +691,41 @@ def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerti
 # 5b. ASTRO 5 SSR CODE SCAFFOLDING & MATERIALIZATION (No Bare Skeletons)
 # =====================================================================
 
+def resolve_scaffold_target_dir(brand_slug: str, custom_output_dir: Optional[str] = None) -> Path:
+    """
+    Resolve the target directory for Astro 5 SSR scaffolding.
+    CRITICAL ARCHITECTURAL INVARIANT: NEVER write brand pages into the upstream
+    chassis repository (/var/www/zerops-astrobranding). Brand apps live in dedicated
+    runtime mounts (/var/www/webdev, /var/www/web), brand app repos (/var/www/apps/<brand>),
+    or explicitly provided output directories.
+    """
+    if custom_output_dir:
+        p = Path(custom_output_dir)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    # 1. Active application runtime mount in Zerops (standard dev workspace)
+    for runtime_cand in [
+        Path("/var/www/webdev/src/pages"),
+        Path("/var/www/web/src/pages"),
+        Path(f"/var/www/{brand_slug}-web/src/pages"),
+        Path(f"/var/www/{brand_slug}/src/pages")
+    ]:
+        if runtime_cand.exists() and runtime_cand.is_dir():
+            return runtime_cand
+
+    # 2. Dedicated brand app workspace outside chassis
+    brand_app_pages = Path(f"/var/www/apps/{brand_slug}/src/pages")
+    if brand_app_pages.parent.exists():
+        brand_app_pages.mkdir(parents=True, exist_ok=True)
+        return brand_app_pages
+
+    # 3. Persistent LocalStorage brand app workspace (outside git chassis)
+    ls_pages = get_local_storage_path() / "apps" / brand_slug / "src" / "pages"
+    ls_pages.mkdir(parents=True, exist_ok=True)
+    return ls_pages
+
+
 def scaffold_astro_page(
     manifest: ApotelosManifest,
     target_file: Path,
@@ -698,6 +733,19 @@ def scaffold_astro_page(
     as_root: bool = False
 ) -> Path:
     """Materialize production-ready Astro 5 SSR code from an Apotelos Blackboard manifest."""
+    # Invariant: Block contamination of upstream chassis
+    chassis_root = Path("/var/www/zerops-astrobranding")
+    try:
+        resolved_target = target_file.resolve()
+        if chassis_root in resolved_target.parents and "apps/astrobranding" in str(resolved_target):
+            raise ValueError(
+                f"CONTAMINATION HAZARD: Cannot write brand page to upstream chassis '{target_file}'. "
+                f"Use a dedicated app workspace (/var/www/webdev, /var/www/apps/{manifest.brand_slug}) or --output-dir."
+            )
+    except Exception as e:
+        if "CONTAMINATION HAZARD" in str(e):
+            raise
+
     target_file.parent.mkdir(parents=True, exist_ok=True)
 
     brand_title = manifest.grounding.get("umbrella_name") or manifest.brand_slug.replace("-", " ").title()
@@ -1061,14 +1109,8 @@ def cmd_run(args):
 
     # 4. Optional physical scaffolding (No Bare Skeletons)
     if getattr(args, "scaffold", False):
-        root = get_workspace_root()
-        for cand in [root / "apps" / "astrobranding" / "src" / "pages", root / "src" / "pages", root / "pages"]:
-            if cand.exists() and cand.is_dir():
-                out_dir = cand
-                break
-        else:
-            out_dir = root / "src" / "pages"
-        target_path = out_dir / f"{vert.vertical_slug}.astro"
+        target_dir = resolve_scaffold_target_dir(eco.brand_slug, getattr(args, "output_dir", None))
+        target_path = target_dir / f"{vert.vertical_slug}.astro"
         scaffold_astro_page(manifest, target_path)
         print(f"✅ Código Astro 5 SSR materializado en: {target_path}\n")
 
@@ -1089,20 +1131,7 @@ def cmd_scaffold(args):
 
     manifest = compile_blackboard_manifest(eco, vert)
 
-    root = get_workspace_root()
-    if args.output_dir:
-        out_dir = Path(args.output_dir)
-    else:
-        for cand in [
-            root / "apps" / "astrobranding" / "src" / "pages",
-            root / "src" / "pages",
-            root / "pages"
-        ]:
-            if cand.exists() and cand.is_dir():
-                out_dir = cand
-                break
-        else:
-            out_dir = root / "src" / "pages"
+    out_dir = resolve_scaffold_target_dir(eco.brand_slug, args.output_dir)
 
     filename = "index.astro" if args.as_root else f"{vert.vertical_slug}.astro"
     target_path = out_dir / filename
