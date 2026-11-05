@@ -75,8 +75,8 @@ Apotelos resuelve la configuración de marcas y verticales en el siguiente orden
 
 ### Formato de `/.apotelos/ecosystem.yaml`
 ```yaml
-brand_slug: "catalinaglamur"
-umbrella_name: "Catalina Glamur Atelier"
+brand_slug: "universal-brand"
+umbrella_name: "Universal Brand Holding"
 design_tokens_ref: "brandbook.json"
 
 verticals:
@@ -87,11 +87,11 @@ verticals:
       pain_points: ["Pretinas que se enrollan al entrenar", "Telas transparentes"]
       desires: ["Ajuste anatómico estético", "Soporte de alta compresión"]
     unique_mechanism:
-      name: "Tejido Seamless Anatómico CG"
+      name: "Tejido Seamless Anatómico"
       contrast: "Frente a licras sintéticas que pierden elasticidad al tercer lavado"
     primary_offer:
       structure: "Pack Deportivo 2x1 con Flete Contra Entrega"
-      pricing: { currency: "COP", amount: 150000 }
+      pricing: { currency: "USD", amount: 49.00 }
     conversion_events: ["Purchase", "InitiateCheckout"]
 
   aesthetics:
@@ -101,13 +101,30 @@ verticals:
       pain_points: ["Tratamientos invasivos dolorosos", "Falta de diagnóstico biotipológico"]
       desires: ["Rejuvenecimiento natural", "Tonificación no invasiva"]
     unique_mechanism:
-      name: "Protocolo Dermo-Activo Glamur"
+      name: "Protocolo Dermo-Activo Exclusivo"
       contrast: "Frente a clínicas genéricas sin aparatología de vanguardia"
     primary_offer:
-      structure: "Valoración Facial Gratuita + 20% en Paquete de 5 Sesiones"
-      pricing: { currency: "COP", amount: 280000 }
+      structure: "Valoración Facial Gratuita + 20% en Paquete de Sesiones"
+      pricing: { currency: "USD", amount: 79.00 }
     conversion_events: ["Lead", "Schedule", "ContactWhatsApp"]
 ```
+
+---
+
+## 3.5. Ecosistema de Mensajería Polimórfica (TOFU / MOFU / BOFU & Anti-Colisión)
+
+Apotelos formaliza la orquestación omnicanal de forma desacoplada de cualquier marca o vertical:
+
+1. **Etapas de Ciclo de Vida**:
+   - **TOFU (Atracción y Captura)**: Entrega instantánea de lead magnet, onboarding inicial, bienvenida y confirmación de opt-in.
+   - **MOFU (Consideración y Nurture)**: Casos de estudio, educación sobre el Mecanismo Único, invitación a agendamiento o demo interactiva.
+   - **BOFU (Decisión y Conversión)**: Asistencia en checkout o recordatorio de slots de agenda, con cálculo dinámico de descuento acotado (`BoundedDiscount`) según margen.
+   - **POST_CONVERSION (Onboarding y Retención)**: Recibos transaccionales (P1), guías de uso, tracking y solicitud de feedback.
+
+2. **Políticas de Anti-Colisión & Fencing**:
+   - **Message Prioritization**: P1 (Transaccional) ignora frequency caps; P2 (Lifecycle) y P3 (Promocional) se subordinan a topes de frecuencia de 24 horas y `Quiet Hours` (21:00 a 08:00).
+   - **Cross-Channel Suppression**: Si el canal conversacional (WhatsApp) está activo, se silencia el correo promocional saliente.
+   - **Fencing Tokens en Valkey**: Cambios de etapa invalidan jobs diferidos en BullMQ mediante versionado monotónico (`HINCRBY stage_version`).
 
 ---
 
