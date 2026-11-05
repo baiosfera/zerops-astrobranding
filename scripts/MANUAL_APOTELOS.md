@@ -128,13 +128,31 @@ apotelos audit --vertical=activewear
 # 4. Ver el árbol de regresión causal inverso
 apotelos plan --vertical=activewear
 
-# 5. Despachar el pipeline autónomo hacia Hermes/CrewAI
+# 5. Despachar el pipeline autónomo hacia Hermes/CrewAI o Blackboard Offline
 apotelos run --vertical=activewear --tier=free --linear-issue=BAI-439
+
+# 6. Materializar el código Astro 5 SSR (No Bare Skeletons)
+apotelos scaffold --vertical=activewear --route-mode=subroute
+# O como landing principal root:
+apotelos scaffold --vertical=activewear --as-root
+# O en modo subdominio (activewear.tudominio.com):
+apotelos scaffold --vertical=activewear --route-mode=subdomain
 ```
 
 ---
 
-## 5. Arquitectura Multi-Agente & Patrón Blackboard
+## 5. Materialización de Código Astro 5 SSR (Anti-Esqueletos)
+
+Apotelos erradica la parálisis de los "manifiestos vacíos". El comando `scaffold` transforma instantáneamente el manifiesto Blackboard en una página funcional Astro 5 SSR con:
+- **Dominó 4 (τε-Final)**: CTA de checkout o lead con pasarelas (Wompi, COD, WhatsApp).
+- **Dominó 3 (τε-1)**: Script de telemetría de primera parte (`__attr_session`) a 90 días y CAPI.
+- **Dominó 2 (τε-2)**: Knowledge graph Schema.org (`Product` o `LocalBusiness`) inyectado en JSON-LD.
+- **Dominó 1 (τε-3)**: Hero con gancho de 3 segundos, ecuación de Hormozi y garantía incondicional.
+- **Dominó 0 (τε-0)**: Sección de Mecanismo Único (Category of One) y contraste frente al mercado.
+
+---
+
+## 6. Arquitectura Multi-Agente & Patrón Blackboard
 
 ### Por qué el encadenamiento `Task(context=[...])` de CrewAI es insuficiente
 En el código fuente de CrewAI, `Task(context=...)` concatena strings planos (`task.output.raw`). Provoca token bloat cuadrático y pierde las instancias Pydantic validadas.

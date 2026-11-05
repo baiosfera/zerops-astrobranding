@@ -147,6 +147,47 @@ Avatar: Directores generales con cuellos de botella operativos
         self.assertIn("academia-online", slugs)
 
 
+class TestApotelosScaffold(unittest.TestCase):
+    """Test physical code scaffolding of Astro 5 SSR pages from Blackboard manifests."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.temp_path = Path(self.temp_dir.name)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_scaffold_generates_valid_astro_page(self):
+        v = apotelos.DynamicVerticalSpec(
+            vertical_slug="auditoria-seo",
+            display_name="Auditoría SEO Local",
+            funnel_type=apotelos.CommercialFunnelType.LEAD_GENERATION,
+            unique_mechanism={"name": "Sensor Algorítmico 360", "contrast": "Frente a reportes manuales genéricos"},
+            primary_offer={"structure": "Diagnóstico de 15 Puntos + Plan de Acción", "pricing": {"currency": "COP", "amount": 150000}},
+            target_avatar={"pain_points": ["Fichas suspendidas en Google Maps"]},
+            conversion_events=["Lead", "Contact"]
+        )
+        eco = apotelos.UniversalBrandEcosystem(
+            brand_slug="baiosfera",
+            umbrella_name="Baiosfera",
+            verticals={"auditoria-seo": v}
+        )
+        manifest = apotelos.compile_blackboard_manifest(eco, v)
+        out_file = self.temp_path / "auditoria-seo.astro"
+        res_path = apotelos.scaffold_astro_page(manifest, out_file)
+
+        self.assertTrue(res_path.exists())
+        content = res_path.read_text(encoding="utf-8")
+
+        # Verify Astro Structure & Reverse Causality Dominos
+        self.assertTrue(content.startswith("---"))
+        self.assertIn("application/ld+json", content)                     # Domino 2: Schema.org
+        self.assertIn("__attr_session", content)                         # Domino 3: 1st-party cookie telemetry
+        self.assertIn("fichas suspendidas en google maps", content.lower()) # Domino 1: Avatar pain in 3s hook
+        self.assertIn("Sensor Algorítmico 360", content)                  # Domino 0: Unique mechanism
+        self.assertIn("Diagnóstico de 15 Puntos", content)               # Domino 4: Primary offer
+
+
 class TestDynamicZeropsDiscovery(unittest.TestCase):
     """Test runtime discovery and blackboard compilation."""
 
