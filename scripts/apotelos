@@ -1071,6 +1071,20 @@ def cmd_run(args):
 
     if caps["hermes_alive"]:
         print(f"🔗 Despachando tarea a runtime Hermes ({caps['hermes_url']})...")
+        linear_issue = args.linear_issue
+        if not linear_issue:
+            for sf in ["/tmp/.linear_activity_state.json", "/var/www/artifacts/.linear_activity_state.json"]:
+                if os.path.exists(sf):
+                    try:
+                        with open(sf, "r") as f:
+                            l_data = json.load(f)
+                            linear_issue = l_data.get("issueId")
+                            if linear_issue:
+                                print(f"🔗 Auto-vinculando Apotelos con issue activo de Linear: {linear_issue}")
+                                break
+                    except Exception:
+                        pass
+
         payload = {
             "crew_name": "apotelos",
             "input": f"Ejecutar protocolo Apotelos inverso para la vertical '{vert.vertical_slug}' de la marca '{eco.brand_slug}'.",
@@ -1078,7 +1092,7 @@ def cmd_run(args):
             "context": {
                 "manifest_path": str(manifest_file),
                 "manifest": manifest.model_dump(),
-                "linear_issue": args.linear_issue
+                "linear_issue": linear_issue
             }
         }
         try:

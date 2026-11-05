@@ -1683,6 +1683,39 @@ def evaluate_hook(payload: dict) -> dict:
                         )
                     }
 
+        # 0.25 Invariante Linear-First Multi-Servicio & Bootstrap (BAI-430 / Supreme Directive Invariante 2)
+        if args.get("ToolName") in ["zerops_import", "zerops_workflow"]:
+            wf_args = args.get("Arguments", {})
+            wf_action = wf_args.get("action")
+            wf_name = wf_args.get("workflow")
+            is_bootstrap = (args.get("ToolName") == "zerops_import") or (wf_action == "start" and wf_name in ["bootstrap", "launch-production"])
+            if is_bootstrap and not payload.get("test_bypass_linear"):
+                state_file = "/tmp/.linear_activity_state.json"
+                alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
+                has_linear_recent = False
+                for sf in [state_file, alt_state_file]:
+                    if os.path.exists(sf):
+                        try:
+                            with open(sf, "r") as f:
+                                l_data = json.load(f)
+                                l_ts = l_data.get("timestamp", 0)
+                                if time.time() * 1000 - l_ts < 24 * 3600 * 1000:
+                                    has_linear_recent = True
+                                    break
+                        except Exception:
+                            pass
+                if not has_linear_recent:
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            "🏛️ VIOLACIÓN LINEAR-FIRST MULTI-SERVICIO (Supreme Directive Invariante 2 & meta-plan): "
+                            "El aprovisionamiento de infraestructura o importación multi-servicio en Zerops exige "
+                            "haber registrado previamente el proyecto o tickets atómicos en Linear ('linear-cli create-project' "
+                            "o 'linear-cli create \"BAI: <servicio>\"'). Queda prohibido mutar topología a ciegas en el chat "
+                            "sin persistencia física en Linear para evitar saturación de tokens y amnesia."
+                        )
+                    }
+
     # A. File writes / edits guards (Antigravity & Claude Code)
     if tool_name in ["write_to_file", "replace_file_content", "write_file", "edit_file"]:
         target_file = args.get("Path", "") or args.get("TargetFile", "")
@@ -2144,6 +2177,34 @@ def evaluate_hook(payload: dict) -> dict:
                 "decision": "deny",
                 "reason": kill_reason
             }
+
+        # B-0. Linear-First Multi-Servicio & Platform Infra Command Gate (BAI-430)
+        if any(k in cmd for k in ["zcli project import", "zcli service import"]):
+            if not payload.get("test_bypass_linear"):
+                state_file = "/tmp/.linear_activity_state.json"
+                alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
+                has_linear_recent = False
+                for sf in [state_file, alt_state_file]:
+                    if os.path.exists(sf):
+                        try:
+                            with open(sf, "r") as f:
+                                l_data = json.load(f)
+                                l_ts = l_data.get("timestamp", 0)
+                                if time.time() * 1000 - l_ts < 24 * 3600 * 1000:
+                                    has_linear_recent = True
+                                    break
+                        except Exception:
+                            pass
+                if not has_linear_recent:
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            "🏛️ VIOLACIÓN LINEAR-FIRST MULTI-SERVICIO (Supreme Directive Invariante 2 & meta-plan): "
+                            "El aprovisionamiento de infraestructura o importación de servicios en Zerops exige "
+                            "haber registrado previamente el proyecto o tickets atómicos en Linear ('linear-cli create-project' "
+                            "o 'linear-cli create \"BAI: <servicio>\"'). Registrá el ticket en Linear antes de desplegar."
+                        )
+                    }
 
         # B0. SSoT Sovereign Custom Skills Anti-Pollution Shield
         # Only check mutating commands if an actual mutating command was invoked
@@ -3326,6 +3387,62 @@ def run_tests():
         })
         assert any("GROUNDING DE INFRAESTRUCTURA" in msg.get("ephemeralMessage", "") for msg in res_pi_infra.get("injectSteps", [])), f"Expected positive infrastructure grounding in PreInvocation, got {res_pi_infra}"
         print("✓ Test 68 Passed: CoHaLo Positive Infrastructure Grounding Radar")
+
+        # Test 69: Multi-service bootstrap blocked without Linear activity (BAI-430)
+        if os.path.exists(state_file):
+            os.remove(state_file)
+        if os.path.exists(alt_state_file):
+            os.remove(alt_state_file)
+        res_multi_block = evaluate_hook({
+            "toolCall": {
+                "name": "call_mcp_tool",
+                "args": {
+                    "ServerName": "zerops",
+                    "ToolName": "zerops_workflow",
+                    "Arguments": {
+                        "action": "start",
+                        "workflow": "bootstrap",
+                        "intent": "Provision database and valkey"
+                    }
+                }
+            }
+        })
+        assert res_multi_block.get("decision") == "deny" and "LINEAR-FIRST MULTI-SERVICIO" in res_multi_block.get("reason", ""), f"Expected deny on multi-service bootstrap without linear activity, got {res_multi_block}"
+        print("✓ Test 69 Passed: Multi-service bootstrap blocked without Linear activity (BAI-430)")
+
+        # Test 70: Multi-service bootstrap allowed with Linear activity (BAI-430)
+        with open(state_file, "w") as f:
+            json.dump({"timestamp": int(time.time() * 1000), "action": "create-project", "issueId": "BAI-123"}, f)
+        res_multi_allow = evaluate_hook({
+            "toolCall": {
+                "name": "call_mcp_tool",
+                "args": {
+                    "ServerName": "zerops",
+                    "ToolName": "zerops_workflow",
+                    "Arguments": {
+                        "action": "start",
+                        "workflow": "bootstrap",
+                        "intent": "Provision database and valkey"
+                    }
+                }
+            }
+        })
+        assert res_multi_allow.get("decision") != "deny", f"Expected allow on multi-service bootstrap with linear activity, got {res_multi_allow}"
+        print("✓ Test 70 Passed: Multi-service bootstrap allowed with Linear activity (BAI-430)")
+
+        # Test 71: zcli project import command blocked without Linear activity (BAI-430)
+        if os.path.exists(state_file):
+            os.remove(state_file)
+        res_cmd_import_block = evaluate_hook({
+            "toolCall": {
+                "name": "run_command",
+                "args": {
+                    "CommandLine": "zcli project import import.yaml"
+                }
+            }
+        })
+        assert res_cmd_import_block.get("decision") == "deny" and "LINEAR-FIRST MULTI-SERVICIO" in res_cmd_import_block.get("reason", ""), f"Expected deny on zcli project import without linear activity, got {res_cmd_import_block}"
+        print("✓ Test 71 Passed: zcli project import command blocked without Linear activity (BAI-430)")
 
 
     finally:
