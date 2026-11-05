@@ -7,6 +7,9 @@ Part of Zerops Astrobranding & Universal Upstream Tooling.
 import os
 import sys
 import json
+import re
+import zipfile
+import xml.etree.ElementTree as ET
 import argparse
 import urllib.request
 import urllib.error
@@ -64,16 +67,144 @@ def get_local_storage_path() -> Path:
         return Path("/var/www/localstorage")
     return Path("/tmp/localstorage")
 
-def discover_ecosystem() -> UniversalBrandEcosystem:
+def extract_verticals_from_files(v_dir: Path):
+    verticals = {}
+    brand_name = None
+    source_files = []
+
+    # Check parent hierarchy for brandbook.json
+    for p in [v_dir, v_dir.parent, v_dir.parent.parent]:
+        bb = p / "brandbook.json"
+        if bb.exists():
+            try:
+                bd = json.loads(bb.read_text("utf-8"))
+                brand_name = bd.get("metadata", {}).get("brand_name") or bd.get("identity", {}).get("brandName")
+                if brand_name:
+                    break
+            except Exception:
+                pass
+    if not brand_name:
+        brand_name = v_dir.parent.parent.name if v_dir.name in ("verticals", "dev") else v_dir.name
+
+    ignore_words = {"tierra", "agua", "fuego", "aire", "éter", "eter", "material", "mental", "espiritual", "social", "emocional", "intelectual", "faceta", "firma", "elemento", "plano", "vibracion", "vibración", "proyecto"}
+
+    for f in sorted(v_dir.iterdir()):
+        if f.name.startswith("."):
+            continue
+        if f.suffix == ".docx":
+            try:
+                with zipfile.ZipFile(f) as z:
+                    txt = "".join(ET.fromstring(z.read("word/document.xml")).itertext())
+                source_files.append(f.name)
+                # Table rows: | col1 | col2 | col3 | col4 |
+                rows = re.findall(r'\|\s*([^|\n]+)\s*\|\s*([^|\n]+)\s*\|\s*([^|\n]+)\s*\|\s*([^|\n]+)\s*\|', txt)
+                for r in rows:
+                    c1, c2, c3, c4 = [c.strip() for c in r]
+                    for cand in [c3, c2, c1]:
+                        cand_clean = cand.split("(")[0].strip()
+                        words = [w.lower() for w in re.findall(r'\w+', cand_clean)]
+                        if not words or all(w in ignore_words for w in words):
+                            continue
+                        if "/" in cand_clean or any(k in cand_clean for k in ["Damaren", "Kreiss", "Sankana", "Bioenka", "Exhalah"]):
+                            if any(bad in cand_clean.lower() for bad in ["escritor", "cantante", "tierra", "eter"]):
+                                continue
+                            slug = re.sub(r'[^a-z0-9]+', '-', cand_clean.lower().split('/')[0].strip()).strip('-')
+                            if slug and slug not in verticals and len(slug) > 2 and slug not in ignore_words:
+                                fn = CommercialFunnelType.BOOKING_CALENDAR if any(k in cand_clean for k in ["Damaren", "Mentor"]) else (CommercialFunnelType.CONTENT_COMMUNITY if any(k in cand_clean for k in ["Kreiss", "Bioenka"]) else CommercialFunnelType.LEAD_GENERATION)
+                                verticals[slug] = DynamicVerticalSpec(
+                                    vertical_slug=slug,
+                                    display_name=cand_clean,
+                                    funnel_type=fn,
+                                    target_avatar={"source_document": f.name},
+                                    unique_mechanism={"name": f"Firma {cand_clean}"},
+                                    primary_offer={"structure": f"Oferta {cand_clean}"},
+                                    conversion_events=["Purchase" if fn == CommercialFunnelType.DIRECT_CHECKOUT else ("Schedule" if fn == CommercialFunnelType.BOOKING_CALENDAR else "Lead")]
+                                )
+                                break
+            except Exception as e:
+                print(f"⚠️ Warning reading docx {f.name}: {e}")
+        elif f.suffix == ".pdf":
+            source_files.append(f.name)
+            title = f.stem.replace("Que es ", "").replace("que es ", "").strip().title()
+            slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+            if slug and slug not in verticals:
+                verticals[slug] = DynamicVerticalSpec(
+                    vertical_slug=slug,
+                    display_name=title,
+                    funnel_type=CommercialFunnelType.LEAD_GENERATION,
+                    target_avatar={"source_document": f.name},
+                    unique_mechanism={"name": f"Tesis {title}"},
+                    primary_offer={"structure": f"Programa {title}"},
+                    conversion_events=["Lead"]
+                )
+        elif f.suffix in (".md", ".txt"):
+            source_files.append(f.name)
+            title = f.stem.replace("-", " ").replace("_", " ").title()
+            slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+            if slug and slug not in verticals:
+                verticals[slug] = DynamicVerticalSpec(
+                    vertical_slug=slug,
+                    display_name=title,
+                    funnel_type=CommercialFunnelType.LEAD_GENERATION,
+                    target_avatar={"source_document": f.name},
+                    unique_mechanism={"name": f"Metodología {title}"},
+                    primary_offer={"structure": f"Oferta {title}"},
+                    conversion_events=["Lead"]
+                )
+
+    if verticals:
+        return UniversalBrandEcosystem(
+            brand_slug=brand_name.lower().replace(" ", "-"),
+            umbrella_name=brand_name,
+            verticals=verticals
+        ), f"{v_dir} ({', '.join(source_files)})"
+    return None, None
+
+def discover_ecosystem(target: Optional[str] = None) -> tuple[UniversalBrandEcosystem, Optional[str]]:
     root = get_workspace_root()
     ls_path = get_local_storage_path()
+    project_env = os.getenv("PROJECT_NAME", "")
     
+    # 0. Explicit Target Path or Project Name (Priority 1)
+    if target:
+        tp = Path(target)
+        if tp.exists() and tp.is_dir():
+            eco, sinfo = extract_verticals_from_files(tp)
+            if eco:
+                return eco, sinfo
+        # Try resolving as project name
+        for base in [Path("/var/www/baiosfera/PROYECTOS"), ls_path]:
+            for candidate_dir in [
+                base / target / "dev" / "verticals",
+                base / target / "verticals",
+                base / target.upper() / "dev" / "verticals",
+                base / target.upper() / "verticals"
+            ]:
+                if candidate_dir.exists() and candidate_dir.is_dir():
+                    eco, sinfo = extract_verticals_from_files(candidate_dir)
+                    if eco:
+                        return eco, sinfo
+
+    # 0b. Auto-detect verticals/ directory in active project
+    if project_env:
+        for base in [Path("/var/www/baiosfera/PROYECTOS"), ls_path]:
+            for c_dir in [
+                base / project_env / "dev" / "verticals",
+                base / project_env / "verticals",
+                base / project_env.upper() / "dev" / "verticals",
+                base / project_env.upper() / "verticals"
+            ]:
+                if c_dir.exists() and c_dir.is_dir():
+                    eco, sinfo = extract_verticals_from_files(c_dir)
+                    if eco:
+                        return eco, sinfo
+
     # 1. Native .apotelos/ecosystem.json or .yaml
     p1_json = root / ".apotelos" / "ecosystem.json"
     if p1_json.exists():
         try:
             data = json.loads(p1_json.read_text(encoding="utf-8"))
-            return UniversalBrandEcosystem.model_validate(data)
+            return UniversalBrandEcosystem.model_validate(data), str(p1_json)
         except Exception as e:
             print(f"⚠️ Warning: Error parsing {p1_json}: {e}")
 
@@ -119,7 +250,7 @@ def discover_ecosystem() -> UniversalBrandEcosystem:
                             primary_offer={"structure": "Catálogo Directo", "pricing": {"currency": "COP", "amount": 0}},
                             conversion_events=["Purchase", "InitiateCheckout"]
                         )
-                    return UniversalBrandEcosystem(brand_slug=brand_slug, umbrella_name=brand_name, verticals=verticals_dict)
+                    return UniversalBrandEcosystem(brand_slug=brand_slug, umbrella_name=brand_name, verticals=verticals_dict), str(bb_path)
             except Exception as e:
                 print(f"⚠️ Warning: Error reading brandbook from {bb_path}: {e}")
 
@@ -128,7 +259,7 @@ def discover_ecosystem() -> UniversalBrandEcosystem:
     if p3.exists():
         try:
             data = json.loads(p3.read_text(encoding="utf-8"))
-            return UniversalBrandEcosystem.model_validate(data)
+            return UniversalBrandEcosystem.model_validate(data), str(p3)
         except Exception:
             pass
 
@@ -148,13 +279,16 @@ def discover_ecosystem() -> UniversalBrandEcosystem:
                 conversion_events=["Purchase"]
             )
         }
-    )
+    ), "Zero-config fallback (directorio local)"
 
 # --- SUBCOMMAND IMPLEMENTATIONS ---
 
 def cmd_list(args):
-    eco = discover_ecosystem()
+    target = getattr(args, "target", None) or getattr(args, "path_opt", None)
+    eco, sinfo = discover_ecosystem(target=target)
     print(f"\n🏛️ Ecosistema Activo: [{eco.brand_slug}] — Matriz: {eco.umbrella_name or 'Mono-marca'}")
+    if sinfo:
+        print(f"📁 Fuente Primaria: {sinfo}")
     print("=" * 70)
     print(f"{'SLUG':<20} | {'DISPLAY NAME':<25} | {'FUNNEL TYPE':<18}")
     print("-" * 70)
@@ -169,7 +303,7 @@ def cmd_add_vertical(args):
     apotelos_dir.mkdir(parents=True, exist_ok=True)
     eco_file = apotelos_dir / "ecosystem.json"
 
-    eco = discover_ecosystem()
+    eco, _ = discover_ecosystem()
     slug = args.slug.lower().strip()
     name = args.name or slug.replace("-", " ").title()
     funnel = args.funnel or CommercialFunnelType.DIRECT_CHECKOUT
@@ -191,7 +325,8 @@ def cmd_add_vertical(args):
     print(f"✅ Vertical '{slug}' ({name}) registrada con éxito en: {eco_file}")
 
 def cmd_audit(args):
-    eco = discover_ecosystem()
+    target = getattr(args, "brand", None) or getattr(args, "target", None)
+    eco, sinfo = discover_ecosystem(target=target)
     target_v = args.vertical
     if not target_v:
         target_v = list(eco.verticals.keys())[0] if eco.verticals else "root_vertical"
@@ -202,6 +337,8 @@ def cmd_audit(args):
 
     vert = eco.verticals[target_v]
     print(f"\n🔍 Auditando Contrato Estático Pydantic para: [{eco.brand_slug}] -> [{vert.vertical_slug}]")
+    if sinfo:
+        print(f"📁 Fuente: {sinfo}")
     print("-" * 60)
     
     # Assertions
@@ -226,7 +363,8 @@ def cmd_audit(args):
     print(f"  • Eventos Tele: {vert.conversion_events}\n")
 
 def cmd_plan(args):
-    eco = discover_ecosystem()
+    target = getattr(args, "brand", None) or getattr(args, "target", None)
+    eco, sinfo = discover_ecosystem(target=target)
     target_v = args.vertical or (list(eco.verticals.keys())[0] if eco.verticals else "root_vertical")
     vert = eco.verticals.get(target_v)
     if not vert:
@@ -256,7 +394,8 @@ def check_service_health(url: str, timeout_sec: float = 2.0) -> bool:
         return False
 
 def cmd_run(args):
-    eco = discover_ecosystem()
+    target = getattr(args, "brand", None) or getattr(args, "target", None)
+    eco, _ = discover_ecosystem(target=target)
     target_v = args.vertical or (list(eco.verticals.keys())[0] if eco.verticals else "root_vertical")
     vert = eco.verticals.get(target_v)
     if not vert:
@@ -324,6 +463,8 @@ def main():
 
     # list
     p_list = subparsers.add_parser("list", help="Lista las marcas y verticales descubiertas en cascada")
+    p_list.add_argument("target", nargs="?", default=None, help="Ruta específica o proyecto a inspeccionar")
+    p_list.add_argument("--path", "-p", dest="path_opt", default=None, help="Ruta explícita al directorio de verticales")
     p_list.set_defaults(func=cmd_list)
 
     # add-vertical
