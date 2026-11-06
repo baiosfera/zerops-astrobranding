@@ -87,6 +87,8 @@ class DynamicVerticalSpec(BaseModel):
     vertical_slug: str = Field(..., description="Unique kebab-case slug for this business vertical")
     display_name: str = Field(..., description="Public human-readable title of the unit")
     funnel_type: str = Field(default=CommercialFunnelType.DIRECT_CHECKOUT)
+    domain_strategy: str = Field(default="subroute", description="Routing topology: 'multi_tenant_astro', 'isolated_runtime', 'subdomain', or 'subroute'")
+    custom_domain: Optional[str] = Field(default=None, description="Custom domain or FQDN if attached (e.g. brand.com)")
     target_avatar: Dict[str, Any] = Field(default_factory=dict, description="Core pain points and desires")
     unique_mechanism: Dict[str, Any] = Field(default_factory=dict, description="Proprietary mechanism and contrast")
     primary_offer: Dict[str, Any] = Field(default_factory=dict, description="Value proposition structure and pricing")
@@ -112,6 +114,8 @@ class ApotelosManifest(BaseModel):
     telemetry_spec: Dict[str, Any]  # Step 3: Pixel events, CAPI, GTM, 1st-party cookies
     deployment_spec: Dict[str, Any] # Step 4: Checkout endpoints, gateways, components
     messaging_spec: Dict[str, Any] = Field(default_factory=dict, description="Omnichannel TOFU/MOFU/BOFU lifecycle messaging and anti-collision contracts")
+    domain_spec: Dict[str, Any] = Field(default_factory=dict, description="Domain topology and Zerops L7 IP mapping")
+    dossier_path: Optional[str] = Field(default=None, description="Canonical path to Markdown dossier SSoT")
 
 
 # =====================================================================
@@ -892,6 +896,18 @@ def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerti
         "playbooks_dir": str(p_dir) if p_dir else None
     }
 
+    # Domain & Infrastructure Spec (Zerops L7 Balancer Shared IP Architecture)
+    domain_strat = getattr(vert, "domain_strategy", "subroute")
+    custom_dom = getattr(vert, "custom_domain", None)
+    domain_spec = {
+        "strategy": domain_strat,
+        "custom_domain": custom_dom or f"{vert.vertical_slug}.{eco.brand_slug}.com",
+        "zerops_ip_sharing": "L7_HTTP_BALANCER_SHARED_IP",
+        "ip_cost_delta": "$0",
+        "cloudflare_ssl_mode": "Full (strict)",
+        "routing_mechanism": "Host-header middleware rewrite" if domain_strat == "multi_tenant_astro" else ("Independent Zerops LXC runtime" if domain_strat == "isolated_runtime" else "Standard Astro route")
+    }
+
     return ApotelosManifest(
         brand_slug=eco.brand_slug,
         vertical_slug=vert.vertical_slug,
@@ -901,8 +917,128 @@ def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerti
         seo_aeo_spec=seo_aeo,
         telemetry_spec=telemetry,
         deployment_spec=deployment,
-        messaging_spec=messaging
+        messaging_spec=messaging,
+        domain_spec=domain_spec
     )
+
+
+def generate_markdown_dossier(eco: UniversalBrandEcosystem, output_path: Optional[Path] = None) -> Path:
+    """
+    Compiles an exhaustive SSoT Markdown Dossier of approved verticals, mechanisms,
+    offers, and domain routing topology. Persisted so other agents (Hermes, CrewAI, Pidev)
+    and human architects have an immutable reference with zero exploratory token burn.
+    """
+    ts = datetime.now(timezone.utc).isoformat()
+    brand_title = eco.umbrella_name or eco.brand_slug.replace("-", " ").title()
+
+    if not output_path:
+        root = get_workspace_root()
+        dossier_dir = root / ".apotelos" / "dossiers"
+        dossier_dir.mkdir(parents=True, exist_ok=True)
+        output_path = dossier_dir / f"{eco.brand_slug}_approved_dossier.md"
+
+    # Mirror to persistent localstorage if available
+    ls_path = get_local_storage_path()
+    ls_mirror_path = None
+    if ls_path.exists():
+        ls_dossier_dir = ls_path / "dossiers"
+        try:
+            ls_dossier_dir.mkdir(parents=True, exist_ok=True)
+            ls_mirror_path = ls_dossier_dir / f"{eco.brand_slug}_approved_dossier.md"
+        except Exception:
+            pass
+
+    md_lines = [
+        f"# DOSSIER SSoT: {brand_title} (`{eco.brand_slug}`)",
+        "> **Compilado por Protocolo Apotelos (Reversa Causal τε-Final -> τε-0)**",
+        f"> **Timestamp UTC:** `{ts}` | **Estado:** `APPROVED (SSoT)` | **Matriz:** `{brand_title}`",
+        "",
+        "---",
+        "",
+        "## 1. Topología de Infraestructura y Dominios (Zerops + Cloudflare)",
+        "",
+        "| Parámetro | Configuración Canónica | Justificación Técnica |",
+        "|---|---|---|",
+        "| **Política de IP Zerops** | **1 sola IP L7 Balancer ($3 USD/mes)** | El L7 Balancer de Zerops (Nginx HA) rutea múltiples dominios por SNI/Host. Cero costo de IP extra. |",
+        "| **Modo SSL Cloudflare** | **Full (strict)** | Cifra extremo a extremo (Edge Cloudflare <-> L7 Balancer Zerops) evitando bucles de redirección. |",
+        "| **Impacto en SEO** | **CERO (Neutro / Aislado)** | Cada dominio tiene su propio `canonical`, `sitemap.xml` y `robots.txt`. IP compartida es estándar universal. |",
+        "",
+        "### Matriz de Dominios por Vertical:",
+        "| Vertical Slug | Display Name | Estrategia de Dominio | Dominio Asignado / FQDN | Mecanismo de Enrutamiento |",
+        "|---|---|---|---|---|"
+    ]
+
+    for slug, v in eco.verticals.items():
+        dom_strat = getattr(v, "domain_strategy", "subroute")
+        c_dom = getattr(v, "custom_domain", None) or f"{slug}.{eco.brand_slug}.com"
+        mech_route = "Astro `middleware.ts` host rewrite" if dom_strat == "multi_tenant_astro" else ("Runtime Bun LXC dedicado" if dom_strat == "isolated_runtime" else "Subruta estándar")
+        md_lines.append(f"| `{slug}` | {v.display_name} | `{dom_strat}` | `{c_dom}` | {mech_route} |")
+
+    md_lines.extend([
+        "",
+        "---",
+        "",
+        "## 2. Registro Maestro de Verticales de Negocio Aprobadas",
+        "",
+        "| Slug | Funnel Type | Mecanismo Único (τε-0) | Oferta Irresistible (τε-Final) | Eventos Telemetría (τε-1) | Schema.org (τε-2) |",
+        "|---|---|---|---|---|---|"
+    ])
+
+    for slug, v in eco.verticals.items():
+        funnel = v.funnel_type
+        mech = v.unique_mechanism.get("name", f"Mecanismo {v.display_name}")
+        offer = v.primary_offer.get("structure", f"Oferta {v.display_name}")
+        events = ", ".join(v.conversion_events) if v.conversion_events else "Lead"
+        schema_t = "Product" if funnel == CommercialFunnelType.DIRECT_CHECKOUT else "LocalBusiness"
+        md_lines.append(f"| `{slug}` | `{funnel}` | **{mech}** | {offer} | `{events}` | `{schema_t}` |")
+
+    md_lines.extend([
+        "",
+        "---",
+        "",
+        "## 3. Plan DAG de Ejecución en Linear (5 BAIs Canónicos)",
+        "",
+        "Cada vertical aprobada se descompone en 5 tickets atómicos e independientes (Invariante Anti-Monolítico):",
+        "",
+        "```mermaid",
+        "flowchart RL",
+        "    BAI4[\"BAI-4: Conversión & Checkout (τε-Final)<br>Wompi / COD OTP / Booking Calendar\"] --> BAI3[\"BAI-3: Telemetría & Atribución (τε-1)<br>Meta CAPI SHA-256 + 1st-party cookie\"]",
+        "    BAI3 --> BAI2[\"BAI-2: Descubrimiento AI/SEO (τε-2)<br>/llms.txt + Schema.org @graph\"]",
+        "    BAI2 --> BAI1[\"BAI-1: Copywriting & Oferta (τε-3)<br>3s Hook + Hormozi Equation\"]",
+        "    BAI1 --> BAI0[\"BAI-0: Mecanismo Único Monopolístico (τε-0)<br>00_category_of_one_playbook.md\"]",
+        "```",
+        "",
+        "1. **`BAI-0` (Dominó 0 / τε-0)**: Extracción y formalización del Mecanismo Único Monopolístico en `grounding`.",
+        "2. **`BAI-1` (Dominó 1 / τε-3)**: Ganchos de 3 segundos, desglose de objeciones y ecuación de valor de Hormozi.",
+        "3. **`BAI-2` (Dominó 2 / τε-2)**: Grafo Schema.org tipado, endpoints `/llms.txt` y metadatos semánticos.",
+        "4. **`BAI-3` (Dominó 3 / τε-1)**: Dispatcher CAPI, Google Consent Mode v2 y cookie `__attr_session` a 90 días.",
+        "5. **`BAI-4` (Dominó 4 / τε-Final)**: Maquetación de página Astro 5 SSR (`scaffold`), Server Actions y pasarelas.",
+        "",
+        "---",
+        "",
+        "## 4. Handover para Hermes-Agent, CrewAI y Pidev",
+        "",
+        "> [!IMPORTANT]",
+        "> **Directiva Anti-Token Burn para Agentes**: Los agentes en runtimes secundarios (`hermes`, `pidev`) NO deben",
+        "> volver a analizar archivos DOCX/PDF ni redescubrir verticales. Este documento y los manifiestos en",
+        "> `/.apotelos/manifests/*.json` son la Verdad Inmutable Aprobada por el Arquitecto.",
+        "",
+        "- **Hermes-Agent (Python)**: Leer `/var/www/localstorage/manifests/{brand}_{vertical}.json`. Usar `pydantic-ai` para gobernar las cuadrillas CrewAI y validar mutaciones GraphQL en Linear.",
+        "- **Pidev (Astro / Gentle-Pi)**: Leer `deployment_spec` y materializar componentes en `src/pages/` hidratando `templates/astro/`.",
+        ""
+    ])
+
+    content = "\n".join(md_lines)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(content, encoding="utf-8")
+
+    if ls_mirror_path:
+        try:
+            ls_mirror_path.write_text(content, encoding="utf-8")
+        except Exception:
+            pass
+
+    return output_path
 
 
 # =====================================================================
@@ -1308,6 +1444,10 @@ def cmd_run(args):
     manifest_dir.mkdir(parents=True, exist_ok=True)
     manifest_file = manifest_dir / f"{eco.brand_slug}_{vert.vertical_slug}.json"
 
+    # 2b. Automatically generate & link comprehensive SSoT Markdown Dossier
+    dossier_file = generate_markdown_dossier(eco)
+    manifest.dossier_path = str(dossier_file)
+
     with open(manifest_file, "w", encoding="utf-8") as f:
         json.dump(manifest.model_dump(), f, indent=2, ensure_ascii=False)
 
@@ -1323,6 +1463,7 @@ def cmd_run(args):
             pass
 
     print(f"✅ Manifiesto Blackboard guardado en: {manifest_file}")
+    print(f"📑 Dossier SSoT persistido en:       {dossier_file}")
 
     # 3. Dynamic Zerops Runtime Discovery
     caps = detect_zerops_capabilities()
@@ -1385,6 +1526,27 @@ def cmd_run(args):
         target_path = target_dir / f"{vert.vertical_slug}.astro"
         scaffold_astro_page(manifest, target_path)
         print(f"✅ Código Astro 5 SSR materializado en: {target_path}\n")
+
+
+def cmd_dossier(args):
+    target = getattr(args, "brand", None) or getattr(args, "target", None)
+    eco, sinfo = discover_ecosystem(target=target, allow_fallback=True)
+
+    if not eco.verticals:
+        print("❌ Error: No se encontraron verticales para generar el dossier.")
+        sys.exit(1)
+
+    out_p = Path(args.output) if getattr(args, "output", None) else None
+    d_path = generate_markdown_dossier(eco, output_path=out_p)
+
+    print(f"\n📑 Dossier SSoT compilado exitosamente:")
+    print(f"  • Archivo:   {d_path}")
+    print(f"  • Marca:     {eco.brand_slug} ({eco.umbrella_name or 'Mono-marca'})")
+    if sinfo:
+        print(f"  • Fuente:    {sinfo}")
+    print(f"  • Verticales ({len(eco.verticals)}): {', '.join(eco.verticals.keys())}")
+    print(f"  • Invariante: Cero gasto de tokens para Hermes, CrewAI y Pidev.")
+    print("=" * 75 + "\n")
 
 
 def cmd_scaffold(args):
@@ -1496,6 +1658,13 @@ def main():
     p_scaffold.add_argument("--route-mode", choices=["subroute", "subdomain"], default="subroute", help="Modo de enrutamiento (subroute o subdomain)")
     p_scaffold.add_argument("--dry-run", action="store_true", help="Imprimir vista previa sin escribir en disco")
     p_scaffold.set_defaults(func=cmd_scaffold)
+
+    # dossier
+    p_dossier = subparsers.add_parser("dossier", help="Compila el Dossier SSoT integral en Markdown de verticales aprobadas")
+    p_dossier.add_argument("target", nargs="?", default=None, help="Ruta específica o proyecto a inspeccionar")
+    p_dossier.add_argument("--brand", help="Slug de la marca (opcional)")
+    p_dossier.add_argument("--output", "-o", help="Ruta de destino del archivo Markdown")
+    p_dossier.set_defaults(func=cmd_dossier)
 
     args = parser.parse_args()
     args.func(args)
