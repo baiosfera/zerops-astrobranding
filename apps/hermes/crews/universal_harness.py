@@ -262,9 +262,10 @@ class UniversalSkillHarness:
         agent: Any,
         skill_name: str,
         objective: str,
-        expected_output: Optional[str] = None
+        expected_output: Optional[str] = None,
+        output_pydantic: Optional[Type[BaseModel]] = None
     ):
-        """Creates a CrewAI Task hydrated with Activation and Output Contracts."""
+        """Creates a CrewAI Task hydrated with Activation, Output Contracts, and PydanticAI Schema Governor."""
         try:
             from crewai import Task
         except ImportError:
@@ -283,11 +284,15 @@ class UniversalSkillHarness:
             f"{spec.output_contract or 'Informe técnico exhaustivo, estructurado y físicamente validado.'}"
         )
 
-        return Task(
-            description=desc,
-            expected_output=output,
-            agent=agent
-        )
+        task_kwargs: Dict[str, Any] = {
+            "description": desc,
+            "expected_output": output,
+            "agent": agent
+        }
+        if output_pydantic is not None:
+            task_kwargs["output_pydantic"] = output_pydantic
+
+        return Task(**task_kwargs)
 
     @classmethod
     def create_multi_skill_crew(
