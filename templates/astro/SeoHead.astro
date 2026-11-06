@@ -17,8 +17,8 @@ const {
   image = '/og-image.jpg',
   canonicalURL = Astro.url,
   type = 'website',
-  siteName = 'Zerops Astro',
-  twitterHandle = '@zeropsio',
+  siteName = '',
+  twitterHandle = '',
   themeColor = '#000000',
   schema,
 } = Astro.props;
@@ -41,7 +41,7 @@ const resolvedCanonical = new URL(canonicalURL, Astro.url).toString();
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description} />
 <meta property="og:image" content={resolvedImage} />
-<meta property="og:site_name" content={siteName} />
+{siteName && <meta property="og:site_name" content={siteName} />}
 
 <!-- Twitter / X -->
 <meta property="twitter:card" content="summary_large_image" />

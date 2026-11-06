@@ -140,7 +140,7 @@ Todo nuevo despliegue adopta su identidad dinámicamente mediante variables de e
 | `CLIENT_DOMAIN` | Dominio público principal | `"acme.com"` / `"tienda.com"` |
 | `PUBLIC_BRAND_NAME` | Nombre visible para el cliente | `"Acme"` |
 | `PUBLIC_CONTACT_EMAIL` | Correo oficial de atención | `"contacto@acme.com"` |
-| `PUBLIC_WHATSAPP_PHONE`| Teléfono para el canal WhatsApp (E.164) | `"+573001234567"` |
+| `PUBLIC_WHATSAPP_PHONE`| Teléfono para el canal WhatsApp (E.164) | `"+1234567890"` |
 
 > [!NOTE]
 > **Gestión Soberana de Secretos:** Toda variable y secreto se inyecta a través de `zerops_env` y se referencia mediante `${VAR}` en manifiestos y `process.env.VAR` en runtime, preservando la raíz del contenedor limpia y sin dependencias de archivos locales.
@@ -435,29 +435,28 @@ Todo ecosistema web debe separar con absoluta nitidez sus formularios según el 
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│             TRÍADA DE FORMULARIOS POR INTENCIÓN DE NEGOCIO             │
+│             TRÍADA DE FORMULARIOS POR INTENCIÓN COMERCIAL              │
 ├─────────────────────┬──────────────────────┬───────────────────────────┤
-│ 1. COMUNIDAD B2C    │ 2. ALIANZAS B2B      │ 3. ADMISIÓN VIP & CHECKOUT│
-│ (`LeadForm.astro`)  │ (`AllianceForm.astro`)│ (`CheckoutForm.astro`)    │
+│ 1. CAPTURA DE LEADS │ 2. CONTACTO / B2B    │ 3. TRANSACCIONAL / CHECKOUT│
+│ (`LeadForm.astro`)  │ (`ContactForm.astro`)│ (`CheckoutForm.astro`)    │
 ├─────────────────────┼──────────────────────┼───────────────────────────┤
-│ • Registro general  │ • Contratación sede  │ • Selección de pases/cupo │
-│ • Roles personales  │ • Talleristas/Eventos│ • Modalidad pago (40%/100%)│
-│ • Cultura/Bienvenida│ • Textarea propuesta │ • dLocal Go / Nequi / PSE │
-│ • Origen: comunidad │ • CERO roles pareja  │ • Origen: checkout_evento │
-│ • Remitente: Marca  │ • Origen: alianza_b2b│ • Credencial sellada + QR │
+│ • Registro general  │ • Consultas B2B      │ • Selección de items      │
+│ • Nombre + Contacto │ • Cotizaciones/Citas │ • Pasarela e idempotencia │
+│ • Doble impacto CAPI│ • Textarea tipado    │ • Wompi / Bold / Stripe   │
+│ • Origen: web_lead  │ • Origen: b2b_contact│ • Origen: checkout_order  │
+│ • NATS JetStream    │ • NATS JetStream     │ • Confirmación + Recibo   │
 └─────────────────────┴──────────────────────┴───────────────────────────┘
 ```
 
-1. **Formulario de Comunidad B2C (`LeadForm.astro`):**
-   - Propósito: Registro en lista de novedades y eventos comunitarios.
-   - Campos: Nombre o alias, WhatsApp, Email, Modalidad comunitaria (`pareja`, `mujer_sola`, `hombre_solo`), Ciudad.
-2. **Formulario de Alianzas y Contratación B2B (`AllianceForm.astro`):**
-   - Propósito: Co-producción, alquiler de locación privada o talleres de facilitadores.
-   - Campos: Nombre/Organización, WhatsApp, Email, Selector de Tipo de Alianza, Textarea amplio para detallar la propuesta, Ciudad.
-   - **Invariante:** CERO preguntas de modalidad íntima (`pareja` o `single`).
-3. **Formulario de Checkout & Admisión VIP (`CheckoutForm.astro`):**
-   - Propósito: Adquisición de entradas, pases o separación de cupos.
-   - Campos: Selector de pases, modalidad de pago, datos de contacto, pasarela de pago segura.
+1. **Formulario de Captura de Leads (`LeadForm.astro`):**
+   - Propósito: Suscripción a novedades, descargas o captura de prospectos comerciales.
+   - Campos: Nombre o alias, WhatsApp (E.164), Email, Origen (`source`).
+2. **Formulario de Contacto / Alianzas B2B (`ContactForm.astro`):**
+   - Propósito: Consultas corporativas, cotizaciones, soporte o contratación de servicios.
+   - Campos: Nombre, Organización, WhatsApp, Email, Tipo de Solicitud, Mensaje, Ciudad/País.
+3. **Formulario Transaccional & Checkout (`CheckoutForm.astro`):**
+   - Propósito: Adquisición de productos, reservas de servicios o tickets.
+   - Campos: Selector de items, datos de facturación, normalización telefónica, pasarela de pago segura.
 
 ---
 
@@ -509,9 +508,9 @@ Evolution Go es un motor ultra-frugal compilado en Go (`whatsmeow`) que consume 
 
 ---
 
-## 11. Gobernanza de Pasarelas Digitales (dLocal Go & Webhooks)
+## 11. Gobernanza de Pasarelas de Pago e Idempotencia (Wompi, Bold, Stripe, dLocal)
 
-dLocal Go es la pasarela líder para cobros en moneda local en Latinoamérica (Colombia: Tarjetas, PSE, Nequi, Daviplata).
+Las pasarelas de pago se integran bajo arquitectura desacoplada mediante drivers intercambiables (Wompi, Bold, Stripe, dLocal Go, ePayco, COD).
 
 ### Invariantes de Integración
 1. **Bifurcación Dinámica de Entornos:**
@@ -538,7 +537,7 @@ Todo despliegue debe adherirse a principios rigurosos de comunicación clara, si
 
 ---
 
-## 13. Normalización Telefónica E.164 con Auto-Deducción Colombia (+57)
+## 13. Normalización Telefónica E.164 Universal (Parametrizable)
 
 En despliegues para Colombia o con alta concentración de usuarios locales, la ausencia de código de país en formularios de contacto provoca que los enlaces `wa.me/` o el gateway EvolutionGo ruteen los números a los Países Bajos (+31, ej: `wa.me/3101234567`), provocando fallas críticas donde WhatsApp informa que el número no existe.
 
@@ -905,13 +904,12 @@ Para cualquier proyecto o marca desplegada en Zerops, el agente conversacional d
 - **Mapeo con Nombres Distintos:** Las variables secretas del vault deben nombrarse de forma explícita y mapearse a la variable de entorno del runtime:
   `GROQ_API_KEY: ${WHISPER_GROQ_API_KEY}`.
 
-### 7. Ingesta SSoT en Tiempo Real, Adaptación Dinámica de Rol/Género y Regla SSoT > Historial:
-- **Ficha Completa de Usuario en Tiempo Real:** El bot extrae todos los datos del usuario en cada turno (`alias`, `email`, `ciudad`, `rol`, `afiliado`, `métricas`, `membresías`).
-- **Tratamiento Diferenciado por Rol / Género:**
-  * `hombre_solo`: Perfil individual masculino $\to$ trato en masculino singular ("Embajador", "bienvenido", "tú").
-  * `mujer_sola`: Perfil individual femenino $\to$ trato en femenino singular ("Embajadora", "bienvenida", "tú").
-  * `pareja`: Cuenta compartida de pareja $\to$ trato estricto en plural ("ustedes", "pareja", "chicos", "ambos", "como pareja", "Embajadores"). Nunca tratar como mujer u hombre individual.
-  * `otro` o no especificado $\to$ tono cercano, neutral y respetuoso.
+### 7. Ingesta SSoT en Tiempo Real, Adaptación Dinámica de Preferencias y Regla SSoT > Historial:
+- **Ficha Completa de Usuario en Tiempo Real:** El bot extrae todos los datos del usuario en cada turno (`alias`, `email`, `ciudad`, `rol`, `tier`, `métricas`, `preferencias`).
+- **Tratamiento Dinámico y Personalizado:**
+  * Trato directo, respetuoso y profesional gobernado por la voz y tono del Brandbook SSoT de la marca activa.
+  * Si el usuario cuenta con nombre registrado, se le saluda por su nombre de forma personalizada.
+  * Adaptación contextual basada en el historial de pedidos y servicios registrados en PostgreSQL 18.
 - **Regla de Verdad Absoluta en Tiempo Real (SSoT > Historial):** La ficha leída de PostgreSQL es la verdad absoluta en el milisegundo actual. Si el usuario actualizó su nombre, rol o enlace, el LLM tiene la instrucción estricta de IGNORAR el historial antiguo de Valkey y confirmar de inmediato la información actualizada, prohibiendo alucinaciones como "los cambios tardan unos minutos en sincronizarse".
 - **Deduplicación Preventiva de Leads:** Las búsquedas telefónicas emplean normalización de variantes y coincidencia de sufijo de 10 dígitos con ordenamiento por completitud (`alias_nombre IS NOT NULL`) y recencia. La inserción de nuevos leads verifica la existencia previa antes de crear filas para no fragmentar identidades con números sin prefijo `+`.
 - **Esquema Relacional Sincronizado:** Toda tabla de usuarios y afiliados debe contar con columna `updated_at TIMESTAMPTZ DEFAULT NOW()` para evitar excepciones en rutas de actualización del perfil web.

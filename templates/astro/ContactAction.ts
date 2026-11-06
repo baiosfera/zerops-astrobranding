@@ -23,19 +23,22 @@ export const contactFormAction = defineAction({
 
     let dispatched = false;
 
-    // 1. NATS JetStream / RPC Dispatch (If event bus available)
+    // 1. NATS JetStream / Core NATS Dispatch (If event bus available)
     const natsUrl = process.env.NATS_URL || process.env.queue_connectionString;
     if (!dispatched && natsUrl) {
       try {
-        // NATS dynamic publish
-        console.log('[ContactAction] Dispatched lead to NATS queue:', payload.email);
+        const { connect, JSONCodec } = await import('nats');
+        const nc = await connect({ servers: natsUrl, timeout: 2000 });
+        const jc = JSONCodec();
+        nc.publish('leads.signals.contact', jc.encode(payload));
+        await nc.drain();
         dispatched = true;
       } catch (err) {
-        console.warn('[ContactAction] NATS dispatch skipped:', err);
+        console.warn('[ContactAction] NATS dynamic dispatch skipped or not installed, falling through:', err);
       }
     }
 
-    // 3. Web3Forms Free API Dispatch (Zero-server static fallback)
+    // 2. Web3Forms Free API Dispatch (Zero-server static fallback)
     const web3Key = process.env.WEB3FORMS_ACCESS_KEY;
     if (!dispatched && web3Key) {
       try {
@@ -50,7 +53,7 @@ export const contactFormAction = defineAction({
       }
     }
 
-    // 4. Fallback: Log payload deterministically so lead is never lost in black box
+    // 3. Fallback: Log payload deterministically so lead is never lost in black box
     if (!dispatched) {
       console.log('📬 [ContactAction] Lead received (Local SSoT):', JSON.stringify(payload));
     }

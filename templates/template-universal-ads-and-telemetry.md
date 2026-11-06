@@ -58,7 +58,7 @@ Para evitar incompatibilidades con las APIs globales y a la vez garantizar una e
    - Base de datos (`PostgreSQL 18`), colas (`NATS JetStream`), caché (`Valkey 7.2`) y llamadas a CAPI se mantienen en inglés universal: `Purchase`, `AddToCart`, `Lead`, `service_bookings`, `physical_goods`.
    - **Por qué:** Meta, Google y TikTok rechazan eventos de optimización que no cumplan con su taxonomía internacional.
 2. **Las Pantallas y Contenido (100% Español Natural):**
-   - Títulos, descripciones de productos, categorías, monedas (`COP`), textos de botones y correos van en español directo.
+   - Títulos, descripciones de productos, categorías, monedas (`${PUBLIC_CURRENCY:-USD}` o moneda local activa), textos de botones y correos van en español directo.
    - En **Frappe CRM y ERPNext**, la interfaz visual se configura en Español: `Sales Invoice` se lee **"Factura de Venta"**, `Customer` se lee **"Clientes"**, y `CRM Lead` se lee **"Prospectos"**.
 
 ---
@@ -69,12 +69,12 @@ Para cumplir con la **Política de Comercio 19 de Meta** y las directrices de **
 
 | Arquetipo (`OfferingArchetype`) | Descripción | Canal de Anuncios | Mapeo en Frappe / ERPNext |
 |---|---|---|---|
-| **`physical_goods`** | Ropa, cosméticos, accesorios con envío físico | Feed XML Maestro (`/api/catalog/feed.xml`) | `Sales Order` (Descuenta inventario en bodega) |
+| **`physical_goods`** | Productos tangibles con despacho físico o entrega local | Feed XML Maestro (`/api/catalog/feed.xml`) | `Sales Order` (Descuenta inventario en bodega) |
 | **`courses_education`** | Talleres, masterclasses, cursos en video | Campañas Web Directas de Conversión | `Sales Invoice` directa (Servicio no inventariable) |
 | **`memberships_mrr`** | Membresías VIP, suscripciones recurrentes | Campañas Web Directas (`Subscribe` + `predicted_ltv`) | `Subscription` / Auto-Repeat en ERPNext |
-| **`events_ticketing`** | Eventos presenciales, desfiles, boletas | Campañas Web Directas (`CompleteRegistration`) | `Sales Invoice` con código de acceso/QR |
+| **`events_ticketing`** | Eventos presenciales, convenciones, boletas | Campañas Web Directas (`CompleteRegistration`) | `Sales Invoice` con código de acceso/QR |
 | **`digital_products`** | Ebooks, guías PDF, presets descargables | Campañas Web Directas (`Purchase` digital) | `Sales Invoice` con entrega de enlace/archivo |
-| **`service_bookings`** | Citas de maquillaje, atelier, asesorías 1 a 1 | WhatsApp Ads / Formulario de Reserva | `CRM Lead` / `CRM Deal` en Frappe CRM |
+| **`service_bookings`** | Citas profesionales, consultas, asesorías o sesiones 1 a 1 | WhatsApp Ads / Formulario de Reserva | `CRM Lead` / `CRM Deal` en Frappe CRM |
 
 ---
 
@@ -196,3 +196,37 @@ Para prevenir el **Split-Brain / Overwrite Hazard** entre cambios del comerciant
      ```
    - En producción SSR (`dist/server/entry.mjs`), Astro corre en modo standalone con Node/Bun nativo sin el dev server de Vite.
 
+
+---
+
+## 9. Guardrails de Seguridad Agéntica y Auditoría de Campañas (Invariante Soberano)
+
+Para operar con agentes autónomos (Hermes, Antigravity, Bifrost) optimizando anuncios y conversiones sin riesgo financiero:
+
+1. **Regla de Solo Lectura por Defecto**:
+   - El agente analiza Insights, calcula ROAS y audita el rendimiento 24/7.
+2. **Escritura Pausada**:
+   - Cualquier anuncio, conjunto o campaña generada por el agente nace estrictamente en estado `PAUSED`.
+3. **Kill-Switch Presupuestario**:
+   - Prohibido modificar presupuestos automáticamente si:
+     * El aumento diario supera el 20%.
+     * El presupuesto excede el tope absoluto definido en `${MAX_DAILY_BUDGET_USD}`.
+     * El CPA supera en un 50% el CPA objetivo fijado por el dueño del negocio.
+4. **Notificaciones Proactivas**:
+   - Toda recomendación o advertencia se envía directamente por WhatsApp/Telegram al operador antes de cualquier ejecución física.
+
+```sql
+-- DDL en PostgreSQL 18 para trazabilidad agéntica de campañas publicitarias
+CREATE TABLE IF NOT EXISTS campaign_agent_audit_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    network VARCHAR(32) NOT NULL, -- meta, google, tiktok
+    campaign_id VARCHAR(64) NOT NULL,
+    action VARCHAR(64) NOT NULL,  -- ALERT_TRIGGERED, PROPOSAL_CREATED, PAUSE_REQUESTED
+    roas_actual NUMERIC(6, 2),
+    cpa_actual NUMERIC(12, 2),
+    currency CHAR(3) DEFAULT 'USD',
+    human_approved BOOLEAN DEFAULT FALSE,
+    reason TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
