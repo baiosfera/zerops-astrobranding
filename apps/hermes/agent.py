@@ -26,7 +26,8 @@ try:
         update_service_price, get_recent_orders,
         get_store_bookings, get_makeup_bookings,
         run_crew_ai, extract_structured_data,
-        list_available_crews, get_paperclip_status
+        list_available_crews, get_paperclip_status,
+        mem_context, mem_search, mem_save
     )
 except (ImportError, ValueError):
     from .prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt
@@ -45,7 +46,8 @@ except (ImportError, ValueError):
         update_service_price, get_recent_orders,
         get_store_bookings, get_makeup_bookings,
         run_crew_ai, extract_structured_data,
-        list_available_crews, get_paperclip_status
+        list_available_crews, get_paperclip_status,
+        mem_context, mem_search, mem_save
     )
 
 BIFROST_URL = os.getenv("HERMES_MODEL_ENDPOINT", "http://bifrost:8080/v1")
@@ -120,6 +122,51 @@ ECOMMERCE_TOOLS = [
                     "price": {"type": "string", "description": "Precio opcional mostrado en el hero"}
                 },
                 "required": ["key", "image_filename_or_url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "mem_context",
+            "description": "Recupera las observaciones más recientes de la memoria persistente compartida Engram (SSoT) para el proyecto activo. Usar al inicio de una tarea o sesión para no repetir análisis ni gastar tokens.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Cantidad de observaciones recientes a retornar (por defecto 5)"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "mem_search",
+            "description": "Busca en la memoria persistente Engram por palabras clave en títulos, temas y contenido. Usar cuando el usuario mencione decisiones, arquitecturas o tareas pasadas.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Término o palabra clave a buscar en Engram"},
+                    "limit": {"type": "integer", "description": "Máximo de resultados a retornar (por defecto 5)"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "mem_save",
+            "description": "Guarda de forma persistente e indestructible una nueva observación, decisión o descubrimiento en Engram (SSoT compartido en localstorage).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Título conciso (Verbo + objeto)"},
+                    "content": {"type": "string", "description": "Contenido detallado (What, Why, Where, Learned)"},
+                    "type": {"type": "string", "enum": ["discovery", "architecture", "decision", "bugfix", "pattern", "config", "preference"], "description": "Tipo de memoria"},
+                    "topic_key": {"type": "string", "description": "Clave estable de tema (ej: 'hermes/ops', 'seo/strategy')"}
+                },
+                "required": ["title", "content"]
             }
         }
     }
@@ -499,6 +546,9 @@ TOOL_DISPATCH = {
     "extract_structured_data": lambda a: extract_structured_data(a.get("fields_spec", {}), a.get("user_input", ""), a.get("tier", "free")),
     "list_available_crews": lambda a: list_available_crews(),
     "get_paperclip_status": lambda a: get_paperclip_status(),
+    "mem_context": lambda a: mem_context(int(a.get("limit", 5))),
+    "mem_search": lambda a: mem_search(a.get("query", ""), int(a.get("limit", 5))),
+    "mem_save": lambda a: mem_save(a.get("title", ""), a.get("content", ""), a.get("type", "discovery"), a.get("topic_key", "")),
 }
 
 async def execute_tool(fn_name: str, fn_args: dict) -> str:

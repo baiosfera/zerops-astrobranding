@@ -21,7 +21,8 @@ zerops:
         - port: 8000
           httpSupport: true
       initCommands:
-        - sudo mkdir -p /mnt/localstorage/hermes /mnt/localstorage/engram ~/.hermes && sudo chown -R zerops:zerops /mnt/localstorage/hermes /mnt/localstorage/engram ~/.hermes
+        - sudo mkdir -p /mnt/localstorage/hermes/.hermes /mnt/localstorage/engram && sudo chown -R zerops:zerops /mnt/localstorage/hermes /mnt/localstorage/engram
+        - ln -sfn /mnt/localstorage/hermes/.hermes ~/.hermes
         - gentle-ai install --agents hermes --scope global || true
       envVariables:
         PORT: "8000"

@@ -969,3 +969,138 @@ async def get_paperclip_status() -> str:
             return f"⚠️ Paperclip responde con estado {res.status_code}"
     except Exception as e:
         return f"❌ Error conectando a Paperclip: {str(e)}"
+
+# ==============================================================================
+# Sovereign Engram Memory Engine (Multi-Agent LocalStorage & Cross-Container SSoT)
+# ==============================================================================
+
+def _resolve_engram_ssot_path() -> Optional[str]:
+    """Resolves active project engram_ssot.json in persistent localstorage."""
+    project_name = (os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or "glamur").strip().lower()
+    base_dirs = [
+        os.path.join(os.getenv("ENGRAM_STORAGE_DIR", "/mnt/localstorage/engram"), project_name),
+        os.path.join("/var/www/localstorage/engram", project_name),
+        f"/mnt/localstorage/engram/{project_name}",
+    ]
+    for d in base_dirs:
+        p = os.path.join(d, "engram_ssot.json")
+        if os.path.exists(p):
+            return p
+    for root in ["/mnt/localstorage/engram", "/var/www/localstorage/engram"]:
+        if os.path.exists(root):
+            try:
+                for item in os.listdir(root):
+                    cand = os.path.join(root, item, "engram_ssot.json")
+                    if os.path.isfile(cand):
+                        return cand
+            except Exception:
+                pass
+    return None
+
+def mem_context(limit: int = 5) -> str:
+    """Recovers the most recent persistent observations from Engram for the active project."""
+    ssot_path = _resolve_engram_ssot_path()
+    if not ssot_path or not os.path.exists(ssot_path):
+        return "ℹ️ No hay memoria Engram registrada aún para este proyecto en localstorage."
+    try:
+        with open(ssot_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        obs = data.get("observations") or []
+        if not obs:
+            return "ℹ️ Engram está vacío (0 observaciones registradas)."
+        active_obs = [o for o in obs if not o.get("deleted_at")]
+        recent = active_obs[-limit:]
+        lines = [f"🧠 **Engram SSoT ({len(active_obs)} observaciones activas, mostrando últimas {len(recent)}):**"]
+        for o in reversed(recent):
+            lines.append(f"• **[{o.get('type', 'discovery')}] {o.get('title', 'Sin título')}** (`{o.get('topic_key', 'general')}`):\n  {o.get('content', '')}")
+        return "\n\n".join(lines)
+    except Exception as e:
+        return f"❌ Error leyendo Engram: {str(e)}"
+
+def mem_search(query: str, limit: int = 5) -> str:
+    """Searches persistent Engram memory by keyword across titles, topics, and content."""
+    ssot_path = _resolve_engram_ssot_path()
+    if not ssot_path or not os.path.exists(ssot_path):
+        return "ℹ️ No hay memoria Engram registrada aún para este proyecto."
+    try:
+        with open(ssot_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        obs = data.get("observations") or []
+        q = query.lower().strip()
+        matches = []
+        for o in obs:
+            if o.get("deleted_at"):
+                continue
+            haystack = f"{o.get('title', '')} {o.get('topic_key', '')} {o.get('content', '')}".lower()
+            if q in haystack:
+                matches.append(o)
+        if not matches:
+            return f"ℹ️ Cero coincidencias en Engram para la búsqueda: '{query}'."
+        lines = [f"🔍 **Engram Search ('{query}' - {len(matches)} coincidencias):**"]
+        for o in matches[-limit:]:
+            lines.append(f"• **[{o.get('type', 'discovery')}] {o.get('title', 'Sin título')}** (`{o.get('topic_key', 'general')}`):\n  {o.get('content', '')}")
+        return "\n\n".join(lines)
+    except Exception as e:
+        return f"❌ Error buscando en Engram: {str(e)}"
+
+def mem_save(title: str, content: str, type: str = "discovery", topic_key: str = "") -> str:
+    """Saves a new observation to persistent Engram storage in localstorage."""
+    project_name = (os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or "glamur").strip().lower()
+    engram_dir = os.path.join(os.getenv("ENGRAM_STORAGE_DIR", "/mnt/localstorage/engram"), project_name)
+    if not os.path.exists(engram_dir):
+        engram_dir = f"/var/www/localstorage/engram/{project_name}"
+    os.makedirs(engram_dir, exist_ok=True)
+    ssot_path = os.path.join(engram_dir, "engram_ssot.json")
+    
+    import hashlib
+    from datetime import datetime, timezone
+    
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    raw_hash = hashlib.sha256(f"{project_name}:{title}:{content}".encode("utf-8")).hexdigest()[:16]
+    sync_id = f"obs-{raw_hash}"
+    
+    data = {"version": "0.1.0", "exported_at": now_iso, "sessions": [], "observations": []}
+    if os.path.exists(ssot_path):
+        try:
+            with open(ssot_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            pass
+            
+    obs_list = data.setdefault("observations", [])
+    existing = None
+    for o in obs_list:
+        if o.get("sync_id") == sync_id or (topic_key and o.get("topic_key") == topic_key):
+            existing = o
+            break
+            
+    if existing:
+        existing["content"] = content
+        existing["title"] = title
+        existing["type"] = type
+        existing["updated_at"] = now_iso
+        existing["revision_count"] = existing.get("revision_count", 1) + 1
+    else:
+        new_obs = {
+            "id": len(obs_list) + 1,
+            "sync_id": sync_id,
+            "session_id": f"hermes-{project_name}",
+            "type": type,
+            "title": title,
+            "content": content,
+            "project": project_name,
+            "scope": "project",
+            "topic_key": topic_key or "hermes/discovery",
+            "revision_count": 1,
+            "duplicate_count": 1,
+            "created_at": now_iso,
+            "updated_at": now_iso
+        }
+        obs_list.append(new_obs)
+        
+    data["exported_at"] = now_iso
+    temp_path = f"{ssot_path}.tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(temp_path, ssot_path)
+    return f"✅ Observación guardada en Engram persistentemente (`{sync_id}`): '{title}'"
