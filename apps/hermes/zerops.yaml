@@ -30,6 +30,7 @@ zerops:
         NATS_URL: ${nats_connectionString}
         ZCP_NATS_URL: ${nats_connectionString}
         LOCAL_STORAGE_PATH: "/mnt/localstorage/hermes"
+        LINEAR_API_KEY: ${LINEAR_API_KEY}
       start: python3 /var/www/main.py
       healthCheck:
         httpGet:

@@ -548,6 +548,20 @@ if [ -d "$DRIVE_MOUNT/PLAYBOOKS" ]; then
     cp -rn "$DRIVE_MOUNT/PLAYBOOKS"/*.md "$PROJECT_ROOT/localstorage/playbooks/" 2>/dev/null || true
 fi
 
+# 2a-quinquies. Inyección segura de credenciales de runtime hacia Local Storage para Hermes y Cuadrillas
+mkdir -p "$PROJECT_ROOT/localstorage/hermes" 2>/dev/null || true
+if [ -n "${LINEAR_API_KEY:-}" ]; then
+    cat << EOF > "$PROJECT_ROOT/localstorage/hermes/runtime.env"
+LINEAR_API_KEY=${LINEAR_API_KEY}
+BIFROST_VIRTUAL_KEY=vk-hermes-agent
+HERMES_MODEL_ENDPOINT=http://bifrost:8080/v1
+EOF
+    chmod 600 "$PROJECT_ROOT/localstorage/hermes/runtime.env" 2>/dev/null || true
+fi
+if [ -f "$REPO_DIR/scripts/linear_bridge.py" ]; then
+    cp -f "$REPO_DIR/scripts/linear_bridge.py" "$PROJECT_ROOT/localstorage/hermes/linear_bridge.py" 2>/dev/null || true
+fi
+
 # 2a-bis. Aprovisionar Persistencia Híbrida 3-Tier Zero-Data-Loss de Engram
 echo "• [2a-bis] Verificando persistencia 3-Tier Zero-Data-Loss para Engram ($APP_IDENTITY_LOWER)..."
 if [ -f "$REPO_DIR/scripts/engram-sync" ]; then
