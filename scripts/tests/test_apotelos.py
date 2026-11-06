@@ -338,8 +338,8 @@ class TestDynamicZeropsDiscovery(unittest.TestCase):
             self.assertIn("fitness-apparel", content)
             self.assertIn("Tejido Compresivo 4D", content)
             self.assertIn("multi_tenant_astro", content)
-            self.assertIn("BAI-0", content)
-            self.assertIn("BAI-4", content)
+            self.assertIn("Dominó 0", content)
+            self.assertIn("Dominó 4", content)
 
 
 if __name__ == "__main__":
