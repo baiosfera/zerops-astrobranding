@@ -475,6 +475,35 @@ def get_local_storage_path() -> Path:
     return Path("/tmp/localstorage")
 
 
+def resolve_playbooks_dir() -> Optional[Path]:
+    """Resolve playbooks directory in priority order (NVMe POSIX first, FUSE SSoT second)."""
+    candidates = [
+        Path("/mnt/localstorage/playbooks"),
+        Path("/var/www/localstorage/playbooks"),
+        get_local_storage_path() / "playbooks",
+        Path("/var/www/baiosfera/PLAYBOOKS"),
+        Path("/var/www/zerops-astrobranding/templates/playbooks")
+    ]
+    for c in candidates:
+        if c.exists() and c.is_dir():
+            return c
+    return None
+
+
+def resolve_playbook_path(playbook_name: str) -> Optional[Path]:
+    """Resolve a specific playbook file (e.g. 00_category_of_one_playbook.md)."""
+    p_dir = resolve_playbooks_dir()
+    if p_dir:
+        target = p_dir / playbook_name
+        if target.exists() and target.is_file():
+            return target
+    for base in [Path("/mnt/localstorage/playbooks"), Path("/var/www/localstorage/playbooks"), Path("/var/www/baiosfera/PLAYBOOKS")]:
+        cand = base / playbook_name
+        if cand.exists() and cand.is_file():
+            return cand
+    return None
+
+
 def discover_ecosystem(target: Optional[str] = None, allow_fallback: bool = False) -> Tuple[UniversalBrandEcosystem, Optional[str]]:
     """Discover business ecosystem in strict cascading order without hardcoded names."""
     root = get_workspace_root()
@@ -851,12 +880,16 @@ def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerti
     }
 
     # Domino 0 (τε-0): Mecanismo Único Monopolístico
+    coo_path = resolve_playbook_path("00_category_of_one_playbook.md")
+    p_dir = resolve_playbooks_dir()
     grounding = {
         "brand_slug": eco.brand_slug,
         "umbrella_name": eco.umbrella_name,
         "vertical_slug": vert.vertical_slug,
         "mechanism_name": vert.unique_mechanism.get("name", f"Mecanismo {vert.display_name}"),
-        "contrast": vert.unique_mechanism.get("contrast", "Frente a soluciones genéricas del mercado")
+        "contrast": vert.unique_mechanism.get("contrast", "Frente a soluciones genéricas del mercado"),
+        "category_of_one_playbook": str(coo_path) if coo_path else None,
+        "playbooks_dir": str(p_dir) if p_dir else None
     }
 
     return ApotelosManifest(

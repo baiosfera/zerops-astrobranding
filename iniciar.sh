@@ -541,6 +541,13 @@ if [ -n "${TARGET_PROJECT:-}" ] && [ -f "$REPO_DIR/scripts/zcp-sync" ]; then
     bash "$REPO_DIR/scripts/zcp-sync" "$TARGET_PROJECT" 2>/dev/null || true
 fi
 
+# 2a-quater. Sincronización de Playbooks Universales y Category of One hacia Local Storage
+if [ -d "$DRIVE_MOUNT/PLAYBOOKS" ]; then
+    echo "• [2a-quater] Sincronizando Playbooks Universales hacia Local Storage (/var/www/localstorage/playbooks)..."
+    mkdir -p "$PROJECT_ROOT/localstorage/playbooks" 2>/dev/null || true
+    cp -rn "$DRIVE_MOUNT/PLAYBOOKS"/*.md "$PROJECT_ROOT/localstorage/playbooks/" 2>/dev/null || true
+fi
+
 # 2a-bis. Aprovisionar Persistencia Híbrida 3-Tier Zero-Data-Loss de Engram
 echo "• [2a-bis] Verificando persistencia 3-Tier Zero-Data-Loss para Engram ($APP_IDENTITY_LOWER)..."
 if [ -f "$REPO_DIR/scripts/engram-sync" ]; then
