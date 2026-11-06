@@ -1,0 +1,33 @@
+zerops:
+  - setup: pidev
+    build:
+      base: ubuntu/nodejs@26
+      prepareCommands:
+        - sudo apt-get update && sudo apt-get install -y --no-install-recommends git curl ca-certificates tar gzip build-essential
+        - npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+        - npm install -g gentle-pi
+      buildCommands:
+        - gentle-shell setup || true
+      deployFiles:
+        - .
+    run:
+      base: ubuntu/nodejs@26
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
+      ports:
+        - port: 3000
+          httpSupport: true
+      initCommands:
+        - sudo mkdir -p /mnt/localstorage/pidev /var/www/webdev && sudo chown -R zerops:zerops /mnt/localstorage/pidev
+      envVariables:
+        PORT: "3000"
+        HOST: "0.0.0.0"
+        NODE_ENV: "production"
+        NATS_URL: ${nats_connectionString}
+        ZEROPS_READ_ONLY: "true"
+        ZEROPS_OBSERVATIONAL_ONLY: "true"
+        GENTLE_SHELL_HOME: "/mnt/localstorage/pidev/gentle-shell"
+        PI_CODING_AGENT_DIR: "/mnt/localstorage/pidev/pi"
+      start: gentle-shell --mode rpc || sleep infinity
