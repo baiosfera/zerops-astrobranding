@@ -238,7 +238,7 @@ Todo producto construido bajo esta plantilla debe orquestar el ecosistema de 141
 - **`checkout-funnels`**: Funnels de alta conversión con 1-Click Upsells y Meta CAPI.
 - **`payment-gateways`**: Firmas SHA-256 e idempotencia en Valkey (60s lock).
 - **`growth-engine`**: Neurocopywriting basado en la Oferta Hormozi y StoryBrand.
-- **`email-marketing`**: React Email 3.0 compilado inline (<85KB) con entregabilidad DMARC/DKIM.
+- **`email-marketing`**: React Email 3.0 compilado inline (<85KB) con entregabilidad DMARC/DKIM y blindaje anti-traducción (`notranslate`, `Content-Language` RFC 3282, densidad léxica e invariante de voz primera persona singular para marcas personales/creadores solos).
 
 ### D. Borde, Seguridad & Plataforma
 - **`cloudflare`**: Edge CDN, SSL Full Strict y Turnstile anti-bot sin captchas invasivos.
