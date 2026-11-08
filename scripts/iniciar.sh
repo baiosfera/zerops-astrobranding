@@ -484,7 +484,8 @@ for _core_pair in \
     "zcp-wa:zcp-wa.sh" \
     "zcp-mail:zcp-mail.sh" \
     "zcp-preflight-gate:zcp-preflight-gate.sh" \
-    "zeropsenv:zeropsenv"; do
+    "zeropsenv:zeropsenv" \
+    "zcp-mount:zcp-mount"; do
     _c_name="${_core_pair%%:*}"
     _c_src="${_core_pair#*:}"
     if [ -f "$REPO_DIR/scripts/$_c_src" ]; then
@@ -539,6 +540,27 @@ echo "  ✓ Symlink de /artifacts verificado -> $SSOT_ARTIFACTS"
 if [ -n "${TARGET_PROJECT:-}" ] && [ -f "$REPO_DIR/scripts/zcp-sync" ]; then
     echo "• [2a-ter] Sincronizando datos de marca ($TARGET_PROJECT) desde Google Drive hacia Local Storage..."
     bash "$REPO_DIR/scripts/zcp-sync" "$TARGET_PROJECT" 2>/dev/null || true
+fi
+
+# 2a-quater. Sincronización de Playbooks Universales y Category of One hacia Local Storage
+if [ -d "$DRIVE_MOUNT/PLAYBOOKS" ]; then
+    echo "• [2a-quater] Sincronizando Playbooks Universales hacia Local Storage (/var/www/localstorage/playbooks)..."
+    mkdir -p "$PROJECT_ROOT/localstorage/playbooks" 2>/dev/null || true
+    cp -rn "$DRIVE_MOUNT/PLAYBOOKS"/*.md "$PROJECT_ROOT/localstorage/playbooks/" 2>/dev/null || true
+fi
+
+# 2a-quinquies. Inyección segura de credenciales de runtime hacia Local Storage para Hermes y Cuadrillas
+mkdir -p "$PROJECT_ROOT/localstorage/hermes" 2>/dev/null || true
+if [ -n "${LINEAR_API_KEY:-}" ]; then
+    cat << EOF > "$PROJECT_ROOT/localstorage/hermes/runtime.env"
+LINEAR_API_KEY=${LINEAR_API_KEY}
+BIFROST_VIRTUAL_KEY=vk-hermes-agent
+HERMES_MODEL_ENDPOINT=http://bifrost:8080/v1
+EOF
+    chmod 600 "$PROJECT_ROOT/localstorage/hermes/runtime.env" 2>/dev/null || true
+fi
+if [ -f "$REPO_DIR/scripts/linear_bridge.py" ]; then
+    cp -f "$REPO_DIR/scripts/linear_bridge.py" "$PROJECT_ROOT/localstorage/hermes/linear_bridge.py" 2>/dev/null || true
 fi
 
 # 2a-bis. Aprovisionar Persistencia Híbrida 3-Tier Zero-Data-Loss de Engram
@@ -659,7 +681,7 @@ if [ "$UPDATE_MODE" = true ]; then
     # Sincronizar scripts actualizados hacia SSoT en Google Drive si está montado
     if [ -d "$SSOT_SCRIPTS" ]; then
         echo "• Sincronizando scripts SSoT hacia Google Drive..."
-        for s in iniciar.sh gdrive.sh setup-zcp.sh setup-astrokey.sh unisetup.sh skills-suite-validate.sh ssot-parity-check.sh ssot-parity-check astrobranding-check.sh engram-sync; do
+        for s in iniciar.sh gdrive.sh setup-zcp.sh setup-astrokey.sh unisetup.sh skills-suite-validate.sh ssot-parity-check.sh ssot-parity-check astrobranding-check.sh engram-sync zcp-mount; do
             [ -f "$REPO_DIR/scripts/$s" ] && cp -f "$REPO_DIR/scripts/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
             [ -f "$REPO_DIR/$s" ] && cp -f "$REPO_DIR/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
         done
@@ -736,7 +758,7 @@ if [ "$UPDATE_MODE" = true ]; then
 
     # Desplegar CLIs esenciales en PATH y .bin (incluyendo limpieza de shadows en ~/.local/bin)
     mkdir -p "$PROJECT_ROOT/.bin" "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
-    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync engram-sync knowledge-sync anti-slop-linter apotelos linear-cli zcp-wa zcp-mail zcp-preflight-gate zeropsenv; do
+    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync engram-sync knowledge-sync anti-slop-linter apotelos linear-cli zcp-wa zcp-mail zcp-preflight-gate zeropsenv zcp-mount; do
         src_cli=""
         if [ -f "$REPO_DIR/scripts/$cli.sh" ]; then
             src_cli="$REPO_DIR/scripts/$cli.sh"

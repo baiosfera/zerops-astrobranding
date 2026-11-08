@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# zcp-mount — Montador Dinámico de Runtimes Adoptados en Zerops
+# ==============================================================================
+set -euo pipefail
+
+STATE_DIR="/var/www/.zcp/state/services"
+
+if [ ! -d "$STATE_DIR" ]; then
+    echo "ℹ️ No hay servicios registrados en $STATE_DIR"
+    exit 0
+fi
+
+for f in "$STATE_DIR"/*.json; do
+    [ -f "$f" ] || continue
+    [[ "$f" == *".verified.json"* ]] && continue
+    hostname="$(basename "$f" .json)"
+    target_dir="/var/www/$hostname"
+
+    # Verificar si ya está montado
+    if mountpoint -q "$target_dir" 2>/dev/null; then
+        echo "✓ [$hostname] ya está montado en $target_dir"
+        continue
+    fi
+
+    mkdir -p "$target_dir"
+
+    # Verificar si el servicio responde por SSH (está activo)
+    if ssh -o BatchMode=yes -o ConnectTimeout=2 "$hostname" "true" 2>/dev/null; then
+        echo "• Montando [$hostname] en $target_dir..."
+        sshfs "$hostname:/var/www" "$target_dir" -o allow_other,default_permissions 2>/dev/null || true
+        if mountpoint -q "$target_dir" 2>/dev/null; then
+            echo "  ✅ [$hostname] montado exitosamente."
+        else
+            echo "  ⚠️ No se pudo montar [$hostname]."
+        fi
+    else
+        echo "  ⏸️ [$hostname] está apagado (omitiendo montaje hasta que se encienda)."
+    fi
+done

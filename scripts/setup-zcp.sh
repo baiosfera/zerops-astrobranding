@@ -55,7 +55,7 @@ if [ -f "$SCRIPT_DIR/zcp-sync" ]; then
 fi
 
 # 1.3 Despliegue de Sincronizador 3-Tier Zero-Data-Loss de Engram (engram-sync) y Sensores Soberanos
-for core_cli in "engram-sync:engram-sync" "ssot-parity-check:ssot-parity-check.sh" "skills-suite-validate:skills-suite-validate.sh"; do
+for core_cli in "engram-sync:engram-sync" "ssot-parity-check:ssot-parity-check.sh" "skills-suite-validate:skills-suite-validate.sh" "zcp-mount:zcp-mount"; do
     cli_name="${core_cli%%:*}"
     cli_src_file="${core_cli#*:}"
     if [ -f "$SCRIPT_DIR/$cli_src_file" ]; then
@@ -228,6 +228,12 @@ if command -v zcli >/dev/null 2>&1; then
         fi
         echo "  ✅ zcli autenticado deterministamente para $(whoami)"
     fi
+fi
+
+# 7. Montaje dinámico de runtimes Zerops adoptados
+if command -v zcp-mount >/dev/null 2>&1; then
+    echo "• Verificando montajes de runtimes adoptados..."
+    zcp-mount || true
 fi
 
 echo "============================================================"

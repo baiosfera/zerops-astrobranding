@@ -484,7 +484,8 @@ for _core_pair in \
     "zcp-wa:zcp-wa.sh" \
     "zcp-mail:zcp-mail.sh" \
     "zcp-preflight-gate:zcp-preflight-gate.sh" \
-    "zeropsenv:zeropsenv"; do
+    "zeropsenv:zeropsenv" \
+    "zcp-mount:zcp-mount"; do
     _c_name="${_core_pair%%:*}"
     _c_src="${_core_pair#*:}"
     if [ -f "$REPO_DIR/scripts/$_c_src" ]; then
@@ -680,7 +681,7 @@ if [ "$UPDATE_MODE" = true ]; then
     # Sincronizar scripts actualizados hacia SSoT en Google Drive si está montado
     if [ -d "$SSOT_SCRIPTS" ]; then
         echo "• Sincronizando scripts SSoT hacia Google Drive..."
-        for s in iniciar.sh gdrive.sh setup-zcp.sh setup-astrokey.sh unisetup.sh skills-suite-validate.sh ssot-parity-check.sh ssot-parity-check astrobranding-check.sh engram-sync; do
+        for s in iniciar.sh gdrive.sh setup-zcp.sh setup-astrokey.sh unisetup.sh skills-suite-validate.sh ssot-parity-check.sh ssot-parity-check astrobranding-check.sh engram-sync zcp-mount; do
             [ -f "$REPO_DIR/scripts/$s" ] && cp -f "$REPO_DIR/scripts/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
             [ -f "$REPO_DIR/$s" ] && cp -f "$REPO_DIR/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
         done
@@ -757,7 +758,7 @@ if [ "$UPDATE_MODE" = true ]; then
 
     # Desplegar CLIs esenciales en PATH y .bin (incluyendo limpieza de shadows en ~/.local/bin)
     mkdir -p "$PROJECT_ROOT/.bin" "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
-    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync engram-sync knowledge-sync anti-slop-linter apotelos linear-cli zcp-wa zcp-mail zcp-preflight-gate zeropsenv; do
+    for cli in skills-suite-validate ssot-parity-check astrobranding-check zcp-sync engram-sync knowledge-sync anti-slop-linter apotelos linear-cli zcp-wa zcp-mail zcp-preflight-gate zeropsenv zcp-mount; do
         src_cli=""
         if [ -f "$REPO_DIR/scripts/$cli.sh" ]; then
             src_cli="$REPO_DIR/scripts/$cli.sh"

@@ -181,7 +181,9 @@ function validateApplicationTests() {
   for (const svc of services) {
     const svcPath = path.join("/var/www", svc);
     const pkgPath = path.join(svcPath, "package.json");
-    const pyTests = fs.existsSync(path.join(svcPath, "tests")) || fs.existsSync(path.join(svcPath, "test"));
+    const isPython = fs.existsSync(path.join(svcPath, "requirements.txt")) || fs.existsSync(path.join(svcPath, "agent.py")) || fs.existsSync(path.join(svcPath, "main.py")) || fs.existsSync(path.join(svcPath, "pytest.ini"));
+    const hasPytestIni = fs.existsSync(path.join(svcPath, "pytest.ini"));
+    const hasTestsDir = fs.existsSync(path.join(svcPath, "tests")) || fs.existsSync(path.join(svcPath, "test"));
     let hasPkgTest = false;
     try {
       if (fs.existsSync(pkgPath)) {
@@ -190,8 +192,13 @@ function validateApplicationTests() {
       }
     } catch (e) {}
 
-    if (hasPkgTest || pyTests || fs.existsSync(path.join(svcPath, "pytest.ini"))) {
-      const testCmd = hasPkgTest ? "npm test" : (pyTests ? "bun test" : "pytest");
+    if (hasPkgTest || (isPython && (hasPytestIni || hasTestsDir)) || hasTestsDir) {
+      let testCmd = "bun test";
+      if (hasPkgTest) {
+        testCmd = "npm test";
+      } else if (isPython) {
+        testCmd = hasPytestIni ? "pytest" : "python3 -m unittest discover tests";
+      }
       console.log(`🧪 [F5 Reality Gate] Ejecutando suite de pruebas en "${svc}" (${testCmd})...`);
       try {
         execSync(`ssh ${svc} "cd /var/www && ${testCmd}"`, { stdio: "inherit", timeout: 60000 });
