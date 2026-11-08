@@ -1,5 +1,9 @@
 # Hito 6: Astro-Web Sovereign Engine (Bun 1.3.9 Ubuntu)
-# Arquitectura Canónica GitOps: Servicio principal en producción (rama main)
+# Arquitectura Canónica GitOps:
+# - Soberanía de Repositorio: Cada cliente opera en su propio repositorio en GitHub (https://github.com/<marca>/web).
+# - Namespace Upstream: baiosfera/* es exclusivamente para plantillas, tooling y skills. Prohibido alojar apps de clientes bajo baiosfera.
+# - Tokens: Se resuelven en /var/www/baiosfera/0ZEROPS-AGY/users-apis/<Marca>/<marca>-keys.md (GITHUB_TOKEN_<MARCA>).
+# - Mapeo de Ramas: rama "main" -> webprod (producción), rama "dev" -> webdev (desarrollo).
 # Almacenamiento: localstorage por defecto. Si el proyecto escala y requiere S3 MinIO,
 # se aprovisiona de forma aditiva e independiente vía recipes/services/04-objectstorage.yaml.
 services:

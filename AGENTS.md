@@ -111,8 +111,13 @@ Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/
         - **Service Discovery Dinámico**: Los servicios se interconectan en caliente vía DNS interno privado (`http://bifrost:8080`, `http://evolution:8085`, `http://listmonk:9000`). El agente inspecciona en vivo (`zerops_discover`) y solo cablea lo existente.
         - **GitOps Multi-Servicio & Staging Efímero en Apps (`astro-web`)**:
           * La plantilla `zerops-astrobranding` es puramente chasis/herramientas y nunca corre workflows de deploy propios.
-          * Las apps personalizadas usan el modelo **Multi-Servicio** (`<app>-prod` en rama `main`, `<app>-stage` en rama `stage`).
+          * Las apps personalizadas usan el modelo **Multi-Servicio** (`<app>-prod` en rama `main`, `<app>-dev` o `<app>-stage` en rama `dev`/`stage`).
           * El entorno `stage` es **efímero**: se crea para validar cambios en `stage.midominio.com` y puede eliminarse al terminar para costo cero.
+          * **Soberanía de Namespaces de Repositorios (Invariante Upstream vs Cliente)**:
+            - `baiosfera/*`: **Exclusivo Upstream** (chasis `zerops-astrobranding`, catálogo `zerops-astro-skills`, compendios, tooling). **PROHIBIDO** alojar código o crear repositorios de clientes bajo `baiosfera`.
+            - `https://github.com/<marca>/web` (o `<cliente>/<app>`): **Repositorio Soberano del Cliente** (aislado bajo su propia organización o usuario en GitHub).
+            - **Resolución de Tokens de GitHub**: El agente DEBE resolver las credenciales específicas del cliente en `/var/www/baiosfera/0ZEROPS-AGY/users-apis/<Marca>/<marca>-keys.md` (ej. `GITHUB_TOKEN_GLAMUR`, `GITHUB_TOKEN_ELPLACERDC`), NUNCA usar el token global de Baiosfera para repos de clientes.
+            - **Mapeo Canónico de Ramas**: La rama `main` despliega en `webprod` (producción); la rama `dev` despliega en `webdev` (desarrollo/preview).
      - Valida la salud física (`/health`, `/metrics`), paridad SSoT (`ssot-parity-check`) y commit descriptivo en Git.
 
 ## 🛑 Contratos Operativos ZCP & Seguridad
