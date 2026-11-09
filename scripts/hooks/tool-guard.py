@@ -1981,6 +1981,70 @@ def evaluate_hook(payload: dict) -> dict:
                     )
                 }
 
+            # A5.2.0 Meta-Skill Subskills Enforcement Gate (BAI-458)
+            if not payload.get("test_bypass_subskills"):
+                # Subskill 1: skill-creator (YAML Frontmatter & Trigger Specification)
+                stripped_content = content_to_check.strip()
+                if not (stripped_content.startswith("---") or "---\nname:" in content_to_check):
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            "🏛️ ARNÉS META-SKILL (Subskill: skill-creator): 'SKILL.md' debe comenzar con un bloque "
+                            "frontmatter YAML delimitado por '---' conteniendo 'name:' y 'description:' con triggers."
+                        )
+                    }
+                if "name:" not in content_to_check or "description:" not in content_to_check:
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            "🏛️ ARNÉS META-SKILL (Subskill: skill-creator): El frontmatter de 'SKILL.md' debe incluir "
+                            "obligatoriamente los campos 'name:' y 'description:'."
+                        )
+                    }
+                if "trigger:" not in content_to_check.lower():
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            "🏛️ ARNÉS META-SKILL (Subskill: skill-creator): El campo 'description:' debe incluir la cláusula "
+                            "'Trigger: <palabras clave>' para alimentar el radar de activación de agentes."
+                        )
+                    }
+
+                # Subskill 2: writing-for-agents (Cognitive Seams & Markdown Syntax Gate)
+                fence_count = len(re.findall(r'^```', content_to_check, re.MULTILINE))
+                if fence_count % 2 != 0:
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            f"🏛️ ARNÉS META-SKILL (Subskill: writing-for-agents): Se detectó un número impar de bloques de código "
+                            f"({fence_count} fences '```'). Cerrá todos los bloques de código para evitar contaminación del contexto."
+                        )
+                    }
+                if not re.search(r'^#\s+.+', content_to_check, re.MULTILINE) or not re.search(r'^##\s+.+', content_to_check, re.MULTILINE):
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            "🏛️ ARNÉS META-SKILL (Subskill: writing-for-agents): 'SKILL.md' debe mantener una jerarquía limpia "
+                            "con al menos un título H1 ('# ...') y secciones H2 ('## ...') que reduzcan la carga cognitiva del agente."
+                        )
+                    }
+
+                # Subskill 3: docu & skill-improver (Dual-RAG Structural References Gate)
+                skill_dir = os.path.dirname(target_file)
+                ref_dir = os.path.join(skill_dir, "references")
+                skill_base = os.path.basename(skill_dir)
+                is_sovereign_custom = "/zerops-astro-skills/" in target_file or "/.agents/skills/" in target_file
+                if is_sovereign_custom and not UPSTREAM_SKILLS_PATTERN.match(skill_base) and skill_base not in ["taste-skill", "impeccable"]:
+                    if os.path.exists(skill_dir) and not os.path.exists(ref_dir) and not payload.get("test_allow_new_skill"):
+                        return {
+                            "decision": "deny",
+                            "reason": (
+                                f"🏛️ ARNÉS META-SKILL (Subskills: docu + skill-improver): La skill [{skill_base}] debe desacoplar "
+                                "su lógica en Dual-RAG con una carpeta 'references/' conteniendo al menos 'usage.md' o 'infra.md'. "
+                                "Prohibido crear monolitos sin arquitectura Dual-RAG."
+                            )
+                        }
+
         # A5.2.1 Governance Rules Size Budget Gate (00-SUPREME <= 600 words, AGENTS.md custom <= 800 words - BAI-424)
         if target_file.endswith("00-SUPREME-DIRECTIVE.md") and tool_name in ["write_to_file", "write_file", "edit_file", "replace_file_content"]:
             check_text = content_to_check
@@ -2326,6 +2390,31 @@ def evaluate_hook(payload: dict) -> dict:
                                 "Commiteá tus cambios primero para asegurar la paridad de código."
                             )
                         }
+
+                    # Subskill 4: skill-registry & writing-skills (Index Verification on Push)
+                    if ("zerops-astro-skills" in repo_dir or "zerops-astro-skills" in cmd) and not payload.get("test_bypass_registry_check"):
+                        registry_file = "/var/www/.atl/skill-registry.md"
+                        if os.path.exists(registry_file):
+                            try:
+                                with open(registry_file, "r") as f:
+                                    reg_text = f.read()
+                                unregistered = []
+                                skills_base = "/var/www/zerops-astro-skills"
+                                if os.path.exists(skills_base):
+                                    for sk in os.listdir(skills_base):
+                                        if os.path.isdir(os.path.join(skills_base, sk)) and not sk.startswith(".") and not UPSTREAM_SKILLS_PATTERN.match(sk):
+                                            if sk not in reg_text:
+                                                unregistered.append(sk)
+                                if unregistered:
+                                    return {
+                                        "decision": "deny",
+                                        "reason": (
+                                            f"🏛️ ARNÉS META-SKILL (Subskill: skill-registry): Hay skills soberanas sin indexar en '{os.path.basename(registry_file)}': "
+                                            f"{unregistered}. Actualizá el registro de skills antes de hacer git push."
+                                        )
+                                    }
+                            except Exception:
+                                pass
                 except Exception:
                     pass
 
@@ -2955,7 +3044,7 @@ def run_tests():
                 "name": "write_to_file",
                 "args": {
                     "TargetFile": "/var/www/zerops-astro-skills/test-skill/SKILL.md",
-                    "CodeContent": "---\nname: test-skill\ndescription: Test\n---\n# Test\n"
+                    "CodeContent": "---\nname: test-skill\ndescription: Trigger: test\n---\n# Test\n## Section\n"
                 }
             }
         })
@@ -3015,7 +3104,7 @@ def run_tests():
                 "name": "write_to_file",
                 "args": {
                     "TargetFile": "/var/www/zerops-astro-skills/test-skill/SKILL.md",
-                    "CodeContent": "---\nname: test-skill\ndescription: Test\n---\n# Test\n"
+                    "CodeContent": "---\nname: test-skill\ndescription: Trigger: test\n---\n# Test\n## Section\n"
                 }
             }
         })
@@ -3250,11 +3339,12 @@ def run_tests():
 
         res_new_skill_allowed = evaluate_hook({
             "test_bypass_linear": True,
+            "test_bypass_subskills": True,
             "toolCall": {
                 "name": "write_file",
                 "args": {
                     "Path": new_skill_path,
-                    "Content": "---\nname: test-brand-new-skill\ndescription: Test\n---\n"
+                    "Content": "---\nname: test-brand-new-skill\ndescription: Trigger: test\n---\n# Test\n## Section\n"
                 }
             }
         })
@@ -3518,6 +3608,72 @@ def run_tests():
             assert any(s[0] == "paperclip" for s in pc_matches), f"Expected paperclip match in detect_skills_in_prompt, got {pc_matches}"
             assert os.path.exists("/mnt/localstorage/paperclip/instances/default/config.json") or os.path.exists("/home/zerops/.paperclip"), "Paperclip home persistence invariant missing"
             print("✓ Test 74 Passed: Paperclip Skill Trigger Radar & Invariant Persistence (BAI-455)")
+
+            # Test 75: Meta-Skill Subskills Physical Enforcement Gate (BAI-458)
+            # 75a: skill-creator frontmatter and trigger validation
+            res_no_frontmatter = evaluate_hook({
+                "test_bypass_linear": True,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {
+                        "Path": "/var/www/zerops-astro-skills/paperclip/SKILL.md",
+                        "Content": "# Bad Skill\nNo frontmatter here."
+                    }
+                }
+            })
+            assert res_no_frontmatter.get("decision") == "deny" and "skill-creator" in res_no_frontmatter.get("reason", ""), f"Expected deny on missing frontmatter, got {res_no_frontmatter}"
+
+            res_no_trigger = evaluate_hook({
+                "test_bypass_linear": True,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {
+                        "Path": "/var/www/zerops-astro-skills/paperclip/SKILL.md",
+                        "Content": "---\nname: test-skill\ndescription: A test without trigger keyword.\n---\n# Test\n## Section\n"
+                    }
+                }
+            })
+            assert res_no_trigger.get("decision") == "deny" and "Trigger:" in res_no_trigger.get("reason", ""), f"Expected deny on missing Trigger:, got {res_no_trigger}"
+
+            # 75b: writing-for-agents markdown cognitive seams (unclosed code fences)
+            res_bad_fence = evaluate_hook({
+                "test_bypass_linear": True,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {
+                        "Path": "/var/www/zerops-astro-skills/paperclip/SKILL.md",
+                        "Content": "---\nname: test-skill\ndescription: Trigger: test\n---\n# Test\n## Section\n```bash\necho hello\n"
+                    }
+                }
+            })
+            assert res_bad_fence.get("decision") == "deny" and "writing-for-agents" in res_bad_fence.get("reason", ""), f"Expected deny on unclosed code fence, got {res_bad_fence}"
+
+            # 75c: docu & skill-improver Dual-RAG structure
+            test_monolith_path = "/var/www/zerops-astro-skills/test-monolith-no-refs/SKILL.md"
+            test_monolith_dossier = "/var/www/artifacts/research/test-monolith-no-refs_dossier.md"
+            os.makedirs(os.path.dirname(test_monolith_path), exist_ok=True)
+            os.makedirs(os.path.dirname(test_monolith_dossier), exist_ok=True)
+            with open(test_monolith_dossier, "w") as f:
+                f.write("# Research Dossier\n")
+            try:
+                res_missing_dual_rag = evaluate_hook({
+                    "test_bypass_linear": True,
+                    "toolCall": {
+                        "name": "write_file",
+                        "args": {
+                            "Path": test_monolith_path,
+                            "Content": "---\nname: test-monolith\ndescription: Trigger: mock\n---\n# Mock\n## Section\n"
+                        }
+                    }
+                })
+                assert res_missing_dual_rag.get("decision") == "deny" and "docu + skill-improver" in res_missing_dual_rag.get("reason", ""), f"Expected deny on missing Dual-RAG references, got {res_missing_dual_rag}"
+            finally:
+                if os.path.exists(test_monolith_dossier):
+                    os.remove(test_monolith_dossier)
+                if os.path.exists("/var/www/zerops-astro-skills/test-monolith-no-refs"):
+                    os.rmdir("/var/www/zerops-astro-skills/test-monolith-no-refs")
+
+            print("✓ Test 75 Passed: Meta-Skill Subskills Physical Enforcement Gate (BAI-458)")
         finally:
             if cache_backup:
                 with open(test_cache, "w") as f:
