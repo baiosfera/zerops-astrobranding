@@ -38,6 +38,14 @@ try:
 except (ImportError, ValueError):
     from .agent import HermesAgent
 
+try:
+    from paperclip_bridge import record_telegram_turn
+except (ImportError, ValueError):
+    try:
+        from .paperclip_bridge import record_telegram_turn
+    except Exception:
+        record_telegram_turn = None
+
 async def run_dormant_loop():
     logger.info("ℹ️ No TELEGRAM_BOT_TOKEN provided. Gateway running in dormant standby mode.")
     logger.info("To activate the Telegram bot, add TELEGRAM_BOT_TOKEN or TELEGRAM_ADMIN_BOT_TOKEN in Zerops.")
@@ -167,27 +175,20 @@ def build_bot_app(token: str, role: str, allowed_users: set, bifrost_key: str):
             raise ApplicationHandlerStop
 
     async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        brand_name = os.environ.get("PROJECT_NAME", "tu negocio").replace("_", " ").title()
-        if role == "client":
-            msg = (
-                f"👋 *Hola. Soy tu asistente de gestión para {brand_name}.*\n\n"
-                "Puedo ayudarte a:\n"
-                "• Consultar y cambiar precios de productos al instante\n"
-                "• Ver y ajustar stock y catálogo\n"
-                "• Consultar pedidos recientes y transacciones\n"
-                "• Atender requerimientos de clientes\n\n"
-                "Escribime en lenguaje natural lo que necesites consultar o modificar."
-            )
-        else:
-            msg = (
-                "👋 *Hola. Soy Hermes, tu copiloto soberano (AGY Twin) en Zerops 24/7.*\n\n"
-                "Capacidades operativas:\n"
-                "• `/status` - Salud del gateway y servicios\n"
-                "• `/reset` - Limpiar ventana de contexto\n"
-                "• Control de Zerops (start, stop, list, zcli)\n"
-                "• GitOps de webdev/webprod (git status, log, diff, preview)\n"
-                "• Gestión completa de catálogo e-commerce en vivo"
-            )
+        project_name = os.environ.get("PROJECT_NAME", "MentorIA").replace("_", " ").title()
+        msg = (
+            f"👋 *Hola. Soy Hermes, tu copiloto soberano en Zerops ({project_name}).*\n\n"
+            "Capacidades operativas en Fase 1 (Apotelos Mesh):\n"
+            "• `/status` - Salud del gateway y servicios Zerops\n"
+            "• `/reset` - Limpiar historial y ventana de contexto\n"
+            "• 🧠 *Enjambres CrewAI*: Orquestación de cuadrillas (research, timing, SEO)\n"
+            "• 📋 *Gestión Linear*: Creación y seguimiento de issues y proyectos\n"
+            "• 📎 *Paperclip AI*: Gobernanza de agentes y control de spend caps\n"
+            "• 🛡️ *PydanticAI*: Extracción y validación estricta de esquemas\n"
+            "• 💾 *Memoria Engram*: Búsqueda y persistencia cross-session\n"
+            "• ⚙️ *Plataforma Zerops*: Diagnóstico y control de servicios en vivo\n\n"
+            "Escribime en lenguaje natural cualquier instrucción, análisis u orden operativa."
+        )
         await send_split_message(update, msg)
 
     async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -195,7 +196,7 @@ def build_bot_app(token: str, role: str, allowed_users: set, bifrost_key: str):
             f"🟢 Hermes Status ({role.upper()}): OPERATIONAL\n"
             f"• Virtual Key: {bifrost_key}\n"
             f"• Rol: {role}\n"
-            f"• Base de Datos: PostgreSQL 18 (SSR Live Sync)\n"
+            f"• Base de Datos: PostgreSQL 18 (Paperclip & Mesh Store)\n"
             f"• Whitelist: {'Activa (' + str(len(allowed_users)) + ' usuarios)' if allowed_users else 'Abierta'}"
         )
 
@@ -233,7 +234,7 @@ def build_bot_app(token: str, role: str, allowed_users: set, bifrost_key: str):
             try:
                 photo = update.message.photo[-1]
                 file_obj = await context.bot.get_file(photo.file_id)
-                storage_dir = "/mnt/localstorage/products" if os.path.exists("/mnt/localstorage") else "/var/www/localstorage/products"
+                storage_dir = "/mnt/localstorage/uploads" if os.path.exists("/mnt/localstorage") else "/var/www/localstorage/uploads"
                 os.makedirs(storage_dir, exist_ok=True)
                 filename = f"telegram_{update.message.id}_{photo.file_unique_id}.jpg"
                 dest_path = os.path.join(storage_dir, filename)
@@ -243,18 +244,52 @@ def build_bot_app(token: str, role: str, allowed_users: set, bifrost_key: str):
             except Exception as pe:
                 logger.error(f"[{role.upper()}] Error al descargar foto de Telegram: {pe}")
 
-        if not user_text and not photo_path:
+        doc_path = None
+        if update.message.document:
+            try:
+                doc = update.message.document
+                file_obj = await context.bot.get_file(doc.file_id)
+                storage_dir = "/mnt/localstorage/uploads" if os.path.exists("/mnt/localstorage") else "/var/www/localstorage/uploads"
+                os.makedirs(storage_dir, exist_ok=True)
+                clean_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', doc.file_name or "document.bin")
+                filename = f"telegram_{update.message.id}_{clean_name}"
+                dest_path = os.path.join(storage_dir, filename)
+                await file_obj.download_to_drive(dest_path)
+                doc_path = dest_path
+                logger.info(f"[{role.upper()}] Documento guardado exitosamente en: {doc_path}")
+            except Exception as de:
+                logger.error(f"[{role.upper()}] Error al descargar documento de Telegram: {de}")
+
+        if not user_text and not photo_path and not doc_path:
             return
 
         if photo_path:
             user_text = f"[Foto recibida y guardada localmente en {photo_path}]: {user_text}".strip()
+        if doc_path:
+            user_text = f"[Documento recibido y guardado localmente en {doc_path}]: {user_text}".strip()
 
         chat_id = update.effective_chat.id
         logger.info(f"[{role.upper()}] Prompt from chat {chat_id}: {user_text[:50]}...")
+        turn_start_time = time.time()
         async with keep_typing(context.bot, chat_id):
             try:
                 reply = await agent.run_turn(user_text, chat_id=chat_id)
+                turn_duration = time.time() - turn_start_time
                 await send_split_message(update, reply)
+
+                # Sincronización automática de telemetría hacia Paperclip Control Plane
+                if record_telegram_turn:
+                    try:
+                        asyncio.create_task(
+                            record_telegram_turn(
+                                user_id=chat_id,
+                                prompt=user_text,
+                                reply=reply,
+                                duration_sec=turn_duration
+                            )
+                        )
+                    except Exception as bridge_err:
+                        logger.warning(f"[{role.upper()}] Error despachando telemetría a Paperclip: {bridge_err}")
             except Exception as e:
                 logger.error(f"[{role.upper()}] Error processing turn: {e}")
                 await update.message.reply_text(f"⚠️ Error al procesar tu solicitud: {str(e)}")
@@ -263,7 +298,7 @@ def build_bot_app(token: str, role: str, allowed_users: set, bifrost_key: str):
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("reset", reset_cmd))
-    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, handle_message))
     return app
 
 async def run_bot():

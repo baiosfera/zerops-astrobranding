@@ -19,12 +19,24 @@ NATS_URL = os.getenv("NATS_URL") or os.getenv("ZCP_NATS_URL", "nats://nats:4222"
 
 async def get_system_health() -> dict:
     """Check health across mesh components"""
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        try:
-            res = await client.get(f"{API_BASE}/health")
-            return res.json()
-        except Exception as e:
-            return {"service": "hermes-agent", "status": "autonomous", "upstream_error": str(e)}
+    health = {
+        "service": "hermes-agent",
+        "status": "autonomous",
+        "mesh": {}
+    }
+    targets = {
+        "bifrost": "http://bifrost:8080/healthz",
+        "paperclip": "http://paperclip:3100/api/health",
+        "freellmapi": "http://freellmapi:3001/"
+    }
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        for name, url in targets.items():
+            try:
+                r = await client.get(url)
+                health["mesh"][name] = "ok" if r.status_code in (200, 401, 404) else f"status_{r.status_code}"
+            except Exception as e:
+                health["mesh"][name] = f"down: {str(e)[:50]}"
+    return health
 
 async def calculate_natal_chart(client_id: str, ayanamsha: str = "tropical") -> dict:
     """Calculate chart or trigger computation via internal engine"""
@@ -130,9 +142,27 @@ async def send_whatsapp_otp(phone: str, client_name: str) -> dict:
         except Exception as e:
             return {"error": str(e)}
 
-# --- Zerops Control Plane & Platform Tools ---
+# --- Zerops Control Plane & Platform Orchestration Tools ---
 
 import subprocess
+
+def get_current_project_id() -> str:
+    """Dynamically resolves active Zerops project ID from runtime environment."""
+    return (os.getenv("ZEROPS_ProjectId") or os.getenv("projectId") or "").strip()
+
+def _ensure_zcli_auth() -> bool:
+    """Ensures zcli is authenticated against the Zerops API."""
+    token = (os.getenv("ZCP_API_KEY") or os.getenv("ZEROPS_TOKEN") or "").strip()
+    if not token:
+        return False
+    try:
+        chk = subprocess.run(["/opt/zerops/bin/zcli", "service", "list"], capture_output=True, text=True, timeout=5)
+        if chk.returncode == 0 and "unauthenticated" not in chk.stderr.lower():
+            return True
+        log_res = subprocess.run(["/opt/zerops/bin/zcli", "login", token], capture_output=True, text=True, timeout=10)
+        return log_res.returncode == 0
+    except Exception:
+        return False
 
 def _clean_service_name(name: str) -> str:
     name = name.strip().lower()
@@ -140,162 +170,176 @@ def _clean_service_name(name: str) -> str:
     return name.split(".")[0]
 
 def list_zerops_services() -> str:
-    """Lists all services in the Zerops project and their current status (ACTIVE/STOPPED)."""
-    project_id = os.getenv("projectId", "I6YfEvtmRgivAAYYXm537A")
-    res = subprocess.run(
-        ["/opt/zerops/bin/zcli", "service", "list", f"--projectId={project_id}"],
-        capture_output=True, text=True, timeout=15
-    )
-    if res.returncode == 0:
-        return res.stdout.strip()
-    return f"Error listing services: {res.stderr.strip()}"
+    """Lists all active and configured services in the Zerops project with their current status (via zcli)."""
+    _ensure_zcli_auth()
+    project_id = get_current_project_id()
+    cmd = ["/opt/zerops/bin/zcli", "service", "list"]
+    if project_id:
+        cmd.append(f"--projectId={project_id}")
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception as e:
+        logger.warning(f"zcli service list error: {e}")
+
+    # Fallback: query internal cluster DNS sockets dynamically
+    candidate_services = ["paperclip", "bifrost", "freellmapi", "hermes", "pidev", "nats", "database", "valkey", "localstorage", "webdev", "webprod"]
+    results = []
+    import socket
+    for s in candidate_services:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(0.5)
+            ports = [80, 3000, 8000, 8080, 3100, 4222, 5432, 6379, 22]
+            reachable = False
+            for p in ports:
+                if sock.connect_ex((s, p)) == 0:
+                    reachable = True
+                    break
+            sock.close()
+            if reachable:
+                results.append(f"• {s}: ACTIVO (Reachable en red interna)")
+        except Exception:
+            pass
+    if results:
+        return "Servicios detectados en la red interna Zerops:\n" + "\n".join(results)
+    return "No fue posible contactar zcli ni resolver servicios en red interna."
 
 def start_zerops_service(service_name: str) -> str:
-    """Starts/turns on a Zerops service stack by name (e.g. 'webdev', 'brand', 'videoworker')."""
+    """Starts/turns on a Zerops service stack by name."""
+    _ensure_zcli_auth()
     service_name = _clean_service_name(service_name)
-    project_id = os.getenv("projectId", "I6YfEvtmRgivAAYYXm537A")
-    res = subprocess.run(
-        ["/opt/zerops/bin/zcli", "service", "start", service_name, f"--projectId={project_id}"],
-        capture_output=True, text=True, timeout=20
-    )
+    project_id = get_current_project_id()
+    cmd = ["/opt/zerops/bin/zcli", "service", "start", service_name]
+    if project_id:
+        cmd.append(f"--projectId={project_id}")
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
     if res.returncode == 0:
-        return f"✅ El servicio '{service_name}' está siendo iniciado en Zerops (comando enviado con éxito)."
-    return f"❌ Error iniciando '{service_name}': {res.stderr.strip()}"
+        return f"✅ El servicio '{service_name}' está siendo iniciado en Zerops."
+    return f"❌ Error iniciando '{service_name}': {res.stderr.strip() or res.stdout.strip()}"
 
 def stop_zerops_service(service_name: str) -> str:
-    """Stops/turns off a Zerops service stack by name (e.g. 'webdev', 'brand')."""
+    """Stops/turns off a Zerops service stack by name."""
+    _ensure_zcli_auth()
     service_name = _clean_service_name(service_name)
-    project_id = os.getenv("projectId", "I6YfEvtmRgivAAYYXm537A")
-    res = subprocess.run(
-        ["/opt/zerops/bin/zcli", "service", "stop", service_name, f"--projectId={project_id}"],
-        capture_output=True, text=True, timeout=20
-    )
+    project_id = get_current_project_id()
+    cmd = ["/opt/zerops/bin/zcli", "service", "stop", service_name]
+    if project_id:
+        cmd.append(f"--projectId={project_id}")
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
     if res.returncode == 0:
-        return f"🛑 El servicio '{service_name}' está siendo detenido en Zerops (comando enviado con éxito)."
-    return f"❌ Error deteniendo '{service_name}': {res.stderr.strip()}"
+        return f"🛑 El servicio '{service_name}' está siendo detenido en Zerops."
+    return f"❌ Error deteniendo '{service_name}': {res.stderr.strip() or res.stdout.strip()}"
 
 def delete_zerops_service(service_name: str) -> str:
-    """Deletes/removes a Zerops service stack by name (e.g. 'videoworker', 'brand').
-    Uses non-interactive confirmation to avoid terminal prompt hangs."""
+    """Deletes/removes a Zerops service stack by name safely."""
+    _ensure_zcli_auth()
     service_name = _clean_service_name(service_name)
-    project_id = os.getenv("projectId", "I6YfEvtmRgivAAYYXm537A")
-    res = subprocess.run(
-        ["/opt/zerops/bin/zcli", "service", "delete", service_name, "--confirm", f"--projectId={project_id}"],
-        capture_output=True, text=True, timeout=25
-    )
+    project_id = get_current_project_id()
+    cmd = ["/opt/zerops/bin/zcli", "service", "delete", service_name, "--confirm"]
+    if project_id:
+        cmd.append(f"--projectId={project_id}")
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
     if res.returncode == 0:
         return f"🗑️ El servicio '{service_name}' fue eliminado exitosamente en Zerops."
     return f"❌ Error eliminando '{service_name}': {res.stderr.strip() or res.stdout.strip()}"
 
 def get_zerops_service_status(service_name: str) -> str:
-    """Checks current status of a specific Zerops service."""
+    """Checks current status and reachability of a specific Zerops service."""
     service_name = _clean_service_name(service_name)
     output = list_zerops_services()
     for line in output.splitlines():
         if service_name in line.lower():
             return f"Estado de '{service_name}': {line.strip()}"
-    return f"No se encontró el servicio '{service_name}' en el proyecto."
+    return f"El servicio '{service_name}' no aparece actualmente en el proyecto activo."
 
-# --- GitOps & Webdev Code Mutation Tools ---
-
-WEB_REPO_DIR = os.getenv("WEB_REPO_DIR", "/mnt/localstorage/web")
-
-def read_web_file(relative_path: str) -> str:
-    """Reads the contents of a file in the webdev repository (e.g., 'brandbook.json', 'package.json', 'apps/web/src/pages/index.astro')."""
-    target = os.path.normpath(os.path.join(WEB_REPO_DIR, relative_path.lstrip("/")))
-    if not target.startswith(WEB_REPO_DIR):
-        return "❌ Error: Ruta fuera del repositorio permitida."
-    if not os.path.exists(target):
-        return f"❌ El archivo '{relative_path}' no existe en el repositorio."
+def _resolve_service_id(service_name: str) -> Optional[str]:
+    """Resolves a Zerops service name to its serviceId dynamically."""
+    _ensure_zcli_auth()
+    project_id = get_current_project_id()
+    cmd = ["/opt/zerops/bin/zcli", "service", "list"]
+    if project_id:
+        cmd.append(f"--projectId={project_id}")
     try:
-        with open(target, "r", encoding="utf-8") as f:
-            content = f.read()
-        if len(content) > 4000:
-            return content[:4000] + "\n... [Truncado: archivo mayor a 4000 caracteres]"
-        return content
-    except Exception as e:
-        return f"❌ Error leyendo archivo: {str(e)}"
-
-def edit_web_file(relative_path: str, new_content: str) -> str:
-    """Writes or updates a file in the webdev repository."""
-    target = os.path.normpath(os.path.join(WEB_REPO_DIR, relative_path.lstrip("/")))
-    if not target.startswith(WEB_REPO_DIR):
-        return "❌ Error: Ruta fuera del repositorio permitida."
-    try:
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        with open(target, "w", encoding="utf-8") as f:
-            f.write(new_content)
-        return f"✅ Archivo '{relative_path}' actualizado con éxito en el repositorio."
-    except Exception as e:
-        return f"❌ Error escribiendo archivo: {str(e)}"
-
-def git_web_status() -> str:
-    """Shows git status and modified files in the webdev repository."""
-    if not os.path.exists(WEB_REPO_DIR):
-        return "❌ Repositorio web no encontrado en /mnt/localstorage/web."
-    res = subprocess.run(["git", "status", "-s"], cwd=WEB_REPO_DIR, capture_output=True, text=True)
-    if res.returncode == 0:
-        output = res.stdout.strip()
-        return output if output else "Working tree limpio (sin cambios pendientes)."
-    return f"❌ Error en git status: {res.stderr.strip()}"
-
-def git_web_diff() -> str:
-    """Shows git diff of unstaged or staged changes in the webdev repository."""
-    if not os.path.exists(WEB_REPO_DIR):
-        return "❌ Repositorio web no encontrado en /mnt/localstorage/web."
-    res = subprocess.run(["git", "diff"], cwd=WEB_REPO_DIR, capture_output=True, text=True)
-    if res.returncode == 0:
-        output = res.stdout.strip()
-        if len(output) > 3000:
-            return output[:3000] + "\n... [Diff truncado]"
-        return output if output else "No hay diferencias locales."
-    return f"❌ Error en git diff: {res.stderr.strip()}"
-
-def deploy_webdev_preview(commit_message: str) -> str:
-    """Commits local changes on 'dev' branch, pushes to GitHub and deploys to Zerops webdev preview."""
-    if not os.path.exists(WEB_REPO_DIR):
-        return "❌ Repositorio web no encontrado."
-    project_id = os.getenv("projectId", "I6YfEvtmRgivAAYYXm537A")
-    try:
-        subprocess.run(["git", "add", "."], cwd=WEB_REPO_DIR, check=True)
-        commit_res = subprocess.run(["git", "commit", "-m", commit_message], cwd=WEB_REPO_DIR, capture_output=True, text=True)
-        push_res = subprocess.run(["git", "push", "origin", "dev"], cwd=WEB_REPO_DIR, capture_output=True, text=True)
-        zcli_res = subprocess.run(
-            ["/opt/zerops/bin/zcli", "push", "webdev", f"--working-dir={WEB_REPO_DIR}", f"--project-id={project_id}", "--no-wait"],
-            capture_output=True, text=True, timeout=30
-        )
-        return f"🚀 Cambios subidos a GitHub (dev) y despliegue disparado en webdev:\nCommit: {commit_res.stdout.strip()}\nZerops Push: {zcli_res.stdout.strip()}"
-    except Exception as e:
-        return f"❌ Error en deploy_webdev_preview: {str(e)}"
-
-def promote_to_production_webprod(commit_message: str) -> str:
-    """Merges 'dev' into 'main' and pushes to GitHub, triggering the GitHub Actions CI/CD to deploy to webprod."""
-    if not os.path.exists(WEB_REPO_DIR):
-        return "❌ Repositorio web no encontrado."
-    try:
-        subprocess.run(["git", "checkout", "main"], cwd=WEB_REPO_DIR, check=True)
-        subprocess.run(["git", "pull", "origin", "main"], cwd=WEB_REPO_DIR, check=True)
-        merge_res = subprocess.run(["git", "merge", "dev", "-m", commit_message], cwd=WEB_REPO_DIR, capture_output=True, text=True)
-        push_res = subprocess.run(["git", "push", "origin", "main"], cwd=WEB_REPO_DIR, capture_output=True, text=True)
-        subprocess.run(["git", "checkout", "dev"], cwd=WEB_REPO_DIR, check=True)
-        return f"🌟 ¡Promoción a PRODUCCIÓN disparada!\nMerge: {merge_res.stdout.strip()}\nGitHub Push: {push_res.stdout.strip()}\nGitHub Actions está desplegando la nueva versión en producción."
-    except Exception as e:
-        subprocess.run(["git", "checkout", "dev"], cwd=WEB_REPO_DIR)
-        return f"❌ Error en promote_to_production_webprod: {str(e)}"
-
-def git_web_log(branch_or_range: str = "main..dev") -> str:
-    """Shows commit history for a branch or range (e.g. 'main..dev' shows all commits on dev waiting to be pushed/merged to main/production)."""
-    if not os.path.exists(WEB_REPO_DIR):
-        return "❌ Repositorio web no encontrado en /mnt/localstorage/web."
-    try:
-        subprocess.run(["git", "fetch", "origin"], cwd=WEB_REPO_DIR, capture_output=True, timeout=10)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        clean = _clean_service_name(service_name)
+        for line in res.stdout.splitlines():
+            parts = [p.strip() for p in line.split("│") if p.strip()]
+            if len(parts) >= 2 and parts[0] != "ID":
+                if parts[1].lower() == clean:
+                    return parts[0]
     except Exception:
         pass
-    res = subprocess.run(["git", "log", branch_or_range, "--oneline", "-n", "15"], cwd=WEB_REPO_DIR, capture_output=True, text=True)
+    return None
+
+def zerops_get_service_logs(service_name: str, limit: int = 50) -> str:
+    """Fetches recent runtime logs from a specific Zerops service container via zcli."""
+    _ensure_zcli_auth()
+    service_id = _resolve_service_id(service_name)
+    if not service_id:
+        return f"❌ No se pudo resolver el ID del servicio '{service_name}' en el proyecto activo."
+    project_id = get_current_project_id()
+    cmd = ["/opt/zerops/bin/zcli", "service", "log", f"--service-id={service_id}", f"--limit={limit}"]
+    if project_id:
+        cmd.append(f"--project-id={project_id}")
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+    if res.returncode == 0 and res.stdout.strip():
+        return f"📜 Logs de '{service_name}' (últimas {limit} líneas):\n{res.stdout.strip()}"
+    return f"❌ Error leyendo logs de '{service_name}': {res.stderr.strip() or 'Sin logs'}"
+
+def zerops_deploy_service(service_name: str, working_dir: str = "") -> str:
+    """Pushes code and triggers deployment for a Zerops service using zcli push."""
+    _ensure_zcli_auth()
+    service_name = _clean_service_name(service_name)
+    project_id = get_current_project_id()
+    cmd = ["/opt/zerops/bin/zcli", "push", service_name, "--no-wait"]
+    if working_dir:
+        cmd.append(f"--working-dir={working_dir}")
+    if project_id:
+        cmd.append(f"--projectId={project_id}")
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if res.returncode == 0:
-        output = res.stdout.strip()
-        return output if output else f"No hay commits pendientes en el rango '{branch_or_range}' (ramas sincronizadas)."
-    return f"❌ Error en git log: {res.stderr.strip()}"
+        return f"🚀 Despliegue disparado en Zerops para '{service_name}':\n{res.stdout.strip()}"
+    return f"❌ Error desplegando '{service_name}': {res.stderr.strip() or res.stdout.strip()}"
+
+# --- PiDev & Gentle-Pi Coding Agent Tools ---
+
+def pidev_get_status() -> str:
+    """Checks the health, agent version, and operational readiness of the PiDev service."""
+    import requests
+    try:
+        res = requests.get("http://pidev:3000/status", timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            return (
+                f"🟢 PiDev (Gentle-Pi) OPERATIVO:\n"
+                f"• Versión: {data.get('version', 'gentle-shell')}\n"
+                f"• Uptime: {data.get('uptime', 0):.1f}s\n"
+                f"• Endpoint: http://pidev:3000"
+            )
+        return f"⚠️ PiDev respondió con código {res.status_code}: {res.text}"
+    except Exception as e:
+        return f"❌ PiDev no alcanzable en http://pidev:3000 ({str(e)})"
+
+def pidev_dispatch_task(prompt: str, working_dir: str = "/var/www") -> str:
+    """Dispatches a web/application coding task to Gentle-Pi in pidev."""
+    import requests
+    try:
+        res = requests.post(
+            "http://pidev:3000/execute",
+            json={"prompt": prompt, "cwd": working_dir},
+            timeout=180
+        )
+        if res.status_code == 200:
+            data = res.json()
+            output = data.get("output", "")
+            stderr = data.get("stderr", "")
+            return f"✅ Resultado de Gentle-Pi (pidev):\n{output}\n{('Advertencias: ' + stderr) if stderr else ''}"
+        return f"❌ Error ejecutando en PiDev ({res.status_code}): {res.text}"
+    except Exception as e:
+        return f"❌ Error conectando a PiDev: {str(e)}"
+
 
 def git_web_diff_branches(base_branch: str = "main", target_branch: str = "dev") -> str:
     """Compares two branches (e.g. 'main' and 'dev') and lists changed files and statistics."""
@@ -919,12 +963,27 @@ get_makeup_bookings = get_store_bookings
 
 # --- Dynamic AI Swarms (CrewAI) & Structured Validation (PydanticAI) ---
 
-async def run_crew_ai(mission: str, roles: list, tier: str = "free") -> str:
-    """Dispatches a dynamic in-memory CrewAI swarm without static scripts."""
+async def run_crew_ai(mission: str, roles: list = None, tier: str = "free", output_schema: dict = None, skills: list = None) -> str:
+    """Dispatches a dynamic in-memory CrewAI swarm or multi-skill CoHaLo crew with optional Pydantic validation."""
     try:
         import asyncio
         from crews.crew_factory import CrewFactory
-        return await asyncio.to_thread(CrewFactory.create_dynamic_crew, goal=mission, roles=roles, tier=tier)
+        
+        # If specific sovereign skills are requested (e.g. ['seo-aeo-geo', 'automation-engine'])
+        if skills and isinstance(skills, list) and len(skills) > 0:
+            return await asyncio.to_thread(CrewFactory.execute_skills_crew, skill_names=skills, goal=mission, tier=tier)
+            
+        # Standard dynamic role-based crew with optional Pydantic schema
+        clean_roles = roles if roles and isinstance(roles, list) else [
+            {"role": "Especialista Principal", "goal": mission, "backstory": "Experto técnico senior"}
+        ]
+        return await asyncio.to_thread(
+            CrewFactory.create_dynamic_crew,
+            goal=mission,
+            roles=clean_roles,
+            tier=tier,
+            output_schema=output_schema
+        )
     except Exception as e:
         return f"❌ Error ejecutando CrewAI: {str(e)}"
 
@@ -937,38 +996,99 @@ async def extract_structured_data(fields_spec: dict, user_input: str, tier: str 
         return f"❌ Error extrayendo datos con PydanticAI: {str(e)}"
 
 def list_available_crews() -> str:
-    """Lists all registered CrewAI squads and dynamic multi-agent capabilities."""
-    return (
-        "🤖 **Cuadrillas Autónomas de CrewAI Registradas:**\n"
-        "1. **`seo_aeo_geo`** (Slugs: `seo`, `seo_aeo_geo`): Enjambre de 2 agentes para optimización en Google, SearchGPT y Perplexity (Schema.org RDF @graph, /llms.txt v2, OpenGraph <300KB WhatsApp budget y reglas Edge Cloudflare).\n"
-        "2. **`general_research`**: Enjambre de investigación web profunda, síntesis documental y triangulación de fuentes.\n"
-        "3. **`astrology_timing`**: Enjambre de cálculo y timing eleccional (Helenístico, Védico, BaZi).\n"
-        "4. **`google_seo`**: Enjambre de auditoría técnica y palabras clave tradicionales.\n\n"
-        "✨ **Enjambres Dinámicos CoHaLo (141 Skills):** Puedo instanciar en tiempo de ejecución cualquier skill del catálogo (`.atl/skill-registry.md`) llamando a `run_crew_ai(mission, roles)`."
-    )
+    """Lists dynamic CrewAI swarm capabilities and available CoHaLo skills."""
+    try:
+        from crews.universal_harness import UniversalSkillHarness
+        skills = UniversalSkillHarness.list_available_skills()
+        total = len(skills)
+        sample = ", ".join([f"`{s}`" for s in skills[:15]])
+        return (
+            f"🤖 **Catálogo Dinámico de Cuadrillas CrewAI ({total} Skills disponibles):**\n"
+            f"1. **Enjambres Ad-hoc por Roles**: Podés pedirme crear cuadrillas personalizadas pasando roles y objetivos a `run_crew_ai`.\n"
+            f"2. **Validación Estricta con Pydantic**: Soporte nativo para exigir salida JSON estructurada pasando `output_schema`.\n"
+            f"3. **Skills Soberanas CoHaLo**: Mapeo directo a {total} skills activas. Muestra: {sample}...\n\n"
+            "Ejemplo de uso: *'Creá una cuadrilla con un estratega de pricing y un auditor para definir las tarifas de mentorías 1:1'*."
+        )
+    except Exception:
+        return "🤖 Cuadrillas dinámicas CrewAI operativas sobre Bifrost ($0 FreeLLMAPI). Podés crear cualquier enjambre pasando roles y misión."
 
 async def get_paperclip_status() -> str:
-    """Queries Paperclip AI board at http://paperclip:3100 to check company and agent status."""
+    """Queries Paperclip AI board at http://paperclip:3100 to check live company, agents, and task status."""
     try:
         import httpx
+        from paperclip_bridge import get_paperclip_db_url, list_paperclip_issues
+
+        dashboard_url = "https://paperclip-2b6-3100.ny1.zerops.app"
+        config_path = "/mnt/localstorage/paperclip/instances/default/config.json"
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    dashboard_url = cfg.get("auth", {}).get("publicBaseUrl") or dashboard_url
+            except Exception:
+                pass
+
         async with httpx.AsyncClient(timeout=5.0) as client:
             res = await client.get("http://paperclip:3100/api/health")
-            if res.status_code == 200:
-                return (
-                    "📋 **Paperclip AI Board (http://paperclip:3100):**\n"
-                    "• Estado: ACTIVO (Node.js 26 + PostgreSQL)\n"
-                    "• Dashboard: https://paperclip-252-3100.ny1.zerops.app/\n"
-                    "• Agentes en Tablero:\n"
-                    "  - Hermes Autonomous Agent (`hermes_gateway`): ACTIVO (Orquestador principal)\n"
-                    "  - CrewAI SEO-AEO-GEO (`hermes_gateway`): PAUSADO (Despertar bajo demanda)\n"
-                    "  - CrewAI General Research (`hermes_gateway`): PAUSADO (Despertar bajo demanda)\n"
-                    "  - CrewAI Astrology Timing (`hermes_gateway`): PAUSADO (Despertar bajo demanda)\n"
-                    "  - CrewAI Google SEO (`hermes_gateway`): PAUSADO (Despertar bajo demanda)\n"
-                    "• Rol: Gobernanza agéntica, organigrama, aprobación de tareas y control presupuestario."
-                )
-            return f"⚠️ Paperclip responde con estado {res.status_code}"
+            if res.status_code != 200:
+                return f"⚠️ Paperclip responde con estado {res.status_code}"
+
+        # Dynamic introspection of physical agents in PostgreSQL
+        db_url = get_paperclip_db_url()
+        agents_info = []
+        if db_url:
+            import asyncpg
+            conn = await asyncpg.connect(db_url, timeout=5.0)
+            rows = await conn.fetch("SELECT name, role, adapter_type, status, last_heartbeat_at FROM agents ORDER BY role ASC")
+            await conn.close()
+            for r in rows:
+                hb = r['last_heartbeat_at'].strftime('%Y-%m-%d %H:%M:%S UTC') if r['last_heartbeat_at'] else 'Sin latidos'
+                agents_info.append(f"  - **{r['name']}** ({r['role']}): {r['status']} | Adaptador: `{r['adapter_type']}` | Último latido: {hb}")
+
+        issues = await list_paperclip_issues(limit=5)
+        issues_text = ""
+        if issues:
+            issues_text = "\n• **Tareas Recientes en Tablero:**\n" + "\n".join(
+                [f"  - [{i['identifier']}] {i['title']} ({i['status']}, prioridad: {i['priority']})" for i in issues]
+            )
+
+        agents_text = "\n".join(agents_info) if agents_info else "  - Sin agentes registrados"
+        return (
+            "📋 **Paperclip Autonomous Control Plane (http://paperclip:3100):**\n"
+            "• Estado: ACTIVO (Node.js 26 + PostgreSQL 18)\n"
+            f"• Dashboard: {dashboard_url}\n"
+            "• **Organigrama Activo en Base de Datos:**\n"
+            f"{agents_text}\n"
+            f"{issues_text}\n"
+            "• **Telemetría Bidireccional:** Habilitada (Telegram turns ➔ Heartbeat Runs + Activity Log)."
+        )
     except Exception as e:
         return f"❌ Error conectando a Paperclip: {str(e)}"
+
+async def paperclip_list_tasks(status: str = "") -> str:
+    """Lists actionable tasks from Paperclip Control Plane."""
+    try:
+        from paperclip_bridge import list_paperclip_issues
+        issues = await list_paperclip_issues(status=status.strip() if status else None, limit=10)
+        if not issues:
+            return "No se encontraron tareas registradas en Paperclip."
+        lines = [f"📋 **Tareas en Paperclip ({len(issues)}):**"]
+        for i in issues:
+            lines.append(f"• **[{i['identifier']}]** {i['title']} — Estado: `{i['status']}` (Prioridad: {i['priority']})")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"❌ Error consultando tareas de Paperclip: {str(e)}"
+
+async def paperclip_create_task(title: str, description: str = "", priority: str = "medium") -> str:
+    """Creates a new actionable task directly in Paperclip Control Plane."""
+    try:
+        from paperclip_bridge import create_paperclip_issue
+        res = await create_paperclip_issue(title=title, description=description, priority=priority)
+        if res:
+            return f"✅ Tarea creada con éxito en Paperclip:\n• Identificador: **{res['identifier']}**\n• Título: {res['title']}\n• Estado: `{res['status']}` (Prioridad: {res['priority']})"
+        return "❌ No se pudo crear la tarea en Paperclip."
+    except Exception as e:
+        return f"❌ Error creando tarea en Paperclip: {str(e)}"
 
 # ==============================================================================
 # Sovereign Engram Memory Engine (Multi-Agent LocalStorage & Cross-Container SSoT)
@@ -976,16 +1096,18 @@ async def get_paperclip_status() -> str:
 
 def _resolve_engram_ssot_path() -> Optional[str]:
     """Resolves active project engram_ssot.json in persistent localstorage."""
-    project_name = (os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or "damaren").strip().lower()
-    base_dirs = [
-        os.path.join(os.getenv("ENGRAM_STORAGE_DIR", "/mnt/localstorage/engram"), project_name),
-        os.path.join("/var/www/localstorage/engram", project_name),
-        f"/mnt/localstorage/engram/{project_name}",
-    ]
-    for d in base_dirs:
-        p = os.path.join(d, "engram_ssot.json")
-        if os.path.exists(p):
-            return p
+    project_name = (os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or os.getenv("ZEROPS_ProjectId") or "").strip().lower()
+    if project_name:
+        base_dirs = [
+            os.path.join(os.getenv("ENGRAM_STORAGE_DIR", "/mnt/localstorage/engram"), project_name),
+            os.path.join("/var/www/localstorage/engram", project_name),
+            f"/mnt/localstorage/engram/{project_name}",
+        ]
+        for d in base_dirs:
+            p = os.path.join(d, "engram_ssot.json")
+            if os.path.exists(p):
+                return p
+    # Dynamic auto-discovery: find any existing engram_ssot.json in localstorage
     for root in ["/mnt/localstorage/engram", "/var/www/localstorage/engram"]:
         if os.path.exists(root):
             try:
@@ -1045,7 +1167,7 @@ def mem_search(query: str, limit: int = 5) -> str:
 
 def mem_save(title: str, content: str, type: str = "discovery", topic_key: str = "") -> str:
     """Saves a new observation to persistent Engram storage in localstorage."""
-    project_name = (os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or "damaren").strip().lower()
+    project_name = (os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or os.getenv("ZEROPS_ProjectId") or "default").strip().lower()
     engram_dir = os.path.join(os.getenv("ENGRAM_STORAGE_DIR", "/mnt/localstorage/engram"), project_name)
     if not os.path.exists(engram_dir):
         engram_dir = f"/var/www/localstorage/engram/{project_name}"
