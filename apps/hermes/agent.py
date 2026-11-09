@@ -23,7 +23,7 @@ try:
         execute_store_query,
         run_crew_ai, extract_structured_data,
         list_available_crews, get_paperclip_status,
-        paperclip_list_tasks, paperclip_create_task,
+        paperclip_list_tasks, paperclip_create_task, paperclip_register_agent,
         mem_context, mem_search, mem_save,
         linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue
     )
@@ -39,7 +39,7 @@ except (ImportError, ValueError):
         execute_store_query,
         run_crew_ai, extract_structured_data,
         list_available_crews, get_paperclip_status,
-        paperclip_list_tasks, paperclip_create_task,
+        paperclip_list_tasks, paperclip_create_task, paperclip_register_agent,
         mem_context, mem_search, mem_save,
         linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue
     )
@@ -282,6 +282,45 @@ HERMES_TOOLS = [
                     }
                 },
                 "required": ["title"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "paperclip_register_agent",
+            "description": "Registra un nuevo agente permanente en el organigrama y control plane de Paperclip bajo la supervisión de Hermes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Nombre del agente (ej. Closer de Ventas, Especialista DIAN, Analista de Mercado)"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Cargo formal del agente en el organigrama"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Nivel jerárquico (lead, worker)",
+                        "enum": ["lead", "worker"]
+                    },
+                    "adapter_type": {
+                        "type": "string",
+                        "description": "Tipo de adaptador de ejecución (hermes_gateway, pi_local, process)",
+                        "enum": ["hermes_gateway", "pi_local", "process"]
+                    },
+                    "capabilities": {
+                        "type": "string",
+                        "description": "Descripción concisa de las capacidades y responsabilidades del agente"
+                    },
+                    "budget_monthly_cents": {
+                        "type": "integer",
+                        "description": "Techo de gasto mensual en centavos de dólar (default: 50000 = $500 USD)"
+                    }
+                },
+                "required": ["name"]
             }
         }
     },
@@ -560,6 +599,14 @@ TOOL_DISPATCH = {
     "get_paperclip_status": lambda a: get_paperclip_status(),
     "paperclip_list_tasks": lambda a: paperclip_list_tasks(a.get("status", "")),
     "paperclip_create_task": lambda a: paperclip_create_task(a.get("title", ""), a.get("description", ""), a.get("priority", "medium")),
+    "paperclip_register_agent": lambda a: paperclip_register_agent(
+        a.get("name", ""),
+        a.get("title", ""),
+        a.get("role", "worker"),
+        a.get("adapter_type", "hermes_gateway"),
+        a.get("capabilities", ""),
+        int(a.get("budget_monthly_cents", 50000))
+    ),
     "run_crew_ai": lambda a: run_crew_ai(
         a.get("mission", ""),
         a.get("roles", []),
