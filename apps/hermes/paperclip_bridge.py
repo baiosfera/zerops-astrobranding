@@ -67,7 +67,9 @@ async def record_telegram_turn(
     reply: str,
     tokens_in: int = 0,
     tokens_out: int = 0,
-    cost_cents: int = 0,
+    cost_cents: float = 0.0,
+    provider: str = "freellmapi",
+    model: str = "auto",
     duration_sec: float = 0.0,
     company_id: str = DEFAULT_COMPANY_ID,
     agent_id: str = DEFAULT_HERMES_AGENT_ID,
@@ -103,18 +105,28 @@ async def record_telegram_turn(
     usage_payload = json.dumps({
         "input_tokens": tokens_in,
         "output_tokens": tokens_out,
-        "cost_cents": cost_cents,
+        "cost_cents": round(cost_cents, 4),
+        "provider": provider,
+        "model": model,
         "duration_sec": round(duration_sec, 2),
     })
 
     summary_text = (reply[:197] + "...") if len(reply) > 200 else reply
-    result_payload = json.dumps({"summary": summary_text})
+    result_payload = json.dumps({
+        "summary": summary_text,
+        "provider": provider,
+        "model": model,
+        "cost_cents": round(cost_cents, 4),
+    })
 
     activity_details = json.dumps({
         "channel": "telegram",
         "user_id": str(user_id),
         "prompt": prompt[:300] if prompt else "",
         "reply": summary_text,
+        "provider": provider,
+        "model": model,
+        "cost_cents": round(cost_cents, 4),
         "tokens": {"input": tokens_in, "output": tokens_out},
         "duration_sec": round(duration_sec, 2),
     })
@@ -140,7 +152,7 @@ async def record_telegram_turn(
             run_id,
             company_uuid,
             agent_uuid,
-            f"Telegram interaction with user {user_id}",
+            f"Telegram ({provider}:{model}) interaction with user {user_id}",
             str(max(0.1, duration_sec)),
             summary_text,
             usage_payload,
@@ -176,7 +188,7 @@ async def record_telegram_turn(
             WHERE id = $1
             """,
             agent_uuid,
-            cost_cents,
+            float(cost_cents),
         )
 
         logger.info("⚡ [Paperclip Bridge] Recorded Telegram turn into Paperclip (run_id: %s)", run_id)

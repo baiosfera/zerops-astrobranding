@@ -846,6 +846,11 @@ class HermesAgent:
         
         final_content = ""
         max_tool_iterations = 10
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_cost_cents = 0.0
+        active_provider = "freellmapi"
+        active_model = MODEL_NAME
         
         async with httpx.AsyncClient(timeout=60.0) as client:
             try:
@@ -883,6 +888,22 @@ class HermesAgent:
                             return "⚠️ El gateway de inferencia está experimentando alta demanda temporal. Por favor intentá nuevamente en unos momentos."
                     
                     data = res.json()
+                    
+                    # Accumulate tokens & calculate model costs (FreeLLMAPI = $0, DeepSeek = paid)
+                    usage = data.get("usage", {})
+                    p_tok = int(usage.get("prompt_tokens", 0))
+                    c_tok = int(usage.get("completion_tokens", 0))
+                    total_prompt_tokens += p_tok
+                    total_completion_tokens += c_tok
+                    
+                    extra = data.get("extra_fields", {})
+                    call_provider = extra.get("provider", "freellmapi")
+                    active_model = extra.get("resolved_model_used", data.get("model", MODEL_NAME))
+                    if call_provider == "deepseek":
+                        active_provider = "deepseek"
+                        # DeepSeek V3/V4: $0.14/1M prompt, $0.28/1M completion (rates in cents: 0.000014 / 0.000028)
+                        total_cost_cents += (p_tok * 0.000014) + (c_tok * 0.000028)
+
                     msg = data["choices"][0]["message"]
                     parsed_tool_calls = extract_tool_calls(msg)
                     
@@ -948,7 +969,17 @@ class HermesAgent:
                             timeout=30.0
                         )
                         if res_synth.status_code == 200:
-                            synth_msg = res_synth.json()["choices"][0]["message"].get("content") or ""
+                            s_data = res_synth.json()
+                            s_usage = s_data.get("usage", {})
+                            s_p = int(s_usage.get("prompt_tokens", 0))
+                            s_c = int(s_usage.get("completion_tokens", 0))
+                            total_prompt_tokens += s_p
+                            total_completion_tokens += s_c
+                            s_extra = s_data.get("extra_fields", {})
+                            if s_extra.get("provider") == "deepseek":
+                                active_provider = "deepseek"
+                                total_cost_cents += (s_p * 0.000014) + (s_c * 0.000028)
+                            synth_msg = s_data["choices"][0]["message"].get("content") or ""
                             cleaned = re.sub(r"<[^>]*function_call.*?</[^>]*function_call>", "", synth_msg, flags=re.DOTALL | re.IGNORECASE)
                             cleaned = re.sub(r"<[^>]*tool_call.*?</[^>]*tool_call>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
                             cleaned = re.sub(r"<dots_function_call>.*?</dots_function_call>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
@@ -958,6 +989,15 @@ class HermesAgent:
 
                 if not final_content or not final_content.strip():
                     final_content = "Operación técnica completada. Los comandos y herramientas del sistema fueron ejecutados con éxito."
+
+                # Store turn cost and usage telemetry for Paperclip Control Plane
+                self.last_turn_telemetry = {
+                    "provider": active_provider,
+                    "model": active_model,
+                    "prompt_tokens": total_prompt_tokens,
+                    "completion_tokens": total_completion_tokens,
+                    "cost_cents": round(total_cost_cents, 4),
+                }
                 
                 # Persist turn
                 if chat_id:

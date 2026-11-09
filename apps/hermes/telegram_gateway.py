@@ -280,11 +280,17 @@ def build_bot_app(token: str, role: str, allowed_users: set, bifrost_key: str):
                 # Sincronización automática de telemetría hacia Paperclip Control Plane
                 if record_telegram_turn:
                     try:
+                        telemetry = getattr(agent, "last_turn_telemetry", {})
                         asyncio.create_task(
                             record_telegram_turn(
                                 user_id=chat_id,
                                 prompt=user_text,
                                 reply=reply,
+                                tokens_in=telemetry.get("prompt_tokens", 0),
+                                tokens_out=telemetry.get("completion_tokens", 0),
+                                cost_cents=telemetry.get("cost_cents", 0.0),
+                                provider=telemetry.get("provider", "freellmapi"),
+                                model=telemetry.get("model", "auto"),
                                 duration_sec=turn_duration
                             )
                         )
