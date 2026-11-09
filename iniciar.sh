@@ -556,14 +556,16 @@ fi
 
 # 2a-quinquies. Inyección segura de credenciales de runtime hacia Local Storage para Hermes y Cuadrillas
 mkdir -p "$PROJECT_ROOT/localstorage/hermes" 2>/dev/null || true
-if [ -n "${LINEAR_API_KEY:-}" ]; then
-    cat << EOF > "$PROJECT_ROOT/localstorage/hermes/runtime.env"
-LINEAR_API_KEY=${LINEAR_API_KEY}
+cat << EOF > "$PROJECT_ROOT/localstorage/hermes/runtime.env"
+LINEAR_API_KEY=${LINEAR_API_KEY:-}
 BIFROST_VIRTUAL_KEY=vk-hermes-agent
+BIFROST_VK_CREWAI=vk-crewai
+BIFROST_VK_PYDANTICAI=vk-pydanticai
 HERMES_MODEL_ENDPOINT=http://bifrost:8080/v1
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
 EOF
-    chmod 600 "$PROJECT_ROOT/localstorage/hermes/runtime.env" 2>/dev/null || true
-fi
+chmod 600 "$PROJECT_ROOT/localstorage/hermes/runtime.env" 2>/dev/null || true
 if [ -f "$REPO_DIR/scripts/linear_bridge.py" ]; then
     cp -f "$REPO_DIR/scripts/linear_bridge.py" "$PROJECT_ROOT/localstorage/hermes/linear_bridge.py" 2>/dev/null || true
 fi
