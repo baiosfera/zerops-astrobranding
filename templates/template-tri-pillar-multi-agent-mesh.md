@@ -71,6 +71,7 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
      * Financial ledger entry inserted directly into `cost_events` with `biller: deepseek` or `freellmapi`, `billing_type: metered_api`, ensuring Paperclip's Costs Tab (`/costs`) renders the real model breakdown and spend.
      * Live audit event published to `activity_log` for immediate visibility in Paperclip Dashboard.
      * Agent heartbeat timestamp (`last_heartbeat_at`) and accumulated monthly spend (`spent_monthly_cents`) synchronized to the exact sum of `cost_events` ledger.
+10. **Symmetric Native CLI Availability (`apotelos`)**: Both ZCP and Hermes runtime containers feature `/usr/local/bin/apotelos` natively installed and linked (`/var/www/scripts/apotelos`). Hermes invokes `apotelos` via `run_command` in its loop, ingesting `/mnt/localstorage/MentorIA/dev/verticals/` and compiling reverse-causality Blackboard manifests without external proxy dependencies.
      * **Bifrost ➔ Paperclip Auto-Reconciliation**: `reconcile_bifrost_to_paperclip()` periodically cross-references Bifrost request logs (`db.logs`) with Paperclip (`cost_events`) to eliminate any billing drift between the LLM gateway and Paperclip.
    - **Conversational Task Operations**: Hermes exposes `paperclip_list_tasks` and `paperclip_create_task` so users can inspect and manage Paperclip Kanban issues directly from Telegram chat without opening a browser.
 10. **Vertical Workspaces & Bounded Contexts Invariant**:
@@ -82,6 +83,9 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
 11. **Headless CrewAI Non-Blocking Telemetry Invariant**:
     - In daemonized container environments (Hermes, ephemeral workers, CLI pipelines), the environment variables `CREWAI_TELEMETRY_OPT_OUT="true"`, `OTEL_SDK_DISABLED="true"`, and `CREWAI_DISABLE_TELEMETRY="true"` are strictly enforced.
     - Eliminates the 20-second interactive terminal prompt (`Share this execution trace? [y/N]`), reducing swarm dispatch latency by over 50% and ensuring zero hangs in unattended execution.
+12. **Cognitive Swarm vs. Sovereign Builder Boundary (CrewAI vs. PiDev)**:
+    - **CrewAI Boundary (Cognitive Strategy & Content Assemblers)**: Dynamic swarms strictly assemble research dossiers, neurocopywriting, SEO/AEO strategies, and component contracts into structured Markdown/JSON (`workspaces/{vertical_slug}/`). They NEVER modify, compile, or generate frontend source code (`.astro`, `.ts`, `.css` in `webdev`).
+    - **PiDev Sovereign Code Authority (Execution & Scaffolding)**: `pidev` (`pi.dev` / Gentle-Pi) is the exclusive sovereign builder for Astro 5 SSR code. It does not perform market strategy or creative design from scratch; it ingests `copy/landing.md` and `web/page-spec.md` produced by CrewAI and compiles them into production Astro 5 SSR components with Tailwind 4 and TypeScript.
 
 ---
 
@@ -244,6 +248,20 @@ Hermes exposes an HTTP Gateway v1 server compatible with Paperclip agent orchest
   - Memory: ~120-200 MB RAM per active squad.
   - Latency: 5s - 60s multi-agent deliberation.
   - Purpose: Creative research, SEO audits, complex decision trees, and multi-step autonomous workflows.
+
+### 5.1 Coding Agent Benchmark: PiDev vs. Aider vs. Goose
+- **Pi Coding Agent (`pi.dev` / Gentle-Pi) — Sovereign Web Builder**:
+  * Runtime: Native `ubuntu/nodejs@26` (V8 / TypeScript isomorphic with Astro 5 & Tailwind 4).
+  * Architecture: Minimal harness (<1k tokens system prompt), QuickJS WASI sandboxed AST pre-flight, and native HTTP (`server.mjs`:3000) + NATS RPC daemon (`rpc.coding.execute`).
+  * Role: Exclusive builder for frontend Astro 5 SSR code in `/var/www/webdev`. Ingests structured specs from `workspaces/{slug}/` and compiles them without needing creative/business deliberation.
+- **Aider (Paul Gauthier) — High-Risk Multi-File Refactorer (Optional Standalone)**:
+  * Runtime: Dedicated Python 3.12 / uv with native Tree-sitter C extensions.
+  * Architecture: SOTA in SWE-bench; Tree-sitter AST symbol graphs & PageRank repo-map (~1k tokens dense graph), automatic atomic git commits, and `--architect` mode.
+  * Decision: Discarded as container daemon in `pidev` due to heavyweight dual-runtime penalty (+300MB RAM, C compilers in Node container). Kept as an optional ephemeral worker for massive multi-file refactoring touching >10 cross-module files.
+- **Goose (Block / AAIF) — Desktop Generalist (Discarded for Code Container)**:
+  * Runtime: Rust native binary (~40MB).
+  * Architecture: Native MCP client and YAML recipe runner (`goose run --recipe`).
+  * Decision: Lacks AST symbol indexing, code-aware diff matchers, and git-native commit hygiene. Discarded for containerized Astro 5 code generation due to high diff-hallucination risk in frontmatter and JSX fences.
 
 ---
 
