@@ -570,6 +570,18 @@ if [ -f "$REPO_DIR/scripts/linear_bridge.py" ]; then
     cp -f "$REPO_DIR/scripts/linear_bridge.py" "$PROJECT_ROOT/localstorage/hermes/linear_bridge.py" 2>/dev/null || true
 fi
 
+# 2a-sexies. Sincronización simétrica de apotelos CLI hacia Hermes y LocalStorage compartido
+mkdir -p "$PROJECT_ROOT/localstorage/bin" 2>/dev/null || true
+if [ -f "$REPO_DIR/scripts/apotelos" ]; then
+    cp -f "$REPO_DIR/scripts/apotelos" "$PROJECT_ROOT/localstorage/bin/apotelos" 2>/dev/null || true
+    chmod +x "$PROJECT_ROOT/localstorage/bin/apotelos" 2>/dev/null || true
+fi
+if ssh -q -o BatchMode=yes -o ConnectTimeout=2 hermes "true" 2>/dev/null; then
+    ssh hermes "mkdir -p /var/www/scripts" 2>/dev/null || true
+    scp -q "$REPO_DIR/scripts/apotelos" hermes:/var/www/scripts/apotelos 2>/dev/null || true
+    ssh hermes "chmod +x /var/www/scripts/apotelos && sudo ln -sfn /var/www/scripts/apotelos /usr/local/bin/apotelos" 2>/dev/null || true
+fi
+
 # 2a-bis. Aprovisionar Persistencia Híbrida 3-Tier Zero-Data-Loss de Engram
 echo "• [2a-bis] Verificando persistencia 3-Tier Zero-Data-Loss para Engram ($APP_IDENTITY_LOWER)..."
 if [ -f "$REPO_DIR/scripts/engram-sync" ]; then
