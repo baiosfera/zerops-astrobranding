@@ -249,6 +249,16 @@ for symlink in "${SYMLINKS[@]}"; do
     fi
 done
 
+# 3.0.1 Functional Behavioral Sensor for Platform CLIs (Anti-Checklist Theater)
+if command -v apotelos >/dev/null 2>&1; then
+    if apotelos test >/dev/null 2>&1; then
+        echo "✓ Apotelos Functional Behavioral Test PASSED (anti-checklist-theater)"
+    else
+        echo "❌ Apotelos Functional Behavioral Test FAILED (domain regression)"
+        ERRORS=$((ERRORS + 1))
+    fi
+fi
+
 # 3.1 Lifecycle Hooks & Gatekeeper Parity
 echo "--- Checking Lifecycle Hooks & Tool-Guard Parity ---"
 compare_files "hooks/tool-guard.py" "$LOCAL_BASE/.bin/hooks/tool-guard.py" "$DRIVE_BASE/scripts/hooks/tool-guard.py"

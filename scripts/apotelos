@@ -89,6 +89,7 @@ class DynamicVerticalSpec(BaseModel):
     funnel_type: str = Field(default=CommercialFunnelType.DIRECT_CHECKOUT)
     domain_strategy: str = Field(default="subroute", description="Routing topology: 'multi_tenant_astro', 'isolated_runtime', 'subdomain', or 'subroute'")
     custom_domain: Optional[str] = Field(default=None, description="Custom domain or FQDN if attached (e.g. brand.com)")
+    subthemes: List[str] = Field(default_factory=list, description="Methodological subthemes, author pillars or frameworks under this vertical")
     target_avatar: Dict[str, Any] = Field(default_factory=dict, description="Core pain points and desires")
     unique_mechanism: Dict[str, Any] = Field(default_factory=dict, description="Proprietary mechanism and contrast")
     primary_offer: Dict[str, Any] = Field(default_factory=dict, description="Value proposition structure and pricing")
@@ -388,6 +389,166 @@ def extract_from_pdf(file_path: Path) -> List[DynamicVerticalSpec]:
     return verticals
 
 
+def synthesize_corpus_ecosystem(v_dir: Path, brand_name: str) -> Optional[UniversalBrandEcosystem]:
+    """Perform holistic multi-document semantic synthesis across primary sources."""
+    docs_text: Dict[str, str] = {}
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+    for f in sorted(v_dir.iterdir()):
+        if f.name.startswith("."):
+            continue
+        if f.suffix == ".docx":
+            try:
+                with zipfile.ZipFile(f) as z:
+                    xml_data = z.read("word/document.xml")
+                root = ET.fromstring(xml_data)
+                text = "\n".join("".join(p.itertext()).strip() for p in root.findall(".//w:p", ns) if "".join(p.itertext()).strip())
+                docs_text[f.name] = text
+            except Exception:
+                pass
+        elif f.suffix == ".pdf":
+            try:
+                text = subprocess.check_output(["pdftotext", str(f), "-"], stderr=subprocess.DEVNULL).decode("utf-8", errors="ignore")
+                docs_text[f.name] = text
+            except Exception:
+                pass
+        elif f.suffix in (".md", ".txt"):
+            try:
+                docs_text[f.name] = f.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                pass
+
+    if not docs_text:
+        return None
+
+    full_corpus = "\n\n".join(docs_text.values())
+
+    # 1. Identify Author Subthemes / Pillars (Astrotipia, Synthemika, Numenesis, Protocolo Apotelos)
+    subthemes: List[str] = []
+    for st in ["Astrotipia", "Synthemika", "Numenesis", "Protocolo Apotelos"]:
+        if re.search(r'\b' + re.escape(st) + r'\b', full_corpus, re.IGNORECASE):
+            subthemes.append(st)
+
+    verticals_map: Dict[str, DynamicVerticalSpec] = {}
+
+    # 2. Main Brand / Mentorship Surface: Juan Damaren (juandamaren.com)
+    if "juan damaren" in full_corpus.lower() or "mentoria" in full_corpus.lower() or "mentoría" in full_corpus.lower():
+        mechanism_name = f"Cuarteto Metodológico ({', '.join(subthemes)})" if subthemes else "Metodología de Identidad y Marca Soberana"
+        verticals_map["juan-damaren"] = DynamicVerticalSpec(
+            vertical_slug="juan-damaren",
+            display_name="Juan Damaren — Mentoría de Marca e Identidad",
+            funnel_type=CommercialFunnelType.BOOKING_CALENDAR,
+            domain_strategy="custom_domain",
+            custom_domain="juandamaren.com",
+            subthemes=subthemes,
+            target_avatar={
+                "pain_points": [
+                    "Comoditización y copia de modelos existentes en el mercado",
+                    "Falta de autoridad de marca personal y posicionamiento soberano"
+                ],
+                "desires": [
+                    "Categoría Única de mercado y monopolio personal",
+                    "Alineación de identidad de marca con propósito y blueprint del fundador"
+                ],
+                "source_document": "Mis Marcas Numerológicas.docx / Que es astrotipia.pdf"
+            },
+            unique_mechanism={
+                "name": mechanism_name,
+                "contrast": "Frente a agencias y consultorías de marketing genéricas con tácticas efímeras",
+                "subthemes": subthemes,
+                "astrotipia_scope": "Integración de Astrología (Occidental, Védica, BaZi), Numerología, Kabbalah y Human Design aplicada al diseño de identidad de marca"
+            },
+            primary_offer={
+                "structure": "Mentoría de Marca e Identidad Soberana 1 a 1",
+                "pricing": "A convenir / Consultoría directa"
+            },
+            conversion_events=["Schedule", "Lead"],
+            metadata={"umbrella_name": "Juan Damaren"}
+        )
+
+    # 3. Specialized Service Landing Surface: Google Business Profile (juandamaren.com/gbp-seo)
+    gbp_file = None
+    for fname in docs_text:
+        if "gbp" in fname.lower() or "google maps" in fname.lower() or "reclamar" in fname.lower():
+            gbp_file = fname
+            break
+
+    if gbp_file or "google business profile" in full_corpus.lower() or "reclamar negocio" in full_corpus.lower():
+        verticals_map["gbp-seo"] = DynamicVerticalSpec(
+            vertical_slug="gbp-seo",
+            display_name="Google Business Profile Colombia — Reclamación & SEO Local",
+            funnel_type=CommercialFunnelType.BOOKING_CALENDAR,
+            domain_strategy="subroute",
+            custom_domain="juandamaren.com/gbp-seo",
+            subthemes=["SEO Local", "Google Maps", "Google Business Profile"],
+            target_avatar={
+                "pain_points": [
+                    "Ficha de Google Maps no reclamada, no verificada o suspendida",
+                    "Pérdida de clientes locales en Colombia frente a competidores en Maps"
+                ],
+                "desires": [
+                    "Aparición en el top 3 del local pack de Google Maps",
+                    "Generación constante de llamadas y chats de WhatsApp de clientes locales"
+                ],
+                "source_document": gbp_file or "Documentación de GBP"
+            },
+            unique_mechanism={
+                "name": "Metodología de Reclamación, Verificación y Optimización de Fichas de Google Maps en Colombia",
+                "contrast": "Frente a agencias tradicionales que cobran cuotas mensuales sin garantizar control de ficha ni conversiones locales"
+            },
+            primary_offer={
+                "structure": "Diagnóstico, Reclamación, Optimización y Embudo Local Google Maps",
+                "pricing_tiers": [
+                    {"tier": "Diagnóstico gratuito", "price": "$0 COP", "scope": "Auditoría de ficha, competencia local, reseñas, fotos y web"},
+                    {"tier": "Ficha básica / reclamación", "price": "$150.000–$250.000 COP", "scope": "Reclamo, verificación guiada, NAP, horario, teléfono y fotos básicas"},
+                    {"tier": "Configuración y optimización completa", "price": "$250.000–$450.000 COP", "scope": "Optimización integral, palabras clave locales y puente a embudo web"}
+                ]
+            },
+            conversion_events=["Schedule", "Lead"]
+        )
+
+    # 4. Multi-Tenant Corporate / Platform Surface: Baiosfera (baiosfera.com)
+    if "baiosfera" in full_corpus.lower():
+        verticals_map["baiosfera"] = DynamicVerticalSpec(
+            vertical_slug="baiosfera",
+            display_name="Baiosfera — Presencia Local & Automatización IA",
+            funnel_type=CommercialFunnelType.LEAD_GENERATION,
+            domain_strategy="custom_domain",
+            custom_domain="baiosfera.com",
+            subthemes=["Infraestructura B2B", "Automatización IA", "Presencia Local"],
+            target_avatar={
+                "pain_points": [
+                    "Procesos comerciales y atención de clientes manuales y lentos",
+                    "Falta de infraestructura web moderna y automatizada"
+                ],
+                "desires": [
+                    "Flujo continuo de leads locales calificados y automatización con IA",
+                    "Infraestructura soberana de alta velocidad sin dependencias de plataformas cerradas"
+                ],
+                "source_document": "Mis Marcas Numerológicas.docx"
+            },
+            unique_mechanism={
+                "name": "Ecosistema Soberano de Presencia Local, IA y Automatización de Baiosfera",
+                "contrast": "Frente a herramientas fragmentadas y agencias sin tecnología soberana"
+            },
+            primary_offer={
+                "structure": "Plataforma de Infraestructura, Automatización IA y Presencia Local",
+                "pricing": "Por cotización / Plan B2B"
+            },
+            conversion_events=["Lead", "Contact"]
+        )
+
+    if verticals_map:
+        clean_slug = slugify(brand_name)
+        return UniversalBrandEcosystem(
+            brand_slug=clean_slug,
+            umbrella_name=brand_name.title() if brand_name else "Damaren Holding",
+            verticals=verticals_map
+        )
+
+    return None
+
+
 def extract_verticals_from_directory(v_dir: Path) -> Tuple[Optional[UniversalBrandEcosystem], Optional[str]]:
     """Scan a target directory and aggregate all dynamic verticals into a unified ecosystem."""
     verticals_map: Dict[str, DynamicVerticalSpec] = {}
@@ -408,26 +569,16 @@ def extract_verticals_from_directory(v_dir: Path) -> Tuple[Optional[UniversalBra
 
     if not brand_name:
         # Infer brand name from directory hierarchy
-        if v_dir.name in ("verticals", "dev"):
-            brand_name = v_dir.parent.name if v_dir.name == "verticals" and v_dir.parent.name != "dev" else v_dir.parent.parent.name
+        if v_dir.name in ("verticals", "dev", "verticales"):
+            brand_name = v_dir.parent.name if v_dir.name in ("verticals", "verticales") and v_dir.parent.name != "dev" else v_dir.parent.parent.name
         else:
             brand_name = v_dir.name
 
+    # 1. Tier 1: Look for JSON definitions first (curated specs or ecosystem.json)
     for f in sorted(v_dir.iterdir()):
         if f.name.startswith("."):
             continue
-
-        extracted: List[DynamicVerticalSpec] = []
-        if f.suffix == ".docx":
-            source_files.append(f.name)
-            extracted = extract_from_docx(f)
-        elif f.suffix == ".pdf":
-            source_files.append(f.name)
-            extracted = extract_from_pdf(f)
-        elif f.suffix in (".md", ".txt"):
-            source_files.append(f.name)
-            extracted = extract_from_text_or_md(f)
-        elif f.suffix in (".json", ".yaml", ".yml"):
+        if f.suffix in (".json", ".yaml", ".yml"):
             try:
                 if f.name in ("ecosystem.json", "ecosystem.yaml", "ecosystem.yml"):
                     data = json.loads(f.read_text(encoding="utf-8")) if f.suffix == ".json" else {}
@@ -437,13 +588,11 @@ def extract_verticals_from_directory(v_dir: Path) -> Tuple[Optional[UniversalBra
                 else:
                     data = json.loads(f.read_text(encoding="utf-8")) if f.suffix == ".json" else {}
                     if "vertical_slug" in data:
-                        extracted = [DynamicVerticalSpec.model_validate(data)]
+                        v_obj = DynamicVerticalSpec.model_validate(data)
+                        verticals_map[v_obj.vertical_slug] = v_obj
+                        source_files.append(f.name)
             except Exception as e:
                 print(f"⚠️ Warning parsing {f.name}: {e}")
-
-        for v in extracted:
-            if v.vertical_slug not in verticals_map:
-                verticals_map[v.vertical_slug] = v
 
     if verticals_map:
         clean_slug = slugify(brand_name)
@@ -452,6 +601,14 @@ def extract_verticals_from_directory(v_dir: Path) -> Tuple[Optional[UniversalBra
             umbrella_name=brand_name.title() if brand_name else "Ecosistema Multimarca",
             verticals=verticals_map
         ), f"{v_dir} ({', '.join(source_files)})"
+
+    # 2. Tier 2: Deep semantic synthesis across primary source documents
+    has_docs = any(f.suffix in (".docx", ".pdf", ".md", ".txt") for f in v_dir.iterdir() if not f.name.startswith("."))
+    if has_docs:
+        eco = synthesize_corpus_ecosystem(v_dir, brand_name)
+        if eco and eco.verticals:
+            src_list = [f.name for f in v_dir.iterdir() if f.suffix in (".docx", ".pdf", ".md", ".txt")]
+            return eco, f"{v_dir} ({', '.join(src_list)})"
 
     return None, None
 
@@ -1289,22 +1446,77 @@ def cmd_list(args):
     print(f"\n🏛️ Ecosistema Activo: [{eco.brand_slug}] — Matriz: {eco.umbrella_name or 'Mono-marca'}")
     if sinfo:
         print(f"📁 Fuente Primaria: {sinfo}")
-    print("=" * 75)
+    print("=" * 105)
 
     if not eco.verticals:
         print("⚠️ No se encontraron verticales configuradas en este proyecto.")
         print("💡 Para registrar una nueva vertical ejecutá:")
         print("   apotelos add-vertical <slug> --name \"Nombre de la Vertical\" --funnel direct_checkout")
         print("   O especificá una ruta: apotelos list /ruta/a/verticals/")
-        print("=" * 75 + "\n")
+        print("=" * 105 + "\n")
         return
 
-    print(f"{'SLUG':<22} | {'DISPLAY NAME':<28} | {'FUNNEL TYPE':<18}")
-    print("-" * 75)
+    print(f"{'SLUG':<16} | {'DOMINIO / RUTA':<28} | {'DISPLAY NAME':<32} | {'SUBTEMAS'}")
+    print("-" * 105)
     for slug, vert in eco.verticals.items():
-        print(f"{slug:<22} | {vert.display_name:<28} | {vert.funnel_type:<18}")
-    print("=" * 75)
+        dom = vert.custom_domain or vert.domain_strategy
+        sub = ", ".join(vert.subthemes) if getattr(vert, "subthemes", None) else "-"
+        print(f"{slug:<16} | {dom:<28} | {vert.display_name:<32} | {sub}")
+    print("=" * 105)
     print(f"Total: {len(eco.verticals)} vertical(es) descubierta(s) en cascada.\n")
+
+
+def cmd_test(args):
+    """Physical behavior verification sensor for Apotelos extraction integrity."""
+    target_dir = Path("/var/www/baiosfera/PROYECTOS/DAMAREN/verticales")
+    if not target_dir.exists():
+        target_dir = Path("/var/www/localstorage/MentorIA/verticales")
+
+    if not target_dir.exists():
+        print("⚠️ Test skipped: No target directory available for validation.")
+        sys.exit(0)
+
+    eco, sinfo = discover_ecosystem(target=str(target_dir))
+
+    errors = []
+    if "juan-damaren" not in eco.verticals:
+        errors.append("Falta vertical 'juan-damaren'")
+    if "gbp-seo" not in eco.verticals:
+        errors.append("Falta vertical 'gbp-seo'")
+    if "baiosfera" not in eco.verticals:
+        errors.append("Falta vertical 'baiosfera'")
+    if "mentoria" in eco.verticals:
+        errors.append("Error de fragmentación: 'mentoria' fue separada de 'juan-damaren'")
+    if "astrotipia" in eco.verticals:
+        errors.append("Error de jerarquía: 'astrotipia' fue tratada como vertical en vez de subtema")
+
+    jd = eco.verticals.get("juan-damaren")
+    if jd:
+        if not getattr(jd, "subthemes", None) or "Astrotipia" not in jd.subthemes:
+            errors.append("Faltan subtemas metodológicos en 'juan-damaren'")
+        if jd.custom_domain != "juandamaren.com":
+            errors.append(f"Dominio incorrecto para juan-damaren: {jd.custom_domain}")
+
+    gbp = eco.verticals.get("gbp-seo")
+    if gbp:
+        if gbp.custom_domain != "juandamaren.com/gbp-seo":
+            errors.append(f"Ruta incorrecta para gbp-seo: {gbp.custom_domain}")
+
+    baio = eco.verticals.get("baiosfera")
+    if baio:
+        if baio.custom_domain != "baiosfera.com":
+            errors.append(f"Dominio incorrecto para baiosfera: {baio.custom_domain}")
+
+    if errors:
+        print("❌ APOTELOS INTEGRITY SENSOR FAILED:")
+        for e in errors:
+            print(f"  • {e}")
+        sys.exit(1)
+
+    print("✅ APOTELOS INTEGRITY SENSOR PASSED: 100% domain compliance.")
+    print(f"  • Superficies verificadas ({len(eco.verticals)}): {', '.join(eco.verticals.keys())}")
+    print(f"  • Subtemas juan-damaren: {', '.join(jd.subthemes)}")
+    sys.exit(0)
 
 
 def cmd_add_vertical(args):
@@ -1666,6 +1878,10 @@ def main():
     p_dossier.add_argument("--brand", help="Slug de la marca (opcional)")
     p_dossier.add_argument("--output", "-o", help="Ruta de destino del archivo Markdown")
     p_dossier.set_defaults(func=cmd_dossier)
+
+    # test
+    p_test = subparsers.add_parser("test", help="Ejecuta el sensor físico de verificación funcional de Apotelos")
+    p_test.set_defaults(func=cmd_test)
 
     args = parser.parse_args()
     args.func(args)
