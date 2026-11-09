@@ -942,10 +942,14 @@ def discover_ecosystem(target: Optional[str] = None, allow_fallback: bool = Fals
         drive_proj = Path("/var/www/baiosfera/PROYECTOS")
         for base in [drive_proj, ls_path]:
             for cand in [
-                base / target / "verticals",
                 base / target / "dev" / "verticals",
-                base / target.upper() / "verticals",
+                base / target / "dev" / "verticales",
+                base / target / "verticales",
+                base / target / "verticals",
                 base / target.upper() / "dev" / "verticals",
+                base / target.upper() / "dev" / "verticales",
+                base / target.upper() / "verticales",
+                base / target.upper() / "verticals",
                 base / target / "ecosystem.json"
             ]:
                 if cand.exists():
@@ -964,10 +968,14 @@ def discover_ecosystem(target: Optional[str] = None, allow_fallback: bool = Fals
     if project_env:
         for base in [Path("/var/www/baiosfera/PROYECTOS"), ls_path]:
             for cand in [
-                base / project_env / "verticals",
                 base / project_env / "dev" / "verticals",
-                base / project_env.upper() / "verticals",
+                base / project_env / "dev" / "verticales",
+                base / project_env / "verticales",
+                base / project_env / "verticals",
                 base / project_env.upper() / "dev" / "verticals",
+                base / project_env.upper() / "dev" / "verticales",
+                base / project_env.upper() / "verticales",
+                base / project_env.upper() / "verticals",
                 base / project_env / "ecosystem.json",
                 base / project_env / "dev" / "brandbook.json"
             ]:
