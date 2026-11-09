@@ -976,7 +976,7 @@ async def get_paperclip_status() -> str:
 
 def _resolve_engram_ssot_path() -> Optional[str]:
     """Resolves active project engram_ssot.json in persistent localstorage."""
-    project_name = (os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or "glamur").strip().lower()
+    project_name = (os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or "damaren").strip().lower()
     base_dirs = [
         os.path.join(os.getenv("ENGRAM_STORAGE_DIR", "/mnt/localstorage/engram"), project_name),
         os.path.join("/var/www/localstorage/engram", project_name),
@@ -1045,7 +1045,7 @@ def mem_search(query: str, limit: int = 5) -> str:
 
 def mem_save(title: str, content: str, type: str = "discovery", topic_key: str = "") -> str:
     """Saves a new observation to persistent Engram storage in localstorage."""
-    project_name = (os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or "glamur").strip().lower()
+    project_name = (os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or "damaren").strip().lower()
     engram_dir = os.path.join(os.getenv("ENGRAM_STORAGE_DIR", "/mnt/localstorage/engram"), project_name)
     if not os.path.exists(engram_dir):
         engram_dir = f"/var/www/localstorage/engram/{project_name}"
@@ -1104,3 +1104,63 @@ def mem_save(title: str, content: str, type: str = "discovery", topic_key: str =
         json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(temp_path, ssot_path)
     return f"✅ Observación guardada en Engram persistentemente (`{sync_id}`): '{title}'"
+
+# ==============================================================================
+# Sovereign Linear Bridge Integration (Typed Linear Operations in Hermes)
+# ==============================================================================
+
+def get_linear_bridge():
+    """Initializes and returns a cached or new LinearBridge instance."""
+    try:
+        from .linear_bridge import LinearBridge
+    except ImportError:
+        try:
+            from linear_bridge import LinearBridge
+        except ImportError:
+            return None
+    return LinearBridge()
+
+def linear_create_issue(title: str, description: str = "", priority: int = 2) -> str:
+    """Creates a new issue in the active Linear project."""
+    bridge = get_linear_bridge()
+    if not bridge:
+        return "❌ Error: linear_bridge no disponible en este entorno."
+    try:
+        issue = bridge.create_issue(title=title, description=description, priority=priority)
+        return f"✅ Ticket Linear creado: [{issue.id}] {issue.title}\nURL: {issue.url}\nEstado: {issue.status}"
+    except Exception as e:
+        return f"❌ Error creando ticket Linear: {str(e)}"
+
+def linear_update_status(issue_id: str, status: str, evidence: str = "") -> str:
+    """Updates the workflow status of a Linear issue (e.g. 'In Progress', 'Done', 'Canceled')."""
+    bridge = get_linear_bridge()
+    if not bridge:
+        return "❌ Error: linear_bridge no disponible en este entorno."
+    try:
+        bridge.update_status(issue_id=issue_id, status=status, evidence=evidence)
+        return f"✅ Estado actualizado en Linear: [{issue_id}] -> {status}"
+    except Exception as e:
+        return f"❌ Error actualizando ticket Linear: {str(e)}"
+
+def linear_get_issue(issue_id: str) -> str:
+    """Fetches details of a Linear issue by ID (e.g. 'BAI-453')."""
+    bridge = get_linear_bridge()
+    if not bridge:
+        return "❌ Error: linear_bridge no disponible en este entorno."
+    try:
+        issue = bridge.get_issue(issue_id)
+        return f"📋 **[{issue.id}] {issue.title}**\nEstado: {issue.status} | Prioridad: {issue.priority}\nURL: {issue.url}\nDescripción:\n{issue.description}"
+    except Exception as e:
+        return f"❌ Error obteniendo ticket Linear: {str(e)}"
+
+def linear_comment_issue(issue_id: str, comment: str) -> str:
+    """Adds a comment to a Linear issue."""
+    bridge = get_linear_bridge()
+    if not bridge:
+        return "❌ Error: linear_bridge no disponible en este entorno."
+    try:
+        bridge.comment_issue(issue_id, comment)
+        return f"✅ Comentario publicado en Linear [{issue_id}]."
+    except Exception as e:
+        return f"❌ Error comentando en ticket Linear: {str(e)}"
+

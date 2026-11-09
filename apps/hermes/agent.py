@@ -27,7 +27,8 @@ try:
         get_store_bookings, get_makeup_bookings,
         run_crew_ai, extract_structured_data,
         list_available_crews, get_paperclip_status,
-        mem_context, mem_search, mem_save
+        mem_context, mem_search, mem_save,
+        linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue
     )
 except (ImportError, ValueError):
     from .prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt
@@ -47,7 +48,8 @@ except (ImportError, ValueError):
         get_store_bookings, get_makeup_bookings,
         run_crew_ai, extract_structured_data,
         list_available_crews, get_paperclip_status,
-        mem_context, mem_search, mem_save
+        mem_context, mem_search, mem_save,
+        linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue
     )
 
 BIFROST_URL = os.getenv("HERMES_MODEL_ENDPOINT", "http://bifrost:8080/v1")
@@ -549,6 +551,10 @@ TOOL_DISPATCH = {
     "mem_context": lambda a: mem_context(int(a.get("limit", 5))),
     "mem_search": lambda a: mem_search(a.get("query", ""), int(a.get("limit", 5))),
     "mem_save": lambda a: mem_save(a.get("title", ""), a.get("content", ""), a.get("type", "discovery"), a.get("topic_key", "")),
+    "linear_create_issue": lambda a: linear_create_issue(a.get("title", ""), a.get("description", ""), int(a.get("priority", 2))),
+    "linear_update_status": lambda a: linear_update_status(a.get("issue_id", ""), a.get("status", ""), a.get("evidence", "")),
+    "linear_get_issue": lambda a: linear_get_issue(a.get("issue_id", "")),
+    "linear_comment_issue": lambda a: linear_comment_issue(a.get("issue_id", ""), a.get("comment", "")),
 }
 
 async def execute_tool(fn_name: str, fn_args: dict) -> str:

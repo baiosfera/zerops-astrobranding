@@ -375,7 +375,25 @@ except Exception: pass
         echo "  ✓ LocalStorage rehidratado deterministamente para ${project_upper}."
     }
 
+    # Sincronización soberana del catálogo consolidado de skills hacia LocalStorage NVMe (/mnt/localstorage/skills)
+    seed_localstorage_skills() {
+        local skills_src="/var/www/.agents/skills"
+        [ ! -d "$skills_src" ] && skills_src="/var/www/zerops-astro-skills"
+        local skills_dst="/var/www/localstorage/skills"
+        if [ -d "$skills_src" ] && [ -d "/var/www/localstorage" ]; then
+            echo "• Sincronizando catálogo consolidado de skills a LocalStorage NVMe (/var/www/localstorage/skills)..."
+            mkdir -p "$skills_dst" 2>/dev/null || true
+            if command -v rsync >/dev/null 2>&1; then
+                rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" --exclude=".git" --exclude="AGENTS.md" "$skills_src/" "$skills_dst/" 2>/dev/null || true
+            else
+                cp -rf "$skills_src"/* "$skills_dst/" 2>/dev/null || true
+            fi
+            echo "  ✓ LocalStorage skills sincronizadas ($(ls -1d "$skills_dst"/*/ 2>/dev/null | wc -l) skills activas)."
+        fi
+    }
+
     seed_localstorage_from_ssot
+    seed_localstorage_skills
 
     if command -v gentle-ai >/dev/null 2>&1; then
         echo "• Refrescando registro de skills..."
