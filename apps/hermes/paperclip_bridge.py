@@ -102,10 +102,19 @@ async def record_telegram_turn(
     company_uuid = uuid.UUID(company_id)
     agent_uuid = uuid.UUID(agent_id)
 
+    cost_usd = round(cost_cents / 100.0, 6)
+    total_tokens = tokens_in + tokens_out
+
     usage_payload = json.dumps({
         "input_tokens": tokens_in,
         "output_tokens": tokens_out,
+        "total_tokens": total_tokens,
+        "inputTokens": tokens_in,
+        "outputTokens": tokens_out,
+        "totalTokens": total_tokens,
         "cost_cents": round(cost_cents, 4),
+        "cost_usd": cost_usd,
+        "costUsd": cost_usd,
         "provider": provider,
         "model": model,
         "duration_sec": round(duration_sec, 2),
@@ -117,6 +126,8 @@ async def record_telegram_turn(
         "provider": provider,
         "model": model,
         "cost_cents": round(cost_cents, 4),
+        "cost_usd": cost_usd,
+        "costUsd": cost_usd,
     })
 
     activity_details = json.dumps({
@@ -127,7 +138,8 @@ async def record_telegram_turn(
         "provider": provider,
         "model": model,
         "cost_cents": round(cost_cents, 4),
-        "tokens": {"input": tokens_in, "output": tokens_out},
+        "cost_usd": cost_usd,
+        "tokens": {"input": tokens_in, "output": tokens_out, "total": total_tokens},
         "duration_sec": round(duration_sec, 2),
     })
 
@@ -159,7 +171,33 @@ async def record_telegram_turn(
             result_payload,
         )
 
-        # 2. Insert into activity log
+        # 2. Insert into cost_events ledger for Paperclip Costs Tab
+        await conn.execute(
+            """
+            INSERT INTO cost_events (
+                id, company_id, agent_id, heartbeat_run_id, provider, model,
+                input_tokens, output_tokens, cost_cents, occurred_at, created_at,
+                biller, billing_type, cached_input_tokens, cost_status, usage_kind,
+                reported_cost_cents, reported_usage_json
+            ) VALUES (
+                gen_random_uuid(), $1, $2, $3, $4, $5,
+                $6, $7, $8, NOW(), NOW(),
+                $4, 'metered_api', 0, 'reported', 'agent',
+                $8, $9::jsonb
+            )
+            """,
+            company_uuid,
+            agent_uuid,
+            run_id,
+            provider,
+            model,
+            tokens_in,
+            tokens_out,
+            cost_cents,
+            usage_payload,
+        )
+
+        # 3. Insert into activity log
         await conn.execute(
             """
             INSERT INTO activity_log (
@@ -476,10 +514,18 @@ async def record_crewai_execution(
             "roles_count": len(clean_roles),
             "skills": clean_skills,
             "cost_cents": 0,
+            "cost_usd": 0.0,
+            "costUsd": 0.0,
+            "provider": "freellmapi",
+            "model": "crewai-swarm",
         })
         result_payload = json.dumps({
             "status": "succeeded" if success else "failed",
             "summary": summary,
+            "provider": "freellmapi",
+            "model": "crewai-swarm",
+            "cost_cents": 0,
+            "cost_usd": 0.0,
         })
         activity_details = json.dumps({
             "mission": (mission or "")[:200],
@@ -487,6 +533,9 @@ async def record_crewai_execution(
             "skills": clean_skills,
             "duration_sec": round(duration_sec, 2),
             "success": success,
+            "provider": "freellmapi",
+            "model": "crewai-swarm",
+            "cost_usd": 0.0,
         })
 
         # 1. Insert into heartbeat_runs under CrewAI Engine worker
@@ -514,7 +563,28 @@ async def record_crewai_execution(
             result_payload,
         )
 
-        # 2. Insert into activity_log
+        # 2. Insert into cost_events ledger for Paperclip Costs Tab
+        await conn.execute(
+            """
+            INSERT INTO cost_events (
+                id, company_id, agent_id, heartbeat_run_id, provider, model,
+                input_tokens, output_tokens, cost_cents, occurred_at, created_at,
+                biller, billing_type, cached_input_tokens, cost_status, usage_kind,
+                reported_cost_cents, reported_usage_json
+            ) VALUES (
+                gen_random_uuid(), $1, $2, $3, 'freellmapi', 'crewai-swarm',
+                0, 0, 0.0, NOW(), NOW(),
+                'freellmapi', 'metered_api', 0, 'reported', 'agent',
+                0.0, $4::jsonb
+            )
+            """,
+            company_uuid,
+            agent_uuid,
+            run_id,
+            usage_payload,
+        )
+
+        # 3. Insert into activity_log
         await conn.execute(
             """
             INSERT INTO activity_log (
