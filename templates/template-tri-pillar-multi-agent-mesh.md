@@ -64,6 +64,13 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
 6. **CrewAI 1.15.30+ Pydantic Output Bridge**: Dynamic swarms can enforce strict Pydantic schemas at runtime via `output_pydantic` on terminal tasks by supplying `output_schema` to `run_crew_ai`.
 7. **Bifrost Governance SSoT Invariant**: When `config_store: postgres` is enabled, PostgreSQL table `governance_virtual_keys` is the exclusive source of truth for Virtual Keys (`vk-production-main`, `vk-hermes-agent`, `vk-crewai`, `vk-pidev`, `vk-pydanticai`). The local `config.json` is not dynamically watched or re-read by the runtime.
 8. **Telegram Multi-Media Gateway**: Handles both photos and documents (`filters.Document.ALL`) persisted to `/mnt/localstorage/uploads/` with single-instance polling conflict protection.
+9. **Paperclip <-> Hermes Bidirectional Telemetry Bridge**:
+   - **Outbound (Paperclip ➔ Hermes)**: Paperclip dispatches heartbeat runs to `http://hermes:8000/v1/runs` and streams execution deltas via SSE (`/v1/runs/:id/events`).
+   - **Inbound (Hermes ➔ Paperclip)**: Every conversational turn with the user in Telegram (or external channels) is automatically and asynchronously recorded into Paperclip via `paperclip_bridge.py`:
+     * Completed execution recorded in `heartbeat_runs` (source `telegram`, token/cost telemetry, duration).
+     * Live audit event published to `activity_log` for immediate visibility in Paperclip Dashboard.
+     * Agent heartbeat timestamp (`last_heartbeat_at`) and status updated on `agents` table.
+   - **Conversational Task Operations**: Hermes exposes `paperclip_list_tasks` and `paperclip_create_task` so users can inspect and manage Paperclip Kanban issues directly from Telegram chat without opening a browser.
 
 ---
 
@@ -85,6 +92,15 @@ Paperclip AI and Hermes run with zero data loss across container restarts, stop/
      * `PAPERCLIP_SECRETS_MASTER_KEY_FILE: "/mnt/localstorage/paperclip/secrets/master.key"`
    - Daily automated `.tar.gz` snapshots provided natively by Zerops platform.
    - **Zero ObjectStorage Overhead**: S3 is not needed for Paperclip governance, eliminating bucket sprawl and redundant billing.
+
+3. **Hermes Affirmative System Prompt Invariant (Anti-Pink Elephant)**:
+   - System prompt in `apps/hermes/prompts.py` follows Nous Research SOTA (arXiv:2408.11857 / arXiv:2402.07896):
+     * **Lean Affirmative Guidance**: Explicitly defines role, identity, and affirmative operating principles.
+     * **Decoupled API Tool Schemas**: Tools are passed strictly in the API `tools` array. Never duplicate tool definitions in plaintext markdown inside the system prompt.
+     * **Zero Pink Elephants**: Zero negative prohibitions ("never do X", "do not output Y") that prime autoregressive attention on forbidden tokens.
+     * **Proportional Intent Handling**: Conceptual and hypothetical questions receive architectural explanations without tool calls; operational requests trigger tools to collect physical proof.
+     * **Dynamic Self-Discovery**: Inspect live services (`list_zerops_services`) and database tables (`execute_query`) dynamically rather than hardcoding pre-existing catalogs or service stacks.
+
 
 ---
 
@@ -122,14 +138,25 @@ Paperclip AI and Hermes run with zero data loss across container restarts, stop/
         NATS_URL: ${nats_connectionString}
       start: python3 apps/hermes/main.py
 
-  # Paperclip AI Platform (Node.js 26)
+  # Paperclip AI Platform (Ubuntu 26 / Node.js 26 pnpm monorepo)
   - setup: paperclip
     build:
       base: ubuntu/nodejs@26
       prepareCommands:
-        - npm install -g paperclipai
+        - sudo apt-get update && sudo apt-get install -y --no-install-recommends ca-certificates curl git build-essential python3
+        - sudo corepack enable || sudo npm install -g pnpm@latest
+      buildCommands:
+        - pnpm install --no-frozen-lockfile
+        - pnpm --filter @paperclipai/ui build
+        - pnpm --filter @paperclipai/plugin-sdk build
+        - PAPERCLIP_TSC_EMIT_ONLY=1 pnpm --filter @paperclipai/server build
+        - pnpm --filter @paperclipai/server build:runtime
+        - sed -i 's|/build/source|/var/www|g' server/dist-runtime/*.mjs
       deployFiles:
-        - apps/agentdev
+        - .
+      cache:
+        - node_modules
+        - .pnpm-store
     run:
       base: ubuntu/nodejs@26
       volume:
@@ -140,17 +167,34 @@ Paperclip AI and Hermes run with zero data loss across container restarts, stop/
         - port: 3100
           httpSupport: true
       initCommands:
-        - sudo mkdir -p /mnt/localstorage/paperclip/storage /mnt/localstorage/paperclip/secrets && sudo chown -R zerops:zerops /mnt/localstorage/paperclip
+        - sudo mkdir -p /mnt/localstorage/paperclip/storage /mnt/localstorage/paperclip/instances/default && sudo chown -R zerops:zerops /mnt/localstorage/paperclip && sudo chmod -R 777 /mnt/localstorage/paperclip
+        - pnpm --filter @paperclipai/db migrate || true
       envVariables:
         PORT: "3100"
         HOST: "0.0.0.0"
         NODE_ENV: "production"
-        DATABASE_URL: ${database_connectionString}
-        PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
+        SERVE_UI: "true"
+        DATABASE_URL: "postgresql://${database_user}:${database_password}@${database_hostname}:${database_port}/paperclip"
+        BETTER_AUTH_SECRET: ${PAPERCLIP_BETTER_AUTH_SECRET}
+        PAPERCLIP_TOOL_ACTION_SIGNING_SECRET: ${PAPERCLIP_SIGNING_SECRET}
         PAPERCLIP_STORAGE_PROVIDER: "local_disk"
         PAPERCLIP_STORAGE_LOCAL_DIR: "/mnt/localstorage/paperclip/storage"
-        PAPERCLIP_SECRETS_MASTER_KEY_FILE: "/mnt/localstorage/paperclip/secrets/master.key"
-      start: node apps/agentdev/src/server.mjs
+        PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
+        PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
+        PAPERCLIP_DEPLOYMENT_EXPOSURE: "public"
+        PAPERCLIP_BIND: "lan"
+        PAPERCLIP_AUTH_BASE_URL_MODE: "explicit"
+        PAPERCLIP_AUTH_PUBLIC_BASE_URL: "https://${zerops_subdomain}"
+        BETTER_AUTH_URL: "https://${zerops_subdomain}"
+        BETTER_AUTH_TRUSTED_ORIGINS: "https://${zerops_subdomain}"
+        PAPERCLIP_ADMIN_EMAIL: ${PAPERCLIP_ADMIN_EMAIL_SECRET}
+        PAPERCLIP_ADMIN_PASSWORD: ${PAPERCLIP_ADMIN_PASSWORD_SECRET}
+        HERMES_GATEWAY_URL: "http://hermes:8000"
+      start: bash start.sh
+      healthCheck:
+        httpGet:
+          port: 3100
+          path: /api/health
 ```
 
 ---
@@ -228,8 +272,9 @@ curl -s http://hermes:8000/health
 # Stream SSE Events (replace <run_id>)
 curl -N http://hermes:8000/v1/runs/<run_id>/events
 
-# Check Paperclip database and env
-ssh paperclip "paperclipai env"
+# Generate Paperclip First-Admin Bootstrap CEO Invite URL (from host terminal or ZCP)
+paperclipai auth bootstrap-ceo
+# Output: https://paperclip-<subdomain>.zerops.app/invite/pcp_bootstrap_<token>
 ```
 
 ---
