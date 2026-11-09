@@ -351,6 +351,13 @@ async def run_nats_bridge():
         await asyncio.sleep(60)
 
 async def run_services():
+    try:
+        from paperclip_bridge import reconcile_bifrost_to_paperclip
+        print("[Hermes-Agent] Reconciling Bifrost costs into Paperclip Control Plane...")
+        await reconcile_bifrost_to_paperclip()
+    except Exception as _reconcile_err:
+        print(f"[Hermes-Agent] Startup cost reconciliation deferred: {_reconcile_err}")
+
     tasks = [asyncio.create_task(run_nats_bridge())]
     if run_telegram_bot:
         print("[Hermes-Agent] Initializing Telegram gateway...")

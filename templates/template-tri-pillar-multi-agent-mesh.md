@@ -67,9 +67,11 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
 9. **Paperclip <-> Hermes Bidirectional Telemetry Bridge**:
    - **Outbound (Paperclip ➔ Hermes)**: Paperclip dispatches heartbeat runs to `http://hermes:8000/v1/runs` and streams execution deltas via SSE (`/v1/runs/:id/events`).
    - **Inbound (Hermes ➔ Paperclip)**: Every conversational turn with the user in Telegram (or external channels) is automatically and asynchronously recorded into Paperclip via `paperclip_bridge.py`:
-     * Completed execution recorded in `heartbeat_runs` (source `telegram`, token/cost telemetry, duration).
+     * Completed execution recorded in `heartbeat_runs` (source `telegram`, canonical USD/cents keys `cost_usd`, `costUsd`, `cost_cents`, `totalTokens`, `duration_sec`).
+     * Financial ledger entry inserted directly into `cost_events` with `biller: deepseek` or `freellmapi`, `billing_type: metered_api`, ensuring Paperclip's Costs Tab (`/costs`) renders the real model breakdown and spend.
      * Live audit event published to `activity_log` for immediate visibility in Paperclip Dashboard.
-     * Agent heartbeat timestamp (`last_heartbeat_at`) and status updated on `agents` table.
+     * Agent heartbeat timestamp (`last_heartbeat_at`) and accumulated monthly spend (`spent_monthly_cents`) synchronized to the exact sum of `cost_events` ledger.
+     * **Bifrost ➔ Paperclip Auto-Reconciliation**: `reconcile_bifrost_to_paperclip()` periodically cross-references Bifrost request logs (`db.logs`) with Paperclip (`cost_events`) to eliminate any billing drift between the LLM gateway and Paperclip.
    - **Conversational Task Operations**: Hermes exposes `paperclip_list_tasks` and `paperclip_create_task` so users can inspect and manage Paperclip Kanban issues directly from Telegram chat without opening a browser.
 
 ---

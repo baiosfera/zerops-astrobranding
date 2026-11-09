@@ -61,6 +61,147 @@ def get_paperclip_db_url() -> Optional[str]:
 
     return None
 
+def get_bifrost_db_url() -> Optional[str]:
+    """
+    Returns the database connection URL for Bifrost gateway request logs.
+    Derived dynamically from Paperclip DB URL or environment.
+    """
+    env_url = os.getenv("BIFROST_DATABASE_URL")
+    if env_url:
+        return env_url
+    pc_url = get_paperclip_db_url()
+    if pc_url and "/paperclip" in pc_url:
+        return pc_url.replace("/paperclip", "/db")
+    fallback = os.getenv("DATABASE_URL", "")
+    if fallback and "/paperclip" in fallback:
+        return fallback.replace("/paperclip", "/db")
+    return None
+
+async def reconcile_bifrost_to_paperclip(
+    company_id: str = DEFAULT_COMPANY_ID,
+    agent_id: str = DEFAULT_HERMES_AGENT_ID,
+) -> int:
+    """
+    Reconciles paid LLM requests (e.g. DeepSeek) from Bifrost logs into Paperclip's cost_events ledger.
+    Ensures 100% financial and token parity between Bifrost gateway and Paperclip Control Plane.
+    Returns the count of reconciled cost events.
+    """
+    pc_url = get_paperclip_db_url()
+    bf_url = get_bifrost_db_url()
+    if not pc_url or not bf_url:
+        return 0
+
+    try:
+        import asyncpg
+    except ImportError:
+        return 0
+
+    conn_pc = None
+    conn_bf = None
+    reconciled_count = 0
+    try:
+        conn_pc = await asyncpg.connect(pc_url, timeout=5.0)
+        conn_bf = await asyncpg.connect(bf_url, timeout=5.0)
+
+        logs = await conn_bf.fetch(
+            """
+            SELECT id, provider, model, prompt_tokens, completion_tokens,
+                   cached_read_tokens, total_tokens, cost, timestamp
+            FROM logs
+            WHERE provider = 'deepseek' AND cost > 0
+            ORDER BY timestamp ASC
+            """
+        )
+
+        company_uuid = uuid.UUID(company_id)
+        agent_uuid = uuid.UUID(agent_id)
+
+        for log in logs:
+            log_id_str = str(log["id"])
+            try:
+                log_uuid = uuid.UUID(log_id_str)
+            except Exception:
+                log_uuid = uuid.uuid4()
+
+            cost_usd = float(log["cost"] or 0.0)
+            cost_cents = round(cost_usd * 100.0, 7)
+            p_tok = int(log["prompt_tokens"] or 0)
+            c_tok = int(log["completion_tokens"] or 0)
+            cached_tok = int(log["cached_read_tokens"] or 0)
+            model_name = str(log["model"] or "deepseek-v4-pro")
+            occurred = log["timestamp"]
+
+            usage_payload = json.dumps({
+                "cost_usd": cost_usd,
+                "costUsd": cost_usd,
+                "cost_cents": cost_cents,
+                "provider": "deepseek",
+                "model": model_name,
+                "input_tokens": p_tok,
+                "output_tokens": c_tok,
+                "total_tokens": p_tok + c_tok,
+            })
+
+            await conn_pc.execute(
+                """
+                INSERT INTO cost_events (
+                    id, company_id, agent_id, provider, model,
+                    input_tokens, output_tokens, cached_input_tokens, cost_cents,
+                    occurred_at, created_at, biller, billing_type, cost_status,
+                    usage_kind, reported_cost_cents, provider_request_id, reported_usage_json
+                ) VALUES (
+                    $1, $2, $3, 'deepseek', $4,
+                    $5, $6, $7, $8,
+                    $9, $9, 'deepseek', 'metered_api', 'reported',
+                    'agent', $8, $10, $11::jsonb
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    cost_cents = EXCLUDED.cost_cents,
+                    reported_cost_cents = EXCLUDED.reported_cost_cents,
+                    input_tokens = EXCLUDED.input_tokens,
+                    output_tokens = EXCLUDED.output_tokens,
+                    occurred_at = EXCLUDED.occurred_at
+                """,
+                log_uuid,
+                company_uuid,
+                agent_uuid,
+                model_name,
+                p_tok,
+                c_tok,
+                cached_tok,
+                cost_cents,
+                occurred,
+                log_id_str,
+                usage_payload,
+            )
+            reconciled_count += 1
+
+        # Synchronize Hermes spent_monthly_cents to exact ledger sum for the current UTC month
+        await conn_pc.execute(
+            """
+            UPDATE agents 
+            SET spent_monthly_cents = (
+                SELECT COALESCE(SUM(cost_cents), 0) 
+                FROM cost_events 
+                WHERE agent_id = $1 
+                  AND occurred_at >= DATE_TRUNC('month', NOW())
+            )
+            WHERE id = $1
+            """,
+            agent_uuid,
+        )
+
+        logger.info("⚡ [Paperclip Bridge] Reconciled %d Bifrost cost events into Paperclip", reconciled_count)
+        return reconciled_count
+    except Exception as err:
+        logger.warning("⚠️ [Paperclip Bridge] Reconcile Bifrost failed: %s", err)
+        return 0
+    finally:
+        if conn_pc:
+            await conn_pc.close()
+        if conn_bf:
+            await conn_bf.close()
+
 async def record_telegram_turn(
     user_id: Any,
     prompt: str,
@@ -230,6 +371,9 @@ async def record_telegram_turn(
         )
 
         logger.info("⚡ [Paperclip Bridge] Recorded Telegram turn into Paperclip (run_id: %s)", run_id)
+        if provider == "deepseek" or cost_cents > 0:
+            import asyncio
+            asyncio.create_task(reconcile_bifrost_to_paperclip(company_id=company_id, agent_id=agent_id))
         return True
     except Exception as err:
         logger.warning("⚠️ [Paperclip Bridge] Failed to record turn in Paperclip: %s", err)

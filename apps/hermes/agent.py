@@ -25,7 +25,8 @@ try:
         list_available_crews, get_paperclip_status,
         paperclip_list_tasks, paperclip_create_task, paperclip_register_agent,
         mem_context, mem_search, mem_save,
-        linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue
+        linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue,
+        list_verticals, get_vertical, list_playbooks, get_playbook, get_brandbook_tokens, get_skill_docs
     )
 except (ImportError, ValueError):
     from .prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt
@@ -41,7 +42,8 @@ except (ImportError, ValueError):
         list_available_crews, get_paperclip_status,
         paperclip_list_tasks, paperclip_create_task, paperclip_register_agent,
         mem_context, mem_search, mem_save,
-        linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue
+        linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue,
+        list_verticals, get_vertical, list_playbooks, get_playbook, get_brandbook_tokens, get_skill_docs
     )
 
 BIFROST_URL = os.getenv("HERMES_MODEL_ENDPOINT", "http://bifrost:8080/v1")
@@ -578,10 +580,100 @@ HERMES_TOOLS = [
                 }
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_verticals",
+            "description": "Lista todas las verticales curadas del ecosistema de negocio registradas en dev/verticals (ej. juan-damaren, astrotipia, apotelos, baiosfera, synthemika, seo-maps).",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_vertical",
+            "description": "Obtiene la especificación técnica completa en JSON de una vertical específica (ej. 'juan-damaren', 'astrotipia', 'apotelos', 'baiosfera', 'synthemika', 'seo-maps').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "vertical_slug": {
+                        "type": "string",
+                        "description": "Slug de la vertical (ej. 'juan-damaren', 'astrotipia', 'apotelos')"
+                    }
+                },
+                "required": ["vertical_slug"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_playbooks",
+            "description": "Lista todos los playbooks universales de crecimiento y marketing en /mnt/localstorage/playbooks (ej. seo_aeo_playbook, copywriting_playbook, funnels_cro_playbook).",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_playbook",
+            "description": "Lee el contenido estratégico de un playbook universal por su slug (ej. 'seo_aeo_playbook', 'copywriting_playbook', 'offers_pricing_playbook').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "playbook_slug": {
+                        "type": "string",
+                        "description": "Slug del playbook (ej. 'seo_aeo_playbook', 'copywriting_playbook')"
+                    }
+                },
+                "required": ["playbook_slug"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_brandbook_tokens",
+            "description": "Lee el manual de marca y design tokens (brandbook.json, chroma_manifest.json, font_manifest.json) del espacio base dev/.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_skill_docs",
+            "description": "Consulta la documentación SKILL.md y directivas de ejecución de cualquier sovereign skill disponible en /mnt/localstorage/skills/ (ej. 'seo-aeo-geo', 'growth-engine', 'apotelos', 'astro-web').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "skill_name": {
+                        "type": "string",
+                        "description": "Nombre de la skill (ej. 'seo-aeo-geo', 'growth-engine', 'apotelos', 'astro-web')"
+                    }
+                },
+                "required": ["skill_name"]
+            }
+        }
     }
 ]
 
 TOOL_DISPATCH = {
+    "list_verticals": lambda a: list_verticals(),
+    "get_vertical": lambda a: get_vertical(a.get("vertical_slug", "")),
+    "list_playbooks": lambda a: list_playbooks(),
+    "get_playbook": lambda a: get_playbook(a.get("playbook_slug", "")),
+    "get_brandbook_tokens": lambda a: get_brandbook_tokens(),
+    "get_skill_docs": lambda a: get_skill_docs(a.get("skill_name", "")),
     "get_system_health": lambda a: get_system_health(),
     "list_zerops_services": lambda a: list_zerops_services(),
     "get_zerops_service_status": lambda a: get_zerops_service_status(a.get("service_name", "")),
@@ -901,8 +993,8 @@ class HermesAgent:
                     active_model = extra.get("resolved_model_used", data.get("model", MODEL_NAME))
                     if call_provider == "deepseek":
                         active_provider = "deepseek"
-                        # DeepSeek V3/V4: $0.14/1M prompt, $0.28/1M completion (rates in cents: 0.000014 / 0.000028)
-                        total_cost_cents += (p_tok * 0.000014) + (c_tok * 0.000028)
+                        # Bifrost pricing for DeepSeek: ~$0.27/1M prompt, ~$2.00/1M completion (rates in cents: 0.000027 / 0.00020)
+                        total_cost_cents += (p_tok * 0.000027) + (c_tok * 0.00020)
 
                     msg = data["choices"][0]["message"]
                     parsed_tool_calls = extract_tool_calls(msg)
@@ -978,7 +1070,7 @@ class HermesAgent:
                             s_extra = s_data.get("extra_fields", {})
                             if s_extra.get("provider") == "deepseek":
                                 active_provider = "deepseek"
-                                total_cost_cents += (s_p * 0.000014) + (s_c * 0.000028)
+                                total_cost_cents += (s_p * 0.000027) + (s_c * 0.00020)
                             synth_msg = s_data["choices"][0]["message"].get("content") or ""
                             cleaned = re.sub(r"<[^>]*function_call.*?</[^>]*function_call>", "", synth_msg, flags=re.DOTALL | re.IGNORECASE)
                             cleaned = re.sub(r"<[^>]*tool_call.*?</[^>]*tool_call>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
