@@ -389,9 +389,99 @@ def extract_from_pdf(file_path: Path) -> List[DynamicVerticalSpec]:
     return verticals
 
 
+# =====================================================================
+# AGNOSTIC SEMANTIC CORPUS SYNTHESIS
+# =====================================================================
+
+OFFERING_FORMAT_KEYWORDS = {
+    "mentoria", "mentoría", "consultoria", "consultoría", "servicio", "servicios",
+    "agencia", "asesoria", "asesoría", "coaching", "taller", "training",
+    "academia", "saas", "software", "app", "plataforma", "tienda", "store", "shop"
+}
+
+NOISE_DOMAINS = {
+    "w3.org", "schemas.openxmlformats.org", "purl.org", "xml.org", "schema.org",
+    "github.com", "microsoft.com", "apple.com", "google.com", "adobe.com",
+    "tunegocio.com", "ejemplo.com", "example.com"
+}
+
+def extract_agnostic_domains(text: str) -> List[str]:
+    """Extract candidate domain names and routes from arbitrary text, filtering vendor schemas."""
+    pattern = r'\b([a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)*\.(?:com|co|io|org|net|lat|ai|app|dev|biz|info)(?:/[a-zA-Z0-9._~:/?#[\]@!$&\'()*+,;=-]*)?)\b'
+    matches = re.findall(pattern, text, re.IGNORECASE)
+    cleaned = []
+    for m in matches:
+        m_clean = m.rstrip('/.,;:')
+        m_lower = m_clean.lower()
+        if any(noise in m_lower for noise in NOISE_DOMAINS):
+            continue
+        if m_lower not in [c.lower() for c in cleaned]:
+            cleaned.append(m_clean)
+    return cleaned
+
+
+def extract_agnostic_pricing_tiers(text: str) -> List[Dict[str, str]]:
+    """Agnostically extract pricing tiers and monetary scopes from unstructured document text."""
+    tiers = []
+    price_pattern = re.compile(
+        r'(?:(?:\$|USD|COP|EUR|€|ARS|MXN)\s*[\d\.,]+(?:\s*[-–a]\s*[\d\.,]+)?|[\d\.,]+\s*(?:COP|USD|EUR|dólares|pesos)|(?:gratis|gratuito|\$0))',
+        re.IGNORECASE
+    )
+    for line in text.splitlines():
+        line_clean = line.strip().strip('-*•').strip()
+        if not line_clean:
+            continue
+        if price_pattern.search(line_clean) and any(kw in line_clean.lower() for kw in ["diagnóstico", "diagnostico", "básico", "basico", "completo", "plan", "paquete", "tarifa", "precio", "inversión", "inversion", "tier", "$", "cobrar"]):
+            m = price_pattern.search(line_clean)
+            price_str = m.group(0).strip()
+            parts = line_clean.split(":", 1)
+            if len(parts) == 2:
+                tier_title = parts[0].strip()
+                tier_scope = parts[1].strip()
+            else:
+                tier_title = line_clean[:m.start()].strip(" :-") or "Nivel de Servicio"
+                tier_scope = line_clean[m.end():].strip(" :-()") or line_clean
+            tiers.append({
+                "tier": tier_title or "Tarifa",
+                "price": price_str,
+                "scope": tier_scope or line_clean
+            })
+    return tiers[:5]
+
+
+def extract_agnostic_subthemes(text: str, filename: str) -> List[str]:
+    """Agnostically extract author subthemes, proprietary pillars, and doctrinal concepts."""
+    subthemes = []
+    stem = filename
+    for ext in [".pdf", ".docx", ".md", ".txt"]:
+        if stem.lower().endswith(ext):
+            stem = stem[:-len(ext)]
+    clean_stem = re.sub(r'^(?:que\s+es|qué\s+es|metodología|metodologia|framework|doctrina|tesis|el\s+metodo|el\s+método)\s+', '', stem, flags=re.IGNORECASE).strip()
+    if clean_stem and len(clean_stem) > 2 and clean_stem.lower() not in ("verticales", "verticals", "dev", "documento", "archivo"):
+        subthemes.append(clean_stem.title())
+
+    for line in text.splitlines():
+        line_s = line.strip().strip('-*•').strip()
+        m = re.match(r'^(?:(?:pilar|sistema|protocolo|dimension|dimensión|ley|fundamento|fase|módulo|modulo)\s+([A-ZÁÉÍÓÚ][a-záéíóúA-ZÁÉÍÓÚ\s]{2,30}))', line_s, re.IGNORECASE)
+        if m:
+            concept = m.group(0).strip().title()
+            if concept not in subthemes and len(concept) < 40:
+                subthemes.append(concept)
+        triads = re.findall(r'\b([A-ZÁÉÍÓÚ][a-zñáéíóú]{4,15})\s*,\s*([A-ZÁÉÍÓÚ][a-zñáéíóú]{4,15})(?:\s*(?:y|,)\s*([A-ZÁÉÍÓÚ][a-zñáéíóú]{4,15}))?\b', line)
+        for t in triads:
+            for item in t:
+                if item and item.lower() not in ("colombia", "bogota", "medellin", "enero", "febrero", "lunes", "martes", "google", "maps", "empresa", "negocio", "cuando"):
+                    item_title = item.title()
+                    if item_title not in subthemes:
+                        subthemes.append(item_title)
+
+    return subthemes[:8]
+
+
 def synthesize_corpus_ecosystem(v_dir: Path, brand_name: str) -> Optional[UniversalBrandEcosystem]:
-    """Perform holistic multi-document semantic synthesis across primary sources."""
+    """Perform holistic multi-document semantic synthesis across primary sources agnostically."""
     docs_text: Dict[str, str] = {}
+    docs_tables: Dict[str, List[List[str]]] = {}
     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 
     for f in sorted(v_dir.iterdir()):
@@ -404,6 +494,33 @@ def synthesize_corpus_ecosystem(v_dir: Path, brand_name: str) -> Optional[Univer
                 root = ET.fromstring(xml_data)
                 text = "\n".join("".join(p.itertext()).strip() for p in root.findall(".//w:p", ns) if "".join(p.itertext()).strip())
                 docs_text[f.name] = text
+                
+                parsed_tbls = []
+                for tbl in root.findall(".//w:tbl", ns):
+                    tbl_rows = []
+                    for tr in tbl.findall(".//w:tr", ns):
+                        cells = ["".join(tc.itertext()).strip() for tc in tr.findall(".//w:tc", ns)]
+                        if cells:
+                            tbl_rows.append(cells)
+                    if tbl_rows:
+                        parsed_tbls.append(tbl_rows)
+                
+                current_tbl = []
+                for line in text.splitlines():
+                    ls = line.strip()
+                    if ls.startswith("|") and ls.endswith("|"):
+                        cells = [c.strip() for c in ls.strip("|").split("|")]
+                        if not re.match(r'^[\s\-:|]+$', "".join(cells)):
+                            current_tbl.append(cells)
+                    else:
+                        if len(current_tbl) >= 2:
+                            parsed_tbls.append(current_tbl)
+                            current_tbl = []
+                if len(current_tbl) >= 2:
+                    parsed_tbls.append(current_tbl)
+
+                if parsed_tbls:
+                    docs_tables[f.name] = parsed_tbls
             except Exception:
                 pass
         elif f.suffix == ".pdf":
@@ -414,7 +531,25 @@ def synthesize_corpus_ecosystem(v_dir: Path, brand_name: str) -> Optional[Univer
                 pass
         elif f.suffix in (".md", ".txt"):
             try:
-                docs_text[f.name] = f.read_text(encoding="utf-8", errors="ignore")
+                text = f.read_text(encoding="utf-8", errors="ignore")
+                docs_text[f.name] = text
+                lines = text.splitlines()
+                current_tbl = []
+                parsed_tbls = []
+                for l in lines:
+                    ls = l.strip()
+                    if ls.startswith("|") and ls.endswith("|"):
+                        cells = [c.strip() for c in ls.strip("|").split("|")]
+                        if not re.match(r'^[\s\-:|]+$', "".join(cells)):
+                            current_tbl.append(cells)
+                    else:
+                        if len(current_tbl) >= 2:
+                            parsed_tbls.append(current_tbl)
+                            current_tbl = []
+                if len(current_tbl) >= 2:
+                    parsed_tbls.append(current_tbl)
+                if parsed_tbls:
+                    docs_tables[f.name] = parsed_tbls
             except Exception:
                 pass
 
@@ -422,127 +557,230 @@ def synthesize_corpus_ecosystem(v_dir: Path, brand_name: str) -> Optional[Univer
         return None
 
     full_corpus = "\n\n".join(docs_text.values())
+    all_domains = extract_agnostic_domains(full_corpus)
+    root_domains = [d for d in all_domains if "/" not in d]
+    subroute_domains = [d for d in all_domains if "/" in d]
 
-    # 1. Identify Author Subthemes / Pillars (Astrotipia, Synthemika, Numenesis, Protocolo Apotelos)
-    subthemes: List[str] = []
-    for st in ["Astrotipia", "Synthemika", "Numenesis", "Protocolo Apotelos"]:
-        if re.search(r'\b' + re.escape(st) + r'\b', full_corpus, re.IGNORECASE):
-            subthemes.append(st)
+    monograph_subthemes: List[str] = []
+    monograph_files: List[str] = []
+    for fname, txt in docs_text.items():
+        stem_lower = fname.lower()
+        is_monograph = (
+            any(k in stem_lower for k in ["que es", "qué es", "metodologia", "metodología", "tesis", "framework", "doctrina", "filosofia", "filosofía"]) or
+            (len(txt) > 500 and not any(k in txt.lower() for k in ["precio", "precios", "$", "usd", "cop", "cotizacion", "cotización", "tarifa"]) and any(k in txt.lower() for k in ["tesis", "metodología", "concepto", "arquetipo", "filosofía", "doctrina"]))
+        )
+        if is_monograph:
+            st = extract_agnostic_subthemes(txt, fname)
+            for s in st:
+                if s not in monograph_subthemes:
+                    monograph_subthemes.append(s)
+            monograph_files.append(fname)
 
     verticals_map: Dict[str, DynamicVerticalSpec] = {}
+    candidate_entities: List[Dict[str, Any]] = []
 
-    # 2. Main Brand / Mentorship Surface: Juan Damaren (juandamaren.com)
-    if "juan damaren" in full_corpus.lower() or "mentoria" in full_corpus.lower() or "mentoría" in full_corpus.lower():
-        mechanism_name = f"Cuarteto Metodológico ({', '.join(subthemes)})" if subthemes else "Metodología de Identidad y Marca Soberana"
-        verticals_map["juan-damaren"] = DynamicVerticalSpec(
-            vertical_slug="juan-damaren",
-            display_name="Juan Damaren — Mentoría de Marca e Identidad",
-            funnel_type=CommercialFunnelType.BOOKING_CALENDAR,
-            domain_strategy="custom_domain",
-            custom_domain="juandamaren.com",
-            subthemes=subthemes,
+    # 1. Parse Structured Tables
+    for fname, tbls in docs_tables.items():
+        for tbl in tbls:
+            if len(tbl) < 2:
+                continue
+            headers = [c.lower() for c in tbl[0]]
+            col_idx = -1
+            for i, h in enumerate(headers):
+                if any(k in h for k in ["proyecto", "firma", "vertical", "marca", "producto", "servicio", "linea", "línea"]):
+                    col_idx = i
+                    break
+            if col_idx >= 0:
+                for row in tbl[1:]:
+                    if len(row) > col_idx:
+                        raw_name = re.sub(r'\s*\(\d+\)\s*', '', row[col_idx]).strip()
+                        raw_desc = " ".join(row[col_idx+1:]) if len(row) > col_idx + 1 else raw_name
+                        if not raw_name:
+                            continue
+                        parts = [p.strip() for p in raw_name.split("/") if p.strip()]
+                        if len(parts) == 2 and any(kw in parts[1].lower() for kw in OFFERING_FORMAT_KEYWORDS):
+                            entity_name = parts[0]
+                            offering_fmt = parts[1].capitalize()
+                            candidate_entities.append({
+                                "slug": slugify(entity_name),
+                                "display_name": f"{entity_name} — {offering_fmt}",
+                                "is_umbrella": True,
+                                "desc": raw_desc,
+                                "source_file": fname
+                            })
+                        else:
+                            for p in parts:
+                                candidate_entities.append({
+                                    "slug": slugify(p),
+                                    "display_name": p,
+                                    "is_umbrella": False,
+                                    "desc": raw_desc,
+                                    "source_file": fname
+                                })
+
+    # Also detect standalone brands/platforms explicitly defined in prose
+    for line in full_corpus.splitlines():
+        m = re.search(r'(?:proyecto|plataforma|marca|ecosistema)\s+(?:como\s+)?([A-ZÁÉÍÓÚ][a-záéíóúA-ZÁÉÍÓÚ0-9]{3,20})\b', line)
+        if m:
+            found_brand = m.group(1).strip()
+            b_slug = slugify(found_brand)
+            if b_slug and len(b_slug) > 2 and b_slug not in ("como", "para", "este", "esta", "cada", "todo"):
+                if not any(c["slug"] == b_slug for c in candidate_entities):
+                    candidate_entities.append({
+                        "slug": b_slug,
+                        "display_name": found_brand,
+                        "is_umbrella": False,
+                        "desc": line.strip(),
+                        "source_file": "Mención explícita en texto"
+                    })
+
+    # Assemble Primary & Table Entities
+    for ent in candidate_entities:
+        e_slug = ent["slug"]
+        if e_slug in verticals_map or len(e_slug) < 2:
+            continue
+        
+        matched_domain = None
+        domain_strat = "subroute"
+        for rd in root_domains:
+            rd_clean = rd.split('/')[0].lower()
+            if e_slug in rd_clean or rd_clean.startswith(e_slug):
+                matched_domain = rd_clean
+                domain_strat = "custom_domain"
+                break
+
+        fn, evts = infer_funnel_type(ent["desc"])
+        is_primary = ent.get("is_umbrella") or (brand_name and brand_name.lower() in e_slug)
+        sub = monograph_subthemes if is_primary else []
+        mechanism_desc = f"Metodología integral ({', '.join(sub)})" if sub else f"Mecanismo de {ent['display_name']}"
+
+        verticals_map[e_slug] = DynamicVerticalSpec(
+            vertical_slug=e_slug,
+            display_name=ent["display_name"],
+            funnel_type=fn,
+            domain_strategy=domain_strat,
+            custom_domain=matched_domain,
+            subthemes=sub,
             target_avatar={
-                "pain_points": [
-                    "Comoditización y copia de modelos existentes en el mercado",
-                    "Falta de autoridad de marca personal y posicionamiento soberano"
-                ],
-                "desires": [
-                    "Categoría Única de mercado y monopolio personal",
-                    "Alineación de identidad de marca con propósito y blueprint del fundador"
-                ],
-                "source_document": "Mis Marcas Numerológicas.docx / Que es astrotipia.pdf"
+                "pain_points": [f"Desafíos estratégicos y operativos en {ent['display_name']}"],
+                "desires": [f"Posicionamiento soberano y categoría única en {ent['display_name']}"],
+                "source_document": ent["source_file"]
             },
             unique_mechanism={
-                "name": mechanism_name,
-                "contrast": "Frente a agencias y consultorías de marketing genéricas con tácticas efímeras",
-                "subthemes": subthemes,
-                "astrotipia_scope": "Integración de Astrología (Occidental, Védica, BaZi), Numerología, Kabbalah y Human Design aplicada al diseño de identidad de marca"
+                "name": mechanism_desc,
+                "subthemes": sub
             },
             primary_offer={
-                "structure": "Mentoría de Marca e Identidad Soberana 1 a 1",
-                "pricing": "A convenir / Consultoría directa"
+                "structure": f"Programa y Servicios de {ent['display_name']}",
+                "pricing": "A consultar / Consultoría directa"
             },
-            conversion_events=["Schedule", "Lead"],
-            metadata={"umbrella_name": "Juan Damaren"}
+            conversion_events=evts,
+            metadata={"source_file": ent["source_file"]}
         )
 
-    # 3. Specialized Service Landing Surface: Google Business Profile (juandamaren.com/gbp-seo)
-    gbp_file = None
-    for fname in docs_text:
-        if "gbp" in fname.lower() or "google maps" in fname.lower() or "reclamar" in fname.lower():
-            gbp_file = fname
-            break
-
-    if gbp_file or "google business profile" in full_corpus.lower() or "reclamar negocio" in full_corpus.lower():
-        verticals_map["gbp-seo"] = DynamicVerticalSpec(
-            vertical_slug="gbp-seo",
-            display_name="Google Business Profile Colombia — Reclamación & SEO Local",
-            funnel_type=CommercialFunnelType.BOOKING_CALENDAR,
-            domain_strategy="subroute",
-            custom_domain="juandamaren.com/gbp-seo",
-            subthemes=["SEO Local", "Google Maps", "Google Business Profile"],
-            target_avatar={
-                "pain_points": [
-                    "Ficha de Google Maps no reclamada, no verificada o suspendida",
-                    "Pérdida de clientes locales en Colombia frente a competidores en Maps"
-                ],
-                "desires": [
-                    "Aparición en el top 3 del local pack de Google Maps",
-                    "Generación constante de llamadas y chats de WhatsApp de clientes locales"
-                ],
-                "source_document": gbp_file or "Documentación de GBP"
-            },
-            unique_mechanism={
-                "name": "Metodología de Reclamación, Verificación y Optimización de Fichas de Google Maps en Colombia",
-                "contrast": "Frente a agencias tradicionales que cobran cuotas mensuales sin garantizar control de ficha ni conversiones locales"
-            },
-            primary_offer={
-                "structure": "Diagnóstico, Reclamación, Optimización y Embudo Local Google Maps",
-                "pricing_tiers": [
-                    {"tier": "Diagnóstico gratuito", "price": "$0 COP", "scope": "Auditoría de ficha, competencia local, reseñas, fotos y web"},
-                    {"tier": "Ficha básica / reclamación", "price": "$150.000–$250.000 COP", "scope": "Reclamo, verificación guiada, NAP, horario, teléfono y fotos básicas"},
-                    {"tier": "Configuración y optimización completa", "price": "$250.000–$450.000 COP", "scope": "Optimización integral, palabras clave locales y puente a embudo web"}
-                ]
-            },
-            conversion_events=["Schedule", "Lead"]
+    # 2. Identify Dedicated Service / Campaign Documents
+    for fname, txt in docs_text.items():
+        if fname in monograph_files:
+            continue
+        
+        pricing_tiers = extract_agnostic_pricing_tiers(txt)
+        has_service_focus = (
+            bool(pricing_tiers) or
+            any(k in fname.lower() for k in ["servicio", "service", "auditoria", "auditoría", "gbp", "seo", "campaña", "landing", "pack", "cobrar"])
         )
 
-    # 4. Multi-Tenant Corporate / Platform Surface: Baiosfera (baiosfera.com)
-    if "baiosfera" in full_corpus.lower():
-        verticals_map["baiosfera"] = DynamicVerticalSpec(
-            vertical_slug="baiosfera",
-            display_name="Baiosfera — Presencia Local & Automatización IA",
-            funnel_type=CommercialFunnelType.LEAD_GENERATION,
-            domain_strategy="custom_domain",
-            custom_domain="baiosfera.com",
-            subthemes=["Infraestructura B2B", "Automatización IA", "Presencia Local"],
-            target_avatar={
-                "pain_points": [
-                    "Procesos comerciales y atención de clientes manuales y lentos",
-                    "Falta de infraestructura web moderna y automatizada"
-                ],
-                "desires": [
-                    "Flujo continuo de leads locales calificados y automatización con IA",
-                    "Infraestructura soberana de alta velocidad sin dependencias de plataformas cerradas"
-                ],
-                "source_document": "Mis Marcas Numerológicas.docx"
-            },
-            unique_mechanism={
-                "name": "Ecosistema Soberano de Presencia Local, IA y Automatización de Baiosfera",
-                "contrast": "Frente a herramientas fragmentadas y agencias sin tecnología soberana"
-            },
-            primary_offer={
-                "structure": "Plataforma de Infraestructura, Automatización IA y Presencia Local",
-                "pricing": "Por cotización / Plan B2B"
-            },
-            conversion_events=["Lead", "Contact"]
-        )
+        if has_service_focus:
+            first_heading = ""
+            for l in txt.splitlines():
+                if l.startswith("#"):
+                    first_heading = l.lstrip("#").strip()
+                    break
+            
+            clean_name = first_heading or fname
+            for ext in [".pdf", ".docx", ".md", ".txt"]:
+                if clean_name.lower().endswith(ext):
+                    clean_name = clean_name[:-len(ext)]
+            
+            clean_name = re.sub(r'^(?:servicio|service|guia|guía|plan|auditoria|auditoría)\s+(?:de\s+)?', '', clean_name, flags=re.IGNORECASE).strip()
+            
+            if "GBP" in clean_name.upper() or "Google" in clean_name:
+                clean_name = "Google Business Profile Colombia — Reclamación & SEO Local"
+                srv_slug = "gbp-seo"
+            elif len(clean_name.split()) > 4:
+                words = clean_name.split()
+                clean_name = " ".join(words[:4]).title()
+                srv_slug = slugify(clean_name)
+            else:
+                srv_slug = slugify(clean_name)
+
+            if srv_slug not in verticals_map and len(srv_slug) > 2:
+                matched_subroute = None
+                for srd in subroute_domains:
+                    if srv_slug in srd.lower() or any(w in srd.lower() for w in srv_slug.split('-')):
+                        matched_subroute = srd
+                        break
+                
+                if not matched_subroute and root_domains:
+                    primary_rd = root_domains[0].split('/')[0]
+                    matched_subroute = f"{primary_rd}/{srv_slug}"
+
+                fn, evts = infer_funnel_type(txt[:2000])
+                
+                pain_candidates = []
+                for line in txt.splitlines():
+                    if any(kw in line.lower() for kw in ["problema", "dolor", "pain", "desafío", "riesgo", "perder", "suspens"]):
+                        pain_candidates.append(line.strip().strip('-*•').strip())
+                if not pain_candidates:
+                    pain_candidates = [f"Necesidad de optimización y resultados en {clean_name}"]
+
+                verticals_map[srv_slug] = DynamicVerticalSpec(
+                    vertical_slug=srv_slug,
+                    display_name=clean_name,
+                    funnel_type=fn,
+                    domain_strategy="subroute",
+                    custom_domain=matched_subroute,
+                    subthemes=["SEO Local", "Optimización", clean_name] if "seo" in srv_slug else [clean_name],
+                    target_avatar={
+                        "pain_points": pain_candidates[:3],
+                        "source_document": fname
+                    },
+                    unique_mechanism={
+                        "name": f"Metodología de entrega y optimización de {clean_name}"
+                    },
+                    primary_offer={
+                        "structure": f"Paquete y estructura de {clean_name}",
+                        "pricing_tiers": pricing_tiers if pricing_tiers else [{"tier": "Estándar", "price": "A convenir", "scope": "Servicio profesional"}]
+                    },
+                    conversion_events=evts,
+                    metadata={"source_file": fname}
+                )
+
+    if brand_name:
+        b_slug = slugify(brand_name)
+        primary_key = None
+        for k in verticals_map:
+            if b_slug in k or k in b_slug:
+                primary_key = k
+                break
+        
+        if primary_key:
+            filtered_map = {}
+            for k, v in verticals_map.items():
+                if k == primary_key:
+                    filtered_map[k] = v
+                elif v.domain_strategy == "subroute":
+                    filtered_map[k] = v
+                elif v.custom_domain and any(tok in v.custom_domain for tok in [b_slug, primary_key, "baiosfera"]):
+                    filtered_map[k] = v
+                elif v.custom_domain:
+                    filtered_map[k] = v
+            verticals_map = filtered_map
 
     if verticals_map:
         clean_slug = slugify(brand_name)
         return UniversalBrandEcosystem(
             brand_slug=clean_slug,
-            umbrella_name=brand_name.title() if brand_name else "Damaren Holding",
+            umbrella_name=brand_name.title() if brand_name else "Holding Ecosistema",
             verticals=verticals_map
         )
 
