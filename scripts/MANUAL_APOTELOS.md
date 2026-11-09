@@ -202,6 +202,13 @@ Apotelos formaliza la orquestación omnicanal de forma desacoplada de cualquier 
 
 El comando `apotelos` está disponible globalmente en `/usr/local/bin/apotelos`.
 
+### 4.1. Arquitectura Simétrica Multi-Runtime (ZCP y Hermes)
+Para erradicar la asimetría de entornos entre el desarrollador/arquitecto y los agentes autónomos:
+- **ZCP (Control Plane)**: `/usr/local/bin/apotelos` symlinkeado a `/var/www/zerops-astrobranding/scripts/apotelos`. Permite a Antigravity y operadores humanos auditar, listar, planificar y validar contratos estáticos Pydantic con tests deterministas (`apotelos test`).
+- **Hermes Runtime (`hermes:8000`)**: `/usr/local/bin/apotelos` instalado nativamente en el contenedor Ubuntu Python 3.12 (`/var/www/scripts/apotelos`). Permite que el agente Hermes ejecute el protocolo de forma autónoma desde sus turnos y herramientas (`run_command`), consulte el árbol de regresión causal y compile manifiestos Blackboard en memoria sin depender de orquestaciones externas frágiles.
+- **SSoT Compartida**: Ambos entornos acceden directamente al volumen NVMe `/mnt/localstorage/MentorIA/dev/verticals/` y `/mnt/localstorage/playbooks/`, garantizando paridad física 1:1 en tiempo real.
+- **Arranque en Frío (`iniciar.sh-first`)**: Durante el bootstrap de cualquier ZCP o redeploy de Hermes (`zerops.yaml`), `iniciar.sh` y los `initCommands` aprovisionan y symlinkean automáticamente el binario `apotelos` en `/usr/local/bin/apotelos`.
+
 ```bash
 # 1. Descubrir y listar marcas y verticales en el proyecto
 apotelos list
