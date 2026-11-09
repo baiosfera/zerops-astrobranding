@@ -104,14 +104,19 @@ async function resolveIssueId(identifierOrId) {
   if (!identifierOrId) return null;
   const clean = identifierOrId.trim();
   if (/^[A-Za-z0-9]+-\d+$/i.test(clean) || !clean.includes("-")) {
-    const q = `query GetIssueId($id: String!) { issue(id: $id) { id team { id } } }`;
+    const q = `query GetIssueId($id: String!) { issue(id: $id) { id identifier title description team { id } } }`;
     try {
       const res = await queryGraphQL(q, { id: clean.toUpperCase() });
-      if (res?.issue?.id) return { id: res.issue.id, teamId: res.issue.team?.id };
+      if (res?.issue?.id) return { id: res.issue.id, identifier: res.issue.identifier, title: res.issue.title, description: res.issue.description, teamId: res.issue.team?.id };
     } catch (e) {}
   }
+  try {
+    const qById = `query GetIssueById($id: String!) { issue(id: $id) { id identifier title description team { id } } }`;
+    const resById = await queryGraphQL(qById, { id: clean });
+    if (resById?.issue?.id) return { id: resById.issue.id, identifier: resById.issue.identifier, title: resById.issue.title, description: resById.issue.description, teamId: resById.issue.team?.id };
+  } catch (e) {}
   const defaultTeam = await getDefaultTeamId();
-  return { id: clean, teamId: defaultTeam };
+  return { id: clean, identifier: clean, title: "", description: "", teamId: defaultTeam };
 }
 
 async function resolveProjectId(identifierOrName) {
@@ -224,6 +229,64 @@ function validateApplicationTests() {
       console.log("✅ [F5 Reality Gate] Sensor Universal de Habilidades validado (exit code 0).");
     } catch (err) {
       console.error("❌ F5 REALITY GATE RECHAZADO: Falló la validación de habilidades.");
+      process.exit(1);
+    }
+  }
+}
+
+/**
+ * Physical Definition of Done (DoD) Verifier:
+ * 1. Checks that services declared in ticket are deployed in Zerops (deployed: true).
+ * 2. Executes curl / endpoint probes defined in DoD (must exit 0 and return HTTP 200).
+ */
+function validateIssueDoD(resolvedIssue) {
+  if (!resolvedIssue || !resolvedIssue.description) return;
+  console.log(`🛡️ [F5 Reality Gate] Verificando Definition of Done físico para [${resolvedIssue.identifier || resolvedIssue.id}]...`);
+
+  const desc = resolvedIssue.description;
+  const title = resolvedIssue.title || "";
+
+  // 1. Check for undeployed runtime services mentioned in ticket
+  const KNOWN_SERVICES = ["freellmapi", "bifrost", "hermes", "paperclip", "pidev", "webdev", "webprod"];
+  const isInfraTicket = /(aprovisionar|provision|desplegar|deploy|infraestructura|subdominio|puerto|runtime)/i.test(title + " " + desc);
+
+  if (isInfraTicket) {
+    const cacheFile = "/tmp/.zerops_discover_cache.json";
+    if (fs.existsSync(cacheFile)) {
+      try {
+        const cache = JSON.parse(fs.readFileSync(cacheFile, "utf-8"));
+        const services = cache.services || [];
+        for (const svc of KNOWN_SERVICES) {
+          const mentioned = new RegExp(`\\b${svc}\\b`, "i").test(title + " " + desc);
+          if (mentioned) {
+            const svcInfo = services.find(s => s.hostname === svc);
+            if (svcInfo && svcInfo.deployed === false) {
+              console.error(`❌ F5 REALITY GATE RECHAZADO: El servicio "${svc}" tiene deployed: false en Zerops.`);
+              console.error(`   El hito [${resolvedIssue.identifier || resolvedIssue.id}] declara infraestructura/despliegue para "${svc}".`);
+              console.error(`   Prohibido marcar Done hasta que el servicio esté formalmente desplegado en Zerops con zerops_deploy.`);
+              process.exit(1);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 2. Extract curl assertions from DoD
+  const curlMatches = desc.match(/curl\s+[^`\n\r|]+/g) || [];
+  for (const rawCurl of curlMatches) {
+    let cleanCurl = rawCurl.trim();
+    cleanCurl = cleanCurl.replace(/^[`'"]+|[`'"]+$/g, "");
+    if (!cleanCurl.includes("http")) continue;
+
+    console.log(`📡 [F5 Gate DoD] Ejecutando aserción física: ${cleanCurl}`);
+    try {
+      execSync(cleanCurl, { stdio: "pipe", timeout: 10000 });
+      console.log(`✅ [F5 Gate DoD] Sonda física exitosa (HTTP 200 / exit 0): ${cleanCurl}`);
+    } catch (curlErr) {
+      console.error(`❌ F5 REALITY GATE RECHAZADO: Falló la aserción física del DoD en [${resolvedIssue.identifier || resolvedIssue.id}]:`);
+      console.error(`   Comando: ${cleanCurl}`);
+      console.error("Prohibido marcar Done en Linear si los endpoints o sondas del DoD no responden físicamente en vivo.");
       process.exit(1);
     }
   }
@@ -663,6 +726,7 @@ async function main() {
       }
 
       validateApplicationTests();
+      validateIssueDoD(resolved);
 
       console.log("🛡️ [F5 Gate] Validating SSoT Parity & Git Push before closing issue...");
       try {
@@ -782,6 +846,7 @@ async function main() {
       }
 
       validateApplicationTests();
+      validateIssueDoD(resolved);
 
       console.log("🛡️ [F5 Gate Batch] Validating SSoT Parity & Git Push once for batch...");
       try {

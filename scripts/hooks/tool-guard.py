@@ -1374,6 +1374,16 @@ def evaluate_hook(payload: dict) -> dict:
                 if payload.get("test_inspect_engram_sync"):
                     return {"engramSyncTriggered": triggered_mcp_sync, "source": f"post_tool:{mcp_tool}"}
                 return {}
+            if mcp_srv == "zerops" and mcp_tool == "zerops_discover":
+                tool_res = payload.get("toolResult") or payload.get("result") or ""
+                if tool_res:
+                    try:
+                        res_obj = json.loads(tool_res) if isinstance(tool_res, str) else tool_res
+                        if isinstance(res_obj, dict) and "services" in res_obj:
+                            with open("/tmp/.zerops_discover_cache.json", "w") as f:
+                                json.dump(res_obj, f, indent=2)
+                    except Exception:
+                        pass
             if payload.get("test_inspect_engram_sync"):
                 return {"engramSyncTriggered": False, "source": f"ignored:{mcp_srv}:{mcp_tool}"}
         for k in ["Path", "path", "file_path", "target_file", "FilePath"]:
@@ -2316,6 +2326,28 @@ def evaluate_hook(payload: dict) -> dict:
                                 "Commiteá tus cambios primero para asegurar la paridad de código."
                             )
                         }
+                except Exception:
+                    pass
+
+        # B6. Gate 14: Anti-False-Completion & Zerops Deployment Verification Gate (BAI-454)
+        if "linear-cli" in cmd and any(st in cmd for st in ['"Done"', "'Done'", "Done"]):
+            cache_file = "/tmp/.zerops_discover_cache.json"
+            if os.path.exists(cache_file) and not payload.get("test_bypass_linear"):
+                try:
+                    with open(cache_file, "r") as f:
+                        z_data = json.load(f)
+                    services = z_data.get("services", [])
+                    undeployed = [s.get("hostname") for s in services if s.get("deployed") is False and not s.get("isInfrastructure")]
+                    for und in undeployed:
+                        if und and re.search(r'\b' + re.escape(und) + r'\b', cmd, re.IGNORECASE):
+                            return {
+                                "decision": "deny",
+                                "reason": (
+                                    f"ARNÉS F5 GOBERNANZA FÍSICA (Gate 14 - Anti-Checklist Theater): "
+                                    f"El servicio '{und}' figura con deployed: false en Zerops. "
+                                    f"Prohibido marcar Done en Linear sin haber ejecutado zerops_deploy formalmente."
+                                )
+                            }
                 except Exception:
                     pass
 
@@ -3443,6 +3475,47 @@ def run_tests():
         })
         assert res_cmd_import_block.get("decision") == "deny" and "LINEAR-FIRST MULTI-SERVICIO" in res_cmd_import_block.get("reason", ""), f"Expected deny on zcli project import without linear activity, got {res_cmd_import_block}"
         print("✓ Test 71 Passed: zcli project import command blocked without Linear activity (BAI-430)")
+
+        # Test 72: Gate 14 blocks linear-cli update-status Done when service has deployed: false (BAI-454)
+        test_cache = "/tmp/.zerops_discover_cache.json"
+        cache_backup = None
+        if os.path.exists(test_cache):
+            with open(test_cache, "r") as f:
+                cache_backup = f.read()
+        try:
+            with open(test_cache, "w") as f:
+                json.dump({
+                    "services": [
+                        {"hostname": "freellmapi", "deployed": False, "isInfrastructure": False},
+                        {"hostname": "bifrost", "deployed": True, "isInfrastructure": False}
+                    ]
+                }, f)
+            res_gate14_block = evaluate_hook({
+                "toolCall": {
+                    "name": "run_command",
+                    "args": {
+                        "CommandLine": 'linear-cli update-status BAI-447 "Done" --evidence "se probaron freellmapi y bifrost"'
+                    }
+                }
+            })
+            assert res_gate14_block.get("decision") == "deny" and "Gate 14" in res_gate14_block.get("reason", ""), f"Expected Gate 14 deny on undeployed freellmapi, got {res_gate14_block}"
+            print("✓ Test 72 Passed: Gate 14 blocks linear-cli Done on undeployed service (BAI-454)")
+
+            # Test 73: Gate 14 allows linear-cli update-status Done when mentioned services are deployed
+            res_gate14_allow = evaluate_hook({
+                "toolCall": {
+                    "name": "run_command",
+                    "args": {
+                        "CommandLine": 'linear-cli update-status BAI-448 "Done" --evidence "se probo bifrost"'
+                    }
+                }
+            })
+            assert res_gate14_allow.get("decision") == "allow", f"Expected Gate 14 allow on deployed bifrost, got {res_gate14_allow}"
+            print("✓ Test 73 Passed: Gate 14 allows linear-cli Done when services are deployed (BAI-454)")
+        finally:
+            if cache_backup:
+                with open(test_cache, "w") as f:
+                    f.write(cache_backup)
 
 
     finally:
