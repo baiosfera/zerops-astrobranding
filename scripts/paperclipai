@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Sovereign Paperclip CLI Wrapper for Zerops ZCP
+# ==============================================================================
+export PAPERCLIP_HOME="${PAPERCLIP_HOME:-/mnt/localstorage/paperclip}"
+CONFIG_DEFAULT="${PAPERCLIP_HOME}/instances/default/config.json"
+
+# Asegurar symlink ~/.paperclip si no existe
+if [ ! -L "$HOME/.paperclip" ] && [ -d "$PAPERCLIP_HOME" ]; then
+    ln -sfn "$PAPERCLIP_HOME" "$HOME/.paperclip" 2>/dev/null || true
+fi
+
+if [ "$1" = "auth" ] && [ "$2" = "bootstrap-ceo" ] && [[ ! " $@ " =~ " -c " ]] && [[ ! " $@ " =~ " --config " ]] && [ -f "$CONFIG_DEFAULT" ]; then
+    exec npx paperclipai "$@" -c "$CONFIG_DEFAULT"
+else
+    exec npx paperclipai "$@"
+fi

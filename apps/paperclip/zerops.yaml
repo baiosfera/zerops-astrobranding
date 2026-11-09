@@ -1,0 +1,62 @@
+# ==============================================================================
+# Zerops Platform Specification: Paperclip Governance & Spend Caps Watchdog
+# Runtime: Ubuntu 26 / Node.js 26 (pnpm monorepo)
+# SSoT: PostgreSQL 18 managed database + LocalStorage NVMe volume
+# ==============================================================================
+zerops:
+  - setup: paperclip
+    build:
+      base: ubuntu/nodejs@26
+      prepareCommands:
+        - sudo apt-get update && sudo apt-get install -y --no-install-recommends ca-certificates curl git build-essential python3
+        - sudo corepack enable || sudo npm install -g pnpm@latest
+      buildCommands:
+        - pnpm install --no-frozen-lockfile
+        - pnpm --filter @paperclipai/ui build
+        - pnpm --filter @paperclipai/plugin-sdk build
+        - PAPERCLIP_TSC_EMIT_ONLY=1 pnpm --filter @paperclipai/server build
+        - pnpm --filter @paperclipai/server build:runtime
+        - sed -i 's|/build/source|/var/www|g' server/dist-runtime/*.mjs
+      deployFiles:
+        - .
+      cache:
+        - node_modules
+        - .pnpm-store
+    run:
+      base: ubuntu/nodejs@26
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
+      ports:
+        - port: 3100
+          httpSupport: true
+      initCommands:
+        - sudo mkdir -p /mnt/localstorage/paperclip/storage /mnt/localstorage/paperclip/instances/default && sudo chown -R zerops:zerops /mnt/localstorage/paperclip && sudo chmod -R 777 /mnt/localstorage/paperclip
+        - pnpm --filter @paperclipai/db migrate || true
+      envVariables:
+        PORT: "3100"
+        HOST: "0.0.0.0"
+        NODE_ENV: "production"
+        SERVE_UI: "true"
+        DATABASE_URL: "postgresql://${database_user}:${database_password}@${database_hostname}:${database_port}/paperclip"
+        BETTER_AUTH_SECRET: ${PAPERCLIP_BETTER_AUTH_SECRET}
+        PAPERCLIP_TOOL_ACTION_SIGNING_SECRET: ${PAPERCLIP_SIGNING_SECRET}
+        PAPERCLIP_STORAGE_PROVIDER: "local_disk"
+        PAPERCLIP_STORAGE_LOCAL_DIR: "/mnt/localstorage/paperclip/storage"
+        PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
+        PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
+        PAPERCLIP_DEPLOYMENT_EXPOSURE: "public"
+        PAPERCLIP_BIND: "lan"
+        PAPERCLIP_AUTH_BASE_URL_MODE: "explicit"
+        PAPERCLIP_AUTH_PUBLIC_BASE_URL: "https://${zerops_subdomain}"
+        BETTER_AUTH_URL: "https://${zerops_subdomain}"
+        BETTER_AUTH_TRUSTED_ORIGINS: "https://${zerops_subdomain}"
+        PAPERCLIP_ADMIN_EMAIL: ${PAPERCLIP_ADMIN_EMAIL_SECRET}
+        PAPERCLIP_ADMIN_PASSWORD: ${PAPERCLIP_ADMIN_PASSWORD_SECRET}
+        HERMES_GATEWAY_URL: "http://hermes:8000"
+      start: bash start.sh
+      healthCheck:
+        httpGet:
+          port: 3100
+          path: /api/health

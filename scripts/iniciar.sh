@@ -402,7 +402,7 @@ if [ "$LOCALSTORAGE_FOUND" = false ]; then
     echo "  📦 Activando almacenamiento persistente LOCAL en $FALLBACK_DIR (MODO RESILIENTE - CERO BLOQUEOS)..."
 
     # Garantizar estructura de directorios requerida inmediatamente para que Engram, SQLite y FreeLLMAPI no fallen
-    sudo mkdir -p "$FALLBACK_DIR/freellmapi" "$FALLBACK_DIR/engram"
+    sudo mkdir -p "$FALLBACK_DIR/freellmapi" "$FALLBACK_DIR/engram" "$FALLBACK_DIR/paperclip/instances/default"
     sudo chown -R zerops:zerops "$FALLBACK_DIR"
     ensure_storage_symlink "$FALLBACK_DIR" "$PROJECT_ROOT/$LOCALSTORAGE_HOST"
     echo "fallback" > "$FALLBACK_DIR/.storage_mode"
@@ -581,20 +581,22 @@ fi
 
 # 2b. Aprovisionar catálogo soberano de skills desde GitHub (zerops-astro-skills)
 SKILLS_REPO_URL="https://github.com/baiosfera/zerops-astro-skills.git"
+[ -n "${GITHUB_TOKEN_BAIOSFERA:-}" ] && SKILLS_REPO_URL="https://x-access-token:${GITHUB_TOKEN_BAIOSFERA}@github.com/baiosfera/zerops-astro-skills.git"
 SKILLS_LOCAL_DIR="/var/www/zerops-astro-skills"
 if [ ! -d "$SKILLS_LOCAL_DIR/.git" ]; then
-    echo "• [2b/4] Sincronizando catálogo de skills soberanas desde GitHub ($SKILLS_REPO_URL)..."
+    echo "• [2b/4] Sincronizando catálogo de skills soberanas desde GitHub..."
     git clone --depth 1 "$SKILLS_REPO_URL" "$SKILLS_LOCAL_DIR" 2>/dev/null || true
 else
     echo "• [2b/4] Actualizando skills soberanas desde GitHub..."
+    [ -n "${GITHUB_TOKEN_BAIOSFERA:-}" ] && git -C "$SKILLS_LOCAL_DIR" remote set-url origin "$SKILLS_REPO_URL" 2>/dev/null || true
     git -C "$SKILLS_LOCAL_DIR" fetch origin main 2>/dev/null || true
     git -C "$SKILLS_LOCAL_DIR" reset --hard origin/main 2>/dev/null || git -C "$SKILLS_LOCAL_DIR" pull --ff-only 2>/dev/null || true
 fi
 
-# Despliegue en vivo y directo de las skills soberanas personalizadas hacia el workspace
+# Despliegue en vivo y directo de las skills soberanas personalizadas hacia el workspace y localstorage
 if [ -d "$SKILLS_LOCAL_DIR" ]; then
-    echo "• [2b/4] Desplegando skills soberanas personalizadas hacia /var/www/.agents/skills..."
-    mkdir -p "$PROJECT_ROOT/.agents/skills" "/home/zerops/.gemini/antigravity-cli/skills" 2>/dev/null || true
+    echo "• [2b/4] Desplegando skills soberanas personalizadas hacia /var/www/.agents/skills y /var/www/localstorage/skills..."
+    mkdir -p "$PROJECT_ROOT/.agents/skills" "/home/zerops/.gemini/antigravity-cli/skills" "$PROJECT_ROOT/localstorage/skills" 2>/dev/null || true
     for sk_dir in "$SKILLS_LOCAL_DIR"/*/; do
         [ -d "$sk_dir" ] || continue
         sk_name=$(basename "$sk_dir")
@@ -602,10 +604,18 @@ if [ -d "$SKILLS_LOCAL_DIR" ]; then
         if command -v rsync >/dev/null 2>&1; then
             rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
             rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
+            if [ -d "$PROJECT_ROOT/localstorage" ]; then
+                mkdir -p "$PROJECT_ROOT/localstorage/skills/$sk_name" 2>/dev/null || true
+                rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "$PROJECT_ROOT/localstorage/skills/$sk_name/" 2>/dev/null || true
+            fi
         else
             mkdir -p "$PROJECT_ROOT/.agents/skills/$sk_name" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
             cp -rf "$sk_dir"* "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
             cp -rf "$sk_dir"* "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
+            if [ -d "$PROJECT_ROOT/localstorage" ]; then
+                mkdir -p "$PROJECT_ROOT/localstorage/skills/$sk_name" 2>/dev/null || true
+                cp -rf "$sk_dir"* "$PROJECT_ROOT/localstorage/skills/$sk_name/" 2>/dev/null || true
+            fi
         fi
     done
     # Sincronizar las 4 skills core hacia Drive SSoT (acotado para evitar latencia FUSE)
@@ -637,6 +647,18 @@ if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
             fi
         fi
     done
+fi
+
+# 2b-ter. Desplegar catálogo consolidado completo hacia LocalStorage NVMe (/var/www/localstorage/skills)
+if [ -d "$PROJECT_ROOT/localstorage" ] && [ -d "$PROJECT_ROOT/.agents/skills" ]; then
+    echo "• [2b-ter] Sincronizando catálogo consolidado de skills hacia LocalStorage NVMe..."
+    mkdir -p "$PROJECT_ROOT/localstorage/skills" 2>/dev/null || true
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" --exclude=".git" --exclude="AGENTS.md" "$PROJECT_ROOT/.agents/skills/" "$PROJECT_ROOT/localstorage/skills/" 2>/dev/null || true
+    else
+        cp -rf "$PROJECT_ROOT/.agents/skills"/* "$PROJECT_ROOT/localstorage/skills/" 2>/dev/null || true
+    fi
+    echo "  ✓ LocalStorage NVMe hidratado con $(ls -1d "$PROJECT_ROOT/localstorage/skills"/*/ 2>/dev/null | wc -l) skills soberanas."
 fi
 
 # 2c. Verificar disponibilidad de scripts SSoT en Google Drive (tolerancia de indexación FUSE)
@@ -1009,6 +1031,26 @@ if [ -f "$REPO_DIR/scripts/unisetup.sh" ] || [ -f "$SSOT_SCRIPTS/unisetup.sh" ];
             sudo ln -sf "$HOME/.bifrost/bin/bifrost" /usr/local/bin/bifrost-cli
         elif [ -f /usr/bin/bifrost ]; then
             sudo ln -sf /usr/bin/bifrost /usr/local/bin/bifrost-cli
+        fi
+    fi
+
+    # 3d. Garantizar configuración soberana y symlink de Paperclip en ZCP
+    PAPERCLIP_DIR="/mnt/localstorage/paperclip"
+    [ ! -d "$PAPERCLIP_DIR" ] && PAPERCLIP_DIR="$PROJECT_ROOT/localstorage/paperclip"
+    if [ -d "$PAPERCLIP_DIR" ] || [ -d "/mnt/localstorage" ]; then
+        echo "• [3d/4] Configurando arnés persistente de Paperclip (PAPERCLIP_HOME y symlink ~/.paperclip)..."
+        sudo mkdir -p "$PAPERCLIP_DIR/instances/default" "$PAPERCLIP_DIR/storage" 2>/dev/null || true
+        sudo chown -R zerops:zerops "$PAPERCLIP_DIR" 2>/dev/null || true
+        ln -sfn "$PAPERCLIP_DIR" "$HOME/.paperclip" 2>/dev/null || true
+        ln -sfn "$PAPERCLIP_DIR" "/home/zerops/.paperclip" 2>/dev/null || true
+        if [ -w /etc/environment ] || command -v sudo >/dev/null 2>&1; then
+            sudo sed -i '/^PAPERCLIP_HOME=/d' /etc/environment 2>/dev/null || true
+            echo "PAPERCLIP_HOME=$PAPERCLIP_DIR" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
+        fi
+        if [ -f "$REPO_DIR/scripts/paperclipai" ]; then
+            sudo cp -f "$REPO_DIR/scripts/paperclipai" /usr/local/bin/paperclipai
+            sudo chmod +x /usr/local/bin/paperclipai
+            sudo ln -sf /usr/local/bin/paperclipai /usr/local/bin/paperclip
         fi
     fi
 else

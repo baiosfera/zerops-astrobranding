@@ -402,7 +402,7 @@ if [ "$LOCALSTORAGE_FOUND" = false ]; then
     echo "  📦 Activando almacenamiento persistente LOCAL en $FALLBACK_DIR (MODO RESILIENTE - CERO BLOQUEOS)..."
 
     # Garantizar estructura de directorios requerida inmediatamente para que Engram, SQLite y FreeLLMAPI no fallen
-    sudo mkdir -p "$FALLBACK_DIR/freellmapi" "$FALLBACK_DIR/engram"
+    sudo mkdir -p "$FALLBACK_DIR/freellmapi" "$FALLBACK_DIR/engram" "$FALLBACK_DIR/paperclip/instances/default"
     sudo chown -R zerops:zerops "$FALLBACK_DIR"
     ensure_storage_symlink "$FALLBACK_DIR" "$PROJECT_ROOT/$LOCALSTORAGE_HOST"
     echo "fallback" > "$FALLBACK_DIR/.storage_mode"
@@ -1031,6 +1031,26 @@ if [ -f "$REPO_DIR/scripts/unisetup.sh" ] || [ -f "$SSOT_SCRIPTS/unisetup.sh" ];
             sudo ln -sf "$HOME/.bifrost/bin/bifrost" /usr/local/bin/bifrost-cli
         elif [ -f /usr/bin/bifrost ]; then
             sudo ln -sf /usr/bin/bifrost /usr/local/bin/bifrost-cli
+        fi
+    fi
+
+    # 3d. Garantizar configuración soberana y symlink de Paperclip en ZCP
+    PAPERCLIP_DIR="/mnt/localstorage/paperclip"
+    [ ! -d "$PAPERCLIP_DIR" ] && PAPERCLIP_DIR="$PROJECT_ROOT/localstorage/paperclip"
+    if [ -d "$PAPERCLIP_DIR" ] || [ -d "/mnt/localstorage" ]; then
+        echo "• [3d/4] Configurando arnés persistente de Paperclip (PAPERCLIP_HOME y symlink ~/.paperclip)..."
+        sudo mkdir -p "$PAPERCLIP_DIR/instances/default" "$PAPERCLIP_DIR/storage" 2>/dev/null || true
+        sudo chown -R zerops:zerops "$PAPERCLIP_DIR" 2>/dev/null || true
+        ln -sfn "$PAPERCLIP_DIR" "$HOME/.paperclip" 2>/dev/null || true
+        ln -sfn "$PAPERCLIP_DIR" "/home/zerops/.paperclip" 2>/dev/null || true
+        if [ -w /etc/environment ] || command -v sudo >/dev/null 2>&1; then
+            sudo sed -i '/^PAPERCLIP_HOME=/d' /etc/environment 2>/dev/null || true
+            echo "PAPERCLIP_HOME=$PAPERCLIP_DIR" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
+        fi
+        if [ -f "$REPO_DIR/scripts/paperclipai" ]; then
+            sudo cp -f "$REPO_DIR/scripts/paperclipai" /usr/local/bin/paperclipai
+            sudo chmod +x /usr/local/bin/paperclipai
+            sudo ln -sf /usr/local/bin/paperclipai /usr/local/bin/paperclip
         fi
     fi
 else

@@ -68,6 +68,37 @@ for core_cli in "engram-sync:engram-sync" "ssot-parity-check:ssot-parity-check.s
     fi
 done
 
+# 1.4 Despliegue de Utilidad Soberana Paperclip CLI (paperclip / paperclipai) y Symlink de Persistencia
+if [ -d "/mnt/localstorage/paperclip" ] || [ -d "$PROJECT_ROOT/localstorage/paperclip" ]; then
+    PAPERCLIP_PERSIST_DIR="/mnt/localstorage/paperclip"
+    [ ! -d "$PAPERCLIP_PERSIST_DIR" ] && PAPERCLIP_PERSIST_DIR="$PROJECT_ROOT/localstorage/paperclip"
+    sudo mkdir -p "$PAPERCLIP_PERSIST_DIR/instances/default" "$PAPERCLIP_PERSIST_DIR/storage" 2>/dev/null || true
+    sudo chown -R zerops:zerops "$PAPERCLIP_PERSIST_DIR" 2>/dev/null || true
+
+    # Symlink canónico ~/.paperclip hacia localstorage persistente
+    ln -sfn "$PAPERCLIP_PERSIST_DIR" "$HOME/.paperclip" 2>/dev/null || true
+    ln -sfn "$PAPERCLIP_PERSIST_DIR" "/home/zerops/.paperclip" 2>/dev/null || true
+
+    # Exportar PAPERCLIP_HOME en entorno del sistema
+    if [ -w /etc/environment ] || command -v sudo >/dev/null 2>&1; then
+        sudo sed -i '/^PAPERCLIP_HOME=/d' /etc/environment 2>/dev/null || true
+        echo "PAPERCLIP_HOME=$PAPERCLIP_PERSIST_DIR" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
+    fi
+fi
+
+if [ -f "$SCRIPT_DIR/paperclipai" ]; then
+    cp -f "$SCRIPT_DIR/paperclipai" "$PERSISTENT_BIN/paperclipai"
+    chmod +x "$PERSISTENT_BIN/paperclipai"
+    ln -sfn "$PERSISTENT_BIN/paperclipai" "$PERSISTENT_BIN/paperclip"
+    mkdir -p "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
+    ln -sfn "$PERSISTENT_BIN/paperclipai" "$HOME/.local/bin/paperclipai" 2>/dev/null || true
+    ln -sfn "$PERSISTENT_BIN/paperclipai" "$HOME/.local/bin/paperclip" 2>/dev/null || true
+    ln -sfn "$PERSISTENT_BIN/paperclipai" "/home/zerops/.local/bin/paperclipai" 2>/dev/null || true
+    ln -sfn "$PERSISTENT_BIN/paperclipai" "/home/zerops/.local/bin/paperclip" 2>/dev/null || true
+    sudo ln -sfn "$PERSISTENT_BIN/paperclipai" "/usr/local/bin/paperclipai" 2>/dev/null || true
+    sudo ln -sfn "$PERSISTENT_BIN/paperclipai" "/usr/local/bin/paperclip" 2>/dev/null || true
+fi
+
 # 2. Despliegue de Utilidad Soberana MCV Downloader (mcv-download)
 # Asegurar dependencias de sistema y navegador para MCV en ZCP limpio con guardas de idempotencia
 if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v 7z >/dev/null 2>&1 || ! command -v unrar >/dev/null 2>&1 || ! command -v megatools >/dev/null 2>&1 || ! command -v pdftotext >/dev/null 2>&1; then
