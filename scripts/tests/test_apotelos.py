@@ -98,6 +98,32 @@ class TestApotelosContracts(unittest.TestCase):
         self.assertEqual(m_booking["currency"], "USD")
         self.assertEqual(m_booking["post_conversion"][0]["priority"], "P1_TRANSACTIONAL")
 
+        # Test polymorphic application flow funnel
+        vert_app = apotelos.DynamicVerticalSpec(
+            vertical_slug="high-ticket-mentorship",
+            display_name="Mentoria Privada",
+            funnel_type=apotelos.CommercialFunnelType.APPLICATION_FLOW,
+            unique_mechanism={"name": "Metodologia 1 a 1"},
+            primary_offer={"structure": "Admision Directa"},
+            target_avatar={"pain_points": ["Comoditizacion"]}
+        )
+        manifest_app = apotelos.compile_blackboard_manifest(eco, vert_app)
+        m_app = manifest_app.messaging_spec
+        self.assertEqual(m_app["tofu"][0]["template_ref"], "application_received_confirmation")
+
+        # Test polymorphic local service funnel
+        vert_local = apotelos.DynamicVerticalSpec(
+            vertical_slug="local-audit",
+            display_name="Auditoria Presencial",
+            funnel_type=apotelos.CommercialFunnelType.LOCAL_SERVICE,
+            unique_mechanism={"name": "Inspeccion Fisica"},
+            primary_offer={"structure": "Visita en Sitio"},
+            target_avatar={"pain_points": ["Visibilidad Local"]}
+        )
+        manifest_local = apotelos.compile_blackboard_manifest(eco, vert_local)
+        m_local = manifest_local.messaging_spec
+        self.assertEqual(m_local["tofu"][0]["channel"], "whatsapp")
+
 
 class TestZeroHardcoding(unittest.TestCase):
     """Ensure no hardcoded client/brand names exist in the apotelos script."""

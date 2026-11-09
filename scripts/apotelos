@@ -187,20 +187,45 @@ def infer_funnel_type(text_sample: str) -> Tuple[str, List[str]]:
     """Infer funnel type and standard telemetry events from semantic keywords."""
     t = text_sample.lower()
 
-    if any(k in t for k in ["postula", "admis", "mentor", "1 a 1", "1:1", "high-ticket", "monopolio personal"]):
+    # 1. Check for explicit funnel declaration
+    m_funnel = re.search(r'(?:funnel|tipo\s+funnel|funnel_type):\s*([a-z_]+)', t)
+    if m_funnel:
+        declared = m_funnel.group(1).strip()
+        if hasattr(CommercialFunnelType, declared.upper()):
+            val = getattr(CommercialFunnelType, declared.upper())
+            if val == CommercialFunnelType.BOOKING_CALENDAR:
+                return val, ["Schedule", "Lead"]
+            elif val == CommercialFunnelType.DIRECT_CHECKOUT:
+                return val, ["Purchase", "InitiateCheckout"]
+            elif val == CommercialFunnelType.SUBSCRIPTION:
+                return val, ["Subscribe", "InitiateCheckout"]
+            elif val == CommercialFunnelType.CONTENT_COMMUNITY:
+                return val, ["CompleteRegistration", "Subscribe"]
+            elif val == CommercialFunnelType.APPLICATION_FLOW:
+                return val, ["ViewContent", "InitiateApplication", "Lead"]
+            elif val == CommercialFunnelType.PWYW_REPORT:
+                return val, ["ViewContent", "InitiateCheckout", "Purchase"]
+            elif val == CommercialFunnelType.LOCAL_SERVICE:
+                return val, ["ViewContent", "SchedulePhysicalVisit", "Lead"]
+            elif val == CommercialFunnelType.BOOK_WAITLIST:
+                return val, ["ViewContent", "JoinWaitlist", "Lead"]
+            return val, ["Lead", "Contact"]
+
+    # 2. Check keyword patterns
+    if any(k in t for k in ["cita", "agenda", "calendario", "booking_calendar", "consulta", "sesion", "sesión", "reserva", "booking"]):
+        return CommercialFunnelType.BOOKING_CALENDAR, ["Schedule", "Lead"]
+
+    if any(k in t for k in ["postula", "admis", "mentoría 1 a 1", "mentoria 1 a 1", "mentoría 1:1", "mentoria 1:1", "high-ticket", "monopolio personal"]):
         return CommercialFunnelType.APPLICATION_FLOW, ["ViewContent", "InitiateApplication", "Lead"]
 
     if any(k in t for k in ["paga lo que quieras", "pwyw", "aporte voluntario", "precio flexible"]):
         return CommercialFunnelType.PWYW_REPORT, ["ViewContent", "InitiateCheckout", "Purchase"]
 
-    if any(k in t for k in ["visita", "presencial", "maps", "reclamar negocio", "ficha"]):
+    if any(k in t for k in ["visita física", "visita presencial", "reclamar negocio", "ficha maps"]):
         return CommercialFunnelType.LOCAL_SERVICE, ["ViewContent", "SchedulePhysicalVisit", "Lead"]
 
-    if any(k in t for k in ["libro", "manifiesto", "saga", "lista de espera", "waitlist", "lectores"]):
+    if any(k in t for k in ["saga", "lista de espera de libro", "waitlist", "saga editorial"]):
         return CommercialFunnelType.BOOK_WAITLIST, ["ViewContent", "JoinWaitlist", "Lead"]
-
-    if any(k in t for k in ["cita", "agenda", "calendario", "consulta", "sesion", "sesión", "reserva", "booking"]):
-        return CommercialFunnelType.BOOKING_CALENDAR, ["Schedule", "Lead"]
 
     if any(k in t for k in ["suscripci", "recurren", "mensual", "membres", "saas", "software"]):
         return CommercialFunnelType.SUBSCRIPTION, ["Subscribe", "InitiateCheckout"]
@@ -1323,6 +1348,157 @@ def build_default_messaging_spec(funnel_type: str, currency: str = "USD") -> Mes
                     step_order=2, channel="whatsapp", delay_minutes=0,
                     priority=MessagePriority.P1_TRANSACTIONAL.value,
                     template_ref="appointment_reminder_pre_session"
+                )
+            ],
+            anti_collision=policy,
+            currency=currency
+        )
+    elif funnel_type == CommercialFunnelType.APPLICATION_FLOW:
+        return MessagingEcosystemSpec(
+            enabled_channels=["email", "whatsapp"],
+            tofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="application_received_confirmation"
+                )
+            ],
+            mofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=720,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="category_of_one_methodology_deep_dive"
+                ),
+                MessagingSequenceStep(
+                    step_order=2, channel="whatsapp", delay_minutes=1440,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="application_review_status_update", condition="unreviewed"
+                )
+            ],
+            bofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="whatsapp", delay_minutes=120,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="private_admission_interview_invitation", condition="approved"
+                )
+            ],
+            post_conversion=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="mentorship_private_portal_access"
+                ),
+                MessagingSequenceStep(
+                    step_order=2, channel="whatsapp", delay_minutes=5,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="concierge_direct_line"
+                )
+            ],
+            anti_collision=policy,
+            currency=currency
+        )
+    elif funnel_type == CommercialFunnelType.PWYW_REPORT:
+        return MessagingEcosystemSpec(
+            enabled_channels=["email", "whatsapp"],
+            tofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="digital_report_access_dispatch"
+                )
+            ],
+            mofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=1440,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="archetype_practical_application"
+                )
+            ],
+            bofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=2880,
+                    priority=MessagePriority.P3_PROMOTIONAL.value,
+                    template_ref="applied_assets_upgrade_invitation"
+                )
+            ],
+            post_conversion=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="order_receipt_download"
+                )
+            ],
+            anti_collision=policy,
+            currency=currency
+        )
+    elif funnel_type == CommercialFunnelType.LOCAL_SERVICE:
+        return MessagingEcosystemSpec(
+            enabled_channels=["email", "whatsapp"],
+            tofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="whatsapp", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="physical_visit_request_received"
+                )
+            ],
+            mofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="whatsapp", delay_minutes=120,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="local_audit_prep_checklist"
+                )
+            ],
+            bofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="whatsapp", delay_minutes=720,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="visit_date_time_confirmation", condition="unconfirmed"
+                )
+            ],
+            post_conversion=[
+                MessagingSequenceStep(
+                    step_order=1, channel="whatsapp", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="physical_audit_summary_dispatch"
+                ),
+                MessagingSequenceStep(
+                    step_order=2, channel="email", delay_minutes=10,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="formal_optimization_proposal"
+                )
+            ],
+            anti_collision=policy,
+            currency=currency
+        )
+    elif funnel_type == CommercialFunnelType.BOOK_WAITLIST:
+        return MessagingEcosystemSpec(
+            enabled_channels=["email", "whatsapp"],
+            tofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="manifesto_download_welcome"
+                )
+            ],
+            mofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=2880,
+                    priority=MessagePriority.P3_PROMOTIONAL.value,
+                    template_ref="chapter_excerpt_essay"
+                )
+            ],
+            bofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="whatsapp", delay_minutes=1440,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="vip_priority_reservation"
+                )
+            ],
+            post_conversion=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="vip_reader_access_pass"
                 )
             ],
             anti_collision=policy,
