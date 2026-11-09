@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
 try:
-    from pydantic import BaseModel, Field
+    from pydantic import BaseModel, Field, ConfigDict, model_validator
 except ImportError:
     print("❌ Error: pydantic is required for apotelos CLI. Run 'pip install pydantic' or execute inside container.")
     sys.exit(1)
@@ -40,6 +40,10 @@ class CommercialFunnelType:
     BOOKING_CALENDAR = "booking_calendar"    # Aesthetic clinics, professional consults
     SUBSCRIPTION = "subscription"            # SaaS, recurring memberships, box delivery
     CONTENT_COMMUNITY = "content_community"  # Paid newsletter, digital courses, academy
+    APPLICATION_FLOW = "application_flow"    # High-ticket 1:1 mentorship, private admission
+    PWYW_REPORT = "pwyw_report"              # Pay-what-you-want digital report/product
+    LOCAL_SERVICE = "local_service"          # Territorial/in-person services, physical visits
+    BOOK_WAITLIST = "book_waitlist"          # Intellectual authority, book waitlist/saga
 
 
 class MessagingChannel(str, Enum):
@@ -57,6 +61,8 @@ class MessagePriority(str, Enum):
 
 
 class MessagingSequenceStep(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
     step_order: int = Field(..., description="1-indexed sequence order")
     channel: str = Field(default=MessagingChannel.EMAIL.value, description="Delivery channel")
     delay_minutes: int = Field(default=0, description="Trigger offset delay in minutes")
@@ -66,6 +72,8 @@ class MessagingSequenceStep(BaseModel):
 
 
 class AntiCollisionPolicy(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
     cross_channel_suppression: bool = Field(default=True, description="Suppress promotional email if conversational channel active")
     frequency_cap_hours: int = Field(default=24, description="Max promotional dispatches per contact per window")
     quiet_hours_start: Optional[int] = Field(default=21, description="Local quiet hours start (e.g. 21 = 9 PM)")
@@ -74,6 +82,8 @@ class AntiCollisionPolicy(BaseModel):
 
 
 class MessagingEcosystemSpec(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
     enabled_channels: List[str] = Field(default_factory=lambda: ["email", "whatsapp"])
     tofu: List[MessagingSequenceStep] = Field(default_factory=list, description="Top of funnel awareness & capture")
     mofu: List[MessagingSequenceStep] = Field(default_factory=list, description="Middle of funnel consideration & nurture")
@@ -84,6 +94,8 @@ class MessagingEcosystemSpec(BaseModel):
 
 
 class DynamicVerticalSpec(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
     vertical_slug: str = Field(..., description="Unique kebab-case slug for this business vertical")
     display_name: str = Field(..., description="Public human-readable title of the unit")
     funnel_type: str = Field(default=CommercialFunnelType.DIRECT_CHECKOUT)
@@ -97,12 +109,47 @@ class DynamicVerticalSpec(BaseModel):
     messaging_flows: Optional[MessagingEcosystemSpec] = Field(default=None, description="Polymorphic TOFU/MOFU/BOFU messaging ecosystem specification")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Extensible attributes")
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_vertical_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Normalize conversion events from nested conversion_flow if missing at root
+            if not data.get("conversion_events") and "conversion_flow" in data:
+                cf = data["conversion_flow"]
+                if isinstance(cf, dict) and "telemetry_events" in cf:
+                    data["conversion_events"] = cf["telemetry_events"]
+            # Normalize subthemes from unique_mechanism if missing at root
+            if not data.get("subthemes") and "unique_mechanism" in data:
+                um = data["unique_mechanism"]
+                if isinstance(um, dict) and "subthemes" in um:
+                    data["subthemes"] = um["subthemes"]
+        return data
+
 
 class UniversalBrandEcosystem(BaseModel):
-    brand_slug: str = Field(..., description="Unique slug for the overarching brand or holding")
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    brand_slug: str = Field(default="universal-brand", description="Unique slug for the overarching brand or holding")
     umbrella_name: Optional[str] = Field(default=None, description="Parent entity or holding name")
     design_tokens_ref: Optional[str] = Field(default="brandbook.json", description="SSoT pointer")
     verticals: Dict[str, DynamicVerticalSpec] = Field(default_factory=dict, description="Dynamic verticals map")
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_brand_slug(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "brand_slug" not in data:
+                slug = data.get("ecosystem_slug") or data.get("ecosystem_name") or data.get("umbrella_name") or "universal-brand"
+                data["brand_slug"] = slugify(str(slug))
+            if "umbrella_name" not in data and "ecosystem_name" in data:
+                data["umbrella_name"] = str(data["ecosystem_name"])
+            if "verticals" in data and isinstance(data["verticals"], list):
+                v_dict = {}
+                for v in data["verticals"]:
+                    if isinstance(v, dict) and "vertical_slug" in v:
+                        v_dict[v["vertical_slug"]] = v
+                data["verticals"] = v_dict
+        return data
 
 
 class ApotelosManifest(BaseModel):
@@ -140,13 +187,25 @@ def infer_funnel_type(text_sample: str) -> Tuple[str, List[str]]:
     """Infer funnel type and standard telemetry events from semantic keywords."""
     t = text_sample.lower()
 
+    if any(k in t for k in ["postula", "admis", "mentor", "1 a 1", "1:1", "high-ticket", "monopolio personal"]):
+        return CommercialFunnelType.APPLICATION_FLOW, ["ViewContent", "InitiateApplication", "Lead"]
+
+    if any(k in t for k in ["paga lo que quieras", "pwyw", "aporte voluntario", "precio flexible"]):
+        return CommercialFunnelType.PWYW_REPORT, ["ViewContent", "InitiateCheckout", "Purchase"]
+
+    if any(k in t for k in ["visita", "presencial", "maps", "reclamar negocio", "ficha"]):
+        return CommercialFunnelType.LOCAL_SERVICE, ["ViewContent", "SchedulePhysicalVisit", "Lead"]
+
+    if any(k in t for k in ["libro", "manifiesto", "saga", "lista de espera", "waitlist", "lectores"]):
+        return CommercialFunnelType.BOOK_WAITLIST, ["ViewContent", "JoinWaitlist", "Lead"]
+
     if any(k in t for k in ["cita", "agenda", "calendario", "consulta", "sesion", "sesión", "reserva", "booking"]):
         return CommercialFunnelType.BOOKING_CALENDAR, ["Schedule", "Lead"]
 
     if any(k in t for k in ["suscripci", "recurren", "mensual", "membres", "saas", "software"]):
         return CommercialFunnelType.SUBSCRIPTION, ["Subscribe", "InitiateCheckout"]
 
-    if any(k in t for k in ["comunidad", "newsletter", "curso", "academia", "taller", "libro", "ebook"]):
+    if any(k in t for k in ["comunidad", "newsletter", "curso", "academia", "taller", "ebook"]):
         return CommercialFunnelType.CONTENT_COMMUNITY, ["CompleteRegistration", "Subscribe"]
 
     if any(k in t for k in ["tienda", "carrito", "comprar", "envio", "envío", "contra entrega", "cod", "flete", "calzado", "ropa", "activewear", "producto"]):
@@ -461,7 +520,7 @@ def extract_agnostic_subthemes(text: str, filename: str) -> List[str]:
     if clean_stem and len(clean_stem) > 2 and clean_stem.lower() not in ("verticales", "verticals", "dev", "documento", "archivo"):
         subthemes.append(clean_stem.title())
 
-    # 1. Terms explicitly introduced or grouped (e.g. 'términos como synthemika o numenesis')
+    # 1. Terms explicitly introduced or grouped (e.g. 'términos como metodología o doctrina')
     m_terms = re.findall(r'(?:términos|conceptos|métodos|disciplinas|subtemas|pilares)\s+como\s+([^\n\r.]+)', text, re.IGNORECASE)
     for mt in m_terms:
         for word in re.split(r'[\s,y/]+|(?:\s+o\s+)', mt):
@@ -878,16 +937,16 @@ def extract_verticals_from_directory(v_dir: Path) -> Tuple[Optional[UniversalBra
             brand_name = v_dir.name
 
     # 1. Tier 1: Look for JSON definitions first (curated specs or ecosystem.json)
+    eco_data = {}
+    eco_file = None
     for f in sorted(v_dir.iterdir()):
         if f.name.startswith("."):
             continue
         if f.suffix in (".json", ".yaml", ".yml"):
             try:
                 if f.name in ("ecosystem.json", "ecosystem.yaml", "ecosystem.yml"):
-                    data = json.loads(f.read_text(encoding="utf-8")) if f.suffix == ".json" else {}
-                    if data:
-                        eco = UniversalBrandEcosystem.model_validate(data)
-                        return eco, str(f)
+                    eco_data = json.loads(f.read_text(encoding="utf-8")) if f.suffix == ".json" else {}
+                    eco_file = str(f)
                 else:
                     data = json.loads(f.read_text(encoding="utf-8")) if f.suffix == ".json" else {}
                     if "vertical_slug" in data:
@@ -897,13 +956,24 @@ def extract_verticals_from_directory(v_dir: Path) -> Tuple[Optional[UniversalBra
             except Exception as e:
                 print(f"⚠️ Warning parsing {f.name}: {e}")
 
-    if verticals_map:
-        clean_slug = slugify(brand_name)
-        return UniversalBrandEcosystem(
-            brand_slug=clean_slug,
-            umbrella_name=brand_name.title() if brand_name else "Ecosistema Multimarca",
-            verticals=verticals_map
-        ), f"{v_dir} ({', '.join(source_files)})"
+    if eco_data or verticals_map:
+        clean_slug = slugify(brand_name) if brand_name else "universal-brand"
+        base_eco = {
+            "brand_slug": clean_slug,
+            "umbrella_name": brand_name.title() if brand_name else "Ecosistema Multimarca",
+            "verticals": verticals_map
+        }
+        if eco_data:
+            if "verticals" in eco_data and isinstance(eco_data["verticals"], dict):
+                for k, v in eco_data["verticals"].items():
+                    if k not in verticals_map:
+                        verticals_map[k] = DynamicVerticalSpec.model_validate(v) if isinstance(v, dict) else v
+            base_eco.update({k: v for k, v in eco_data.items() if k != "verticals"})
+            base_eco["verticals"] = verticals_map
+
+        eco = UniversalBrandEcosystem.model_validate(base_eco)
+        sources_desc = eco_file if (eco_file and not source_files) else f"{v_dir} ({', '.join(source_files + ([Path(eco_file).name] if eco_file else []))})"
+        return eco, sources_desc
 
     # 2. Tier 2: Deep semantic synthesis across primary source documents
     has_docs = any(f.suffix in (".docx", ".pdf", ".md", ".txt") for f in v_dir.iterdir() if not f.name.startswith("."))

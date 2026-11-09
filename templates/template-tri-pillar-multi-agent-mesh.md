@@ -73,6 +73,15 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
      * Agent heartbeat timestamp (`last_heartbeat_at`) and accumulated monthly spend (`spent_monthly_cents`) synchronized to the exact sum of `cost_events` ledger.
      * **Bifrost ➔ Paperclip Auto-Reconciliation**: `reconcile_bifrost_to_paperclip()` periodically cross-references Bifrost request logs (`db.logs`) with Paperclip (`cost_events`) to eliminate any billing drift between the LLM gateway and Paperclip.
    - **Conversational Task Operations**: Hermes exposes `paperclip_list_tasks` and `paperclip_create_task` so users can inspect and manage Paperclip Kanban issues directly from Telegram chat without opening a browser.
+10. **Vertical Workspaces & Bounded Contexts Invariant**:
+    - The development workspace (`/mnt/localstorage/{project}/dev/`) is organized as a Vertical-First hierarchy:
+      * `_shared/`: Global ecosystem topology (`ecosystem.json`) and core brandbook tokens.
+      * `verticals/`: Declarative SSoT specifications (`juan-damaren.json`, `apotelos.json`, `astrotipia.json`, `baiosfera.json`, `synthemika.json`, `seo-maps.json`).
+      * `workspaces/{vertical_slug}/`: Bounded context per vertical with strictly isolated sub-layers: `brand/` (design tokens, theme.css), `strategy/` (dossier.md, seo.md, psychology), `copy/` (landings, offers, emails), and `web/` (page specs and component contracts for PiDev).
+    - Prevents multi-brand token contamination and eliminates recursive directory scanning token waste across autonomous swarms.
+11. **Headless CrewAI Non-Blocking Telemetry Invariant**:
+    - In daemonized container environments (Hermes, ephemeral workers, CLI pipelines), the environment variables `CREWAI_TELEMETRY_OPT_OUT="true"`, `OTEL_SDK_DISABLED="true"`, and `CREWAI_DISABLE_TELEMETRY="true"` are strictly enforced.
+    - Eliminates the 20-second interactive terminal prompt (`Share this execution trace? [y/N]`), reducing swarm dispatch latency by over 50% and ensuring zero hangs in unattended execution.
 
 ---
 
