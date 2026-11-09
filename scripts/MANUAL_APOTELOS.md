@@ -130,6 +130,57 @@ verticals:
 
 ---
 
+### 3.2. Arquitectura de Dos Capas y Bifurcación Arquetípica de Marca
+
+Para evitar que todas las verticales se vean idénticas y compartan los mismos colores y tipografías (lo que destruiría la credibilidad de verticales dispares como agencias B2B o comercios locales frente a marcas personales de lujo), Apotelos establece una arquitectura de persistencia y consumo en dos capas estrictas:
+
+```
+/mnt/localstorage/{PROJECT}/dev/
+│
+├── [Capa 0: Ingestión Maestra / Diagnóstico Global (Oráculo, Chroma, Fontgen)]
+│   ├── brandbook.json             <- Tokens maestros globales del holding/fundador
+│   ├── chroma_manifest.json       <- Catálogo con los 3 ecosistemas cromáticos calculados
+│   ├── font_manifest.json         <- Catálogo con los 3 ecosistemas tipográficos calculados
+│   ├── astrobranding_*.md         <- Documento rector de identidad y psicología arquetípica
+│   ├── system_prompt.md           <- Prompt base del sistema
+│   └── ecosystem.json             <- Topología de marcas
+│   ⚠️ REGLA DE ORO: Esta raíz NUNCA SE BORRA. Es la SSoT que zcp-sync sincroniza
+│      de forma bidireccional entre Google Drive y Local Storage para mantener paridad física.
+│
+├── _shared/                       <- Topología global cross-vertical (ecosystem.json)
+├── verticals/                     <- Contratos declarativos de dominio (Blackboard SSoT)
+│
+└── workspaces/                    <- [Capa 1: Bifurcación Especializada por Vertical]
+    ├── {vertical_slug_A}/
+    │   ├── brand/                 <- Tokens especializados asignados (brandbook.json, theme.css)
+    │   ├── strategy/              <- seo.md, dossier.md, psicología arquetípica
+    │   ├── copy/                  <- landings, emails, ofertas
+    │   └── web/                   <- contratos de componentes para PiDev / Astro 5 SSR
+    └── {vertical_slug_B}/
+        └── ...
+```
+
+#### Regla de Bifurcación Arquetípica en Verticales
+Cada vertical en `dev/verticals/{slug}.json` declara cuál de los 3 ecosistemas calculados por Chroma y Fontgen adopta según su Avatar y Rol en el Ecosistema:
+1. **Vertical Personal / High-Ticket / Monopolio (ej. `juan-damaren`)**:
+   - Color: `eco_solar_architect` (Oro Solar Mate `#daa24f` + Obsidiana Cálida `#090502`).
+   - Tipografía: `eco-1` (*Quiet Luxury Air Authority* - Serif de alta jerarquía).
+2. **Vertical B2B / Ingeniería / Automatización DFY (ej. `baiosfera`, `apotelos`)**:
+   - Color: `eco_abyssal_ink` (Azules estructurales, tinta abisal y acentos cian - Rigor Vishwakarma / Agua).
+   - Tipografía: `eco-2` (*High Performance Wood Precision* - Grotesk/Mono técnica).
+3. **Vertical Mística / Cosmología / Software Arquetípico (ej. `astrotipia`, `synthemika`)**:
+   - Color: `eco_terracotta_forge` (Terracota noble, cobre forjado y ámbar ahumado - Fuego / Alquimia).
+   - Tipografía: `eco-3` (*Alchemical Chitra Vanguard* - Tipografía alquímica con ligaduras discretas).
+
+#### Resolución en Cascada para Agentes y Herramientas (Zero Token Waste)
+Cuando Hermes, CrewAI o PiDev requieren los tokens de diseño para operar sobre una vertical:
+1. **Paso 1 (Especializado)**: Intenta leer `dev/workspaces/{slug}/brand/brandbook.json`.
+2. **Paso 2 (Fallback transparente)**: Si la vertical aún no fue bifurcada en su workspace, recurre a la Capa 0 maestra en `dev/brandbook.json`.
+3. **Escritura estricta**: Los agentes constructores tienen prohibido escribir nuevos activos sueltos en la raíz de `dev/`. Todo artefacto nuevo se persiste dentro de `dev/workspaces/{slug}/[brand|strategy|copy|web]/`.
+4. **Sincronización `zcp-sync`**: Sincroniza tanto la Capa 0 maestra como la Capa 1 de `workspaces/` con Google Drive, garantizando que arranques de nuevos ZCP (`iniciar.sh`) nazcan con paridad absoluta.
+
+---
+
 ## 3.5. Ecosistema de Mensajería Polimórfica (TOFU / MOFU / BOFU & Anti-Colisión)
 
 Apotelos formaliza la orquestación omnicanal de forma desacoplada de cualquier marca o vertical:
