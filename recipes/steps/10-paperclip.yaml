@@ -25,6 +25,10 @@ services:
       PAPERCLIP_STORAGE_PROVIDER: "local_disk"
       PAPERCLIP_STORAGE_LOCAL_DIR: "/mnt/localstorage/paperclip/storage"
       PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
+      PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: "public"
+      PAPERCLIP_BIND: "lan"
+      PAPERCLIP_AUTH_BASE_URL_MODE: "explicit"
       PAPERCLIP_ADMIN_EMAIL: ${PAPERCLIP_ADMIN_EMAIL_SECRET}
       PAPERCLIP_ADMIN_PASSWORD: ${PAPERCLIP_ADMIN_PASSWORD_SECRET}
       HERMES_GATEWAY_URL: "http://hermes:8000"
