@@ -308,17 +308,21 @@ function checkGitParity() {
       repos.push(svcRepo);
     }
   } else {
-    try {
-      const entries = fs.readdirSync(baseDir, { withFileTypes: true });
-      for (const ent of entries) {
-        if (ent.isDirectory() && ent.name !== "baiosfera") {
-          const repoPath = path.join(baseDir, ent.name);
-          if (fs.existsSync(path.join(repoPath, ".git"))) {
-            repos.push(repoPath);
-          }
-        }
+    // Sovereign repositories that must maintain strict git parity with upstream
+    const sovereignRepos = ["zerops-astrobranding", "zerops-astro-skills"];
+    for (const name of sovereignRepos) {
+      const repoPath = path.join(baseDir, name);
+      if (fs.existsSync(path.join(repoPath, ".git"))) {
+        repos.push(repoPath);
       }
-    } catch (e) {}
+    }
+    // Also verify customer app repositories if actively cloned under /var/www
+    for (const appName of ["webdev", "webprod"]) {
+      const appPath = path.join(baseDir, appName);
+      if (fs.existsSync(path.join(appPath, ".git"))) {
+        repos.push(appPath);
+      }
+    }
   }
 
   let pending = false;
