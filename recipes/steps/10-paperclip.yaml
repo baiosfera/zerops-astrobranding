@@ -20,7 +20,11 @@ services:
       HOST: "0.0.0.0"
       NODE_ENV: "production"
       DATABASE_URL: ${database_connectionString}
-      PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
+      BETTER_AUTH_SECRET: ${PAPERCLIP_BETTER_AUTH_SECRET}
+      PAPERCLIP_TOOL_ACTION_SIGNING_SECRET: ${PAPERCLIP_SIGNING_SECRET}
       PAPERCLIP_STORAGE_PROVIDER: "local_disk"
       PAPERCLIP_STORAGE_LOCAL_DIR: "/mnt/localstorage/paperclip/storage"
-      PAPERCLIP_SECRETS_MASTER_KEY_FILE: "/mnt/localstorage/paperclip/secrets/master.key"
+      PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
+      PAPERCLIP_ADMIN_EMAIL: ${PAPERCLIP_ADMIN_EMAIL_SECRET}
+      PAPERCLIP_ADMIN_PASSWORD: ${PAPERCLIP_ADMIN_PASSWORD_SECRET}
+      HERMES_GATEWAY_URL: "http://hermes:8000"
