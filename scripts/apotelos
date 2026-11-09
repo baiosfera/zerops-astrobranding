@@ -1705,56 +1705,90 @@ def cmd_list(args):
 
 
 def cmd_test(args):
-    """Physical behavior verification sensor for Apotelos extraction integrity."""
-    target_dir = Path("/var/www/baiosfera/PROYECTOS/DAMAREN/verticales")
-    if not target_dir.exists():
-        target_dir = Path("/var/www/localstorage/MentorIA/verticales")
+    """Agnostic physical behavior verification sensor for Apotelos extraction integrity."""
+    import tempfile
 
-    if not target_dir.exists():
-        print("⚠️ Test skipped: No target directory available for validation.")
+    with tempfile.TemporaryDirectory(prefix="apotelos_test_") as tmp_dir:
+        t_path = Path(tmp_dir)
+
+        # 1. Monograph file (Framework thesis with subthemes, zero sales offers)
+        (t_path / "Que es Metodologia Nexus.md").write_text(
+            "# Qué es Metodología Nexus\n\n"
+            "La Metodología Nexus integra tres dimensiones fundamentales:\n"
+            "- Resonancia Cuántica\n"
+            "- Malla Óntica\n"
+            "- Sintaxis Causal\n\n"
+            "Doctrina teórica sin venta directa.\n",
+            encoding="utf-8"
+        )
+
+        # 2. Portfolio table (Umbrella brand with offering format + secondary platform)
+        (t_path / "Portafolio de Marcas.md").write_text(
+            "# Marcas y Proyectos\n\n"
+            "| Marca / Línea | Descripción |\n"
+            "|---|---|\n"
+            "| Aurelius Vance / Consultoría | Consultoría estratégica de monopolio de categoría. Web: aureliusvance.com |\n"
+            "| CloudSphere | Plataforma B2B de automatización cloud. Web: cloudsphere.io |\n",
+            encoding="utf-8"
+        )
+
+        # 3. Dedicated Service Landing with Pricing Tiers
+        (t_path / "Servicio-Auditoria-Cloud.md").write_text(
+            "# Auditoría Cloud y Optimización\n\n"
+            "Servicio para empresas con problemas de rendimiento.\n"
+            "Ruta: aureliusvance.com/auditoria-cloud\n\n"
+            "Estructura de precios:\n"
+            "- Diagnóstico gratuito: $0 USD (revisión preliminar)\n"
+            "- Paquete Básico: $200 - $400 USD (optimización inicial)\n"
+            "- Configuración Completa: $600 - $1500 USD (migración y CDN)\n\n"
+            "Problema: Latencia alta y sobrecostos en servidores.\n",
+            encoding="utf-8"
+        )
+
+        eco, sinfo = discover_ecosystem(target=str(t_path))
+
+        errors = []
+        if not eco or not eco.verticals:
+            print("❌ APOTELOS AGNOSTIC INTEGRITY SENSOR FAILED: No verticals discovered.")
+            sys.exit(1)
+
+        if "aurelius-vance" not in eco.verticals:
+            errors.append("Falta vertical umbrella 'aurelius-vance'")
+        if "cloud-y-optimizacion" not in eco.verticals:
+            errors.append("Falta vertical de servicio 'cloud-y-optimizacion'")
+        if "cloudsphere" not in eco.verticals:
+            errors.append("Falta vertical secundaria 'cloudsphere'")
+        if "consultoria" in eco.verticals:
+            errors.append("Error de fragmentación: 'consultoria' fue separada de 'aurelius-vance'")
+        if "metodologia-nexus" in eco.verticals:
+            errors.append("Error de jerarquía: 'metodologia-nexus' fue tratada como vertical en vez de subtema")
+
+        av = eco.verticals.get("aurelius-vance")
+        if av:
+            if not getattr(av, "subthemes", None) or "Metodologia Nexus" not in av.subthemes:
+                errors.append(f"Subtemas no detectados en aurelius-vance: {getattr(av, 'subthemes', [])}")
+
+        srv = eco.verticals.get("cloud-y-optimizacion")
+        if srv:
+            tiers = srv.primary_offer.get("pricing_tiers", [])
+            if not tiers:
+                errors.append("No se extrajeron los pricing tiers agnósticos del servicio")
+
+        cs = eco.verticals.get("cloudsphere")
+        if cs:
+            if cs.custom_domain != "cloudsphere.io":
+                errors.append(f"Dominio incorrecto para cloudsphere: {cs.custom_domain}")
+
+        if errors:
+            print("❌ APOTELOS AGNOSTIC INTEGRITY SENSOR FAILED:")
+            for e in errors:
+                print(f"  • {e}")
+            sys.exit(1)
+
+        print("✅ APOTELOS AGNOSTIC INTEGRITY SENSOR PASSED: 100% universal domain compliance.")
+        print(f"  • Superficies verificadas ({len(eco.verticals)}): {', '.join(eco.verticals.keys())}")
+        print(f"  • Subtemas extraídos dinámicamente: {', '.join(av.subthemes)}")
         sys.exit(0)
-
-    eco, sinfo = discover_ecosystem(target=str(target_dir))
-
-    errors = []
-    if "juan-damaren" not in eco.verticals:
-        errors.append("Falta vertical 'juan-damaren'")
-    if "gbp-seo" not in eco.verticals:
-        errors.append("Falta vertical 'gbp-seo'")
-    if "baiosfera" not in eco.verticals:
-        errors.append("Falta vertical 'baiosfera'")
-    if "mentoria" in eco.verticals:
-        errors.append("Error de fragmentación: 'mentoria' fue separada de 'juan-damaren'")
-    if "astrotipia" in eco.verticals:
-        errors.append("Error de jerarquía: 'astrotipia' fue tratada como vertical en vez de subtema")
-
-    jd = eco.verticals.get("juan-damaren")
-    if jd:
-        if not getattr(jd, "subthemes", None) or "Astrotipia" not in jd.subthemes:
-            errors.append("Faltan subtemas metodológicos en 'juan-damaren'")
-        if jd.custom_domain != "juandamaren.com":
-            errors.append(f"Dominio incorrecto para juan-damaren: {jd.custom_domain}")
-
-    gbp = eco.verticals.get("gbp-seo")
-    if gbp:
-        if gbp.custom_domain != "juandamaren.com/gbp-seo":
-            errors.append(f"Ruta incorrecta para gbp-seo: {gbp.custom_domain}")
-
-    baio = eco.verticals.get("baiosfera")
-    if baio:
-        if baio.custom_domain != "baiosfera.com":
-            errors.append(f"Dominio incorrecto para baiosfera: {baio.custom_domain}")
-
-    if errors:
-        print("❌ APOTELOS INTEGRITY SENSOR FAILED:")
-        for e in errors:
-            print(f"  • {e}")
-        sys.exit(1)
-
-    print("✅ APOTELOS INTEGRITY SENSOR PASSED: 100% domain compliance.")
-    print(f"  • Superficies verificadas ({len(eco.verticals)}): {', '.join(eco.verticals.keys())}")
-    print(f"  • Subtemas juan-damaren: {', '.join(jd.subthemes)}")
-    sys.exit(0)
 
 
 def cmd_add_vertical(args):
