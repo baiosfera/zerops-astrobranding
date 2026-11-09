@@ -581,12 +581,14 @@ fi
 
 # 2b. Aprovisionar catálogo soberano de skills desde GitHub (zerops-astro-skills)
 SKILLS_REPO_URL="https://github.com/baiosfera/zerops-astro-skills.git"
+[ -n "${GITHUB_TOKEN_BAIOSFERA:-}" ] && SKILLS_REPO_URL="https://x-access-token:${GITHUB_TOKEN_BAIOSFERA}@github.com/baiosfera/zerops-astro-skills.git"
 SKILLS_LOCAL_DIR="/var/www/zerops-astro-skills"
 if [ ! -d "$SKILLS_LOCAL_DIR/.git" ]; then
-    echo "• [2b/4] Sincronizando catálogo de skills soberanas desde GitHub ($SKILLS_REPO_URL)..."
+    echo "• [2b/4] Sincronizando catálogo de skills soberanas desde GitHub..."
     git clone --depth 1 "$SKILLS_REPO_URL" "$SKILLS_LOCAL_DIR" 2>/dev/null || true
 else
     echo "• [2b/4] Actualizando skills soberanas desde GitHub..."
+    [ -n "${GITHUB_TOKEN_BAIOSFERA:-}" ] && git -C "$SKILLS_LOCAL_DIR" remote set-url origin "$SKILLS_REPO_URL" 2>/dev/null || true
     git -C "$SKILLS_LOCAL_DIR" fetch origin main 2>/dev/null || true
     git -C "$SKILLS_LOCAL_DIR" reset --hard origin/main 2>/dev/null || git -C "$SKILLS_LOCAL_DIR" pull --ff-only 2>/dev/null || true
 fi
