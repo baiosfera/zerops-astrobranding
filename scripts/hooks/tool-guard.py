@@ -3512,6 +3512,12 @@ def run_tests():
             })
             assert res_gate14_allow.get("decision") == "allow", f"Expected Gate 14 allow on deployed bifrost, got {res_gate14_allow}"
             print("✓ Test 73 Passed: Gate 14 allows linear-cli Done when services are deployed (BAI-454)")
+
+            # Test 74: Paperclip Skill Trigger Radar & Invariant Persistence (BAI-455)
+            pc_matches = detect_skills_in_prompt("vamos a coordinar el organigrama y spend caps en paperclip con hermes_gateway")
+            assert any(s[0] == "paperclip" for s in pc_matches), f"Expected paperclip match in detect_skills_in_prompt, got {pc_matches}"
+            assert os.path.exists("/mnt/localstorage/paperclip/instances/default/config.json") or os.path.exists("/home/zerops/.paperclip"), "Paperclip home persistence invariant missing"
+            print("✓ Test 74 Passed: Paperclip Skill Trigger Radar & Invariant Persistence (BAI-455)")
         finally:
             if cache_backup:
                 with open(test_cache, "w") as f:
