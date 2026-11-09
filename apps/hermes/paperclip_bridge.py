@@ -15,6 +15,8 @@ logger = logging.getLogger("hermes.paperclip_bridge")
 # Default UUIDs for Baiosfera in Paperclip SSoT
 DEFAULT_COMPANY_ID = "2c915432-4c84-4b01-b90b-ee7482147eef"
 DEFAULT_HERMES_AGENT_ID = "22222222-2222-2222-2222-222222222222"
+DEFAULT_PI_AGENT_ID = "33333333-3333-3333-3333-333333333333"
+DEFAULT_CREWAI_AGENT_ID = "44444444-4444-4444-4444-444444444444"
 DEFAULT_RESPONSIBLE_USER_ID = "xy80KZka8U4baAQBJwmSzEVOFjd2GRby"
 
 _DB_CONN_STR: Optional[str] = None
@@ -315,3 +317,225 @@ async def create_paperclip_issue(
     except Exception as err:
         logger.warning("Error creating Paperclip issue: %s", err)
         return None
+
+async def register_paperclip_agent(
+    name: str,
+    title: str = "",
+    role: str = "worker",
+    adapter_type: str = "hermes_gateway",
+    capabilities: str = "",
+    budget_monthly_cents: int = 50000,
+    reports_to: Optional[str] = DEFAULT_HERMES_AGENT_ID,
+    company_id: str = DEFAULT_COMPANY_ID,
+) -> Optional[Dict[str, Any]]:
+    """
+    Registers a permanent autonomous agent in Paperclip's Org Chart.
+    """
+    db_url = get_paperclip_db_url()
+    if not db_url:
+        return None
+
+    try:
+        import asyncpg
+        conn = await asyncpg.connect(db_url, timeout=5.0)
+
+        agent_id = uuid.uuid4()
+        reports_to_uuid = uuid.UUID(reports_to) if reports_to else None
+
+        adapter_config = {
+            "apiBaseUrl": "http://hermes:8000",
+            "apiKey": "hermes-internal-key",
+            "timeoutSec": 600,
+            "sessionKeyStrategy": "issue",
+            "dangerouslyAllowInsecureRemoteHttp": True,
+        }
+        if adapter_type == "pi_local":
+            adapter_config = {
+                "command": "pidev",
+                "model": "bifrost/auto",
+                "thinking": "medium",
+                "env": {
+                    "OPENAI_BASE_URL": "http://bifrost:8080/v1",
+                    "OPENAI_API_KEY": "vk-bifrost",
+                },
+            }
+
+        runtime_config = {
+            "heartbeat": {
+                "enabled": True,
+                "intervalSec": 300,
+                "cooldownSec": 10,
+                "wakeOnDemand": True,
+                "maxConcurrentRuns": 5,
+                "skipTimerWhenNoActionableWork": True,
+            }
+        }
+
+        await conn.execute(
+            """
+            INSERT INTO agents (
+                id, company_id, name, role, title, status, lifecycle_state,
+                reports_to, capabilities, adapter_type, adapter_config,
+                runtime_config, budget_monthly_cents, created_at, updated_at
+            ) VALUES (
+                $1, $2, $3, $4, $5, 'idle', 'ready',
+                $6, $7, $8, $9::jsonb,
+                $10::jsonb, $11, NOW(), NOW()
+            )
+            """,
+            agent_id,
+            uuid.UUID(company_id),
+            name,
+            role,
+            title or f"{name} Specialist",
+            reports_to_uuid,
+            capabilities or f"Autonomous {name} agent for {title}",
+            adapter_type,
+            json.dumps(adapter_config),
+            json.dumps(runtime_config),
+            budget_monthly_cents,
+        )
+
+        # Log creation activity
+        await conn.execute(
+            """
+            INSERT INTO activity_log (
+                id, company_id, actor_type, actor_id, action, entity_type, entity_id,
+                agent_id, details, created_at, responsible_user_id
+            ) VALUES (
+                gen_random_uuid(), $1, 'agent', $2, 'agent.registered', 'agent', $3,
+                $4, $5::jsonb, NOW(), $6
+            )
+            """,
+            uuid.UUID(company_id),
+            str(reports_to or agent_id),
+            str(agent_id),
+            reports_to_uuid or agent_id,
+            json.dumps({"name": name, "role": role, "title": title, "adapter_type": adapter_type}),
+            DEFAULT_RESPONSIBLE_USER_ID,
+        )
+
+        await conn.close()
+        logger.info("🤖 [Paperclip Bridge] Registered new permanent agent %s (%s) in Org Chart", name, role)
+        return {
+            "id": str(agent_id),
+            "name": name,
+            "role": role,
+            "title": title,
+            "reports_to": str(reports_to) if reports_to else None,
+            "status": "idle",
+        }
+    except Exception as err:
+        logger.warning("Error registering Paperclip agent: %s", err)
+        return None
+
+async def record_crewai_execution(
+    mission: str,
+    roles: Optional[List[Any]] = None,
+    skills: Optional[List[str]] = None,
+    output_summary: str = "",
+    duration_sec: float = 0.0,
+    success: bool = True,
+    company_id: str = DEFAULT_COMPANY_ID,
+    agent_id: str = DEFAULT_CREWAI_AGENT_ID,
+) -> bool:
+    """
+    Records an ephemeral CrewAI swarm execution into Paperclip telemetry
+    under the persistent CrewAI Engine worker (44444444-4444-4444-4444-444444444444).
+    """
+    db_url = get_paperclip_db_url()
+    if not db_url:
+        return False
+
+    try:
+        import asyncpg
+        conn = await asyncpg.connect(db_url, timeout=5.0)
+
+        run_id = uuid.uuid4()
+        agent_uuid = uuid.UUID(agent_id)
+        company_uuid = uuid.UUID(company_id)
+
+        clean_roles = roles if roles and isinstance(roles, list) else []
+        clean_skills = skills if skills and isinstance(skills, list) else []
+        summary = (output_summary or "Execution completed")[:500]
+
+        usage_payload = json.dumps({
+            "duration_sec": round(duration_sec, 2),
+            "roles_count": len(clean_roles),
+            "skills": clean_skills,
+            "cost_cents": 0,
+        })
+        result_payload = json.dumps({
+            "status": "succeeded" if success else "failed",
+            "summary": summary,
+        })
+        activity_details = json.dumps({
+            "mission": (mission or "")[:200],
+            "roles": [r.get("role") if isinstance(r, dict) else str(r) for r in clean_roles],
+            "skills": clean_skills,
+            "duration_sec": round(duration_sec, 2),
+            "success": success,
+        })
+
+        # 1. Insert into heartbeat_runs under CrewAI Engine worker
+        await conn.execute(
+            """
+            INSERT INTO heartbeat_runs (
+                id, company_id, agent_id, invocation_source, status, trigger_detail,
+                started_at, finished_at, stdout_excerpt, usage_json, result_json,
+                scope_kind, runtime_mode, cost_accounting_pending, process_loss_retry_count,
+                continuation_attempt, scheduled_retry_attempt, accounting_attempt_count, next_event_seq
+            ) VALUES (
+                $1, $2, $3, 'crewai_swarm', $4, $5,
+                NOW() - ($6 || ' seconds')::interval, NOW(), $7, $8::jsonb,
+                $9::jsonb, 'company', 'direct', false, 0, 0, 0, 0, 1
+            )
+            """,
+            run_id,
+            company_uuid,
+            agent_uuid,
+            "succeeded" if success else "failed",
+            f"CrewAI Swarm: {mission[:120]}",
+            str(max(0.1, duration_sec)),
+            summary,
+            usage_payload,
+            result_payload,
+        )
+
+        # 2. Insert into activity_log
+        await conn.execute(
+            """
+            INSERT INTO activity_log (
+                id, company_id, actor_type, actor_id, action, entity_type, entity_id,
+                agent_id, run_id, details, created_at, responsible_user_id
+            ) VALUES (
+                gen_random_uuid(), $1, 'agent', $2, 'crewai.swarm_executed', 'agent', $2,
+                $3, $4, $5::jsonb, NOW(), $6
+            )
+            """,
+            company_uuid,
+            str(agent_id),
+            agent_uuid,
+            run_id,
+            activity_details,
+            DEFAULT_RESPONSIBLE_USER_ID,
+        )
+
+        # 3. Update agent heartbeat
+        await conn.execute(
+            """
+            UPDATE agents
+            SET last_heartbeat_at = NOW(),
+                status = 'idle'
+            WHERE id = $1
+            """,
+            agent_uuid,
+        )
+
+        await conn.close()
+        logger.info("⚡ [Paperclip Bridge] Recorded CrewAI swarm execution for agent %s in %ss", agent_id, duration_sec)
+        return True
+    except Exception as err:
+        logger.warning("Error recording CrewAI execution in Paperclip: %s", err)
+        return False
+

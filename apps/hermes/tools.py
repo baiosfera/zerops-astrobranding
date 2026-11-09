@@ -965,26 +965,56 @@ get_makeup_bookings = get_store_bookings
 
 async def run_crew_ai(mission: str, roles: list = None, tier: str = "free", output_schema: dict = None, skills: list = None) -> str:
     """Dispatches a dynamic in-memory CrewAI swarm or multi-skill CoHaLo crew with optional Pydantic validation."""
+    t0 = time.time()
     try:
         import asyncio
         from crews.crew_factory import CrewFactory
         
         # If specific sovereign skills are requested (e.g. ['seo-aeo-geo', 'automation-engine'])
         if skills and isinstance(skills, list) and len(skills) > 0:
-            return await asyncio.to_thread(CrewFactory.execute_skills_crew, skill_names=skills, goal=mission, tier=tier)
-            
-        # Standard dynamic role-based crew with optional Pydantic schema
-        clean_roles = roles if roles and isinstance(roles, list) else [
-            {"role": "Especialista Principal", "goal": mission, "backstory": "Experto técnico senior"}
-        ]
-        return await asyncio.to_thread(
-            CrewFactory.create_dynamic_crew,
-            goal=mission,
-            roles=clean_roles,
-            tier=tier,
-            output_schema=output_schema
-        )
+            result = await asyncio.to_thread(CrewFactory.execute_skills_crew, skill_names=skills, goal=mission, tier=tier)
+        else:
+            # Standard dynamic role-based crew with optional Pydantic schema
+            clean_roles = roles if roles and isinstance(roles, list) else [
+                {"role": "Especialista Principal", "goal": mission, "backstory": "Experto técnico senior"}
+            ]
+            result = await asyncio.to_thread(
+                CrewFactory.create_dynamic_crew,
+                goal=mission,
+                roles=clean_roles,
+                tier=tier,
+                output_schema=output_schema
+            )
+        
+        # Telemetry to Paperclip (fire-and-forget under CrewAI Engine worker)
+        try:
+            from paperclip_bridge import record_crewai_execution
+            asyncio.create_task(record_crewai_execution(
+                mission=mission,
+                roles=roles,
+                skills=skills,
+                output_summary=str(result),
+                duration_sec=time.time() - t0,
+                success=True
+            ))
+        except Exception:
+            pass
+
+        return result
     except Exception as e:
+        # Telemetry to Paperclip on failure
+        try:
+            from paperclip_bridge import record_crewai_execution
+            asyncio.create_task(record_crewai_execution(
+                mission=mission,
+                roles=roles,
+                skills=skills,
+                output_summary=f"Error: {str(e)}",
+                duration_sec=time.time() - t0,
+                success=False
+            ))
+        except Exception:
+            pass
         return f"❌ Error ejecutando CrewAI: {str(e)}"
 
 async def extract_structured_data(fields_spec: dict, user_input: str, tier: str = "free") -> str:
@@ -1089,6 +1119,31 @@ async def paperclip_create_task(title: str, description: str = "", priority: str
         return "❌ No se pudo crear la tarea en Paperclip."
     except Exception as e:
         return f"❌ Error creando tarea en Paperclip: {str(e)}"
+
+async def paperclip_register_agent(
+    name: str,
+    title: str = "",
+    role: str = "worker",
+    adapter_type: str = "hermes_gateway",
+    capabilities: str = "",
+    budget_monthly_cents: int = 50000,
+) -> str:
+    """Registers a new permanent agent in Paperclip's Org Chart under Hermes."""
+    try:
+        from paperclip_bridge import register_paperclip_agent
+        res = await register_paperclip_agent(
+            name=name,
+            title=title,
+            role=role,
+            adapter_type=adapter_type,
+            capabilities=capabilities,
+            budget_monthly_cents=budget_monthly_cents,
+        )
+        if res:
+            return f"✅ Agente registrado con éxito en Paperclip:\n• Nombre: **{res['name']}**\n• Rol: `{res['role']}`\n• Título: {res['title']}\n• ID: `{res['id']}`\n• Visible en el Organigrama de Paperclip."
+        return "❌ No se pudo registrar el agente en Paperclip."
+    except Exception as e:
+        return f"❌ Error registrando agente en Paperclip: {str(e)}"
 
 # ==============================================================================
 # Sovereign Engram Memory Engine (Multi-Agent LocalStorage & Cross-Container SSoT)
