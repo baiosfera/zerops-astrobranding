@@ -60,6 +60,10 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
 2. **Zero-Leak Budgeting**: Default routing uses FreeLLMAPI ($0). Paperclip spend caps enforce hard stop conditions.
 3. **Decoupled Runtimes**: Every service runs in dedicated Incus LXC containers with non-blocking threading.
 4. **Ephemeral On-Demand Workers**: Compute-heavy workloads (video rendering, large-scale scrapers) use ephemeral containers spawned via recipe steps, executed, and deleted to maintain zero idle cost.
+5. **Dynamic Domain Agnosticism & DB Introspection**: Hermes operates business-agnostically. It strictly forbids hardcoding catalogs, dummy stores, or static products (e.g. no hardcoded clothes, makeup, or services) and equally forbids rigid anti-commerce prohibitions. Instead, it introspects live PostgreSQL 18 tables (`information_schema.tables`, `mentorships`, `products`, `orders`, `bookings`) via `execute_query` to adapt dynamically to any business model (Bioenka agroecology, Juan Damaren 1:1 mentorships, digital consulting).
+6. **CrewAI 1.15.30+ Pydantic Output Bridge**: Dynamic swarms can enforce strict Pydantic schemas at runtime via `output_pydantic` on terminal tasks by supplying `output_schema` to `run_crew_ai`.
+7. **Bifrost Governance SSoT Invariant**: When `config_store: postgres` is enabled, PostgreSQL table `governance_virtual_keys` is the exclusive source of truth for Virtual Keys (`vk-production-main`, `vk-hermes-agent`, `vk-crewai`, `vk-pidev`, `vk-pydanticai`). The local `config.json` is not dynamically watched or re-read by the runtime.
+8. **Telegram Multi-Media Gateway**: Handles both photos and documents (`filters.Document.ALL`) persisted to `/mnt/localstorage/uploads/` with single-instance polling conflict protection.
 
 ---
 

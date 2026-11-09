@@ -67,11 +67,30 @@ En la realidad empresarial:
 
 ### Orden de Descubrimiento en Cascada (Cascading Discovery)
 Apotelos resuelve la configuración de marcas y verticales en el siguiente orden estricto:
-1. `/.apotelos/ecosystem.yaml` (o `.json`): Archivo nativo del proyecto.
-2. `/brandbook.json`: Bloque opcional `"verticals": { ... }`.
-3. `$LOCAL_STORAGE_PATH/brand/ecosystem.yaml`: Volumen NVMe persistente en Zerops.
-4. `/var/www/baiosfera/PROYECTOS/{PROJECT_NAME}/ecosystem.yaml`: Drive SSoT.
-5. **Fallback Zero-Config**: Si no existe ningún archivo, Apotelos sintetiza automáticamente una `root_vertical` para permitir arranques inmediatos sin configuración previa.
+1. `dev/verticals/ecosystem.json` (o specs curadas en `.json`): Archivos aprobados para desarrollo.
+2. `/.apotelos/ecosystem.yaml` (o `.json`): Archivo nativo del proyecto.
+3. `/brandbook.json`: Bloque opcional `"verticals": { ... }`.
+4. `$LOCAL_STORAGE_PATH/brand/ecosystem.yaml`: Volumen NVMe persistente en Zerops.
+5. `/var/www/baiosfera/PROYECTOS/{PROJECT_NAME}/ecosystem.yaml`: Drive SSoT.
+6. **Escaneo de Documentos Crudos (`verticales/`)**: Insumos `.docx`, `.pdf`, `.md`.
+7. **Fallback Zero-Config**: Si no existe ningún archivo, síntesis de `root_vertical` para arranques iniciales.
+
+### 3.1 Ciclo Soberano de Descubrimiento y Aprobación Humana (Anti-Autocracia)
+
+El descubrimiento de verticales sigue un ciclo estricto de 3 etapas que previene alucinaciones y carpetas huérfanas:
+
+1. **Etapa 1: Escaneo Profundo de Insumos Crudos (`apotelos list <FOLDER>`)**:
+   - Se ejecuta sobre el directorio de insumos crudos del cliente (e.g. `/var/www/baiosfera/PROYECTOS/{PROJECT}/verticales/`).
+   - Apotelos escanea todos los documentos (`.docx`, `.pdf`, `.md`, `.txt`), resuelve entidades en tablas, monografías conceptuales y landings de servicio con pricing tiers.
+   - **Salida**: Muestra la lista de posibles verticales candidatas descubiertas en el corpus. **No escribe ni muta nada en `dev/` aún.**
+
+2. **Etapa 2: Gate de Autorización y Curaduría Humana (Human-in-the-Loop)**:
+   - El operador o fundador humano revisa las candidatas descubiertas, decide cuáles se activan, ajusta sus nombres, dominios o subtemas.
+   - **Regla inmutable**: Ningún agente puede auto-declarar o materializar verticales en `dev/` sin autorización explícita del humano.
+
+3. **Etapa 3: Materialización Curada en `<PROJECT>/dev/verticals/`**:
+   - Una vez recibida la aprobación explícita, se escriben **única y exclusivamente los contratos JSON limpios y curados** (`ecosystem.json`, `<slug>.json`) en `<PROJECT>/dev/verticals/`.
+   - **Prohibición física**: Nunca copiar archivos binarios crudos (`.docx`, `.pdf`) a `dev/verticals/`. Este directorio es la SSoT técnica consumida directamente por los agentes constructores y programadores (Hermes, CrewAI, Gentle-Pi).
 
 ### Formato de `/.apotelos/ecosystem.yaml`
 ```yaml
