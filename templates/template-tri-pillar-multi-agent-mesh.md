@@ -98,7 +98,8 @@ Paperclip AI and Hermes run with zero data loss across container restarts, stop/
      * **Lean Affirmative Guidance**: Explicitly defines role, identity, and affirmative operating principles.
      * **Decoupled API Tool Schemas**: Tools are passed strictly in the API `tools` array. Never duplicate tool definitions in plaintext markdown inside the system prompt.
      * **Zero Pink Elephants**: Zero negative prohibitions ("never do X", "do not output Y") that prime autoregressive attention on forbidden tokens.
-     * **Proportional Intent Handling**: Conceptual and hypothetical questions receive architectural explanations without tool calls; operational requests trigger tools to collect physical proof.
+     * **Proportional Intent Handling**: Conceptual and hypothetical questions receive architectural explanations in 1-3 concise paragraphs without tool calls; operational requests trigger tools to collect physical proof.
+     * **Executive Brevity & Code Policy**: Conversational responses remain brief and natural. Scripts, playbooks, and code files are authored to workspace/git via tools (`write_file`, `pidev_dispatch_task`), reserving raw code blocks in chat strictly for explicit user requests.
      * **Dynamic Self-Discovery**: Inspect live services (`list_zerops_services`) and database tables (`execute_query`) dynamically rather than hardcoding pre-existing catalogs or service stacks.
 
 
