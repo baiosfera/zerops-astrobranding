@@ -26,8 +26,8 @@ zerops:
         HOST: "0.0.0.0"
         NODE_ENV: "production"
         NATS_URL: ${nats_connectionString}
-        ZEROPS_READ_ONLY: "true"
-        ZEROPS_OBSERVATIONAL_ONLY: "true"
+        PI_READ_ONLY: "true"
+        PI_OBSERVATIONAL_ONLY: "true"
         GENTLE_SHELL_HOME: "/mnt/localstorage/pidev/gentle-shell"
         PI_CODING_AGENT_DIR: "/mnt/localstorage/pidev/pi"
       start: gentle-shell --mode rpc || sleep infinity
