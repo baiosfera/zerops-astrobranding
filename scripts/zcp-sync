@@ -47,8 +47,9 @@ list_projects() {
 
 sync_project() {
     local proj="$1"
+    local dest_proj="${2:-$proj}"
     local drive_dir="$DRIVE_BASE/$proj"
-    local storage_dir="$STORAGE_BASE/$proj"
+    local storage_dir="$STORAGE_BASE/$dest_proj"
 
     # Resolver coincidencia insensible a mayúsculas y subcadenas si no coincide exacto
     if [ ! -d "$drive_dir" ]; then
@@ -59,14 +60,17 @@ sync_project() {
             if [ "$d_norm" = "$p_norm" ] || [[ "$d_norm" == *"$p_norm"* ]] || [[ "$p_norm" == *"$d_norm"* ]]; then
                 drive_dir="$d"
                 proj="$(basename "$d")"
-                storage_dir="$STORAGE_BASE/$proj"
+                if [ -z "${2:-}" ]; then
+                    dest_proj="$proj"
+                fi
+                storage_dir="$STORAGE_BASE/$dest_proj"
                 break
             fi
         done
     fi
 
     echo "------------------------------------------------------------"
-    echo "  🔄 Sincronizando proyecto: [$proj]"
+    echo "  🔄 Sincronizando proyecto: Drive [$proj] <---> Storage [$dest_proj]"
     echo "  📁 Drive:   $drive_dir"
     echo "  💾 Storage: $storage_dir"
     echo "------------------------------------------------------------"
@@ -81,7 +85,7 @@ sync_project() {
     echo "• [2/2] Respaldando cambios de Local Storage hacia Google Drive..."
     rsync -au "$storage_dir/" "$drive_dir/"
 
-    echo "✅ Proyecto [$proj] sincronizado exitosamente en ambas direcciones."
+    echo "✅ Sincronización exitosa: Drive [$proj] <---> Storage [$dest_proj]."
 }
 
 sync_all() {
@@ -119,17 +123,30 @@ case "${1:-}" in
         sync_all
         ;;
     --help|-h|help)
-        echo "Uso: zcp-sync [PROYECTO|--all|--list]"
+        echo "Uso: zcp-sync [PROYECTO_DRIVE [DESTINO_STORAGE]|--all|--list]"
         echo "Ejemplos:"
-        echo "  zcp-sync              # Sincroniza el proyecto activo (\$PROJECT_NAME)"
-        echo "  zcp-sync ELPLACERDC   # Sincroniza el proyecto ELPLACERDC"
-        echo "  zcp-sync --list       # Lista todos los proyectos disponibles"
-        echo "  zcp-sync --all        # Sincroniza todos los proyectos"
+        echo "  zcp-sync                        # Sincroniza el proyecto activo (\$PROJECT_NAME)"
+        echo "  zcp-sync ELPLACERDC             # Sincroniza ELPLACERDC (Drive <-> Storage idénticos)"
+        echo "  zcp-sync DAMAREN MentorIA       # Sincroniza Drive (DAMAREN) <-> Storage (MentorIA)"
+        echo "  zcp-sync DAMAREN:MentorIA      # Sintaxis alternativa origen:destino"
+        echo "  zcp-sync --list                 # Lista todos los proyectos disponibles"
+        echo "  zcp-sync --all                  # Sincroniza todos los proyectos"
         ;;
     *)
         TARGET="${1:-}"
+        DEST_TARGET="${2:-}"
+        if [[ "$TARGET" == *":"* ]]; then
+            DEST_TARGET="${TARGET#*:}"
+            TARGET="${TARGET%%:*}"
+        fi
+
         if [ -z "$TARGET" ]; then
-            TARGET="${PROJECT_NAME:-${CLIENT_NAME:-${ENGRAM_PROJECT:-}}}"
+            if [ -n "${CLIENT_NAME:-}" ] && [ -n "${PROJECT_NAME:-}" ] && [ "$CLIENT_NAME" != "$PROJECT_NAME" ]; then
+                TARGET="$CLIENT_NAME"
+                DEST_TARGET="$PROJECT_NAME"
+            else
+                TARGET="${PROJECT_NAME:-${CLIENT_NAME:-${ENGRAM_PROJECT:-}}}"
+            fi
         fi
         if [ -z "$TARGET" ]; then
             echo "ℹ️ No se especificó proyecto ni existe \$PROJECT_NAME en el entorno."
@@ -139,11 +156,14 @@ case "${1:-}" in
         fi
 
         ACTIVE_PROJ="${PROJECT_NAME:-${CLIENT_NAME:-${ENGRAM_PROJECT:-}}}"
-        if [ -n "$ACTIVE_PROJ" ] && [ "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')" != "$(echo "$ACTIVE_PROJ" | tr '[:lower:]' '[:upper:]')" ]; then
-            echo "ℹ️ Aviso de Gobernanza: El proyecto solicitado [$TARGET] difiere de la marca activa en este runtime [$ACTIVE_PROJ]."
-            echo "   (Prioridad arquitectónica: una marca activa por localstorage. Procediendo por solicitud explícita sin bloqueo...)"
+        if [ -n "$DEST_TARGET" ]; then
+            sync_project "$TARGET" "$DEST_TARGET"
+        else
+            if [ -n "$ACTIVE_PROJ" ] && [ "$(echo "$TARGET" | tr '[:lower:]' '[:upper:]')" != "$(echo "$ACTIVE_PROJ" | tr '[:lower:]' '[:upper:]')" ]; then
+                echo "ℹ️ Aviso de Gobernanza: El proyecto solicitado [$TARGET] difiere de la marca activa en este runtime [$ACTIVE_PROJ]."
+                echo "   (Prioridad arquitectónica: una marca activa por localstorage. Procediendo por solicitud explícita sin bloqueo...)"
+            fi
+            sync_project "$TARGET" "$TARGET"
         fi
-
-        sync_project "$TARGET"
         ;;
 esac

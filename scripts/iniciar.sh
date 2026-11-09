@@ -538,8 +538,13 @@ echo "  ✓ Symlink de /artifacts verificado -> $SSOT_ARTIFACTS"
 
 # 2a-ter. Sincronización automática de datos de marca desde Drive SSoT hacia Local Storage
 if [ -n "${TARGET_PROJECT:-}" ] && [ -f "$REPO_DIR/scripts/zcp-sync" ]; then
-    echo "• [2a-ter] Sincronizando datos de marca ($TARGET_PROJECT) desde Google Drive hacia Local Storage..."
-    bash "$REPO_DIR/scripts/zcp-sync" "$TARGET_PROJECT" 2>/dev/null || true
+    if [ -n "${CLIENT_NAME:-}" ] && [ "$CLIENT_NAME" != "$TARGET_PROJECT" ]; then
+        echo "• [2a-ter] Sincronizando datos de marca ($CLIENT_NAME -> $TARGET_PROJECT) desde Google Drive hacia Local Storage..."
+        bash "$REPO_DIR/scripts/zcp-sync" "$CLIENT_NAME" "$TARGET_PROJECT" 2>/dev/null || true
+    else
+        echo "• [2a-ter] Sincronizando datos de marca ($TARGET_PROJECT) desde Google Drive hacia Local Storage..."
+        bash "$REPO_DIR/scripts/zcp-sync" "$TARGET_PROJECT" 2>/dev/null || true
+    fi
 fi
 
 # 2a-quater. Sincronización de Playbooks Universales y Category of One hacia Local Storage

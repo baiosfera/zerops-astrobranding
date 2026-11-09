@@ -61,6 +61,9 @@ if [ ! -f "$SCRIPT_DIR/gga" ] || [ ! -f "$SCRIPT_DIR/lib/gga/providers.sh" ] || 
     TMP_GGA="$(mktemp -d 2>/dev/null || mktemp -d -t 'gga_dl.XXXXXX')"
     if timeout 15s git clone --depth 1 https://github.com/Gentleman-Programming/gentleman-guardian-angel.git "$TMP_GGA/gga" >/dev/null 2>&1; then
         bash "$TMP_GGA/gga/install.sh" >/dev/null 2>&1 || true
+        # Anti-OpenCode Invariant: Purgar OpenCode permanentemente para evitar reinstalaciones espurias
+        rm -rf "$HOME/.opencode" "/home/zerops/.opencode" 2>/dev/null || true
+        sed -i '/# opencode/d; /opencode\/bin/d' "$HOME/.bashrc" "/home/zerops/.bashrc" 2>/dev/null || true
         [ -f "$HOME/.local/bin/gga" ] && cp "$HOME/.local/bin/gga" "$SCRIPT_DIR/gga" 2>/dev/null || true
         [ -f "$TMP_GGA/gga/bin/gga" ] && cp "$TMP_GGA/gga/bin/gga" "$SCRIPT_DIR/gga" 2>/dev/null || true
         [ -d "$TMP_GGA/gga/lib" ] && cp "$TMP_GGA/gga/lib/"*.sh "$SCRIPT_DIR/lib/gga/" 2>/dev/null || true
