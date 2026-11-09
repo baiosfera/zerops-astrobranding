@@ -1024,13 +1024,16 @@ def get_workspace_root() -> Path:
 
 
 def get_local_storage_path() -> Path:
-    env_path = os.getenv("LOCAL_STORAGE_PATH")
-    if env_path and Path(env_path).exists():
-        return Path(env_path)
     if Path("/mnt/localstorage").exists():
         return Path("/mnt/localstorage")
     if Path("/var/www/localstorage").exists():
         return Path("/var/www/localstorage")
+    env_path = os.getenv("LOCAL_STORAGE_PATH")
+    if env_path and Path(env_path).exists():
+        p = Path(env_path)
+        if p.name in ("hermes", "paperclip", "engram", "pidev") and p.parent.exists():
+            return p.parent
+        return p
     return Path("/tmp/localstorage")
 
 
