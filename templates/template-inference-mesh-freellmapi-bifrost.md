@@ -64,14 +64,12 @@ VALUES ('qwen-3.8-27b', 'Qwen 2.5 Coder 27B', 'cerebras', 'chat', 'user', 1, 1);
 ```
 
 ### Invariante 2: Bifrost Model Aliases (Anti-404 Shield)
-Bifrost únicamente activa su circuit breaker en errores 429 (`retry-after` o `x-ratelimit-remaining: 0`). Si un agente pide `hermes-3-llama-3.1-8b` y FreeLLMAPI no tiene exactamente ese ID de modelo, devuelve HTTP 404 (`model_not_found`). Bifrost interpreta 404 como error de cliente y NO hace fallback.
+Bifrost únicamente activa su circuit breaker en errores 429 (`retry-after` o `x-ratelimit-remaining: 0`). Si un agente pide `auto` y FreeLLMAPI no tiene exactamente ese ID de modelo, devuelve HTTP 404 (`model_not_found`). Bifrost interpreta 404 como error de cliente y NO hace fallback.
 **Regla Soberana:** En `/var/www/bifrost/config.json`, mapear todas las variantes solicitadas por Hermes hacia `auto`:
 ```json
 "aliases": {
-  "hermes-3-llama-3.1-8b": "auto",
-  "hermes-3-llama-3.1-70b": "auto",
-  "hermes-3-llama-3.1-405b": "auto",
-  "hermes-3": "auto"
+  "auto": "auto",
+  
 }
 ```
 
@@ -126,7 +124,7 @@ curl -s http://freellmapi:3001/v1/chat/completions \
 curl -s http://bifrost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer bifrost-local" \
-  -d '{"model":"hermes-3-llama-3.1-8b","messages":[{"role":"user","content":"ping"}]}' | jq .choices[0].message.content
+  -d '{"model":"auto","messages":[{"role":"user","content":"ping"}]}' | jq .choices[0].message.content
 
 # 3. Probar permisos de escritura de PiDev en /var/www/webdev
 ssh pidev "touch /var/www/webdev/.sensor_test && rm /var/www/webdev/.sensor_test && echo 'OK'"

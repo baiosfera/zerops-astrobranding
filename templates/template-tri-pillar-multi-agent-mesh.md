@@ -149,7 +149,7 @@ Paperclip AI and Hermes run with zero data loss across container restarts, stop/
         PYTHONPATH: "./apps/hermes/vendor:./apps/hermes"
         DATABASE_URL: ${database_connectionString}
         HERMES_MODEL_ENDPOINT: "http://bifrost:8080/v1"
-        HERMES_MODEL_NAME: "hermes-3-llama-3.1-8b"
+        HERMES_MODEL_NAME: "auto"
         BIFROST_VIRTUAL_KEY: "vk-hermes-agent"
         NATS_URL: ${nats_connectionString}
       start: python3 apps/hermes/main.py

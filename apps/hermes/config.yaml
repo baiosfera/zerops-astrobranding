@@ -9,7 +9,7 @@ runtime:
 models:
   primary:
     endpoint: "http://bifrost:8080/v1"
-    name: "hermes-3-llama-3.1-8b"
+    name: "auto"
 
 integrations:
   nats_url: "nats://nats:4222"
