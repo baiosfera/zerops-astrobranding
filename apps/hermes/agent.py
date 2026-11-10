@@ -57,7 +57,9 @@ if os.path.exists(_runtime_env_path):
                 _line = _line.strip()
                 if _line and not _line.startswith("#") and "=" in _line:
                     _k, _v = _line.split("=", 1)
-                    os.environ[_k.strip()] = _v.strip()
+                    val = _v.strip("'\" ")
+                    if val:
+                        os.environ.setdefault(_k.strip(), val)
     except Exception:
         pass
 

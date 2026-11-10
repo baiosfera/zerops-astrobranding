@@ -308,7 +308,12 @@ def build_bot_app(token: str, role: str, allowed_users: set, bifrost_key: str):
     return app
 
 async def run_bot():
-    if not ADMIN_TOKEN and not CLIENT_TOKEN:
+    admin_token = (ADMIN_TOKEN or os.getenv("TELEGRAM_ADMIN_BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN", "")).strip()
+    client_token = (CLIENT_TOKEN or os.getenv("TELEGRAM_CLIENT_BOT_TOKEN", "")).strip()
+    admin_allowed_raw = os.getenv("TELEGRAM_ADMIN_ALLOWED_USERS") or os.getenv("TELEGRAM_ALLOWED_USERS", "").strip()
+    admin_allowed = ADMIN_ALLOWED_USERS or {int(x.strip()) for x in admin_allowed_raw.split(",") if x.strip() and x.strip().lstrip("-").isdigit()}
+
+    if not admin_token and not client_token:
         await run_dormant_loop()
         return
 
@@ -320,20 +325,22 @@ async def run_bot():
         return
 
     apps = []
-    if ADMIN_TOKEN:
+    if admin_token:
         admin_app = build_bot_app(
-            token=ADMIN_TOKEN,
+            token=admin_token,
             role="admin",
-            allowed_users=ADMIN_ALLOWED_USERS,
+            allowed_users=admin_allowed,
             bifrost_key="vk-hermes-agent"
         )
         apps.append(admin_app)
 
-    if CLIENT_TOKEN and CLIENT_TOKEN != ADMIN_TOKEN:
+    if client_token and client_token != admin_token:
+        client_allowed_raw = os.getenv("TELEGRAM_CLIENT_ALLOWED_USERS", "").strip()
+        client_allowed = CLIENT_ALLOWED_USERS or {int(x.strip()) for x in client_allowed_raw.split(",") if x.strip() and x.strip().lstrip("-").isdigit()}
         client_app = build_bot_app(
-            token=CLIENT_TOKEN,
+            token=client_token,
             role="client",
-            allowed_users=CLIENT_ALLOWED_USERS,
+            allowed_users=client_allowed,
             bifrost_key="vk-hermes-client"
         )
         apps.append(client_app)
