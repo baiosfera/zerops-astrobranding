@@ -885,9 +885,10 @@ async def execute_tool(fn_name: str, fn_args: dict) -> str:
         return f"Error ejecutando {fn_name}: {str(e)}"
 
 async def load_chat_history(chat_id: int, limit: int = 10) -> list[dict]:
-    """Loads recent messages from PostgreSQL 18 with localstorage SQLite fallback."""
+    """Loads recent messages from PostgreSQL 18 with localstorage SQLite fallback, enforcing zero-CoT hygiene."""
     if not chat_id:
         return []
+    raw_messages = []
     db_url = os.getenv("DATABASE_URL")
     if db_url:
         try:
@@ -902,30 +903,43 @@ async def load_chat_history(chat_id: int, limit: int = 10) -> list[dict]:
                 chat_id, limit
             )
             await conn.close()
-            return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+            raw_messages = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
         except Exception as e:
             print(f"[Hermes DB Warning] Error loading history from PostgreSQL: {e}", file=sys.stderr)
 
-    # Fallback: SQLite WAL on localstorage
-    try:
-        import aiosqlite
-        db_path = "/mnt/localstorage/hermes/sessions.db"
-        if os.path.exists(db_path):
-            async with aiosqlite.connect(db_path, timeout=3.0) as db:
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute(
-                    """
-                    SELECT role, content FROM hermes_messages 
-                    WHERE chat_id = ? 
-                    ORDER BY id DESC LIMIT ?
-                    """,
-                    (chat_id, limit)
-                )
-                rows = await cursor.fetchall()
-                return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
-    except Exception as e:
-        print(f"[Hermes DB Warning] Error loading history from SQLite fallback: {e}", file=sys.stderr)
-    return []
+    if not raw_messages:
+        # Fallback: SQLite WAL on localstorage
+        try:
+            import aiosqlite
+            db_path = "/mnt/localstorage/hermes/sessions.db"
+            if os.path.exists(db_path):
+                async with aiosqlite.connect(db_path, timeout=3.0) as db:
+                    db.row_factory = aiosqlite.Row
+                    cursor = await db.execute(
+                        """
+                        SELECT role, content FROM hermes_messages 
+                        WHERE chat_id = ? 
+                        ORDER BY id DESC LIMIT ?
+                        """,
+                        (chat_id, limit)
+                    )
+                    rows = await cursor.fetchall()
+                    raw_messages = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+        except Exception as e:
+            print(f"[Hermes DB Warning] Error loading history from SQLite fallback: {e}", file=sys.stderr)
+
+    # Sanitize in-flight: purge any contaminated thought dumps from reaching the context window
+    clean_history = []
+    for m in raw_messages:
+        role = m.get("role")
+        content = m.get("content", "")
+        if role == "assistant":
+            clean_text = sanitize_model_output(content)
+            if clean_text:
+                clean_history.append({"role": "assistant", "content": clean_text})
+        else:
+            clean_history.append(m)
+    return clean_history
 
 async def save_chat_turn(chat_id: int, user_text: str, assistant_text: str) -> None:
     """Persists conversation turn to PostgreSQL 18 and localstorage SQLite WAL."""
@@ -1052,6 +1066,16 @@ def sanitize_model_output(raw_content: str) -> str:
                 if cleaned_paras:
                     text = "\n\n".join(cleaned_paras).strip()
 
+    # 5. Detect if the text is predominantly an English reasoning monologue
+    words = re.findall(r"\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]+\b", text.lower())
+    if len(words) >= 10:
+        en_stops = {"the", "is", "of", "and", "to", "in", "that", "this", "we", "with", "for", "on", "are", "as", "it", "not", "should", "would", "before", "after", "swarm", "question", "doctrine", "outcome", "definition", "skill", "contract", "execution", "validation", "persistence", "now"}
+        es_stops = {"el", "la", "de", "que", "en", "los", "del", "se", "las", "por", "un", "para", "con", "una", "su", "al", "lo", "como", "más", "pero", "sus", "le", "ya", "o", "si", "te", "digo", "haría", "orden", "creo", "tenés", "hacés", "este", "cargó", "ingesto", "despacho"}
+        en_count = sum(1 for w in words if w in en_stops)
+        es_count = sum(1 for w in words if w in es_stops)
+        if en_count >= 5 and es_count <= 2:
+            return ""
+
     return text.strip()
 
 ACTION_KEYWORDS = {
@@ -1150,7 +1174,7 @@ class HermesAgent:
                         "model": target_model,
                         "messages": messages,
                         "temperature": 0.3,
-                        "max_tokens": 1024,
+                        "max_tokens": 2048,
                     }
                     if active_tools:
                         post_payload["tools"] = active_tools
@@ -1166,7 +1190,7 @@ class HermesAgent:
                             "model": "deepseek-chat",
                             "messages": messages,
                             "temperature": 0.3,
-                            "max_tokens": 1024,
+                            "max_tokens": 2048,
                         }
                         if active_tools:
                             fallback_payload["tools"] = active_tools
@@ -1245,7 +1269,7 @@ class HermesAgent:
                     # If tools were executed but no text content was emitted, force synthesis turn without tools
                     messages.append({
                         "role": "user",
-                        "content": "Con base en los resultados de las herramientas ejecutadas, respondé al usuario con la información solicitada de forma concisa (1 a 3 oraciones por defecto), directa y ejecutiva. No generes tablas markdown ni bloques de código a menos que el usuario lo haya pedido explícitamente."
+                        "content": "Con base en lo analizado, respondé a mi consulta de forma directa, ejecutiva y concisa (1 a 3 oraciones), EXCLUSIVAMENTE en español rioplatense (voseo). No emitas reflexiones ni razonamientos en inglés."
                     })
                     try:
                         res_synth = await client.post(
@@ -1254,8 +1278,8 @@ class HermesAgent:
                             json={
                                 "model": target_model,
                                 "messages": messages,
-                                "temperature": 0.3,
-                                "max_tokens": 800,
+                                "temperature": 0.2,
+                                "max_tokens": 1024,
                             },
                             timeout=30.0
                         )
