@@ -145,15 +145,21 @@ Paperclip AI and Hermes run with zero data loss across container restarts, stop/
         - port: 8000
           httpSupport: true
       initCommands:
-        - sudo mkdir -p /mnt/localstorage/hermes && sudo chown -R zerops:zerops /mnt/localstorage/hermes
+        - sudo mkdir -p /mnt/localstorage/hermes/.hermes /mnt/localstorage/engram /mnt/localstorage/bin /mnt/localstorage/skills && sudo chown -R zerops:zerops /mnt/localstorage/hermes /mnt/localstorage/engram /mnt/localstorage/bin /mnt/localstorage/skills
+        - ln -sfn /mnt/localstorage/hermes/.hermes ~/.hermes
+        - for f in /mnt/localstorage/bin/*; do [ -f "$f" ] && [ -x "$f" ] && sudo ln -sfn "$f" "/usr/local/bin/$(basename "$f")"; done
+        - HOME=/home/zerops gentle-ai install --agents hermes --scope global || true
       envVariables:
         PORT: "8000"
+        PATH: "/mnt/localstorage/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/opt/zerops/bin"
         PYTHONPATH: "./apps/hermes/vendor:./apps/hermes"
         DATABASE_URL: ${database_connectionString}
         HERMES_MODEL_ENDPOINT: "http://bifrost:8080/v1"
         HERMES_MODEL_NAME: "auto"
         BIFROST_VIRTUAL_KEY: "vk-hermes-agent"
         NATS_URL: ${nats_connectionString}
+        ZEROPS_TOKEN: ${ZEROPS_TOKEN}
+        ZCP_API_KEY: ${ZEROPS_TOKEN}
       start: python3 apps/hermes/main.py
 
   # Paperclip AI Platform (Ubuntu 26 / Node.js 26 pnpm monorepo)

@@ -116,6 +116,23 @@ Para evitar el monopolio de un solo proveedor rápido (Cerebras) y aprovechar la
 - `routing_explore_enabled = '1'` en `settings`: activa Thompson Sampling exploration para evitar el *Exploitation Trap* y muestrear periódicamente modelos con pocas observaciones.
 - En `profile_models` (Perfil 1), los modelos de OpenRouter de alta capacidad (`dots-studio/dots-3-note-preview:free`, `nvidia/nemotron-3.5-lightning:free`, `openrouter/free`) deben posicionarse en prioridades 1 a 5 junto a Cerebras y Groq.
 
+### Invariante 10: Blindaje de Saldo Comercial (Zero-Cost First)
+Bajo ninguna circunstancia Hermes u otros agentes despacharán consultas automáticas al tier comercial de DeepSeek:
+- El 100% del tráfico (chitchat, código de Astro-Web, transmutación de slots en Brand-Play, tareas de PiDev o diagnósticos de Oráculo) debe resolverse primero a coste $0 en FreeLLMAPI mediante `"model": "auto"`.
+- DeepSeek Pro se reserva estrictamente para:
+  1. Mandato humano EXPLÍCITO en Telegram conteniendo palabras clave (`"deepseek"`, `"modo pro"`, `"tier pro"`, `"razonamiento pro"`).
+  2. Failover de emergencia cuando todas las 8 llaves gratuitas de FreeLLMAPI devuelvan 429/503.
+
+### Invariante 11: Demarcación Semántica en Hermes vs Latencia Sub-100µs en Bifrost
+Bifrost opera como proxy reverso de alto rendimiento en Go (~11µs de latencia) evaluando reglas CEL sin ejecutar un LLM interno:
+- La clasificación de intención semántica es responsabilidad exclusiva de Hermes en Python (`classify_query_intent`).
+- Hermes inyecta el header `x-freellm-task-type: chat | code` para que FreeLLMAPI asigne el modelo óptimo sin coste adicional.
+
+### Invariante 12: Higienización de Historial de Herramientas (Anti-English CoT Contamination)
+Durante las iteraciones de llamada a herramientas (`tool_calls`), los modelos de código (Qwen Coder) generan bloques de pensamiento interno en inglés (`<thought>...</thought>`):
+- El mensaje del asistente registrado en `messages` y persistido en base de datos (`hermes_messages`) NUNCA debe contener el pensamiento crudo en inglés. Solo debe almacenar el array de `tool_calls`.
+- Esto erradica el sesgo de continuación (*continuation bias*), manteniendo el contexto 100% en español rioplatense sin recurrir a prohibiciones negativas en el prompt.
+
 ---
 
 ## 3. Matriz de Proveedores Verificados (8 Keys)
