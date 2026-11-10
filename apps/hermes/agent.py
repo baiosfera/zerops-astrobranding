@@ -47,7 +47,7 @@ except (ImportError, ValueError):
     )
 
 BIFROST_URL = os.getenv("HERMES_MODEL_ENDPOINT", "http://bifrost:8080/v1")
-MODEL_NAME = os.getenv("HERMES_MODEL_OVERRIDE") or os.getenv("HERMES_MODEL_NAME") or "auto"
+MODEL_NAME = os.getenv("HERMES_MODEL_OVERRIDE") or os.getenv("HERMES_MODEL_NAME") or "qwen/qwen3.8-27b"
 BIFROST_KEY = os.getenv("BIFROST_VIRTUAL_KEY", "vk-hermes-agent")
 
 HERMES_TOOLS = [
