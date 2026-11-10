@@ -604,6 +604,9 @@ fi
 if [ -f "/usr/local/bin/yq" ]; then
     cp -f "/usr/local/bin/yq" "$PROJECT_ROOT/localstorage/bin/yq" 2>/dev/null || true
 fi
+if [ -f "/usr/bin/node" ]; then
+    cp -f "/usr/bin/node" "$PROJECT_ROOT/localstorage/bin/node" 2>/dev/null || true
+fi
 chmod +x "$PROJECT_ROOT/localstorage/bin"/* 2>/dev/null || true
 
 # Garantizar symlinks en ZCP local
