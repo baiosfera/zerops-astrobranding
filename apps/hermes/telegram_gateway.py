@@ -300,11 +300,17 @@ def build_bot_app(token: str, role: str, allowed_users: set, bifrost_key: str):
                 logger.error(f"[{role.upper()}] Error processing turn: {e}")
                 await update.message.reply_text(f"⚠️ Error al procesar tu solicitud: {str(e)}")
 
+    async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if update.message:
+            await update.message.reply_text("🎙️ Recibí tu mensaje de voz. Actualmente proceso texto, fotos y documentos. Escribime tu instrucción.")
+
     app.add_handler(TypeHandler(Update, security_gate), group=-1)
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("reset", reset_cmd))
-    app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
+    # Route ALL other messages (including any custom slash commands like /plan, /run, etc.) directly to Hermes
+    app.add_handler(MessageHandler(filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.COMMAND, handle_message))
     return app
 
 async def run_bot():
