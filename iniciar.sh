@@ -593,33 +593,33 @@ if [ -f "$REPO_DIR/scripts/linear_bridge.py" ]; then
     cp -f "$REPO_DIR/scripts/linear_bridge.py" "$PROJECT_ROOT/localstorage/hermes/linear_bridge.py" 2>/dev/null || true
 fi
 
-# 2a-sexies. Sincronización simétrica de apotelos CLI hacia Hermes y LocalStorage compartido
+# 2a-sexies. Sincronización simétrica de catálogo de binarios y CLIs hacia LocalStorage y Hermes
 mkdir -p "$PROJECT_ROOT/localstorage/bin" 2>/dev/null || true
+if [ -d "$PROJECT_ROOT/.bin" ]; then
+    cp -fp "$PROJECT_ROOT/.bin"/* "$PROJECT_ROOT/localstorage/bin/" 2>/dev/null || true
+fi
 if [ -f "$REPO_DIR/scripts/apotelos" ]; then
     cp -f "$REPO_DIR/scripts/apotelos" "$PROJECT_ROOT/localstorage/bin/apotelos" 2>/dev/null || true
-    chmod +x "$PROJECT_ROOT/localstorage/bin/apotelos" 2>/dev/null || true
 fi
-if ssh -q -o BatchMode=yes -o ConnectTimeout=2 hermes "true" 2>/dev/null; then
-    ssh hermes "mkdir -p /var/www/scripts /var/www/bin" 2>/dev/null || true
-    scp -q "$REPO_DIR/scripts/apotelos" hermes:/var/www/scripts/apotelos 2>/dev/null || true
-    ssh hermes "chmod +x /var/www/scripts/apotelos && sudo ln -sfn /var/www/scripts/apotelos /usr/local/bin/apotelos" 2>/dev/null || true
+if [ -f "/usr/local/bin/yq" ]; then
+    cp -f "/usr/local/bin/yq" "$PROJECT_ROOT/localstorage/bin/yq" 2>/dev/null || true
 fi
+chmod +x "$PROJECT_ROOT/localstorage/bin"/* 2>/dev/null || true
 
-# 2a-septies. Sincronización simétrica de gentle-ai CLI hacia LocalStorage y Hermes
-if [ -f "$PROJECT_ROOT/.bin/gentle-ai" ]; then
-    mkdir -p "$PROJECT_ROOT/localstorage/bin" 2>/dev/null || true
-    cp -f "$PROJECT_ROOT/.bin/gentle-ai" "$PROJECT_ROOT/localstorage/bin/gentle-ai" 2>/dev/null || true
-    chmod +x "$PROJECT_ROOT/localstorage/bin/gentle-ai" 2>/dev/null || true
-    sudo ln -sf "$PROJECT_ROOT/localstorage/bin/gentle-ai" /usr/local/bin/gentle-ai 2>/dev/null || true
-elif [ -f "$PROJECT_ROOT/localstorage/bin/gentle-ai" ]; then
+# Garantizar symlinks en ZCP local
+if [ -f "$PROJECT_ROOT/localstorage/bin/gentle-ai" ]; then
     sudo ln -sf "$PROJECT_ROOT/localstorage/bin/gentle-ai" /usr/local/bin/gentle-ai 2>/dev/null || true
 fi
 
 if ssh -q -o BatchMode=yes -o ConnectTimeout=2 hermes "true" 2>/dev/null; then
-    if [ -f "$PROJECT_ROOT/localstorage/bin/gentle-ai" ]; then
-        scp -q "$PROJECT_ROOT/localstorage/bin/gentle-ai" hermes:/var/www/bin/gentle-ai 2>/dev/null || true
-        ssh hermes "sudo cp /var/www/bin/gentle-ai /usr/local/bin/gentle-ai 2>/dev/null && sudo chmod +x /usr/local/bin/gentle-ai 2>/dev/null && gentle-ai install --agents hermes --scope global 2>/dev/null || true" 2>/dev/null || true
-    fi
+    ssh hermes "
+        for f in /mnt/localstorage/bin/*; do
+            if [ -f \"\$f\" ] && [ -x \"\$f\" ]; then
+                sudo ln -sfn \"\$f\" \"/usr/local/bin/\$(basename \"\$f\")\" 2>/dev/null || true
+            fi
+        done
+        gentle-ai install --agents hermes --scope global 2>/dev/null || true
+    " 2>/dev/null || true
 fi
 
 # 2a-bis. Aprovisionar Persistencia Híbrida 3-Tier Zero-Data-Loss de Engram
