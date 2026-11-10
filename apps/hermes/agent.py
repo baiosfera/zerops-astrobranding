@@ -3,6 +3,7 @@ Hermes-Agent Execution Loop
 Sovereign Master Agent for Apotelos Multi-Agent Mesh & MentorIA
 """
 import os
+import sys
 import re
 import json
 import uuid
@@ -12,7 +13,7 @@ import httpx
 
 logger = logging.getLogger("hermes.agent")
 try:
-    from prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt
+    from prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt, get_hermes_conversational_prompt
     from tools import (
         get_system_health, calculate_natal_chart, send_whatsapp_otp,
         list_zerops_services, start_zerops_service, stop_zerops_service, delete_zerops_service, get_zerops_service_status,
@@ -30,7 +31,7 @@ try:
         list_skills, get_skill_docs, apotelos_cli
     )
 except (ImportError, ValueError):
-    from .prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt
+    from .prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt, get_hermes_conversational_prompt
     from .tools import (
         get_system_health, calculate_natal_chart, send_whatsapp_otp,
         list_zerops_services, start_zerops_service, stop_zerops_service, delete_zerops_service, get_zerops_service_status,
@@ -974,10 +975,42 @@ async def save_chat_turn(chat_id: int, user_text: str, assistant_text: str) -> N
     except Exception as e:
         print(f"[Hermes DB Warning] Error saving turn to SQLite fallback: {e}", file=sys.stderr)
 
+ACTION_KEYWORDS = {
+    'ver', 'revisar', 'consultar', 'buscar', 'ejecutar', 'correr', 'crear',
+    'editar', 'modificar', 'borrar', 'eliminar', 'desplegar', 'deploy', 'status',
+    'logs', 'servicio', 'servicios', 'tabla', 'tablas', 'bd', 'postgres', 'sql', 'zerops',
+    'linear', 'paperclip', 'crew', 'crewai', 'enjambre', 'archivo', 'archivos',
+    'file', 'token', 'tokens', 'bifrost', 'freellmapi', 'oraculo', 'oráculo',
+    'apotelos', 'script', 'reiniciar', 'apagar', 'iniciar', 'start', 'stop',
+    'health', 'salud', 'memoria', 'engram', 'natal', 'carta', 'playbook', 'código', 'codigo'
+}
+
+CHITCHAT_PATTERNS = [
+    r'^(?:hola|buenas|buen d[ií]a|buenas tardes|buenas noches|hey|hello|hi|qu[eé] tal|c[oó]mo va)[\s!?.]*$',
+    r'^(?:gracias|muchas gracias|dale|listo|ok|joya|perfecto|entendido|chau|hasta luego)[\s!?.]*$',
+    r'^(?:qui[eé]n sos|qu[eé] hac[eé]s|c[oó]mo te llam[aá]s|c[oó]mo funcion[aá]s|qu[eé] pod[eé]s hacer)[\s!?.]*$',
+]
+
+def classify_query_intent(user_query: str) -> str:
+    """
+    Classifies the user query into 'chat' (conversational/conceptual) or 'operational' (tool-bearing).
+    Pure CoHaLo Positive Guidance: conversational queries prune 42 tools to 0, saving ~5,000 tokens per turn
+    and preventing FreeLLMAPI/Groq 413 rate limit rejections.
+    """
+    t = user_query.strip().lower()
+    for p in CHITCHAT_PATTERNS:
+        if re.match(p, t):
+            return "chat"
+    words = set(re.findall(r'\b\w+\b', t))
+    if not (words & ACTION_KEYWORDS) and len(words) <= 12:
+        return "chat"
+    return "operational"
+
 class HermesAgent:
     def __init__(self, system_prompt: str = None, role: str = "admin", bifrost_key: str = None, tools: list = None):
         self.role = role
         self.system_prompt = system_prompt or get_hermes_system_prompt()
+        self.conversational_prompt = get_hermes_conversational_prompt()
         self.bifrost_key = bifrost_key or os.getenv("BIFROST_VIRTUAL_KEY", "vk-hermes-agent")
         self.tools = tools if tools is not None else HERMES_TOOLS
         self.history: list[dict[str, str]] = []
@@ -987,21 +1020,34 @@ class HermesAgent:
         persistent_history = await load_chat_history(chat_id, limit=6)
         active_history = persistent_history if persistent_history else self.history
         
+        intent = classify_query_intent(user_query)
+        if intent == "chat":
+            active_tools = None
+            active_system_prompt = self.conversational_prompt
+            task_type_header = "chat"
+        else:
+            active_tools = self.tools
+            active_system_prompt = self.system_prompt
+            task_type_header = "code"
+
         messages = [
-            {"role": "system", "content": self.system_prompt},
+            {"role": "system", "content": active_system_prompt},
             *active_history,
             {"role": "user", "content": user_query}
         ]
         
         final_content = ""
-        max_tool_iterations = 10
+        max_tool_iterations = 10 if active_tools else 1
         total_prompt_tokens = 0
         total_completion_tokens = 0
         total_cost_cents = 0.0
         active_provider = "freellmapi"
         active_model = MODEL_NAME
         
-        request_headers = {"Authorization": f"Bearer {self.bifrost_key}"}
+        request_headers = {
+            "Authorization": f"Bearer {self.bifrost_key}",
+            "x-freellm-task-type": task_type_header,
+        }
         target_model = MODEL_NAME
         query_lower = user_query.lower()
         if any(k in query_lower for k in ("deepseek", "pro tier", "modo pro", "razonamiento pro", "tier pro")):
@@ -1013,33 +1059,40 @@ class HermesAgent:
             try:
                 while max_tool_iterations > 0:
                     max_tool_iterations -= 1
+                    post_payload = {
+                        "model": target_model,
+                        "messages": messages,
+                        "temperature": 0.3,
+                        "max_tokens": 1024,
+                    }
+                    if active_tools:
+                        post_payload["tools"] = active_tools
+
                     res = await client.post(
                         f"{BIFROST_URL}/chat/completions",
                         headers=request_headers,
-                        json={
-                            "model": target_model,
-                            "messages": messages,
-                            "tools": self.tools,
-                            "temperature": 0.3,
-                            "max_tokens": 1024,
-                        }
+                        json=post_payload
                     )
                     if res.status_code != 200:
                         logger.warning(f"[Hermes] Primary gateway status {res.status_code}. Retrying with pro failover...")
+                        fallback_payload = {
+                            "model": "deepseek-chat",
+                            "messages": messages,
+                            "temperature": 0.3,
+                            "max_tokens": 1024,
+                        }
+                        if active_tools:
+                            fallback_payload["tools"] = active_tools
+
                         res = await client.post(
                             f"{BIFROST_URL}/chat/completions",
                             headers={
                                 "Authorization": f"Bearer {self.bifrost_key}",
                                 "x-force-deepseek": "true",
-                                "x-routing-tier": "pro"
+                                "x-routing-tier": "pro",
+                                "x-freellm-task-type": task_type_header,
                             },
-                            json={
-                                "model": "deepseek-chat",
-                                "messages": messages,
-                                "tools": self.tools,
-                                "temperature": 0.3,
-                                "max_tokens": 1024,
-                            },
+                            json=fallback_payload,
                             timeout=120.0
                         )
                         if res.status_code != 200:

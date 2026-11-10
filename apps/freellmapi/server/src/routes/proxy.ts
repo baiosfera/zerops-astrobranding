@@ -1649,8 +1649,12 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
   // client max_tokens can't starve routing; input + images count in full. The
   // reserve is threaded to the router separately: it is exact and must not be
   // inflated by the context-window safety margin (#956 review).
+  // Account for serialized tool definitions in estimated input tokens (#1231)
+  const estimatedToolsTokens = (Array.isArray(tools) && tools.length > 0)
+    ? Math.ceil(JSON.stringify(tools).length / 4)
+    : 0;
   const outputReserve = routingReserveTokens(max_tokens);
-  const estimatedTotal = estimatedInputTokens + imageCount * IMAGE_TOKEN_ESTIMATE + outputReserve;
+  const estimatedTotal = estimatedInputTokens + estimatedToolsTokens + imageCount * IMAGE_TOKEN_ESTIMATE + outputReserve;
 
   // Tool-bearing requests must route to a model that emits STRUCTURED
   // tool_calls. A model without real function-calling support serializes the

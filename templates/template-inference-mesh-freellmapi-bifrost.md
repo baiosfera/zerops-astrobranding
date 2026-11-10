@@ -94,6 +94,22 @@ Cuando Bifrost tiene `config_store.enabled: true` con PostgreSQL (`config_store.
 - Toda clave virtual (`vk-production-main`, `vk-hermes-agent`, `vk-crewai`, `vk-pidev`, `vk-pydanticai`) debe insertarse o sincronizarse directamente contra la tabla PostgreSQL o vía `POST /api/governance/virtual-keys`.
 - Las claves fantasma o de otros proyectos (como `vk-agy-operator`, `vk-evolution-wa`, `vk-astrobranding-prod`) deben purgarse físicamente de dicha tabla para evitar fugas de contexto y confusión en la interfaz de gobernanza.
 
+### Invariante 6: Estimación de Tokens Consciente de Herramientas (Tool-Aware Input Estimation)
+En `freellmapi/server/src/routes/proxy.ts`, `estimatedInputTokens` debe sumar incondicionalmente el tamaño serializado del array `tools` (`estimatedToolsTokens`):
+- Omitir `tools` subestima drásticamente la carga real recibida por el proveedor upstream (de ~8,500 tokens reales a ~2,000 estimados).
+- Esto causa que FreeLLMAPI despache payloads gigantescos a modelos con límites de tokens por minuto ajustados (como Groq con 7,000 ITPM), desatando rechazos HTTP 413 y degradando artificialmente la confiabilidad del modelo en el Multi-Armed Bandit (MAB).
+
+### Invariante 7: Límite ITPM Real de Groq On-Demand (7,000 ITPM Guard)
+En la capa on-demand gratuita de Groq Cloud, el límite de tokens de entrada por minuto es de **7,000 ITPM** (no 70,000 ni 80,000):
+- En la tabla `models` de `freeapi.db`, el registro de `groq / qwen/qwen3.8-27b` debe tener estrictamente `tpm_limit = 7000`.
+- Valores inflados impiden que el router prefiltre la petición antes del despacho, forzando un error upstream 413 y penalización injustificada en Thompson Sampling.
+
+### Invariante 8: Progressive Tool Disclosure & Intent Routing en Agentes (Hermes)
+Los agentes conversacionales (Hermes Agent) no deben inyectar schemas de 40+ herramientas en turnos de chitchat o consultas conceptuales:
+- `HermesAgent.run_turn` clasifica la intención mediante `classify_query_intent`: si la consulta es conversacional/conceptual, despacha con `tools = None`, un prompt magro (~70 tokens) y el header `x-freellm-task-type: chat`.
+- Esto reduce el consumo de tokens de ~8,500 a ~50 tokens y la latencia a < 200ms, permitiendo alternancia dinámica entre proveedores libres sin saturar cuotas ni disparar HTTP 413s.
+- Las 42 herramientas operativas se reservan estrictamente para consultas que demandan ejecución técnica (`x-freellm-task-type: code`).
+
 ---
 
 ## 3. Matriz de Proveedores Verificados (8 Keys)

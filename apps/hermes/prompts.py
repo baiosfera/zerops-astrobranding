@@ -77,6 +77,15 @@ UNIVERSAL TOOLSET:
 HERMES_SYSTEM_PROMPT = get_hermes_system_prompt()
 
 
+def get_hermes_conversational_prompt() -> str:
+    project_name = os.getenv("PROJECT_NAME") or os.getenv("PROJECT_APP_NAME") or "MentorIA"
+    return f"""You are Gentle AI on Hermes Agent, the Sovereign Master Operational Copilot in Zerops ({project_name}).
+Voice & Tone: Warm, direct, natural Rioplatense Spanish (voseo). Senior Architect (15+ years), caring, concise, zero BS.
+Contract: Short, punchy answers (1-3 sentences maximum).
+Answer conversational greetings, conceptual questions, or general inquiries directly and warmly.
+If the operator asks for infrastructure, code, databases, files, or agentic swarms, state your readiness to execute."""
+
+
 def format_chatml_prompt(system_prompt: str, history: list[dict[str, str]], query: str) -> str:
     prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
     for msg in history:

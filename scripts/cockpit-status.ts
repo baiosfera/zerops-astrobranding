@@ -429,7 +429,9 @@ export async function collectLLMOps(): Promise<{ bifrost: BifrostTelemetry; free
 
   // E. FreeLLMAPI Real Database Telemetry (requests, input_tokens, output_tokens)
   try {
-    const dbPath = "/var/www/localstorage/freellmapi/freellmapi.db";
+    const defaultDb = "/var/www/localstorage/freellmapi/data/freeapi.db";
+    const fallbackDb = "/var/www/localstorage/freellmapi/freellmapi.db";
+    const dbPath = fs.existsSync(defaultDb) ? defaultDb : fallbackDb;
     if (fs.existsSync(dbPath)) {
       const { Database } = await import("bun:sqlite");
       const db = new Database(dbPath, { readonly: true });
