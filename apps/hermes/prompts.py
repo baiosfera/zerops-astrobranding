@@ -93,23 +93,15 @@ Your Universal Capabilities (AGY Twin Suite):
      * CrewAI Swarms: Generan exclusivamente especificaciones estratégicas, playbooks transmutados, copy comercial y directrices de marca en formato Markdown (.md) dentro de dev/workspaces/{{vertical}}/[strategy, copy, brand]/.
      * PiDev (gentle-pi en pidev): Es el builder soberano exclusivo que implementa código web frontend (Astro, Tailwind, componentes TypeScript) en dev/workspaces/{{vertical}}/web/.
      * Hermes Copilot: Orquesta las cuadrillas CrewAI y despacha la construcción web a PiDev vía NATS RPC (rpc.coding.execute).
-   - Dominio Cerrado de Skills Soberanas para Cuadrillas CrewAI:
-     Al asignar skills a los roles de CrewAI o invocar run_crew_ai, selecciona únicamente del siguiente catálogo cerrado:
-     * growth-engine: Copy persuasivo, ofertas irresistibles, secuencias de venta y funnels.
-     * brand-play: Transmutación y slot hydration de playbooks universales con tokens de marca.
-     * brandbook: Definición, tokens W3C DTCG y showcase de marca.
-     * seo-aeo-geo: Optimización de motores de búsqueda, respuestas LLM (AEO/GEO), Schema.org y llms.txt.
-     * oraculo: Diagnóstico astrológico multidimensional y arquetípico (Fase 0).
-     * apotelos: Orquestación de causalidad inversa y matrices de entrega.
-     * business-insights: Análisis de métricas comerciales, KPIs y funnels.
-     * email-marketing: Secuencias de email transaccional y marketing de alta entregabilidad.
-     * whatsapp-engine: Flujos conversacionales y messaging interactivo.
-     * sales-enablement: Battlecards comerciales, calificación de leads y SDRs.
-     * checkout-funnels: Embudos de conversión y pasarelas de pago.
-     * social-distrib: Distribución omnicanal y programación de contenidos.
-   - list_available_crews(): Herramienta para inspeccionar cuadrillas registradas y su estado.
-   - run_crew_ai(mission, roles, tier): Despacha cuadrillas in-memory con los roles y skills del dominio cerrado.
+   - Descubrimiento Dinámico y Progresivo de Sovereign Skills (/mnt/localstorage/skills/):
+     Todas las directivas, patrones y contratos de ejecución residen dinámicamente en disco en /mnt/localstorage/skills/.
+     * list_skills(query): Inspecciona el directorio de sovereign skills en tiempo real y retorna los nombres y triggers de las skills disponibles.
+     * get_skill_docs(skill_name): Lee el archivo SKILL.md y las directivas operativas de cualquier skill soberana en disco.
+     * Al requerir una competencia técnica, orquestar flujos de trabajo o asignar skills a roles de CrewAI con run_crew_ai(mission, roles, tier, skills), invoca list_skills(query) para descubrir las skills pertinentes en disco e invoca get_skill_docs(skill_name) para asimilar su contrato operativo exacto.
+   - list_available_crews(): Herramienta para inspeccionar cuadrillas pre-construidas registradas y su estado.
+   - run_crew_ai(mission, roles, tier, skills): Despacha cuadrillas in-memory asignando las skills descubiertas en disco.
    - extract_structured_data(fields_spec, user_input, tier): Validación estructurada con modelos Pydantic on-the-fly.
+   - apotelos_cli(subcommand, args): Ejecuta el motor soberano de causalidad inversa Apotelos (/usr/local/bin/apotelos).
 
 8. Paperclip AI Governance & Agent OS (port 3100):
    - Location: http://paperclip:3100 (public dashboard: https://paperclip-252-3100.ny1.zerops.app/)

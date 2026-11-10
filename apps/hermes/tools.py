@@ -968,7 +968,10 @@ async def run_crew_ai(mission: str, roles: list = None, tier: str = "free", outp
     t0 = time.time()
     try:
         import asyncio
-        from crews.crew_factory import CrewFactory
+        try:
+            from crews.crew_factory import CrewFactory
+        except ImportError:
+            from hermes.crews.crew_factory import CrewFactory
         
         # If specific sovereign skills are requested (e.g. ['seo-aeo-geo', 'automation-engine'])
         if skills and isinstance(skills, list) and len(skills) > 0:
@@ -988,7 +991,10 @@ async def run_crew_ai(mission: str, roles: list = None, tier: str = "free", outp
         
         # Telemetry to Paperclip (fire-and-forget under CrewAI Engine worker)
         try:
-            from paperclip_bridge import record_crewai_execution
+            try:
+                from paperclip_bridge import record_crewai_execution
+            except ImportError:
+                from hermes.paperclip_bridge import record_crewai_execution
             asyncio.create_task(record_crewai_execution(
                 mission=mission,
                 roles=roles,
@@ -1004,7 +1010,10 @@ async def run_crew_ai(mission: str, roles: list = None, tier: str = "free", outp
     except Exception as e:
         # Telemetry to Paperclip on failure
         try:
-            from paperclip_bridge import record_crewai_execution
+            try:
+                from paperclip_bridge import record_crewai_execution
+            except ImportError:
+                from hermes.paperclip_bridge import record_crewai_execution
             asyncio.create_task(record_crewai_execution(
                 mission=mission,
                 roles=roles,
@@ -1340,4 +1349,199 @@ def linear_comment_issue(issue_id: str, comment: str) -> str:
         return f"✅ Comentario publicado en Linear [{issue_id}]."
     except Exception as e:
         return f"❌ Error comentando en ticket Linear: {str(e)}"
+
+
+
+# ==============================================================================
+# Operational Base Workspace & Verticals Grounding (MentorIA/dev & Playbooks)
+# ==============================================================================
+
+DEV_BASE_PATH = "/mnt/localstorage/MentorIA/dev"
+PLAYBOOKS_PATH = "/mnt/localstorage/playbooks"
+SKILLS_PATH = "/mnt/localstorage/skills"
+
+def list_verticals() -> str:
+    """Lists all available vertical specifications in the dev base workspace."""
+    vert_dir = os.path.join(DEV_BASE_PATH, "verticals")
+    if not os.path.exists(vert_dir):
+        vert_dir = "/var/www/localstorage/MentorIA/dev/verticals"
+    if not os.path.exists(vert_dir):
+        return "❌ Directorio de verticales no encontrado en /mnt/localstorage/MentorIA/dev/verticals"
+    
+    verticals = []
+    for fn in sorted(os.listdir(vert_dir)):
+        if fn.endswith(".json") and fn != "ecosystem.json":
+            fpath = os.path.join(vert_dir, fn)
+            try:
+                with open(fpath, "r", encoding="utf-8") as jf:
+                    data = json.load(jf)
+                    slug = data.get("vertical_slug", fn[:-5])
+                    name = data.get("display_name", slug)
+                    domain = data.get("custom_domain", "")
+                    funnel = data.get("funnel_type", "")
+                    verticals.append(f"• **{slug}**: {name} (Dominio: {domain} | Funnel: {funnel})")
+            except Exception:
+                verticals.append(f"• **{fn[:-5]}**")
+    
+    if not verticals:
+        return "No hay especificaciones de verticales registradas aún en dev/verticals."
+    return "📂 **Verticales Curadas Disponibles (dev/verticals)**:\n" + "\n".join(verticals)
+
+def get_vertical(vertical_slug: str) -> str:
+    """Retrieves the complete JSON specification of a curated vertical (e.g. 'juan-damaren', 'astrotipia', 'apotelos', 'baiosfera', 'synthemika', 'seo-maps')."""
+    slug = vertical_slug.strip().lower()
+    if slug.endswith(".json"):
+        slug = slug[:-5]
+    
+    for base in [DEV_BASE_PATH, "/var/www/localstorage/MentorIA/dev"]:
+        fpath = os.path.join(base, "verticals", f"{slug}.json")
+        if os.path.exists(fpath):
+            try:
+                with open(fpath, "r", encoding="utf-8") as jf:
+                    return jf.read()
+            except Exception as e:
+                return f"❌ Error leyendo vertical {slug}: {str(e)}"
+    
+    return f"❌ Vertical '{slug}' no encontrada en dev/verticals. Usa list_verticals para ver las disponibles."
+
+def list_playbooks() -> str:
+    """Lists all available universal playbooks in /mnt/localstorage/playbooks."""
+    pdir = PLAYBOOKS_PATH if os.path.exists(PLAYBOOKS_PATH) else "/var/www/localstorage/playbooks"
+    if not os.path.exists(pdir):
+        return "❌ Directorio de playbooks no encontrado en /mnt/localstorage/playbooks"
+    
+    playbooks = [fn[:-3] for fn in sorted(os.listdir(pdir)) if fn.endswith(".md")]
+    if not playbooks:
+        return "No hay playbooks disponibles."
+    return "📚 **Playbooks Universales Disponibles**:\n" + "\n".join([f"• {p}" for p in playbooks])
+
+def get_playbook(playbook_slug: str) -> str:
+    """Reads a universal playbook markdown file by name (e.g. 'seo_aeo_playbook', 'copywriting_playbook', 'offers_pricing_playbook', 'funnels_cro_playbook')."""
+    slug = playbook_slug.strip().lower()
+    if not slug.endswith(".md"):
+        slug = f"{slug}.md"
+    
+    for base in [PLAYBOOKS_PATH, "/var/www/localstorage/playbooks"]:
+        fpath = os.path.join(base, slug)
+        if os.path.exists(fpath):
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    if len(content) > 6000:
+                        return f"[PLAYBOOK {slug} (primeros 6000 caracteres)]:\n\n{content[:6000]}\n\n... [snip resto del playbook]"
+                    return content
+            except Exception as e:
+                return f"❌ Error leyendo playbook {slug}: {str(e)}"
+    
+    return f"❌ Playbook '{playbook_slug}' no encontrado. Usa list_playbooks para ver los disponibles."
+
+def get_brandbook_tokens(vertical_slug: str = "") -> str:
+    """Reads the compiled brandbook and design tokens (brandbook.json, chroma_manifest.json, font_manifest.json) for a specific vertical from its isolated workspace."""
+    slug = (vertical_slug or "juan-damaren").strip().lower()
+    for base in [DEV_BASE_PATH, "/var/www/localstorage/MentorIA/dev"]:
+        # 1. Check workspace brand path
+        w_path = os.path.join(base, "workspaces", slug, "brand", "brandbook.json")
+        if os.path.exists(w_path):
+            try:
+                with open(w_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception as e:
+                return f"❌ Error leyendo brandbook.json en workspace {slug}: {str(e)}"
+        # 2. Check root / fallback symlink
+        bb_path = os.path.join(base, "brandbook.json")
+        if os.path.exists(bb_path):
+            try:
+                with open(bb_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception as e:
+                return f"❌ Error leyendo brandbook.json: {str(e)}"
+    return f"❌ brandbook.json no encontrado para vertical '{slug}' en dev/workspaces/."
+
+def list_skills(query: str = "") -> str:
+    """Lists available sovereign skills in /mnt/localstorage/skills/ with their operational triggers and descriptions."""
+    bases = [SKILLS_PATH, "/var/www/localstorage/skills"]
+    target_base = None
+    for b in bases:
+        if os.path.isdir(b):
+            target_base = b
+            break
+    if not target_base:
+        return "❌ Directorio de sovereign skills no encontrado en /mnt/localstorage/skills"
+    
+    q = query.strip().lower()
+    discovered = []
+    for item in sorted(os.listdir(target_base)):
+        item_path = os.path.join(target_base, item)
+        if not os.path.isdir(item_path):
+            continue
+        skill_md = os.path.join(item_path, "SKILL.md")
+        if not os.path.exists(skill_md):
+            continue
+        
+        desc = ""
+        try:
+            with open(skill_md, "r", encoding="utf-8") as f:
+                content = f.read(1500)
+                if content.startswith("---"):
+                    parts = content.split("---", 2)
+                    if len(parts) >= 3:
+                        for line in parts[1].splitlines():
+                            if line.strip().startswith("description:"):
+                                desc = line.split("description:", 1)[1].strip().strip('"').strip("'")
+                                break
+        except Exception:
+            pass
+        
+        if q:
+            if q in item.lower() or q in desc.lower():
+                discovered.append((item, desc))
+        else:
+            discovered.append((item, desc))
+            
+    if not discovered:
+        return f"No se encontraron sovereign skills que coincidan con '{query}'."
+    
+    if q:
+        lines = [f"• **{n}**: {d[:160]}..." if d else f"• **{n}**" for n, d in discovered]
+        return f"🛠️ **Sovereign Skills Coincidentes con '{query}' ({len(lines)})**:\n" + "\n".join(lines)
+    else:
+        names = [item[0] for item in discovered]
+        return f"🛠️ **{len(names)} Sovereign Skills en /mnt/localstorage/skills/** (filtrá con list_skills(query='...') o consultá con get_skill_docs(name)):\n" + ", ".join(names)
+
+def get_skill_docs(skill_name: str) -> str:
+    """Reads the SKILL.md and operational usage guidelines of any sovereign skill from /mnt/localstorage/skills/ (e.g. 'seo-aeo-geo', 'growth-engine', 'apotelos', 'astro-web')."""
+    sname = skill_name.strip().lower()
+    for base in [SKILLS_PATH, "/var/www/localstorage/skills"]:
+        sdir = os.path.join(base, sname)
+        if os.path.isdir(sdir):
+            skill_md = os.path.join(sdir, "SKILL.md")
+            if os.path.exists(skill_md):
+                try:
+                    with open(skill_md, "r", encoding="utf-8") as f:
+                        return f.read()
+                except Exception as e:
+                    return f"❌ Error leyendo SKILL.md para {sname}: {str(e)}"
+    return f"❌ Skill '{sname}' no encontrada en localstorage/skills."
+
+def apotelos_cli(subcommand: str, args: str = "") -> str:
+    """
+    Executes the sovereign Apotelos Reverse-Causality CLI (/usr/local/bin/apotelos).
+    Subcommands:
+      - 'list': Lists all discovered business verticals and active ecosystem.
+      - 'audit': Validates static Pydantic v2 contract for a vertical (e.g. args='--vertical juan-damaren').
+      - 'plan': Displays the reverse causality domino tree (Dominó 4 a Dominó 0).
+      - 'run': Compiles the authoritative Blackboard Manifest and SSoT Markdown Dossier.
+      - 'dossier': Compiles the comprehensive SSoT markdown dossier for the ecosystem.
+      - 'test': Runs the physical agnostic integrity sensor.
+      - 'scaffold': Materializes Astro 5 SSR code from the Blackboard manifest.
+    """
+    import subprocess
+    cmd = f"/usr/local/bin/apotelos {subcommand} {args}".strip()
+    try:
+        res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        out = (res.stdout + "\n" + res.stderr).strip()
+        return out if out else f"✅ Comando '{cmd}' ejecutado exitosamente con código {res.returncode}."
+    except Exception as e:
+        return f"❌ Error ejecutando '{cmd}': {str(e)}"
+
 

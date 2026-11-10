@@ -26,7 +26,8 @@ try:
         paperclip_list_tasks, paperclip_create_task, paperclip_register_agent,
         mem_context, mem_search, mem_save,
         linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue,
-        list_verticals, get_vertical, list_playbooks, get_playbook, get_brandbook_tokens, get_skill_docs
+        list_verticals, get_vertical, list_playbooks, get_playbook, get_brandbook_tokens,
+        list_skills, get_skill_docs, apotelos_cli
     )
 except (ImportError, ValueError):
     from .prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt
@@ -43,7 +44,8 @@ except (ImportError, ValueError):
         paperclip_list_tasks, paperclip_create_task, paperclip_register_agent,
         mem_context, mem_search, mem_save,
         linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue,
-        list_verticals, get_vertical, list_playbooks, get_playbook, get_brandbook_tokens, get_skill_docs
+        list_verticals, get_vertical, list_playbooks, get_playbook, get_brandbook_tokens,
+        list_skills, get_skill_docs, apotelos_cli
     )
 
 # Load persistent runtime environment if present
@@ -61,7 +63,7 @@ if os.path.exists(_runtime_env_path):
 
 BIFROST_URL = os.getenv("HERMES_MODEL_ENDPOINT", "http://bifrost:8080/v1")
 _raw_model = os.getenv("HERMES_MODEL_OVERRIDE") or os.getenv("HERMES_MODEL_NAME")
-MODEL_NAME = "qwen/qwen3.8-27b" if (not _raw_model or _raw_model.lower() == "auto") else _raw_model
+MODEL_NAME = _raw_model if (_raw_model and _raw_model.lower() != "auto") else "auto"
 BIFROST_KEY = os.getenv("BIFROST_VIRTUAL_KEY", "vk-hermes-agent")
 
 HERMES_TOOLS = [
@@ -665,6 +667,22 @@ HERMES_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "list_skills",
+            "description": "Descubre y lista dinámicamente las sovereign skills disponibles en /mnt/localstorage/skills/ con su descripción y triggers operativos.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Término opcional de búsqueda o filtro (ej. 'seo', 'brand', 'copy', 'oraculo', 'astro')"
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_skill_docs",
             "description": "Consulta la documentación SKILL.md y directivas de ejecución de cualquier sovereign skill disponible en /mnt/localstorage/skills/ (ej. 'seo-aeo-geo', 'growth-engine', 'apotelos', 'astro-web').",
             "parameters": {
@@ -678,6 +696,27 @@ HERMES_TOOLS = [
                 "required": ["skill_name"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "apotelos_cli",
+            "description": "Ejecuta el CLI soberano de Apotelos (/usr/local/bin/apotelos) para orquestación causal, auditoría de contratos Pydantic v2, árbol de dominó y compilación de manifiestos Blackboard.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "subcommand": {
+                        "type": "string",
+                        "description": "Subcomando de apotelos: 'list', 'audit', 'plan', 'run', 'dossier', 'test', o 'scaffold'"
+                    },
+                    "args": {
+                        "type": "string",
+                        "description": "Argumentos adicionales (ej. '--vertical juan-damaren')"
+                    }
+                },
+                "required": ["subcommand"]
+            }
+        }
     }
 ]
 
@@ -687,7 +726,9 @@ TOOL_DISPATCH = {
     "list_playbooks": lambda a: list_playbooks(),
     "get_playbook": lambda a: get_playbook(a.get("playbook_slug", "")),
     "get_brandbook_tokens": lambda a: get_brandbook_tokens(),
+    "list_skills": lambda a: list_skills(a.get("query", "")),
     "get_skill_docs": lambda a: get_skill_docs(a.get("skill_name", "")),
+    "apotelos_cli": lambda a: apotelos_cli(a.get("subcommand", ""), a.get("args", "")),
     "get_system_health": lambda a: get_system_health(),
     "list_zerops_services": lambda a: list_zerops_services(),
     "get_zerops_service_status": lambda a: get_zerops_service_status(a.get("service_name", "")),
@@ -982,7 +1023,7 @@ class HermesAgent:
                                 "x-routing-tier": "pro"
                             },
                             json={
-                                "model": MODEL_NAME,
+                                "model": "auto",
                                 "messages": messages,
                                 "tools": self.tools,
                                 "temperature": 0.3,
