@@ -2199,6 +2199,33 @@ def evaluate_hook(payload: dict) -> dict:
                     )
                 }
 
+        # A5.6 Anti-Frankenstein Python Tool Guard (Universal Primitives Architecture)
+        if ("tools.py" in target_file or "agent.py" in target_file) and tool_name in ["write_to_file", "write_file", "edit_file", "replace_file_content"] and content_to_check:
+            frankenstein_patterns = [
+                r'def\s+run_orchesbrand\b',
+                r'def\s+apotelos_cli\b',
+                r'def\s+run_apotelos\b',
+                r'def\s+run_brandplay\b',
+                r'def\s+run_fontgen\b',
+                r'def\s+run_chroma\b',
+                r'def\s+run_symbol\b',
+                r'def\s+run_kinetic\b',
+                r'def\s+run_brandbook\b',
+            ]
+            for pat in frankenstein_patterns:
+                match = re.search(pat, content_to_check)
+                if match:
+                    func_name = match.group(0)
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            f"VIOLACIÓN DE ARQUITECTURA (Anti-Frankenstein Tool Invariant - Meta-Script): "
+                            f"Prohibido crear tools Python ad-hoc para skills computacionales ({func_name}) en [{os.path.basename(target_file)}]. "
+                            "Toda skill determinista o ejecutable DEBE compilarse como un CLI autónomo en /usr/local/bin bajo meta-script "
+                            "e invocarse exclusivamente mediante la primitiva universal 'run_command'."
+                        )
+                    }
+
         # A5.4 Physical Syntax Pre-Flight Gate (Zero Syntax Errors)
         if tool_name in ["write_to_file", "write_file"] and content_to_check:
             # Python syntax validation
@@ -3674,6 +3701,32 @@ def run_tests():
                     os.rmdir("/var/www/zerops-astro-skills/test-monolith-no-refs")
 
             print("✓ Test 75 Passed: Meta-Skill Subskills Physical Enforcement Gate (BAI-458)")
+
+            # Test 76: Anti-Frankenstein Python Tool Guard (BAI-459)
+            res_frank = evaluate_hook({
+                "test_bypass_linear": True,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {
+                        "Path": "/var/www/hermes/tools.py",
+                        "Content": "def run_orchesbrand(vertical: str):\n    pass\n"
+                    }
+                }
+            })
+            assert res_frank.get("decision") == "deny" and "Anti-Frankenstein Tool Invariant" in res_frank.get("reason", ""), f"Expected deny on frankenstein tool, got {res_frank}"
+
+            res_clean_tool = evaluate_hook({
+                "test_bypass_linear": True,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {
+                        "Path": "/var/www/hermes/tools.py",
+                        "Content": "def get_system_uptime():\n    return '10 days'\n"
+                    }
+                }
+            })
+            assert res_clean_tool.get("decision") == "allow", f"Expected allow on clean tool, got {res_clean_tool}"
+            print("✓ Test 76 Passed: Anti-Frankenstein Python Tool Guard (Universal Primitives Architecture)")
         finally:
             if cache_backup:
                 with open(test_cache, "w") as f:
