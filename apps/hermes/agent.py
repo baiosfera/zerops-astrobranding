@@ -12,8 +12,33 @@ import asyncio
 import httpx
 
 logger = logging.getLogger("hermes.agent")
+
+def load_hermes_soul() -> str:
+    """Loads the canonical Gentle AI SOUL.md constitution for Hermes Agent."""
+    candidates = [
+        os.path.expanduser("~/.hermes/SOUL.md"),
+        "/mnt/localstorage/hermes/.hermes/SOUL.md",
+        "/var/www/localstorage/hermes/.hermes/SOUL.md",
+        os.path.join(os.path.dirname(__file__), "SOUL.md"),
+        "/var/www/SOUL.md",
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        logger.info(f"[Hermes] Loaded canonical SOUL.md from {path} ({len(content)} bytes)")
+                        return content
+            except Exception as e:
+                logger.warning(f"Failed to read SOUL.md from {path}: {e}")
+    # Minimal affirmative fallback in case no file is reachable
+    return (
+        "Eres Hermes Agent, el orquestador autónomo de infraestructura y aplicaciones en Zerops. "
+        "Operás con rigor de Senior Architect, voseo natural y respuestas concisas orientadas a la acción."
+    )
+
 try:
-    from prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt, get_hermes_conversational_prompt
     from tools import (
         get_system_health, calculate_natal_chart, send_whatsapp_otp,
         list_zerops_services, start_zerops_service, stop_zerops_service, delete_zerops_service, get_zerops_service_status,
@@ -31,7 +56,6 @@ try:
         list_skills, get_skill_docs, apotelos_cli
     )
 except (ImportError, ValueError):
-    from .prompts import HERMES_SYSTEM_PROMPT, format_chatml_prompt, get_hermes_system_prompt, get_hermes_conversational_prompt
     from .tools import (
         get_system_health, calculate_natal_chart, send_whatsapp_otp,
         list_zerops_services, start_zerops_service, stop_zerops_service, delete_zerops_service, get_zerops_service_status,
@@ -1116,8 +1140,7 @@ def classify_query_intent(user_query: str) -> str:
 class HermesAgent:
     def __init__(self, system_prompt: str = None, role: str = "admin", bifrost_key: str = None, tools: list = None):
         self.role = role
-        self.system_prompt = system_prompt or get_hermes_system_prompt()
-        self.conversational_prompt = get_hermes_conversational_prompt()
+        self.system_prompt = system_prompt or load_hermes_soul()
         self.bifrost_key = bifrost_key or os.getenv("BIFROST_VIRTUAL_KEY", "vk-hermes-agent")
         self.tools = tools if tools is not None else HERMES_TOOLS
         self.history: list[dict[str, str]] = []
@@ -1128,14 +1151,10 @@ class HermesAgent:
         active_history = persistent_history if persistent_history else self.history
         
         intent = classify_query_intent(user_query)
-        if intent == "chat":
-            active_tools = None
-            active_system_prompt = self.conversational_prompt
-            task_type_header = "chat"
-        else:
-            active_tools = self.tools
-            active_system_prompt = self.system_prompt
-            task_type_header = "code"
+        task_type_header = "chat" if intent == "chat" else "code"
+        # Always provide tools and canonical SOUL.md; Hermes model decides autonomously
+        active_tools = self.tools
+        active_system_prompt = self.system_prompt
 
         messages = [
             {"role": "system", "content": active_system_prompt},
@@ -1269,7 +1288,7 @@ class HermesAgent:
                     # If tools were executed but no text content was emitted, force synthesis turn without tools
                     messages.append({
                         "role": "user",
-                        "content": "Con base en lo analizado, respondé a mi consulta de forma directa, ejecutiva y concisa (1 a 3 oraciones), EXCLUSIVAMENTE en español rioplatense (voseo). No emitas reflexiones ni razonamientos en inglés."
+                        "content": "Con base en las herramientas ejecutadas, sintetizá el resultado en español rioplatense (voseo) de forma ejecutiva, directa y concisa."
                     })
                     try:
                         res_synth = await client.post(
@@ -1279,7 +1298,7 @@ class HermesAgent:
                                 "model": target_model,
                                 "messages": messages,
                                 "temperature": 0.2,
-                                "max_tokens": 1024,
+                                "max_tokens": 2048,
                             },
                             timeout=30.0
                         )

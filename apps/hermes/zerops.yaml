@@ -44,6 +44,8 @@ zerops:
         OTEL_SDK_DISABLED: "true"
         TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
         TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS}
+        ZEROPS_TOKEN: ${ZEROPS_TOKEN}
+        ZCP_API_KEY: ${ZEROPS_TOKEN}
       start: python3 /var/www/main.py
       healthCheck:
         httpGet:

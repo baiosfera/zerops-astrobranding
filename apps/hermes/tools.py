@@ -145,6 +145,17 @@ async def send_whatsapp_otp(phone: str, client_name: str) -> dict:
 # --- Zerops Control Plane & Platform Orchestration Tools ---
 
 import subprocess
+import shutil
+
+def _get_zcli_bin() -> str:
+    """Dynamically resolves zcli executable across any Zerops container or host environment."""
+    path = shutil.which("zcli")
+    if path:
+        return path
+    for candidate in ["/usr/local/bin/zcli", "/mnt/localstorage/bin/zcli", "/opt/zerops/bin/zcli"]:
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return "zcli"
 
 def get_current_project_id() -> str:
     """Dynamically resolves active Zerops project ID from runtime environment."""
@@ -155,11 +166,12 @@ def _ensure_zcli_auth() -> bool:
     token = (os.getenv("ZCP_API_KEY") or os.getenv("ZEROPS_TOKEN") or "").strip()
     if not token:
         return False
+    zcli_bin = _get_zcli_bin()
     try:
-        chk = subprocess.run(["/opt/zerops/bin/zcli", "service", "list"], capture_output=True, text=True, timeout=5)
+        chk = subprocess.run([zcli_bin, "service", "list"], capture_output=True, text=True, timeout=5)
         if chk.returncode == 0 and "unauthenticated" not in chk.stderr.lower():
             return True
-        log_res = subprocess.run(["/opt/zerops/bin/zcli", "login", token], capture_output=True, text=True, timeout=10)
+        log_res = subprocess.run([zcli_bin, "login", token], capture_output=True, text=True, timeout=10)
         return log_res.returncode == 0
     except Exception:
         return False
@@ -173,7 +185,7 @@ def list_zerops_services() -> str:
     """Lists all active and configured services in the Zerops project with their current status (via zcli)."""
     _ensure_zcli_auth()
     project_id = get_current_project_id()
-    cmd = ["/opt/zerops/bin/zcli", "service", "list"]
+    cmd = [_get_zcli_bin(), "service", "list"]
     if project_id:
         cmd.append(f"--projectId={project_id}")
     try:
@@ -211,7 +223,7 @@ def start_zerops_service(service_name: str) -> str:
     _ensure_zcli_auth()
     service_name = _clean_service_name(service_name)
     project_id = get_current_project_id()
-    cmd = ["/opt/zerops/bin/zcli", "service", "start", service_name]
+    cmd = [_get_zcli_bin(), "service", "start", service_name]
     if project_id:
         cmd.append(f"--projectId={project_id}")
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
@@ -224,7 +236,7 @@ def stop_zerops_service(service_name: str) -> str:
     _ensure_zcli_auth()
     service_name = _clean_service_name(service_name)
     project_id = get_current_project_id()
-    cmd = ["/opt/zerops/bin/zcli", "service", "stop", service_name]
+    cmd = [_get_zcli_bin(), "service", "stop", service_name]
     if project_id:
         cmd.append(f"--projectId={project_id}")
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
@@ -237,7 +249,7 @@ def delete_zerops_service(service_name: str) -> str:
     _ensure_zcli_auth()
     service_name = _clean_service_name(service_name)
     project_id = get_current_project_id()
-    cmd = ["/opt/zerops/bin/zcli", "service", "delete", service_name, "--confirm"]
+    cmd = [_get_zcli_bin(), "service", "delete", service_name, "--confirm"]
     if project_id:
         cmd.append(f"--projectId={project_id}")
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
@@ -258,7 +270,7 @@ def _resolve_service_id(service_name: str) -> Optional[str]:
     """Resolves a Zerops service name to its serviceId dynamically."""
     _ensure_zcli_auth()
     project_id = get_current_project_id()
-    cmd = ["/opt/zerops/bin/zcli", "service", "list"]
+    cmd = [_get_zcli_bin(), "service", "list"]
     if project_id:
         cmd.append(f"--projectId={project_id}")
     try:
@@ -280,7 +292,7 @@ def zerops_get_service_logs(service_name: str, limit: int = 50) -> str:
     if not service_id:
         return f"❌ No se pudo resolver el ID del servicio '{service_name}' en el proyecto activo."
     project_id = get_current_project_id()
-    cmd = ["/opt/zerops/bin/zcli", "service", "log", f"--service-id={service_id}", f"--limit={limit}"]
+    cmd = [_get_zcli_bin(), "service", "log", f"--service-id={service_id}", f"--limit={limit}"]
     if project_id:
         cmd.append(f"--project-id={project_id}")
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
@@ -293,7 +305,7 @@ def zerops_deploy_service(service_name: str, working_dir: str = "") -> str:
     _ensure_zcli_auth()
     service_name = _clean_service_name(service_name)
     project_id = get_current_project_id()
-    cmd = ["/opt/zerops/bin/zcli", "push", service_name, "--no-wait"]
+    cmd = [_get_zcli_bin(), "push", service_name, "--no-wait"]
     if working_dir:
         cmd.append(f"--working-dir={working_dir}")
     if project_id:

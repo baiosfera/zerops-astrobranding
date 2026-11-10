@@ -566,6 +566,8 @@ BIFROST_VK_PYDANTICAI=vk-pydanticai
 HERMES_MODEL_ENDPOINT=http://bifrost:8080/v1
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
 TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
+ZEROPS_TOKEN=${ZEROPS_TOKEN:-}
+ZCP_API_KEY=${ZEROPS_TOKEN:-}
 EOF
     chmod 600 "$HERMES_ENV" 2>/dev/null || true
 else
@@ -588,6 +590,8 @@ else
     [ -n "${LINEAR_API_KEY:-}" ] && update_hermes_env "LINEAR_API_KEY" "$LINEAR_API_KEY"
     [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && update_hermes_env "TELEGRAM_BOT_TOKEN" "$TELEGRAM_BOT_TOKEN"
     [ -n "${TELEGRAM_ALLOWED_USERS:-}" ] && update_hermes_env "TELEGRAM_ALLOWED_USERS" "$TELEGRAM_ALLOWED_USERS"
+    [ -n "${ZEROPS_TOKEN:-}" ] && update_hermes_env "ZEROPS_TOKEN" "$ZEROPS_TOKEN"
+    [ -n "${ZEROPS_TOKEN:-}" ] && update_hermes_env "ZCP_API_KEY" "$ZEROPS_TOKEN"
 fi
 if [ -f "$REPO_DIR/scripts/linear_bridge.py" ]; then
     cp -f "$REPO_DIR/scripts/linear_bridge.py" "$PROJECT_ROOT/localstorage/hermes/linear_bridge.py" 2>/dev/null || true
