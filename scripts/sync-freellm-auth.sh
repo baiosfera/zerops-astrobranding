@@ -51,8 +51,33 @@ try {
   if (updated.changes > 0) {
     console.log(\"Patched Groq qwen3.8-27b tpm_limit to 7000 ITPM.\");
   }
+
+  // Ensure routing settings use smartest strategy and MAB exploration
+  db.prepare(\"INSERT INTO settings (key, value) VALUES (\x27routing_strategy\x27, \x27smartest\x27) ON CONFLICT(key) DO UPDATE SET value = \x27smartest\x27\").run();
+  db.prepare(\"INSERT INTO settings (key, value) VALUES (\x27routing_explore_enabled\x27, \x271\x27) ON CONFLICT(key) DO UPDATE SET value = \x271\x27\").run();
+  db.prepare(\"INSERT INTO settings (key, value) VALUES (\x27key_selection_strategy\x27, \x27least-remaining\x27) ON CONFLICT(key) DO UPDATE SET value = \x27least-remaining\x27\").run();
+
+  // Rebalance top Profile 1 priorities to include OpenRouter models
+  const topModels = [
+    { platform: \"cerebras\", model_id: \"qwen-3.8-27b\", priority: 1 },
+    { platform: \"groq\", model_id: \"qwen/qwen3.8-27b\", priority: 2 },
+    { platform: \"openrouter\", model_id: \"nvidia/nemotron-3.5-lightning:free\", priority: 3 },
+    { platform: \"openrouter\", model_id: \"dots-studio/dots-3-note-preview:free\", priority: 4 },
+    { platform: \"openrouter\", model_id: \"openrouter/free\", priority: 5 }
+  ];
+  for (const m of topModels) {
+    const row = db.prepare(\"SELECT id FROM models WHERE platform = ? AND model_id = ?\").get(m.platform, m.model_id);
+    if (row) {
+      db.prepare(\"UPDATE models SET enabled = 1 WHERE id = ?\").run(row.id);
+      db.prepare(\`
+        INSERT INTO profile_models (profile_id, model_db_id, priority, enabled)
+        VALUES (1, ?, ?, 1)
+        ON CONFLICT(profile_id, model_db_id) DO UPDATE SET priority = excluded.priority, enabled = 1
+      \`).run(row.id, m.priority);
+    }
+  }
 } catch (e) {
-  console.log(\"Model limit patch note: \" + e.message);
+  console.log(\"Model settings and priorities patch note: \" + e.message);
 }
 '"
 

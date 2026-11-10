@@ -110,6 +110,12 @@ Los agentes conversacionales (Hermes Agent) no deben inyectar schemas de 40+ her
 - Esto reduce el consumo de tokens de ~8,500 a ~50 tokens y la latencia a < 200ms, permitiendo alternancia dinámica entre proveedores libres sin saturar cuotas ni disparar HTTP 413s.
 - Las 42 herramientas operativas se reservan estrictamente para consultas que demandan ejecución técnica (`x-freellm-task-type: code`).
 
+### Invariante 9: Estrategia `smartest`, MAB Exploration y OpenRouter Top Priorities
+Para evitar el monopolio de un solo proveedor rápido (Cerebras) y aprovechar la flota de OpenRouter y Groq:
+- `routing_strategy = 'smartest'` en `settings`: asigna 55% de peso a inteligencia, 35% a confiabilidad y 10% a velocidad.
+- `routing_explore_enabled = '1'` en `settings`: activa Thompson Sampling exploration para evitar el *Exploitation Trap* y muestrear periódicamente modelos con pocas observaciones.
+- En `profile_models` (Perfil 1), los modelos de OpenRouter de alta capacidad (`dots-studio/dots-3-note-preview:free`, `nvidia/nemotron-3.5-lightning:free`, `openrouter/free`) deben posicionarse en prioridades 1 a 5 junto a Cerebras y Groq.
+
 ---
 
 ## 3. Matriz de Proveedores Verificados (8 Keys)
