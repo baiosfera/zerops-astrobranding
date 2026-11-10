@@ -53,7 +53,7 @@ try:
         mem_context, mem_search, mem_save,
         linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue,
         list_verticals, get_vertical, list_playbooks, get_playbook, get_brandbook_tokens,
-        list_skills, get_skill_docs, apotelos_cli, run_orchesbrand
+        list_skills, get_skill_docs, apotelos_cli
     )
 except (ImportError, ValueError):
     from .tools import (
@@ -70,7 +70,7 @@ except (ImportError, ValueError):
         mem_context, mem_search, mem_save,
         linear_create_issue, linear_update_status, linear_get_issue, linear_comment_issue,
         list_verticals, get_vertical, list_playbooks, get_playbook, get_brandbook_tokens,
-        list_skills, get_skill_docs, apotelos_cli, run_orchesbrand
+        list_skills, get_skill_docs, apotelos_cli
     )
 
 # Load persistent runtime environment if present
@@ -744,34 +744,10 @@ HERMES_TOOLS = [
                 "required": ["subcommand"]
             }
         }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_orchesbrand",
-            "description": "Ejecuta el pipeline de diseño e identidad visual orchesbrand (fontgen, chroma, brandbook) para una vertical específica (ej: 'apotelos', 'astrotipia', 'seo-maps', 'synthemika', 'juan-damaren', 'baiosfera') o para todas ('all'). Genera font_manifest.json, chroma_manifest.json, brandbook.json y brandbook-theme.css en dev/workspaces/[vertical]/brand/.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "vertical": {
-                        "type": "string",
-                        "description": "Slug de la vertical (ej: 'apotelos', 'astrotipia', 'seo-maps', 'synthemika', 'all')",
-                        "default": "all"
-                    },
-                    "phases": {
-                        "type": "string",
-                        "description": "Fases a ejecutar separadas por coma ('fontgen,chroma,brandbook' o 'all')",
-                        "default": "fontgen,chroma,brandbook"
-                    }
-                },
-                "required": ["vertical"]
-            }
-        }
     }
 ]
 
 TOOL_DISPATCH = {
-    "run_orchesbrand": lambda a: run_orchesbrand(a.get("vertical", "all"), a.get("phases", "fontgen,chroma,brandbook")),
     "list_verticals": lambda a: list_verticals(),
     "get_vertical": lambda a: get_vertical(a.get("vertical_slug", "")),
     "list_playbooks": lambda a: list_playbooks(),
@@ -1285,7 +1261,7 @@ class HermesAgent:
                             messages.append({"role": "assistant", "content": raw_content})
                             messages.append({
                                 "role": "user",
-                                "content": "Mandato de acción detectado. Invocá inmediatamente la herramienta correspondiente (ej: run_orchesbrand, run_command, pidev_dispatch_task, etc.) sin emitir texto conversacional ni explicaciones."
+                                "content": "Mandato de acción detectado. Invocá inmediatamente la herramienta correspondiente (ej: run_command con el CLI adecuado, pidev_dispatch_task, etc.) sin emitir texto conversacional ni explicaciones."
                             })
                             continue
                         final_content = sanitize_model_output(raw_content)

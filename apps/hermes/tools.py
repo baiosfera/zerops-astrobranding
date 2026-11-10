@@ -1556,17 +1556,4 @@ def apotelos_cli(subcommand: str, args: str = "") -> str:
     except Exception as e:
         return f"❌ Error ejecutando '{cmd}': {str(e)}"
 
-def run_orchesbrand(vertical: str = "all", phases: str = "fontgen,chroma,brandbook") -> str:
-    """
-    Ejecuta el pipeline de orchesbrand (fontgen, chroma, brandbook) para una vertical específica o para todas ('all').
-    Genera font_manifest.json, chroma_manifest.json, brandbook.json y brandbook-theme.css en el workspace de la vertical.
-    """
-    runner = "/var/www/hermes/scripts/orchesbrand_runner.py"
-    if not os.path.exists(runner):
-        runner = "/mnt/localstorage/hermes/scripts/orchesbrand_runner.py"
-    v = (vertical or "all").strip().lower()
-    p = (phases or "fontgen,chroma,brandbook").strip()
-    cmd = f"python3 {runner} --vertical {v} --phases {p}"
-    return run_command(cmd)
-
 
