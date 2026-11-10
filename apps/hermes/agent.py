@@ -46,8 +46,22 @@ except (ImportError, ValueError):
         list_verticals, get_vertical, list_playbooks, get_playbook, get_brandbook_tokens, get_skill_docs
     )
 
+# Load persistent runtime environment if present
+_runtime_env_path = os.getenv("RUNTIME_ENV_PATH", "/mnt/localstorage/hermes/runtime.env")
+if os.path.exists(_runtime_env_path):
+    try:
+        with open(_runtime_env_path, "r") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    os.environ[_k.strip()] = _v.strip()
+    except Exception:
+        pass
+
 BIFROST_URL = os.getenv("HERMES_MODEL_ENDPOINT", "http://bifrost:8080/v1")
-MODEL_NAME = os.getenv("HERMES_MODEL_OVERRIDE") or os.getenv("HERMES_MODEL_NAME") or "qwen/qwen3.8-27b"
+_raw_model = os.getenv("HERMES_MODEL_OVERRIDE") or os.getenv("HERMES_MODEL_NAME")
+MODEL_NAME = "qwen/qwen3.8-27b" if (not _raw_model or _raw_model.lower() == "auto") else _raw_model
 BIFROST_KEY = os.getenv("BIFROST_VIRTUAL_KEY", "vk-hermes-agent")
 
 HERMES_TOOLS = [
