@@ -1521,7 +1521,7 @@ class BifrostBrandStrategist:
     """Invokes Bifrost for comprehensive, deep multi-tradition brand positioning and narrative authoring."""
 
     def __init__(self, base_url: str = "http://bifrost:8080", primary_model: str = "deepseek/deepseek-chat",
-                 fallback_model: str = "freellmapi/deepseek-v4-flash", timeout_sec: int = 300):
+                 fallback_model: str = "freellmapi/deepseek-v4-flash", timeout_sec: int = 180):
         self.base_url = (os.getenv("BIFROST_URL") or base_url).rstrip("/")
         self.primary_model = primary_model
         self.fallback_model = fallback_model
@@ -1984,7 +1984,6 @@ class BrandbookPipelineRunner:
         # Base directories
         self.diag_dir = Path("/var/www/baiosfera/ASTROLOGÍA/DIAG") / self.brand_upper
         self.diag_output_dir = self.diag_dir / "raw" / "llm"
-        self.shards_path = self.diag_dir / "raw" / "json" / "dumps" / "client_dumps_15_shards.json"
         self.projects_dir = Path("/var/www/baiosfera/PROYECTOS") / self.brand_upper
         self.project_dev_dir = self.projects_dir / "dev"
         self.localstorage_dev_dir = Path("/var/www/localstorage") / self.brand_upper / "dev"
@@ -2027,49 +2026,16 @@ class BrandbookPipelineRunner:
             author_psych_md = synth.render_author_psychology(self.brand_upper, shards)
             astrobranding_md = synth.render_astrobranding_brief(self.brand_upper, shards, palette)
         else:
-            try:
-                strategist = BifrostBrandStrategist(base_url=self.bifrost_url, primary_model=self.model, timeout_sec=300)
-                # Step 4.1: Brand Strategy JSON (< 20s)
-                strategy_data = strategist.generate_strategy_json(self.brand_upper, shards, palette)
-                # Step 4.2: Full Author Psychology Markdown (~25s)
-                author_psych_md = strategist.generate_author_psychology_markdown(self.brand_upper, shards)
-                # Step 4.3: Full Astrobranding Brief Markdown (~25s)
-                astrobranding_md = strategist.generate_astrobranding_brief_markdown(self.brand_upper, shards, palette)
-            except Exception as bifrost_err:
-                logger.warning(f"Bifrost Gateway unreachable ({bifrost_err}). Checking for existing SSoT briefs to adopt...")
-                # Try adopting existing artifacts from dev or diag
-                existing_bb_candidates = [
-                    self.project_dev_dir / "brandbook.json",
-                    self.diag_output_dir / "brandbook.json"
-                ]
-                strategy_data = None
-                for cand in existing_bb_candidates:
-                    if cand.exists():
-                        try:
-                            bb_raw = json.loads(cand.read_text(encoding="utf-8"))
-                            strategy_data = {
-                                "brand_architecture": bb_raw.get("brand_architecture", {}),
-                                "voice_and_tone": bb_raw.get("voice_tone_and_messaging", {}),
-                                "target_audience": bb_raw.get("target_audience", {}),
-                                "brand_narrative": bb_raw.get("brand_narrative", ""),
-                            }
-                            logger.info(f"Adopted existing Brand Strategy from: {cand}")
-                            break
-                        except Exception:
-                            pass
+            strategist = BifrostBrandStrategist(base_url=self.bifrost_url, primary_model=self.model, timeout_sec=180)
+            
+            # Step 4.1: Brand Strategy JSON (< 20s)
+            strategy_data = strategist.generate_strategy_json(self.brand_upper, shards, palette)
 
-                existing_psych = self.project_dev_dir / "fase0_author_psychology.md"
-                if not existing_psych.exists():
-                    existing_psych = self.diag_output_dir / "fase0_author_psychology.md"
-                author_psych_md = existing_psych.read_text(encoding="utf-8") if existing_psych.exists() else None
+            # Step 4.2: Full Author Psychology Markdown (~25s)
+            author_psych_md = strategist.generate_author_psychology_markdown(self.brand_upper, shards)
 
-                existing_brief = self.project_dev_dir / f"astrobranding_{self.brand_lower}.md"
-                if not existing_brief.exists():
-                    existing_brief = self.diag_output_dir / f"astrobranding_{self.brand_lower}.md"
-                astrobranding_md = existing_brief.read_text(encoding="utf-8") if existing_brief.exists() else None
-
-                if not strategy_data or not author_psych_md or not astrobranding_md:
-                    raise bifrost_err
+            # Step 4.3: Full Astrobranding Brief Markdown (~25s)
+            astrobranding_md = strategist.generate_astrobranding_brief_markdown(self.brand_upper, shards, palette)
 
         # 5. Assemble W3C DTCG Brandbook JSON
         brandbook_json = self._assemble_dtcg_brandbook(self.brand_upper, shards, palette, strategy_data)
@@ -2132,14 +2098,6 @@ class BrandbookPipelineRunner:
         (target_dir / "brandbook-theme.css").write_text(theme_css, encoding="utf-8")
         (target_dir / "system_prompt.md").write_text(system_prompt, encoding="utf-8")
 
-        # Canonical DIAG root mirror for Track B (orchesbrand / fontgen / symbol / chroma)
-        diag_root_brief = Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{self.brand_upper}/astrobranding_{self.brand_lower}.md")
-        try:
-            diag_root_brief.parent.mkdir(parents=True, exist_ok=True)
-            diag_root_brief.write_text(brief, encoding="utf-8")
-        except Exception as e:
-            logger.warning(f"Could not mirror brief to canonical DIAG root: {e}")
-
     def _assemble_dtcg_brandbook(self, brand_name: str, shards: Dict[str, Any],
                                  palette: Dict[str, Any], strategy: Dict[str, Any]) -> Dict[str, Any]:
         """Assembles a valid W3C Design Tokens Community Group (DTCG 2025.10) document."""
@@ -2160,64 +2118,44 @@ class BrandbookPipelineRunner:
         sb_dom = sb.get("dominant_planet", "Sol")
         sb_rupas = sb.get("max_rupas", 6.0)
 
-        # Agnostic Typography Derivation & SSoT Manifest Adoption
-        font_manifest_candidates = [
-            Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{brand_name}/font_manifest.json"),
-            Path(f"/var/www/baiosfera/PROYECTOS/{brand_name}/dev/font_manifest.json"),
-        ]
-        font_manifest_data = None
-        for fc in font_manifest_candidates:
-            if fc.exists():
-                try:
-                    font_manifest_data = json.loads(fc.read_text(encoding="utf-8"))
-                    logger.info(f"Adopted existing font_manifest.json SSoT from: {fc}")
-                    break
-                except Exception:
-                    pass
+        # Dynamic typography choice with font_manifest.json ingestion
+        disp_fonts = []
+        body_fonts = []
+        mono_fonts = []
 
-        if not font_manifest_data:
+        font_manifest_path = None
+        for cand_dir in [self.project_dev_dir, self.diag_dir, Path.cwd(), Path.cwd() / "brand"]:
+            if (cand_dir / "font_manifest.json").exists():
+                font_manifest_path = cand_dir / "font_manifest.json"
+                break
+
+        if font_manifest_path:
             try:
-                # Add fontgen/scripts to path if needed
-                fontgen_dir = Path("/var/www/.agents/skills/fontgen/scripts")
-                if str(fontgen_dir) not in sys.path:
-                    sys.path.insert(0, str(fontgen_dir))
-                from fontgen_engine import FontgenEngine
-                f_engine = FontgenEngine(brand=brand_name, shards_path=self.shards_path)
-                font_manifest_data, _ = f_engine.run(dry_run=False)
-                logger.info(f"Dynamically generated agnostic font_manifest.json for: {brand_name}")
-            except Exception as e:
-                logger.warning(f"Could not run fontgen_engine: {e}")
+                fm = json.loads(font_manifest_path.read_text(encoding="utf-8"))
+                sel_eco = fm.get("selected_ecosystem", {})
+                tokens = sel_eco.get("tokens", {})
+                disp_val = tokens.get("display_primary", {}).get("$value")
+                body_val = tokens.get("ui_secondary", {}).get("$value")
+                if disp_val and body_val:
+                    disp_fonts = [disp_val, "serif" if "serif" in disp_val.lower() else "sans-serif"]
+                    body_fonts = [body_val, "Inter", "sans-serif"]
+                    mono_fonts = ["JetBrains Mono", "monospace"]
+            except Exception:
+                pass
 
-        if font_manifest_data:
-            sel_eco = font_manifest_data.get("selected_ecosystem") or font_manifest_data.get("candidate_ecosystems", [{}])[0]
-            tokens_typo = sel_eco.get("tokens", {})
-            fallback_disp = "Space Grotesk" if mc_sign in ["Gemini", "Libra", "Aquarius", "Aries", "Leo", "Sagittarius"] else "Cormorant Garamond"
-            fallback_body = "Outfit" if mc_sign in ["Gemini", "Libra", "Aquarius", "Aries", "Leo", "Sagittarius"] else "Plus Jakarta Sans"
-            fallback_accent = "Space Mono" if mc_sign in ["Gemini", "Libra", "Aquarius", "Aries", "Leo", "Sagittarius"] else "Cinzel Decorative"
-
-            disp_primary = tokens_typo.get("display_primary", {}).get("$value") or fallback_disp
-            ui_secondary = tokens_typo.get("ui_secondary", {}).get("$value") or fallback_body
-            accent_brand = tokens_typo.get("accent_brand", {}).get("$value") or fallback_accent
-
-            disp_fonts = [disp_primary, "serif"]
-            body_fonts = [ui_secondary, "sans-serif"]
-            accent_fonts = [accent_brand, "display"]
-            mono_fonts = ["JetBrains Mono", "monospace"]
-            typo_ecosystems = font_manifest_data.get("candidate_ecosystems", [])
-            cls_overrides = sel_eco.get("cls_metric_overrides", {})
-        else:
+        if not disp_fonts:
             if mc_sign in ["Gemini", "Libra", "Aquarius", "Aries", "Leo", "Sagittarius"]:
                 disp_fonts = ["Space Grotesk", "Syne", "sans-serif"]
                 body_fonts = ["Outfit", "Inter", "sans-serif"]
-                accent_fonts = ["Space Mono", "display"]
                 mono_fonts = ["Space Mono", "monospace"]
-            else:
-                disp_fonts = ["Cormorant Garamond", "Cinzel", "serif"]
-                body_fonts = ["Plus Jakarta Sans", "Inter", "sans-serif"]
-                accent_fonts = ["Cinzel Decorative", "display"]
+            elif mc_sign in ["Cancer", "Scorpio", "Pisces"]:
+                disp_fonts = ["Fraunces", "Cormorant Garamond", "serif"]
+                body_fonts = ["Spectral", "Inter", "serif"]
                 mono_fonts = ["JetBrains Mono", "monospace"]
-            typo_ecosystems = []
-            cls_overrides = {}
+            else: # Earth signs (Taurus, Virgo, Capricorn)
+                disp_fonts = ["Newsreader", "Cinzel", "serif"]
+                body_fonts = ["Inter", "-apple-system", "sans-serif"]
+                mono_fonts = ["JetBrains Mono", "monospace"]
 
         # Dynamic motion timing
         if sb_dom in ["Mercury", "Mars"]:
@@ -2360,14 +2298,7 @@ class BrandbookPipelineRunner:
                             "$value": mono_fonts,
                             "$description": "Mathematical coordinate and token font",
                         },
-                        "accent": {
-                            "$type": "fontFamily",
-                            "$value": accent_fonts,
-                            "$description": "Brand voice and monogram accent typography",
-                        },
                     },
-                    "ecosystems": typo_ecosystems,
-                    "cls_metric_overrides": cls_overrides,
                     "fontSize": {
                         "display": {"$type": "dimension", "$value": "clamp(2.5rem, 5vw + 1rem, 4.5rem)"},
                         "h1": {"$type": "dimension", "$value": "clamp(2rem, 4vw + 1rem, 3.5rem)"},
@@ -2393,7 +2324,6 @@ class BrandbookPipelineRunner:
                 "communication_style": voice.get("primary_tone", "Autoridad serena y calidez profesional"),
                 "guardrails": [
                     "Never hallucinate services or products outside verified brand assets.",
-                    "Dynamic Business Data Invariant: Catalog, live prices, events, schedule availability, and payment URLs must be queried in real time via database/API tools (PostgreSQL 18 / Present Continuous); never hardcode or assume business data from this prompt.",
                     "Respect the brand's tone and forbidden vocabulary at all times.",
                     "Prioritize genuine connection and value before conversion.",
                 ],
@@ -2430,9 +2360,8 @@ class BrandbookPipelineRunner:
             return default_str
 
         font_disp = format_font(typo.get("display"), "'Cinzel', serif")
-        font_body = format_font(typo.get("body"), "'Plus Jakarta Sans', sans-serif")
+        font_body = format_font(typo.get("body"), "'Inter', -apple-system, BlinkMacSystemFont, sans-serif")
         font_mono = format_font(typo.get("mono"), "'JetBrains Mono', monospace")
-        font_accent = format_font(typo.get("accent"), "'Adorn Chiseled Monogram', cursive")
 
         return f"""/* ==========================================================================
    Tailwind CSS v4 Brand Theme Tokens — {self.brand_upper}
@@ -2453,7 +2382,6 @@ class BrandbookPipelineRunner:
   --font-display: {font_disp};
   --font-body: {font_body};
   --font-mono: {font_mono};
-  --font-accent: {font_accent};
 }}
 
 :root {{
@@ -2468,7 +2396,6 @@ class BrandbookPipelineRunner:
   --font-display: {font_disp};
   --font-body: {font_body};
   --font-mono: {font_mono};
-  --font-accent: {font_accent};
 }}
 """
 
@@ -2484,7 +2411,6 @@ class BrandbookPipelineRunner:
         style = engine.get("communication_style", "Autoridad serena y calidez profesional.")
         guardrails = engine.get("guardrails", [
             "Never hallucinate services or products outside verified brand assets.",
-            "Dynamic Business Data Invariant: Catalog, live prices, events, schedule availability, and payment URLs must be queried in real time via database/API tools (PostgreSQL 18 / Present Continuous); never hardcode or assume business data from this prompt.",
             "Respect the brand's tone and forbidden vocabulary at all times.",
             "Prioritize genuine connection and value before conversion.",
         ])
