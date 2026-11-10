@@ -1001,18 +1001,27 @@ class HermesAgent:
         active_provider = "freellmapi"
         active_model = MODEL_NAME
         
+        request_headers = {"Authorization": f"Bearer {self.bifrost_key}"}
+        target_model = MODEL_NAME
+        query_lower = user_query.lower()
+        if any(k in query_lower for k in ("deepseek", "pro tier", "modo pro", "razonamiento pro", "tier pro")):
+            request_headers["x-force-deepseek"] = "true"
+            request_headers["x-routing-tier"] = "pro"
+            target_model = "deepseek-chat"
+
         async with httpx.AsyncClient(timeout=60.0) as client:
             try:
                 while max_tool_iterations > 0:
                     max_tool_iterations -= 1
                     res = await client.post(
                         f"{BIFROST_URL}/chat/completions",
-                        headers={"Authorization": f"Bearer {self.bifrost_key}"},
+                        headers=request_headers,
                         json={
-                            "model": MODEL_NAME,
+                            "model": target_model,
                             "messages": messages,
                             "tools": self.tools,
                             "temperature": 0.3,
+                            "max_tokens": 1024,
                         }
                     )
                     if res.status_code != 200:
@@ -1025,10 +1034,11 @@ class HermesAgent:
                                 "x-routing-tier": "pro"
                             },
                             json={
-                                "model": "auto",
+                                "model": "deepseek-chat",
                                 "messages": messages,
                                 "tools": self.tools,
                                 "temperature": 0.3,
+                                "max_tokens": 1024,
                             },
                             timeout=120.0
                         )
@@ -1104,16 +1114,17 @@ class HermesAgent:
                     # If tools were executed but no text content was emitted, force synthesis turn without tools
                     messages.append({
                         "role": "user",
-                        "content": "Con base en los resultados observados de las herramientas ejecutadas, redactá el informe técnico con tu veredicto estructurado para el usuario."
+                        "content": "Con base en los resultados de las herramientas ejecutadas, respondé al usuario con la información solicitada de forma concisa (1 a 3 oraciones por defecto), directa y ejecutiva. No generes tablas markdown ni bloques de código a menos que el usuario lo haya pedido explícitamente."
                     })
                     try:
                         res_synth = await client.post(
                             f"{BIFROST_URL}/chat/completions",
-                            headers={"Authorization": f"Bearer {self.bifrost_key}"},
+                            headers=request_headers,
                             json={
-                                "model": MODEL_NAME,
+                                "model": target_model,
                                 "messages": messages,
                                 "temperature": 0.3,
+                                "max_tokens": 800,
                             },
                             timeout=30.0
                         )

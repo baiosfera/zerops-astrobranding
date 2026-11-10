@@ -33,7 +33,7 @@
     "enabled": true,
     "type": "chromem",
     "config": {
-      "path": "/mnt/localstorage/bifrost/chromem",
+      "path": "/var/www/chromem",
       "compress": true
     }
   },
@@ -60,15 +60,18 @@
       "keys": [
         {
           "name": "freellmapi-primary-pool",
-          "value": "freellmapi-3201de79b7e7c2f46abf1718a0862337db9489157fd7d4ad",
-          "models": ["*"],
+          "value": "freellmapi-1a51f9aa17ab766b7e98b5b2ae3353a6bfb216d86868a4ef",
+          "models": [
+            "*"
+          ],
+          "aliases": {},
           "weight": 1.0
         }
       ],
       "network_config": {
         "base_url": "http://freellmapi:3001",
         "allow_private_network": true,
-        "default_request_timeout_in_seconds": 3,
+        "default_request_timeout_in_seconds": 60,
         "max_retries": 1,
         "retry_backoff_initial": "300ms",
         "retry_backoff_max": "1s"
@@ -79,12 +82,14 @@
         {
           "name": "deepseek-pro-commercial",
           "value": "env.DEEPSEEK_PRO_KEY",
-          "models": ["*"],
+          "models": [
+            "*"
+          ],
           "aliases": {
             "auto": "deepseek-chat",
-            "deepseek-chat": "deepseek-v4-pro",
-            "deepseek-coder": "deepseek-v4-pro",
-            "deepseek-reasoner": "deepseek-v4-pro"
+            "deepseek-chat": "deepseek-chat",
+            "deepseek-coder": "deepseek-chat",
+            "deepseek-reasoner": "deepseek-reasoner"
           },
           "weight": 1.0
         }
@@ -102,7 +107,7 @@
       {
         "id": "vk-production-main",
         "name": "Production Sovereign Key",
-        "value": "env.BIFROST_VIRTUAL_KEY",
+        "value": "vk-damaren-sovereign-2026",
         "is_active": true,
         "rate_limits": {
           "requests_per_minute": 120
@@ -110,60 +115,22 @@
         "provider_configs": [
           {
             "provider": "freellmapi",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
             "weight": 1.0
           },
           {
             "provider": "deepseek",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
-            "weight": 1.0
-          }
-        ]
-      },
-      {
-        "id": "vk-astrobranding-prod",
-        "name": "AstroBranding Production",
-        "value": "env.BIFROST_VK_ASTROBRANDING",
-        "is_active": true,
-        "rate_limits": {
-          "requests_per_minute": 120
-        },
-        "provider_configs": [
-          {
-            "provider": "freellmapi",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
-            "weight": 1.0
-          },
-          {
-            "provider": "deepseek",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
-            "weight": 1.0
-          }
-        ]
-      },
-      {
-        "id": "vk-web-client",
-        "name": "Web Client Application",
-        "value": "env.BIFROST_VK_WEB",
-        "is_active": true,
-        "rate_limits": {
-          "requests_per_minute": 120
-        },
-        "provider_configs": [
-          {
-            "provider": "freellmapi",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
-            "weight": 1.0
-          },
-          {
-            "provider": "deepseek",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
             "weight": 1.0
           }
         ]
@@ -171,7 +138,7 @@
       {
         "id": "vk-hermes-agent",
         "name": "Hermes Agent Autonomous",
-        "value": "env.BIFROST_VK_HERMES",
+        "value": "vk-hermes-agent",
         "is_active": true,
         "rate_limits": {
           "requests_per_minute": 60
@@ -179,60 +146,22 @@
         "provider_configs": [
           {
             "provider": "freellmapi",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
             "weight": 1.0
           },
           {
             "provider": "deepseek",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
-            "weight": 1.0
-          }
-        ]
-      },
-      {
-        "id": "vk-evolution-wa",
-        "name": "Evolution WhatsApp Bot",
-        "value": "env.BIFROST_VK_EVOLUTION",
-        "is_active": true,
-        "rate_limits": {
-          "requests_per_minute": 60
-        },
-        "provider_configs": [
-          {
-            "provider": "freellmapi",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
-            "weight": 1.0
-          },
-          {
-            "provider": "deepseek",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
-            "weight": 1.0
-          }
-        ]
-      },
-      {
-        "id": "vk-agy-operator",
-        "name": "Antigravity AGY Operator",
-        "value": "env.BIFROST_VK_AGY",
-        "is_active": true,
-        "rate_limits": {
-          "requests_per_minute": 120
-        },
-        "provider_configs": [
-          {
-            "provider": "freellmapi",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
-            "weight": 1.0
-          },
-          {
-            "provider": "deepseek",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
             "weight": 1.0
           }
         ]
@@ -240,7 +169,7 @@
       {
         "id": "vk-crewai",
         "name": "CrewAI Teams Autonomous",
-        "value": "env.BIFROST_VK_CREWAI",
+        "value": "vk-crewai",
         "is_active": true,
         "rate_limits": {
           "requests_per_minute": 120
@@ -248,22 +177,30 @@
         "provider_configs": [
           {
             "provider": "freellmapi",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
             "weight": 1.0
           },
           {
             "provider": "deepseek",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
             "weight": 1.0
           }
         ]
       },
       {
-        "id": "vk-pydanticai",
-        "name": "PydanticAI Structured Contracts",
-        "value": "env.BIFROST_VK_PYDANTICAI",
+        "id": "vk-pidev",
+        "name": "PiDev Sovereign Code Builder",
+        "value": "vk-pidev",
         "is_active": true,
         "rate_limits": {
           "requests_per_minute": 120
@@ -271,14 +208,22 @@
         "provider_configs": [
           {
             "provider": "freellmapi",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
             "weight": 1.0
           },
           {
             "provider": "deepseek",
-            "allowed_models": ["*"],
-            "key_ids": ["*"],
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
             "weight": 1.0
           }
         ]

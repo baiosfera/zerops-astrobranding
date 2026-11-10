@@ -18,13 +18,24 @@ esac
 DOWNLOAD_URL="https://downloads.getmaxim.ai/bifrost/${BIFROST_VERSION}/${OS}/${ARCH}/bifrost-http"
 
 echo "==> Downloading from: ${DOWNLOAD_URL}"
+mkdir -p "$TARGET_DIR"
+if ! command -v curl >/dev/null 2>&1; then
+  if command -v apk >/dev/null 2>&1; then
+    apk add --no-cache curl bash ca-certificates
+  elif command -v apt-get >/dev/null 2>&1; then
+    apt-get update && apt-get install -y curl ca-certificates
+  fi
+fi
+
 curl -fsSL -o /tmp/bifrost "${DOWNLOAD_URL}"
 chmod +x /tmp/bifrost
 
 if [ -w "$TARGET_DIR" ]; then
   mv /tmp/bifrost "${TARGET_DIR}/bifrost"
-else
+elif command -v sudo >/dev/null 2>&1; then
   sudo mv /tmp/bifrost "${TARGET_DIR}/bifrost"
+else
+  mv /tmp/bifrost "${TARGET_DIR}/bifrost"
 fi
 
 echo "==> [Bifrost Setup] Successfully installed bifrost to ${TARGET_DIR}/bifrost"

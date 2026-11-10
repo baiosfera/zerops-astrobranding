@@ -23,7 +23,9 @@ zerops:
       initCommands:
         - sudo mkdir -p /mnt/localstorage/hermes/.hermes /mnt/localstorage/engram && sudo chown -R zerops:zerops /mnt/localstorage/hermes /mnt/localstorage/engram
         - ln -sfn /mnt/localstorage/hermes/.hermes ~/.hermes
+        - if [ -f /mnt/localstorage/bin/gentle-ai ]; then sudo cp /mnt/localstorage/bin/gentle-ai /usr/local/bin/gentle-ai && sudo chmod +x /usr/local/bin/gentle-ai; elif [ -f /var/www/bin/gentle-ai ]; then sudo cp /var/www/bin/gentle-ai /usr/local/bin/gentle-ai && sudo chmod +x /usr/local/bin/gentle-ai; fi
         - gentle-ai install --agents hermes --scope global || true
+        - if [ -f /var/www/scripts/apotelos ]; then sudo chmod +x /var/www/scripts/apotelos && sudo ln -sfn /var/www/scripts/apotelos /usr/local/bin/apotelos; elif [ -f /mnt/localstorage/bin/apotelos ]; then sudo ln -sfn /mnt/localstorage/bin/apotelos /usr/local/bin/apotelos; fi
       envVariables:
         PORT: "8000"
         PYTHONPATH: "/var/www/vendor:/var/www"
