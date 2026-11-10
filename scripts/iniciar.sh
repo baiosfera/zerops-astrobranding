@@ -554,18 +554,55 @@ if [ -d "$DRIVE_MOUNT/PLAYBOOKS" ]; then
     cp -rn "$DRIVE_MOUNT/PLAYBOOKS"/*.md "$PROJECT_ROOT/localstorage/playbooks/" 2>/dev/null || true
 fi
 
-# 2a-quinquies. Inyección segura de credenciales de runtime hacia Local Storage para Hermes y Cuadrillas
+# 2a-quinquies. Inyección segura y no destructiva de credenciales de runtime hacia Local Storage
+HERMES_ENV="$PROJECT_ROOT/localstorage/hermes/runtime.env"
 mkdir -p "$PROJECT_ROOT/localstorage/hermes" 2>/dev/null || true
-if [ -n "${LINEAR_API_KEY:-}" ]; then
-    cat << EOF > "$PROJECT_ROOT/localstorage/hermes/runtime.env"
-LINEAR_API_KEY=${LINEAR_API_KEY}
+if [ ! -f "$HERMES_ENV" ]; then
+    cat << EOF > "$HERMES_ENV"
+LINEAR_API_KEY=${LINEAR_API_KEY:-}
 BIFROST_VIRTUAL_KEY=vk-hermes-agent
+BIFROST_VK_CREWAI=vk-crewai
+BIFROST_VK_PYDANTICAI=vk-pydanticai
 HERMES_MODEL_ENDPOINT=http://bifrost:8080/v1
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
 EOF
-    chmod 600 "$PROJECT_ROOT/localstorage/hermes/runtime.env" 2>/dev/null || true
+    chmod 600 "$HERMES_ENV" 2>/dev/null || true
+else
+    # Preservar tokens existentes y actualizar únicamente variables con valor definido
+    update_hermes_env() {
+        local k="$1"
+        local v="$2"
+        if [ -n "$v" ]; then
+            if grep -q "^${k}=" "$HERMES_ENV"; then
+                sed -i "s|^${k}=.*|${k}=${v}|" "$HERMES_ENV"
+            else
+                echo "${k}=${v}" >> "$HERMES_ENV"
+            fi
+        fi
+    }
+    update_hermes_env "BIFROST_VIRTUAL_KEY" "vk-hermes-agent"
+    update_hermes_env "BIFROST_VK_CREWAI" "vk-crewai"
+    update_hermes_env "BIFROST_VK_PYDANTICAI" "vk-pydanticai"
+    update_hermes_env "HERMES_MODEL_ENDPOINT" "http://bifrost:8080/v1"
+    [ -n "${LINEAR_API_KEY:-}" ] && update_hermes_env "LINEAR_API_KEY" "$LINEAR_API_KEY"
+    [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && update_hermes_env "TELEGRAM_BOT_TOKEN" "$TELEGRAM_BOT_TOKEN"
+    [ -n "${TELEGRAM_ALLOWED_USERS:-}" ] && update_hermes_env "TELEGRAM_ALLOWED_USERS" "$TELEGRAM_ALLOWED_USERS"
 fi
 if [ -f "$REPO_DIR/scripts/linear_bridge.py" ]; then
     cp -f "$REPO_DIR/scripts/linear_bridge.py" "$PROJECT_ROOT/localstorage/hermes/linear_bridge.py" 2>/dev/null || true
+fi
+
+# 2a-sexies. Sincronización simétrica de apotelos CLI hacia Hermes y LocalStorage compartido
+mkdir -p "$PROJECT_ROOT/localstorage/bin" 2>/dev/null || true
+if [ -f "$REPO_DIR/scripts/apotelos" ]; then
+    cp -f "$REPO_DIR/scripts/apotelos" "$PROJECT_ROOT/localstorage/bin/apotelos" 2>/dev/null || true
+    chmod +x "$PROJECT_ROOT/localstorage/bin/apotelos" 2>/dev/null || true
+fi
+if ssh -q -o BatchMode=yes -o ConnectTimeout=2 hermes "true" 2>/dev/null; then
+    ssh hermes "mkdir -p /var/www/scripts" 2>/dev/null || true
+    scp -q "$REPO_DIR/scripts/apotelos" hermes:/var/www/scripts/apotelos 2>/dev/null || true
+    ssh hermes "chmod +x /var/www/scripts/apotelos && sudo ln -sfn /var/www/scripts/apotelos /usr/local/bin/apotelos" 2>/dev/null || true
 fi
 
 # 2a-bis. Aprovisionar Persistencia Híbrida 3-Tier Zero-Data-Loss de Engram

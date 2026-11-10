@@ -351,6 +351,17 @@ async def run_nats_bridge():
         await asyncio.sleep(60)
 
 async def run_services():
+    # 0. Auto-initialize Database and persistent schemas idempotently
+    try:
+        try:
+            from db import init_db
+        except (ImportError, ValueError):
+            from .db import init_db
+        print("[Hermes-Agent] Initializing and verifying persistent database schemas...")
+        await init_db()
+    except Exception as _db_err:
+        print(f"[Hermes-Agent] Database initialization warning: {_db_err}", file=sys.stderr)
+
     try:
         from paperclip_bridge import reconcile_bifrost_to_paperclip
         print("[Hermes-Agent] Reconciling Bifrost costs into Paperclip Control Plane...")

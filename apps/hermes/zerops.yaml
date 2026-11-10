@@ -34,8 +34,13 @@ zerops:
         SUPERUSER_URL: "postgresql://${database_superUser}:${database_superUserPassword}@${database_hostname}:${database_port}/${database_dbName}"
         NATS_URL: ${nats_connectionString}
         ZCP_NATS_URL: ${nats_connectionString}
+        VALKEY_URL: ${valkey_connectionString}
         LOCAL_STORAGE_PATH: "/mnt/localstorage/hermes"
         ENGRAM_STORAGE_DIR: "/mnt/localstorage/engram"
+        CREWAI_TELEMETRY_OPT_OUT: "true"
+        OTEL_SDK_DISABLED: "true"
+        TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+        TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS}
       start: python3 /var/www/main.py
       healthCheck:
         httpGet:

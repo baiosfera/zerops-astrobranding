@@ -902,8 +902,8 @@ async def load_chat_history(chat_id: int, limit: int = 10) -> list[dict]:
             )
             await conn.close()
             return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[Hermes DB Warning] Error loading history from PostgreSQL: {e}", file=sys.stderr)
 
     # Fallback: SQLite WAL on localstorage
     try:
@@ -922,8 +922,8 @@ async def load_chat_history(chat_id: int, limit: int = 10) -> list[dict]:
                 )
                 rows = await cursor.fetchall()
                 return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Hermes DB Warning] Error loading history from SQLite fallback: {e}", file=sys.stderr)
     return []
 
 async def save_chat_turn(chat_id: int, user_text: str, assistant_text: str) -> None:
@@ -943,8 +943,8 @@ async def save_chat_turn(chat_id: int, user_text: str, assistant_text: str) -> N
                 [(chat_id, "user", user_text), (chat_id, "assistant", assistant_text)]
             )
             await conn.close()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[Hermes DB Warning] Error saving turn to PostgreSQL: {e}", file=sys.stderr)
 
     # Local replica in SQLite WAL
     try:
@@ -971,8 +971,8 @@ async def save_chat_turn(chat_id: int, user_text: str, assistant_text: str) -> N
                 [(chat_id, "user", user_text, now), (chat_id, "assistant", assistant_text, now + 0.01)]
             )
             await db.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Hermes DB Warning] Error saving turn to SQLite fallback: {e}", file=sys.stderr)
 
 class HermesAgent:
     def __init__(self, system_prompt: str = None, role: str = "admin", bifrost_key: str = None, tools: list = None):
