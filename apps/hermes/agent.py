@@ -975,6 +975,85 @@ async def save_chat_turn(chat_id: int, user_text: str, assistant_text: str) -> N
     except Exception as e:
         print(f"[Hermes DB Warning] Error saving turn to SQLite fallback: {e}", file=sys.stderr)
 
+def sanitize_model_output(raw_content: str) -> str:
+    """
+    Sanitizes raw model completion:
+    1. Eradicates all chain-of-thought tags (<think>, <thought>, <reasoning>, etc.).
+    2. Eradicates unclosed <think> blocks if truncated or streaming.
+    3. Strips leaked XML function/tool calls and ChatML tags.
+    4. Detects and eliminates un-fenced English/Spanish chain-of-thought monologues
+       (e.g., 'The user is asking...', 'Let me think...', 'Thinking Process:', etc.).
+    5. Enforces executive Rioplatense response tone (Gentle AI persona).
+    """
+    if not raw_content:
+        return ""
+
+    text = raw_content
+
+    # 1. Strip explicit thinking / reasoning / reflection tags
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<thought>.*?</thought>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<reasoning>.*?</reasoning>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<reflection>.*?</reflection>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"\[THOUGHT\].*?\[/THOUGHT\]", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<internal_monologue>.*?</internal_monologue>", "", text, flags=re.DOTALL | re.IGNORECASE)
+
+    # 2. If an unclosed <think> tag exists (e.g. model was interrupted), strip everything inside it
+    if "<think>" in text.lower():
+        text = re.sub(r"<think>.*$", "", text, flags=re.DOTALL | re.IGNORECASE)
+
+    # 3. Strip raw function / tool calls that might have leaked into content
+    text = re.sub(r"<[^>]*function_call.*?</[^>]*function_call>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[^>]*tool_call.*?</[^>]*tool_call>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[\||\s]*tool_calls?[\||\s]*>.*?</[\||\s]*tool_calls?[\||\s]*>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<dots_function_call>.*?</dots_function_call>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[^>]*invoke.*?</[^>]*invoke>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[｜|\s]*DSML.*?</[｜|\s]*DSML[｜|\s]*tool_calls>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[\||\s]*(?:tool_calls?|tool_name|parameters)[\||\s]*>", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"</[\||\s]*(?:tool_calls?|tool_name|parameters)[\||\s]*>", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"</?dots_function_call>", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"<\|im_end\|>", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"<\|im_start\|>assistant", "", text, flags=re.IGNORECASE)
+
+    text = text.strip()
+
+    # 4. Detect unfenced CoT monologue (like 'The user is asking: ... Let me think ...')
+    cot_lead_patterns = [
+        r"^The user is asking[:\s]",
+        r"^This is a (?:follow-up|question|request)",
+        r"^Let me think about",
+        r"^Let's think about",
+        r"^Thinking Process:",
+        r"^Internal Monologue:",
+        r"^I need to respond",
+        r"^Let me draft a (?:concise )?response",
+    ]
+    if any(re.search(pat, text, re.IGNORECASE) for pat in cot_lead_patterns):
+        # Look for explicit draft quotation or transition
+        draft_match = re.search(r'(?:Let me draft[^\n]*:\s*|\bresponse:\s*|\bRioplatense Spanish:\s*)\s*["\'](.*?)["\'](?:\s*$|\s*(?:Hmm|Actually))', text, re.DOTALL | re.IGNORECASE)
+        if draft_match:
+            text = draft_match.group(1).strip()
+        else:
+            quotes = re.findall(r'"([^"]{20,})"', text, re.DOTALL)
+            if quotes:
+                text = quotes[-1].strip()
+            else:
+                paragraphs = text.split("\n\n")
+                cleaned_paras = []
+                for p in paragraphs:
+                    p_strip = p.strip()
+                    if not p_strip:
+                        continue
+                    if any(re.search(pat, p_strip, re.IGNORECASE) for pat in cot_lead_patterns):
+                        continue
+                    if re.search(r"^(?:Actually|Hmm|So my revised plan|I don't have direct knowledge|The user is challenging)\b", p_strip, re.IGNORECASE):
+                        continue
+                    cleaned_paras.append(p_strip)
+                if cleaned_paras:
+                    text = "\n\n".join(cleaned_paras).strip()
+
+    return text.strip()
+
 ACTION_KEYWORDS = {
     'ver', 'revisar', 'consultar', 'buscar', 'ejecutar', 'correr', 'crear',
     'editar', 'modificar', 'borrar', 'eliminar', 'desplegar', 'deploy', 'status',
@@ -982,7 +1061,11 @@ ACTION_KEYWORDS = {
     'linear', 'paperclip', 'crew', 'crewai', 'enjambre', 'archivo', 'archivos',
     'file', 'token', 'tokens', 'bifrost', 'freellmapi', 'oraculo', 'oráculo',
     'apotelos', 'script', 'reiniciar', 'apagar', 'iniciar', 'start', 'stop',
-    'health', 'salud', 'memoria', 'engram', 'natal', 'carta', 'playbook', 'código', 'codigo'
+    'health', 'salud', 'memoria', 'engram', 'natal', 'carta', 'playbook', 'playbooks',
+    'código', 'codigo', 'brand-play', 'brandplay', 'brandbook', 'coo', 'vertical',
+    'verticales', 'verticals', 'tienda', 'tiendas', 'ecommerce', 'e-commerce', 'producto',
+    'productos', 'precio', 'ordenes', 'pedidos', 'checkout', 'pidev', 'landing', 'landings',
+    'deepseek', 'pro', 'gratis', 'free', 'sincronizar', 'sync'
 }
 
 CHITCHAT_PATTERNS = [
@@ -993,16 +1076,16 @@ CHITCHAT_PATTERNS = [
 
 def classify_query_intent(user_query: str) -> str:
     """
-    Classifies the user query into 'chat' (conversational/conceptual) or 'operational' (tool-bearing).
-    Pure CoHaLo Positive Guidance: conversational queries prune 42 tools to 0, saving ~5,000 tokens per turn
-    and preventing FreeLLMAPI/Groq 413 rate limit rejections.
+    Classifies the user query into 'chat' (conversational/greetings) or 'operational' (tool-bearing / ecosystem).
+    Pure CoHaLo Positive Guidance: pure chitchat prunes 42 tools to 0 to save tokens,
+    while any architectural or domain inquiry retains full context.
     """
     t = user_query.strip().lower()
     for p in CHITCHAT_PATTERNS:
         if re.match(p, t):
             return "chat"
-    words = set(re.findall(r'\b\w+\b', t))
-    if not (words & ACTION_KEYWORDS) and len(words) <= 12:
+    words = set(re.findall(r'\b[a-zA-Z0-9_-]+\b', t))
+    if not (words & ACTION_KEYWORDS) and len(words) <= 5 and not any(k in t for k in ("qué", "que", "cómo", "como", "por qué", "por que", "plan")):
         return "chat"
     return "operational"
 
@@ -1054,6 +1137,10 @@ class HermesAgent:
             request_headers["x-force-deepseek"] = "true"
             request_headers["x-routing-tier"] = "pro"
             target_model = "deepseek-chat"
+        elif any(k in query_lower for k in ("freellmapi", "free tier", "modo gratis", "gratis", "tier free", "vuelve a freellmapi", "usa freellm")):
+            request_headers["x-routing-tier"] = "free"
+            request_headers.pop("x-force-deepseek", None)
+            target_model = MODEL_NAME
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             try:
@@ -1121,16 +1208,7 @@ class HermesAgent:
                     
                     if not parsed_tool_calls:
                         raw_content = msg.get("content") or ""
-                        cleaned = re.sub(r"<[^>]*function_call.*?</[^>]*function_call>", "", raw_content, flags=re.DOTALL | re.IGNORECASE)
-                        cleaned = re.sub(r"<[^>]*tool_call.*?</[^>]*tool_call>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
-                        cleaned = re.sub(r"<[\||\s]*tool_calls?[\||\s]*>.*?</[\||\s]*tool_calls?[\||\s]*>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
-                        cleaned = re.sub(r"<dots_function_call>.*?</dots_function_call>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
-                        cleaned = re.sub(r"<[^>]*invoke.*?</[^>]*invoke>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
-                        cleaned = re.sub(r"<[｜|\s]*DSML.*?</[｜|\s]*DSML[｜|\s]*tool_calls>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
-                        cleaned = re.sub(r"<[\||\s]*(?:tool_calls?|tool_name|parameters)[\||\s]*>", "", cleaned, flags=re.IGNORECASE)
-                        cleaned = re.sub(r"</[\||\s]*(?:tool_calls?|tool_name|parameters)[\||\s]*>", "", cleaned, flags=re.IGNORECASE)
-                        cleaned = re.sub(r"</?dots_function_call>", "", cleaned, flags=re.IGNORECASE).strip()
-                        final_content = cleaned if cleaned else raw_content
+                        final_content = sanitize_model_output(raw_content)
                         break
                     
                     # Tool call execution step
@@ -1193,10 +1271,7 @@ class HermesAgent:
                                 active_provider = "deepseek"
                                 total_cost_cents += (s_p * 0.000027) + (s_c * 0.00020)
                             synth_msg = s_data["choices"][0]["message"].get("content") or ""
-                            cleaned = re.sub(r"<[^>]*function_call.*?</[^>]*function_call>", "", synth_msg, flags=re.DOTALL | re.IGNORECASE)
-                            cleaned = re.sub(r"<[^>]*tool_call.*?</[^>]*tool_call>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
-                            cleaned = re.sub(r"<dots_function_call>.*?</dots_function_call>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
-                            final_content = cleaned.strip() if cleaned.strip() else synth_msg.strip()
+                            final_content = sanitize_model_output(synth_msg)
                     except Exception as se:
                         logger.warning(f"Synthesis turn failed: {se}")
 

@@ -607,6 +607,11 @@ fi
 if [ -f "/usr/bin/node" ]; then
     cp -f "/usr/bin/node" "$PROJECT_ROOT/localstorage/bin/node" 2>/dev/null || true
 fi
+if [ -f "/opt/zerops/bin/zcli" ]; then
+    cp -f "/opt/zerops/bin/zcli" "$PROJECT_ROOT/localstorage/bin/zcli" 2>/dev/null || true
+elif [ -f "/usr/local/bin/zcli" ]; then
+    cp -f "/usr/local/bin/zcli" "$PROJECT_ROOT/localstorage/bin/zcli" 2>/dev/null || true
+fi
 chmod +x "$PROJECT_ROOT/localstorage/bin"/* 2>/dev/null || true
 
 # Garantizar symlinks en ZCP local
