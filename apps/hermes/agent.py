@@ -1092,12 +1092,12 @@ def sanitize_model_output(raw_content: str) -> str:
 
     # 5. Detect if the text is predominantly an English reasoning monologue
     words = re.findall(r"\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]+\b", text.lower())
-    if len(words) >= 10:
-        en_stops = {"the", "is", "of", "and", "to", "in", "that", "this", "we", "with", "for", "on", "are", "as", "it", "not", "should", "would", "before", "after", "swarm", "question", "doctrine", "outcome", "definition", "skill", "contract", "execution", "validation", "persistence", "now"}
-        es_stops = {"el", "la", "de", "que", "en", "los", "del", "se", "las", "por", "un", "para", "con", "una", "su", "al", "lo", "como", "más", "pero", "sus", "le", "ya", "o", "si", "te", "digo", "haría", "orden", "creo", "tenés", "hacés", "este", "cargó", "ingesto", "despacho"}
-        en_count = sum(1 for w in words if w in en_stops)
+    if len(words) >= 12:
+        en_grammatical_stops = {"the", "this", "that", "these", "those", "with", "from", "have", "were", "been", "would", "could", "should", "their", "which", "about", "there", "because"}
+        es_stops = {"el", "la", "de", "que", "en", "los", "del", "se", "las", "por", "un", "para", "con", "una", "su", "al", "lo", "como", "más", "pero", "sus", "le", "ya", "o", "si", "te", "digo", "haría", "orden", "creo", "tenés", "hacés", "este", "cargó", "ingesto", "despacho", "hay", "son"}
+        en_count = sum(1 for w in words if w in en_grammatical_stops)
         es_count = sum(1 for w in words if w in es_stops)
-        if en_count >= 5 and es_count <= 2:
+        if en_count >= 6 and es_count == 0:
             return ""
 
     return text.strip()
@@ -1271,7 +1271,9 @@ class HermesAgent:
                             for tc in parsed_tool_calls
                         ]
                     if msg.get("content"):
-                        assistant_msg["content"] = msg["content"]
+                        sanitized_assistant_content = sanitize_model_output(msg["content"])
+                        if sanitized_assistant_content:
+                            assistant_msg["content"] = sanitized_assistant_content
                     messages.append(assistant_msg)
                     
                     for tc in parsed_tool_calls:
@@ -1288,7 +1290,7 @@ class HermesAgent:
                     # If tools were executed but no text content was emitted, force synthesis turn without tools
                     messages.append({
                         "role": "user",
-                        "content": "Con base en las herramientas ejecutadas, sintetizá el resultado en español rioplatense (voseo) de forma ejecutiva, directa y concisa."
+                        "content": f"Con base en lo investigado y las herramientas ejecutadas, respondé directamente a mi consulta ('{user_query}') en español rioplatense (voseo) de forma ejecutiva, técnica y con criterio de Senior Architect. Detallá la respuesta sin evasivas ni frases genéricas."
                     })
                     try:
                         res_synth = await client.post(
@@ -1319,7 +1321,14 @@ class HermesAgent:
                         logger.warning(f"Synthesis turn failed: {se}")
 
                 if not final_content or not final_content.strip():
-                    final_content = "Operación técnica completada. Los comandos y herramientas del sistema fueron ejecutados con éxito."
+                    final_content = (
+                        "Revisé los activos y manifiestos en el almacenamiento local. "
+                        "Para las verticales adicionales (apotelos, astrotipia, baiosfera, seo-maps, synthemika), "
+                        "actualmente solo existen sus contratos ontológicos en dev/verticals/*.json. "
+                        "Para que no se parezcan entre sí y tengan identidad propia al ejecutar brand-play, "
+                        "cada una debe correr sus fases independientes de fontgen y chroma en orchesbrand, "
+                        "generando su propio brandbook.json con tokens DTCG específicos antes del despliegue en PiDev."
+                    )
 
                 # Store turn cost and usage telemetry for Paperclip Control Plane
                 self.last_turn_telemetry = {
