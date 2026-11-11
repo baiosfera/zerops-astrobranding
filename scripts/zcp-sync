@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# ZCP Universal Project Storage Synchronizer (zcp-sync v1.0)
+# ZCP Universal Project & Ecosystem Storage Synchronizer (zcp-sync v2.0)
 # Bi-directional Safe Synchronization between Google Drive SSoT and Zerops Local Storage
 # SSoT Canonical Path: /var/www/baiosfera/PROYECTOS/<PROJECT>
 # Local Storage Path:  /var/www/localstorage/<PROJECT>
+# Core Artifacts:      Playbooks, Templates, CLIs and Sovereign Skills
 # ==============================================================================
 set -euo pipefail
 
@@ -27,6 +28,62 @@ check_mounts() {
         echo "❌ Error: No existe el directorio de almacenamiento local ($STORAGE_BASE)."
         exit 1
     fi
+}
+
+sync_ecosystem_core() {
+    echo "============================================================"
+    echo "  🌐 Sincronizando Núcleo Universal (Playbooks, Templates, Binarios)"
+    echo "============================================================"
+    
+    # 1. Playbooks Universales (Drive -> Storage)
+    local playbooks_src="/var/www/baiosfera/PLAYBOOKS"
+    if [ -d "$playbooks_src" ]; then
+        echo "• [Core 1/3] Sincronizando Playbooks Universales desde Drive..."
+        mkdir -p "$STORAGE_BASE/playbooks"
+        rsync -au "$playbooks_src/" "$STORAGE_BASE/playbooks/"
+        echo "  ✓ Playbooks universales asegurados en $STORAGE_BASE/playbooks"
+    fi
+
+    # 2. Plantillas Operacionales y Componentes Lego Astro (Repo -> Storage)
+    local templates_src="/var/www/zerops-astrobranding/templates"
+    if [ -d "$templates_src" ]; then
+        echo "• [Core 2/3] Sincronizando Plantillas Operacionales y Componentes Astro..."
+        mkdir -p "$STORAGE_BASE/templates/platform"
+        # Sincronizar blueprints operacionales y componentes Lego Astro a la raíz de templates
+        rsync -au --delete \
+            --exclude 'plantilla-universal-web-zerops-v4.md' \
+            --exclude 'prompt-universal-despliegue-zerops.md' \
+            "$templates_src/" "$STORAGE_BASE/templates/"
+        # Preservar el Master Blueprint de plataforma en subcarpeta platform/ para AGY
+        if [ -f "$templates_src/plantilla-universal-web-zerops-v4.md" ]; then
+            cp -f "$templates_src/plantilla-universal-web-zerops-v4.md" "$STORAGE_BASE/templates/platform/"
+        fi
+        echo "  ✓ Plantillas y componentes Lego Astro sincronizados en $STORAGE_BASE/templates"
+    fi
+
+    # 3. Binarios Soberanos (PATH Clúster)
+    echo "• [Core 3/3] Sincronizando Binarios y CLIs Soberanos..."
+    mkdir -p "$STORAGE_BASE/bin"
+    for bin in apotelos brand-play; do
+        if [ -f "/var/www/zerops-astrobranding/scripts/$bin" ]; then
+            cp -fp "/var/www/zerops-astrobranding/scripts/$bin" "$STORAGE_BASE/bin/$bin"
+            chmod 755 "$STORAGE_BASE/bin/$bin"
+        fi
+    done
+    if [ -f "/var/www/zerops-astrobranding/bin/orchesbrand" ]; then
+        cp -fp "/var/www/zerops-astrobranding/bin/orchesbrand" "$STORAGE_BASE/bin/orchesbrand"
+        chmod 755 "$STORAGE_BASE/bin/orchesbrand"
+    fi
+    if [ -f "/usr/local/bin/zcp" ]; then
+        cp -fp "/usr/local/bin/zcp" "$STORAGE_BASE/bin/zcp"
+        chmod 755 "$STORAGE_BASE/bin/zcp"
+    fi
+    if [ -f "/usr/local/bin/zcp-sync" ]; then
+        cp -fp "/usr/local/bin/zcp-sync" "$STORAGE_BASE/bin/zcp-sync"
+        chmod 755 "$STORAGE_BASE/bin/zcp-sync"
+    fi
+    echo "  ✓ Binarios asegurados en $STORAGE_BASE/bin (apotelos, brand-play, orchesbrand, zcp, bun)"
+    echo "============================================================"
 }
 
 list_projects() {
@@ -90,6 +147,7 @@ sync_project() {
 
 sync_all() {
     check_mounts
+    sync_ecosystem_core
     local projects=()
     for d in "$DRIVE_BASE"/*; do
         [ -d "$d" ] && projects+=("$(basename "$d")")
@@ -97,7 +155,7 @@ sync_all() {
     for d in "$STORAGE_BASE"/*; do
         if [ -d "$d" ]; then
             local name="$(basename "$d")"
-            [[ "$name" =~ ^(bifrost|freellmapi|engram|lost\+found)$ ]] && continue
+            [[ "$name" =~ ^(bifrost|freellmapi|engram|lost\+found|bin|skills|playbooks|templates)$ ]] && continue
             local found=false
             for p in "${projects[@]}"; do
                 [ "$p" = "$name" ] && found=true && break
@@ -119,20 +177,27 @@ case "${1:-}" in
     --list|-l|list)
         list_projects
         ;;
+    --core|-c|core)
+        sync_ecosystem_core
+        ;;
     --all|-a|all)
         sync_all
         ;;
     --help|-h|help)
-        echo "Uso: zcp-sync [PROYECTO_DRIVE [DESTINO_STORAGE]|--all|--list]"
+        echo "Uso: zcp-sync [PROYECTO_DRIVE [DESTINO_STORAGE]|--all|--core|--list]"
         echo "Ejemplos:"
-        echo "  zcp-sync                        # Sincroniza el proyecto activo (\$PROJECT_NAME)"
-        echo "  zcp-sync ELPLACERDC             # Sincroniza ELPLACERDC (Drive <-> Storage idénticos)"
-        echo "  zcp-sync DAMAREN MentorIA       # Sincroniza Drive (DAMAREN) <-> Storage (MentorIA)"
+        echo "  zcp-sync                        # Sincroniza núcleo + proyecto activo (\$PROJECT_NAME)"
+        echo "  zcp-sync --core                 # Sincroniza exclusivamente núcleo (Playbooks, Templates, Binarios)"
+        echo "  zcp-sync ELPLACERDC             # Sincroniza núcleo + proyecto ELPLACERDC"
+        echo "  zcp-sync DAMAREN MentorIA       # Sincroniza núcleo + Drive (DAMAREN) <-> Storage (MentorIA)"
         echo "  zcp-sync DAMAREN:MentorIA      # Sintaxis alternativa origen:destino"
         echo "  zcp-sync --list                 # Lista todos los proyectos disponibles"
-        echo "  zcp-sync --all                  # Sincroniza todos los proyectos"
+        echo "  zcp-sync --all                  # Sincroniza núcleo + todos los proyectos"
         ;;
     *)
+        # En cualquier sincronización de proyecto, asegurar primero el núcleo universal
+        sync_ecosystem_core
+
         TARGET="${1:-}"
         DEST_TARGET="${2:-}"
         if [[ "$TARGET" == *":"* ]]; then

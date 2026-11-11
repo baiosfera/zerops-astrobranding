@@ -23,7 +23,8 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
 |   * GET  /v1/runs/:id -> Status & Usage               | | - PostgreSQL 18 SSoT (Zero Embedded DB) |
 |   * GET  /v1/runs/:id/events -> SSE streaming         | | - NVMe POSIX LocalStorage at            |
 | - Ephemeral Worker Discovery (list_zerops_services)   | |   /mnt/localstorage/paperclip           |
-| - Universal CoHaLo Dynamic Skill Harness (141 skills) | | - Zero ObjectStorage Overhead           |
+| - Universal Primitives Engine (5 core primitives,     | | - Zero ObjectStorage Overhead           |
+|   zero frankenstein tools; CLIs in /usr/local/bin)    | |                                         |
 +---------------------------+---------------------------+ +--------------------+--------------------+
                             |                                                  |
                             | (HTTP Gateway v1 / NATS RPC)                     | (Run dispatch)
@@ -83,11 +84,17 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
 11. **Headless CrewAI Non-Blocking Telemetry Invariant**:
     - In daemonized container environments (Hermes, ephemeral workers, CLI pipelines), the environment variables `CREWAI_TELEMETRY_OPT_OUT="true"`, `OTEL_SDK_DISABLED="true"`, and `CREWAI_DISABLE_TELEMETRY="true"` are strictly enforced.
     - Eliminates the 20-second interactive terminal prompt (`Share this execution trace? [y/N]`), reducing swarm dispatch latency by over 50% and ensuring zero hangs in unattended execution.
-12. **Hermes Zero-Leak Anti-CoT & Persona Invariant**:
-    - Hermes enforces strict Rioplatense Spanish (voseo) dialogue (1–3 sentences), eradicating all internal chain-of-thought traces (`<think>...</think>`, `<thought>`, and unfenced English reflection monologues) via deterministic output sanitization (`sanitize_model_output`) before broadcasting to Telegram. Technical artifacts default to clean English.
 12. **Cognitive Swarm vs. Sovereign Builder Boundary (CrewAI vs. PiDev)**:
     - **CrewAI Boundary (Cognitive Strategy & Content Assemblers)**: Dynamic swarms strictly assemble research dossiers, neurocopywriting, SEO/AEO strategies, and component contracts into structured Markdown/JSON (`workspaces/{vertical_slug}/`). They NEVER modify, compile, or generate frontend source code (`.astro`, `.ts`, `.css` in `webdev`).
     - **PiDev Sovereign Code Authority (Execution & Scaffolding)**: `pidev` (`pi.dev` / Gentle-Pi) is the exclusive sovereign builder for Astro 5 SSR code. It does not perform market strategy or creative design from scratch; it ingests `copy/landing.md` and `web/page-spec.md` produced by CrewAI and compiles them into production Astro 5 SSR components with Tailwind 4 and TypeScript.
+13. **Hermes Native ZCP MCP Bridge Invariant (Zero Frankenstein Tools)**:
+    - Hermes controls the Zerops infrastructure directly via an async stdio JSON-RPC client (`apps/hermes/mcp_bridge.py`) connecting to `/mnt/localstorage/bin/zcp serve`.
+    - Eliminates bespoke Python wrappers and fragile CLI parsing: exposes all 24 native Zerops MCP tools (`zerops_discover`, `zerops_deploy`, `zerops_logs`, `zerops_scale`, `zerops_env`, `zerops_verify`, etc.) with strict typing and 10MB streaming buffers.
+    - Preserves `SOUL.md` minimal ($\le 4\text{ KB}$): tool schemas are dynamically registered in the inference API `tools` array, never duplicated as plaintext markdown.
+14. **PiDev Codecraft Doctrine & Bifrost Headless Bridge Invariant**:
+    - `pidev` runs under sovereign `AGENTS.md` bound to the 5-skill core: `codecraft` (TDD, Karpathy guidelines, deep modules, verification before completion), `impeccable`, `design-taste-frontend` (`taste-skill`), `astro-web`, and `ghcicd`.
+    - Headless agentic execution is routed to Bifrost (`http://bifrost:8080/v1`) using Virtual Key `vk-pidev` via `/mnt/localstorage/pidev/pi/models.json` and `auth.json` (`type: "api_key"`).
+    - Unattended execution uses `pi --approve --provider bifrost --model bifrost/deepseek-chat -p '<prompt>' < /dev/null`, ensuring automatic project trust, zero stdin blocking, and sub-2s execution latency.
 
 ---
 
@@ -145,21 +152,15 @@ Paperclip AI and Hermes run with zero data loss across container restarts, stop/
         - port: 8000
           httpSupport: true
       initCommands:
-        - sudo mkdir -p /mnt/localstorage/hermes/.hermes /mnt/localstorage/engram /mnt/localstorage/bin /mnt/localstorage/skills && sudo chown -R zerops:zerops /mnt/localstorage/hermes /mnt/localstorage/engram /mnt/localstorage/bin /mnt/localstorage/skills
-        - ln -sfn /mnt/localstorage/hermes/.hermes ~/.hermes
-        - for f in /mnt/localstorage/bin/*; do [ -f "$f" ] && [ -x "$f" ] && sudo ln -sfn "$f" "/usr/local/bin/$(basename "$f")"; done
-        - HOME=/home/zerops gentle-ai install --agents hermes --scope global || true
+        - sudo mkdir -p /mnt/localstorage/hermes && sudo chown -R zerops:zerops /mnt/localstorage/hermes
       envVariables:
         PORT: "8000"
-        PATH: "/mnt/localstorage/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/opt/zerops/bin"
         PYTHONPATH: "./apps/hermes/vendor:./apps/hermes"
         DATABASE_URL: ${database_connectionString}
         HERMES_MODEL_ENDPOINT: "http://bifrost:8080/v1"
         HERMES_MODEL_NAME: "auto"
         BIFROST_VIRTUAL_KEY: "vk-hermes-agent"
         NATS_URL: ${nats_connectionString}
-        ZEROPS_TOKEN: ${ZEROPS_TOKEN}
-        ZCP_API_KEY: ${ZEROPS_TOKEN}
       start: python3 apps/hermes/main.py
 
   # Paperclip AI Platform (Ubuntu 26 / Node.js 26 pnpm monorepo)
