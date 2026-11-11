@@ -21,3 +21,4 @@ scripts/gentle-ai
 scripts/*.bak
 scripts/**/*.bak
 scripts/**/__pycache__/
+.apotelos/

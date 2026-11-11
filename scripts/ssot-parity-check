@@ -222,6 +222,8 @@ SYMLINKS=(
     "linear-cli"
     "anti-slop-linter"
     "knowledge-sync"
+    "orchesbrand"
+    "brand-play"
 )
 
 for symlink in "${SYMLINKS[@]}"; do
@@ -255,6 +257,15 @@ if command -v apotelos >/dev/null 2>&1; then
         echo "✓ Apotelos Functional Behavioral Test PASSED (anti-checklist-theater)"
     else
         echo "❌ Apotelos Functional Behavioral Test FAILED (domain regression)"
+        ERRORS=$((ERRORS + 1))
+    fi
+fi
+
+if command -v brand-play >/dev/null 2>&1; then
+    if brand-play test >/dev/null 2>&1; then
+        echo "✓ brand-play Functional Behavioral Test PASSED (anti-checklist-theater)"
+    else
+        echo "❌ brand-play Functional Behavioral Test FAILED (domain regression)"
         ERRORS=$((ERRORS + 1))
     fi
 fi

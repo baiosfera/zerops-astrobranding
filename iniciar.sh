@@ -605,6 +605,14 @@ fi
 if [ -f "$REPO_DIR/scripts/apotelos" ]; then
     cp -f "$REPO_DIR/scripts/apotelos" "$PROJECT_ROOT/localstorage/bin/apotelos" 2>/dev/null || true
 fi
+if [ -f "$REPO_DIR/scripts/brand-play" ]; then
+    cp -f "$REPO_DIR/scripts/brand-play" "$PROJECT_ROOT/localstorage/bin/brand-play" 2>/dev/null || true
+fi
+if [ -f "$REPO_DIR/bin/orchesbrand" ]; then
+    cp -f "$REPO_DIR/bin/orchesbrand" "$PROJECT_ROOT/localstorage/bin/orchesbrand" 2>/dev/null || true
+elif [ -f "$PROJECT_ROOT/localstorage/bin/orchesbrand" ]; then
+    cp -f "$PROJECT_ROOT/localstorage/bin/orchesbrand" "$REPO_DIR/bin/orchesbrand" 2>/dev/null || true
+fi
 if [ -f "/usr/local/bin/yq" ]; then
     cp -f "/usr/local/bin/yq" "$PROJECT_ROOT/localstorage/bin/yq" 2>/dev/null || true
 fi
@@ -619,9 +627,12 @@ fi
 chmod +x "$PROJECT_ROOT/localstorage/bin"/* 2>/dev/null || true
 
 # Garantizar symlinks en ZCP local
-if [ -f "$PROJECT_ROOT/localstorage/bin/gentle-ai" ]; then
-    sudo ln -sf "$PROJECT_ROOT/localstorage/bin/gentle-ai" /usr/local/bin/gentle-ai 2>/dev/null || true
-fi
+for cli_bin in gentle-ai apotelos brand-play orchesbrand linear-cli anti-slop-linter skills-suite-validate ssot-parity-check; do
+    if [ -f "$PROJECT_ROOT/localstorage/bin/$cli_bin" ]; then
+        sudo ln -sfn "$PROJECT_ROOT/localstorage/bin/$cli_bin" "/usr/local/bin/$cli_bin" 2>/dev/null || true
+        ln -sfn "$PROJECT_ROOT/localstorage/bin/$cli_bin" "$PROJECT_ROOT/.bin/$cli_bin" 2>/dev/null || true
+    fi
+done
 
 if ssh -q -o BatchMode=yes -o ConnectTimeout=2 hermes "true" 2>/dev/null; then
     ssh hermes "

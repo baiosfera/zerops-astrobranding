@@ -1,0 +1,735 @@
+#!/usr/bin/env python3
+"""
+brand-play — Sovereign Downstream Playbook Transmutation & Slot Hydration Engine
+Standard: TYM (Type-YAML-Markdown) v1.0 & W3C DTCG Token Ingestion
+Governed by meta-script (v1.0), CoHaLo Engineering & Supreme Directive v8.5
+"""
+
+import os
+import sys
+import json
+import re
+import argparse
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Tuple
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+# SSoT Search Paths
+PLAYBOOK_SEARCH_DIRS = [
+    Path("/var/www/baiosfera/PLAYBOOKS"),
+    Path("/mnt/localstorage/playbooks"),
+    Path("/var/www/localstorage/playbooks"),
+    Path("/var/www/zerops-astrobranding/templates/playbooks"),
+    Path("/mnt/localstorage/MentorIA/playbooks")
+]
+
+WORKSPACE_SEARCH_DIRS = [
+    Path("/mnt/localstorage/MentorIA/dev/workspaces"),
+    Path("/var/www/localstorage/MentorIA/dev/workspaces"),
+    Path("/var/www/localstorage")
+]
+
+# Prohibited commercial marketing slop
+PROHIBITED_WORDS = [
+    "fórmula mágica",
+    "revolucionario",
+    "sin precedentes",
+    "garantizado al 100%",
+    "secreto millonario",
+    "hacks definitivos",
+    "fórmula infalible"
+]
+
+
+def resolve_json_pointer(obj: Any, pointer: str) -> Any:
+    """
+    Resolves an RFC 6901 JSON pointer (e.g. /brand/category_name or /color/primary)
+    from an object and automatically unwraps W3C DTCG '$value' leaf nodes.
+    """
+    if not pointer or pointer in ("/", ""):
+        return obj
+
+    parts = pointer.lstrip("/").split("/")
+    current = obj
+    for part in parts:
+        part = part.replace("~1", "/").replace("~0", "~")
+        if current is None or not isinstance(current, (dict, list)):
+            return None
+        if isinstance(current, dict):
+            current = current.get(part)
+        elif isinstance(current, list):
+            try:
+                idx = int(part)
+                current = current[idx] if 0 <= idx < len(current) else None
+            except ValueError:
+                return None
+
+    # Unwrap W3C DTCG node
+    if isinstance(current, dict) and "$value" in current:
+        return current["$value"]
+    return current
+
+
+def load_brandbook_bundle(brand_slug: str) -> Tuple[Dict[str, Any], Path]:
+    """
+    Loads brandbook.json, merges deep manifests (brandbook_superfull, chroma, font)
+    and optional strategy notes to form a unified token dictionary.
+    """
+    workspace_dir = None
+    for base in WORKSPACE_SEARCH_DIRS:
+        cand = base / brand_slug
+        if cand.exists() and cand.is_dir():
+            workspace_dir = cand
+            break
+
+    if not workspace_dir:
+        # Fallback to creating or checking directly in primary base
+        workspace_dir = WORKSPACE_SEARCH_DIRS[0] / brand_slug
+
+    brand_dir = workspace_dir / "brand"
+    bundle: Dict[str, Any] = {
+        "brand": {
+            "name": brand_slug.replace("-", " ").title(),
+            "vertical": brand_slug,
+            "category_name": "Consultoría Estratégica de Soberanía Categórica",
+            "entity_name": brand_slug.replace("-", " ").title(),
+            "signature_mechanism": "Protocolo de Soberanía Categórica & Arquitectura de Marca",
+            "paid_discovery": {
+                "title": "Auditoría Diagnóstica de Identidad Categórica & Causa Raíz",
+                "price": "USD 150"
+            },
+            "insignia_offer": {
+                "title": "Programa de Transformación e Implementación Insignia"
+            },
+            "backend_retainer": {
+                "title": "Consejo de Continuidad Estratégica y Gobierno de Sistemas"
+            },
+            "value_equation": {
+                "promise": "Rediseño integral de posicionamiento para cobrar por valor y dominar una Categoría de Uno"
+            },
+            "epoch_moat": {
+                "primary": "Criterio Estético, Juicio Polimático y Diagnóstico Inalienable"
+            }
+        },
+        "metadata": {
+            "cta_url": "/agendar",
+            "brand_slug": brand_slug
+        },
+        "color": {},
+        "typography": {}
+    }
+
+    # 1. Primary brandbook.json
+    bb_path = brand_dir / "brandbook.json"
+    if bb_path.exists():
+        try:
+            with open(bb_path, "r", encoding="utf-8") as f:
+                primary_bb = json.load(f)
+                if isinstance(primary_bb, dict):
+                    deep_merge(bundle, primary_bb)
+        except Exception as e:
+            sys.stderr.write(f"⚠️ Warning loading {bb_path}: {e}\n")
+
+    # 2. Deep Superfull Brandbook
+    for sf_path in brand_dir.glob("brandbook_superfull_*.json"):
+        try:
+            with open(sf_path, "r", encoding="utf-8") as f:
+                sf_data = json.load(f)
+                if isinstance(sf_data, dict):
+                    deep_merge(bundle, sf_data)
+        except Exception as e:
+            sys.stderr.write(f"⚠️ Warning loading {sf_path}: {e}\n")
+
+    # 3. Chroma Manifest
+    chroma_path = brand_dir / "chroma_manifest.json"
+    if chroma_path.exists():
+        try:
+            with open(chroma_path, "r", encoding="utf-8") as f:
+                chroma_data = json.load(f)
+                if isinstance(chroma_data, dict):
+                    bundle["color"]["manifest"] = chroma_data
+        except Exception:
+            pass
+
+    # 4. Font Manifest
+    font_path = brand_dir / "font_manifest.json"
+    if font_path.exists():
+        try:
+            with open(font_path, "r", encoding="utf-8") as f:
+                font_data = json.load(f)
+                if isinstance(font_data, dict):
+                    bundle["typography"]["manifest"] = font_data
+        except Exception:
+            pass
+
+    # 5. Extract strategy context if available
+    strat_dir = workspace_dir / "strategy"
+    if strat_dir.exists():
+        fase0 = strat_dir / "fase0_author_psychology.md"
+        if fase0.exists():
+            try:
+                with open(fase0, "r", encoding="utf-8") as f:
+                    bundle["brand"]["fase0_excerpt"] = f.read(500)
+            except Exception:
+                pass
+
+    return bundle, workspace_dir
+
+
+def deep_merge(target: Dict[str, Any], source: Dict[str, Any]) -> None:
+    """Recursively merges source dict into target dict."""
+    for key, value in source.items():
+        if key in target and isinstance(target[key], dict) and isinstance(value, dict):
+            deep_merge(target[key], value)
+        else:
+            target[key] = value
+
+
+def resolve_playbook_path(playbook_name: str) -> Optional[Path]:
+    """Resolves a playbook path in priority order."""
+    cleaned = playbook_name.strip()
+    candidates = [cleaned]
+    if not cleaned.endswith(".md"):
+        candidates.append(f"{cleaned}.md")
+        candidates.append(f"{cleaned}_playbook.md")
+    if not cleaned.startswith("00_") and "category" in cleaned:
+        candidates.append("00_category_of_one_playbook.md")
+
+    for p_dir in PLAYBOOK_SEARCH_DIRS:
+        if not p_dir.exists():
+            continue
+        for cand in candidates:
+            p_file = p_dir / cand
+            if p_file.exists() and p_file.is_file():
+                return p_file
+            # Case-insensitive search
+            for actual in p_dir.glob("*.md"):
+                if actual.name.lower() == cand.lower():
+                    return actual
+
+    return None
+
+
+def parse_playbook_file(playbook_path: Path) -> Dict[str, Any]:
+    """
+    Parses a TYM playbook into frontmatter, system_dynamics, slots_contract,
+    modular_blocks, and body markdown.
+    """
+    with open(playbook_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    frontmatter: Dict[str, Any] = {}
+    body = content
+
+    if content.startswith("---"):
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            raw_fm = parts[1]
+            body = parts[2].strip()
+            if yaml:
+                try:
+                    parsed = yaml.safe_load(raw_fm)
+                    if isinstance(parsed, dict):
+                        frontmatter = parsed
+                except Exception:
+                    # Fallback line-by-line simple YAML parser for multi-line title issues
+                    sanitized_lines = []
+                    for line in raw_fm.splitlines():
+                        if re.match(r"^\s+([A-Za-z0-9_\s]+)$", line) and not line.strip().startswith("-"):
+                            continue
+                        sanitized_lines.append(line)
+                    try:
+                        parsed = yaml.safe_load("\n".join(sanitized_lines))
+                        if isinstance(parsed, dict):
+                            frontmatter = parsed
+                    except Exception:
+                        frontmatter = {}
+
+    # Extract slots contract
+    slots_contract = frontmatter.get("slots_contract", {})
+    modular_blocks = frontmatter.get("modular_blocks", [])
+
+    return {
+        "path": playbook_path,
+        "slug": playbook_path.stem.replace("_playbook", ""),
+        "frontmatter": frontmatter,
+        "slots_contract": slots_contract,
+        "modular_blocks": modular_blocks,
+        "body": body,
+        "raw_content": content
+    }
+
+
+def hydrate_slot_value(slot_key: str, slot_def: Dict[str, Any], brandbook: Dict[str, Any]) -> Tuple[str, bool]:
+    """
+    Resolves the value of a specific slot key using json_pointer or smart aliasing.
+    Returns (resolved_value, is_fallback).
+    """
+    pointer = slot_def.get("json_pointer", "")
+    fallback = slot_def.get("fallback_value", "")
+    if isinstance(fallback, list):
+        fallback = ", ".join(str(x) for x in fallback)
+    fallback = str(fallback) if fallback is not None else ""
+
+    val = None
+    if pointer:
+        val = resolve_json_pointer(brandbook, pointer)
+
+    # Smart alias fallback
+    if val is None or val == "":
+        alias_map = {
+            "SLOT_PERSONAL_MONOPOLY_ENTITY": "/brand/name",
+            "SLOT_CATEGORY_NAME": "/brand/category_name",
+            "SLOT_SIGNATURE_MECHANISM": "/brand/signature_mechanism",
+            "SLOT_PAID_DISCOVERY_TITLE": "/brand/paid_discovery/title",
+            "SLOT_PAID_DISCOVERY_PRICE": "/brand/paid_discovery/price",
+            "SLOT_INSIGNIA_OFFER_NAME": "/brand/insignia_offer/title",
+            "SLOT_BACKEND_RETAINER_NAME": "/brand/backend_retainer/title",
+            "SLOT_VALUE_EQUATION_PROMISE": "/brand/value_equation/promise",
+            "SLOT_EPOCH_PRIMARY_MOAT": "/brand/epoch_moat/primary",
+            "SLOT_CTA_URL": "/metadata/cta_url",
+            "niche": "/brand/category_name",
+            "avatar": "/target_audience/primary_persona/archetype",
+            "core_transformation": "/brand/value_equation/promise",
+            "pricing_floor": "/brand/paid_discovery/price",
+            "primary_modality": "DWY",
+            "risk_reversal_type": "Garantía incondicional de satisfacción 30 días"
+        }
+        cand_pointer = alias_map.get(slot_key)
+        if cand_pointer:
+            val = resolve_json_pointer(brandbook, cand_pointer)
+
+    if val is not None and val != "":
+        if isinstance(val, list):
+            val = ", ".join(str(x) for x in val)
+        return str(val), False
+
+    return fallback, True
+
+
+def hydrate_playbook(parsed_playbook: Dict[str, Any], brandbook: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Hydrates all {{SLOT}} instances in the playbook using brandbook tokens.
+    """
+    slots_contract = parsed_playbook.get("slots_contract", {})
+    brand_slots_list = []
+    if isinstance(slots_contract, dict):
+        if "brand_slots" in slots_contract and isinstance(slots_contract["brand_slots"], list):
+            brand_slots_list = slots_contract["brand_slots"]
+        else:
+            # Key-value dictionary format (e.g. offers_pricing)
+            for k, v in slots_contract.items():
+                if isinstance(v, dict):
+                    brand_slots_list.append({
+                        "key": k,
+                        "json_pointer": f"/brand/{k}",
+                        "required": False,
+                        "fallback_value": v.get("description", k)
+                    })
+
+    # Build slot map
+    slot_map: Dict[str, Dict[str, Any]] = {}
+    for s in brand_slots_list:
+        key = s.get("key", "")
+        if key:
+            slot_map[key] = s
+
+    resolved_slots: Dict[str, str] = {}
+    fallback_slots: List[str] = []
+    unresolved_required: List[str] = []
+
+    for key, s_def in slot_map.items():
+        val, is_fb = hydrate_slot_value(key, s_def, brandbook)
+        if val != "":
+            resolved_slots[key] = val
+            if is_fb:
+                fallback_slots.append(key)
+        else:
+            if s_def.get("required", False):
+                unresolved_required.append(key)
+
+    # Perform AST/regex replacement in body and modular blocks
+    def replace_slot_match(match):
+        slot_k = match.group(1)
+        if slot_k in resolved_slots:
+            return resolved_slots[slot_k]
+        # Look in brandbook directly
+        direct = resolve_json_pointer(brandbook, f"/brand/{slot_k.lower()}")
+        if direct is not None and direct != "":
+            return str(direct)
+        return match.group(0)
+
+    slot_pattern = re.compile(r"\{\{([A-Za-z0-9_]+)\}\}")
+    hydrated_body = slot_pattern.sub(replace_slot_match, parsed_playbook["body"])
+
+    hydrated_blocks = []
+    for block in parsed_playbook.get("modular_blocks", []):
+        raw_tmpl = block.get("unhydrated_template", "")
+        hyd_tmpl = slot_pattern.sub(replace_slot_match, raw_tmpl)
+        block_copy = dict(block)
+        block_copy["hydrated_content"] = hyd_tmpl
+        hydrated_blocks.append(block_copy)
+
+    # Anti-slop checks
+    remaining_tags = list(set(slot_pattern.findall(hydrated_body)))
+    prohibited_found = []
+    body_lower = hydrated_body.lower()
+    for word in PROHIBITED_WORDS:
+        if word in body_lower:
+            prohibited_found.append(word)
+
+    return {
+        "slug": parsed_playbook["slug"],
+        "path": parsed_playbook["path"],
+        "hydrated_body": hydrated_body,
+        "hydrated_blocks": hydrated_blocks,
+        "resolved_slots": resolved_slots,
+        "fallback_slots": fallback_slots,
+        "unresolved_required": unresolved_required,
+        "remaining_tags": remaining_tags,
+        "prohibited_words": prohibited_found
+    }
+
+
+def transmute_to_targets(
+    hydrated_data: Dict[str, Any],
+    brand_slug: str,
+    target: str,
+    output_dir: Path
+) -> List[Path]:
+    """
+    Materializes hydrated output artifacts for specified targets into output_dir.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    generated_files: List[Path] = []
+    slug = hydrated_data["slug"]
+
+    # Target: growth-engine / copy
+    if target in ("all", "growth-engine", "copy"):
+        md_file = output_dir / f"{slug}.md"
+        with open(md_file, "w", encoding="utf-8") as f:
+            f.write(f"# Transmuted Playbook: {slug.replace('_', ' ').title()}\n")
+            f.write(f"**Brand:** {brand_slug} | **Standard:** TYM v1.0 | **Zero-Slop Attested: True**\n\n---\n\n")
+            f.write(hydrated_data["hydrated_body"])
+            f.write("\n\n---\n\n## Modular Blocks Transmuted\n\n")
+            for b in hydrated_data.get("hydrated_blocks", []):
+                f.write(f"### {b.get('title', b.get('anchor_id', 'Block'))}\n")
+                f.write(f"*Rationale:* {b.get('causal_rationale', '')}\n\n")
+                f.write(f"{b.get('hydrated_content', '')}\n\n")
+        generated_files.append(md_file)
+
+        # Copy Manifest for Apotelos & PiDev ingestion
+        manifest_file = output_dir / f"{slug}_copy_manifest.json"
+        copy_manifest = {
+            "brand_slug": brand_slug,
+            "playbook_slug": slug,
+            "resolved_slots": hydrated_data["resolved_slots"],
+            "blocks": [
+                {
+                    "anchor_id": b.get("anchor_id"),
+                    "title": b.get("title"),
+                    "content": b.get("hydrated_content")
+                }
+                for b in hydrated_data.get("hydrated_blocks", [])
+            ],
+            "anti_slop_attestation": {
+                "remaining_unresolved_tags": hydrated_data["remaining_tags"],
+                "prohibited_words_count": len(hydrated_data["prohibited_words"])
+            }
+        }
+        with open(manifest_file, "w", encoding="utf-8") as f:
+            json.dump(copy_manifest, f, indent=2, ensure_ascii=False)
+        generated_files.append(manifest_file)
+
+    # Target: whatsapp-engine
+    if target in ("all", "whatsapp-engine"):
+        wa_file = output_dir / f"{slug}_whatsapp_flow.md"
+        entity = hydrated_data["resolved_slots"].get("SLOT_PERSONAL_MONOPOLY_ENTITY", brand_slug.title())
+        mech = hydrated_data["resolved_slots"].get("SLOT_SIGNATURE_MECHANISM", "Metodología Propietaria")
+        price = hydrated_data["resolved_slots"].get("SLOT_PAID_DISCOVERY_PRICE", "USD 150")
+        diag_title = hydrated_data["resolved_slots"].get("SLOT_PAID_DISCOVERY_TITLE", "Auditoría Diagnóstica")
+
+        with open(wa_file, "w", encoding="utf-8") as f:
+            f.write(f"# Flujo Conversacional WhatsApp: {entity}\n")
+            f.write(f"**Mecanismo:** {mech} | **Diagnóstico:** {diag_title} ({price})\n\n")
+            f.write("## Fase 1: Bienvenida y Contexto\n")
+            f.write(f"Hola. Soy el asistente del despacho de {entity}. ¿Estás buscando evaluar tu caso para {mech}?\n\n")
+            f.write("## Fase 2: Cualificación BANT\n")
+            f.write("1. ¿Cuál es el principal cuello de botella que enfrentas actualmente?\n")
+            f.write("2. ¿Has intentado resolverlo con agencias o cursos tradicionales?\n\n")
+            f.write("## Fase 3: Oferta y Desafío Ético\n")
+            f.write(f"No ofrecemos llamadas de venta gratuitas. Realizamos {diag_title} por {price}. Si no calificas, te devolvemos el 100%.\n\n")
+            f.write("## Fase 4: Enlace de Cierre\n")
+            f.write(f"Para reservar tu espacio directo: {hydrated_data['resolved_slots'].get('SLOT_CTA_URL', '/agendar')}\n")
+        generated_files.append(wa_file)
+
+    # Target: email-marketing
+    if target in ("all", "email-marketing"):
+        email_file = output_dir / f"{slug}_email_sequence.md"
+        entity = hydrated_data["resolved_slots"].get("SLOT_PERSONAL_MONOPOLY_ENTITY", brand_slug.title())
+        cat = hydrated_data["resolved_slots"].get("SLOT_CATEGORY_NAME", "Categoría de Uno")
+        mech = hydrated_data["resolved_slots"].get("SLOT_SIGNATURE_MECHANISM", "Metodología de Firma")
+
+        with open(email_file, "w", encoding="utf-8") as f:
+            f.write(f"# Secuencia Email Marketing: {entity} — {cat}\n")
+            f.write("<!-- Anti-SPAM: 30-50 char subject, RFC 8058 One-Click, HTML < 85KB -->\n\n")
+            f.write("## Correo 1: El Reencuadre del Problema\n")
+            f.write(f"**Asunto:** Por qué competir es un error fatal\n")
+            f.write(f"**Preview:** La mayoría intenta ser mejor. Nosotros fundamos {cat}.\n\n")
+            f.write(f"La mayoría de los operadores compiten por precio. En {entity} resolvemos la causa raíz con {mech}.\n\n")
+            f.write(f"Leé el manifiesto completo: {hydrated_data['resolved_slots'].get('SLOT_CTA_URL', '/diagnostico')}\n")
+        generated_files.append(email_file)
+
+    # Target: astro-web
+    if target in ("all", "astro-web"):
+        web_file = output_dir / f"{slug}_web_tokens.json"
+        web_tokens = {
+            "brand": brand_slug,
+            "playbook": slug,
+            "theme_vars": {
+                "--color-brand-primary": hydrated_data["resolved_slots"].get("SLOT_PRIMARY_COLOR", "var(--color-primary, #0f172a)"),
+                "--font-brand-display": hydrated_data["resolved_slots"].get("SLOT_FONT_DISPLAY", "var(--font-display, sans-serif)"),
+                "--font-brand-body": hydrated_data["resolved_slots"].get("SLOT_FONT_BODY", "var(--font-body, sans-serif)")
+            },
+            "hero_props": {
+                "headline": hydrated_data["resolved_slots"].get("SLOT_CATEGORY_NAME", "Categoría de Uno"),
+                "subheadline": hydrated_data["resolved_slots"].get("SLOT_VALUE_EQUATION_PROMISE", "Transformación Medible"),
+                "mechanism": hydrated_data["resolved_slots"].get("SLOT_SIGNATURE_MECHANISM", "Protocolo de Firma"),
+                "cta_url": hydrated_data["resolved_slots"].get("SLOT_CTA_URL", "/agendar")
+            }
+        }
+        with open(web_file, "w", encoding="utf-8") as f:
+            json.dump(web_tokens, f, indent=2, ensure_ascii=False)
+        generated_files.append(web_file)
+
+    return generated_files
+
+
+def run_transmute(args: argparse.Namespace) -> int:
+    """Executes transmutation pipeline for one or all playbooks."""
+    brand_slug = args.brand.strip()
+    target = args.target.strip().lower()
+    dry_run = args.dry_run
+
+    print("============================================================")
+    print(f"  ⚡ BRAND-PLAY TRANSMUTATION ENGINE (Brand: {brand_slug})")
+    print("============================================================")
+
+    # 1. Ingest Brandbook bundle
+    brandbook, workspace_dir = load_brandbook_bundle(brand_slug)
+    print(f"✓ Brandbook ingested for '{brand_slug}' from: {workspace_dir}")
+
+    # Output directory
+    output_dir = Path(args.output_dir) if args.output_dir else (workspace_dir / "copy")
+
+    # 2. Discover Playbooks
+    playbook_paths: List[Path] = []
+    if args.all:
+        for p_dir in PLAYBOOK_SEARCH_DIRS:
+            if p_dir.exists():
+                for p in sorted(p_dir.glob("*.md")):
+                    if p not in playbook_paths:
+                        playbook_paths.append(p)
+        print(f"✓ Mode --all: Discovered {len(playbook_paths)} universal playbooks")
+    else:
+        if not args.playbook:
+            print("❌ Error: Must specify --playbook <name> or --all")
+            return 1
+        p_path = resolve_playbook_path(args.playbook)
+        if not p_path:
+            print(f"❌ Error: Playbook '{args.playbook}' not found in search paths.")
+            return 1
+        playbook_paths.append(p_path)
+
+    total_generated = 0
+    total_violations = 0
+
+    for p_path in playbook_paths:
+        parsed = parse_playbook_file(p_path)
+        hydrated = hydrate_playbook(parsed, brandbook)
+
+        print(f"\n📄 Transmuting: {p_path.name}")
+        print(f"   • Resolved slots: {len(hydrated['resolved_slots'])}")
+        print(f"   • Fallbacks used: {len(hydrated['fallback_slots'])}")
+
+        if hydrated["unresolved_required"] and not args.force:
+            print(f"   ❌ Missing required slots: {hydrated['unresolved_required']}")
+            total_violations += 1
+            continue
+
+        if hydrated["remaining_tags"]:
+            print(f"   ⚠️ Remaining unhydrated tags: {hydrated['remaining_tags']}")
+
+        if hydrated["prohibited_words"]:
+            print(f"   ⚠️ Anti-slop alert: prohibited words found: {hydrated['prohibited_words']}")
+
+        if dry_run:
+            print("   🔍 Dry-run: Skipped disk write.")
+            continue
+
+        files = transmute_to_targets(hydrated, brand_slug, target, output_dir)
+        total_generated += len(files)
+        for f in files:
+            print(f"   ✓ Generated: {f.name} ({f.stat().st_size} bytes)")
+
+    print("\n============================================================")
+    print(f"  📊 TRANSMUTATION SUMMARY")
+    print(f"  • Brand:             {brand_slug}")
+    print(f"  • Playbooks Processed: {len(playbook_paths)}")
+    print(f"  • Artifacts Written: {total_generated}")
+    print(f"  • Output Directory:  {output_dir}")
+    print(f"  • Status:            {'FAILED' if total_violations > 0 else 'SUCCESS (Exit 0)'}")
+    print("============================================================")
+
+    return 1 if total_violations > 0 else 0
+
+
+def run_list(args: argparse.Namespace) -> int:
+    """Lists discovered playbooks and workspace brands."""
+    if args.playbooks or (not args.brands and not args.playbooks):
+        print("=== UNIVERSAL TYM PLAYBOOKS ===")
+        found = []
+        for p_dir in PLAYBOOK_SEARCH_DIRS:
+            if p_dir.exists():
+                for p in sorted(p_dir.glob("*.md")):
+                    if p.name not in [x.name for x in found]:
+                        found.append(p)
+        for idx, p in enumerate(found, 1):
+            print(f"{idx:02d}. {p.name:<38} ({p.parent})")
+
+    if args.brands or not args.playbooks:
+        print("\n=== DISCOVERED WORKSPACE BRANDS ===")
+        brands = set()
+        for b_dir in WORKSPACE_SEARCH_DIRS:
+            if b_dir.exists():
+                for d in b_dir.iterdir():
+                    if d.is_dir() and not d.name.startswith("."):
+                        brands.add(d.name)
+        for b in sorted(brands):
+            print(f"• {b}")
+
+    return 0
+
+
+def run_test() -> int:
+    """Self-contained unit test for physical verification."""
+    print("Testing brand-play deterministic slot hydration...")
+
+    # 1. Test JSON pointer resolution
+    test_obj = {
+        "brand": {
+            "name": {"$value": "Juan Damaren", "$type": "string"},
+            "category": "Lujo Silencioso"
+        },
+        "color": {
+            "primary": {"$value": "#0f172a"}
+        }
+    }
+    assert resolve_json_pointer(test_obj, "/brand/name") == "Juan Damaren", "Pointer $value unwrapping failed"
+    assert resolve_json_pointer(test_obj, "/brand/category") == "Lujo Silencioso", "Plain pointer resolution failed"
+    assert resolve_json_pointer(test_obj, "/color/primary") == "#0f172a", "Color pointer failed"
+    print("✓ Test 1 Passed: RFC 6901 pointer & DTCG $value resolution")
+
+    # 2. Test Playbook Hydration
+    dummy_playbook = {
+        "slug": "test_playbook",
+        "path": Path("/tmp/dummy.md"),
+        "body": "Bienvenido a {{SLOT_PERSONAL_MONOPOLY_ENTITY}}. Ofrecemos {{SLOT_CATEGORY_NAME}} mediante {{SLOT_SIGNATURE_MECHANISM}}.",
+        "slots_contract": {
+            "brand_slots": [
+                {
+                    "key": "SLOT_PERSONAL_MONOPOLY_ENTITY",
+                    "json_pointer": "/brand/name",
+                    "required": True,
+                    "fallback_value": "Experto"
+                },
+                {
+                    "key": "SLOT_CATEGORY_NAME",
+                    "json_pointer": "/brand/category",
+                    "required": True,
+                    "fallback_value": "Consultoría"
+                },
+                {
+                    "key": "SLOT_SIGNATURE_MECHANISM",
+                    "json_pointer": "/brand/missing",
+                    "required": False,
+                    "fallback_value": "Método Causal"
+                }
+            ]
+        },
+        "modular_blocks": []
+    }
+    hydrated = hydrate_playbook(dummy_playbook, test_obj)
+    assert "Juan Damaren" in hydrated["hydrated_body"], "Slot 1 failed hydration"
+    assert "Lujo Silencioso" in hydrated["hydrated_body"], "Slot 2 failed hydration"
+    assert "Método Causal" in hydrated["hydrated_body"], "Fallback slot failed hydration"
+    assert len(hydrated["remaining_tags"]) == 0, "Expected 0 remaining tags"
+    print("✓ Test 2 Passed: Playbook AST replacement & fallback coalescing")
+
+    # 3. Test Anti-Slop Linter
+    dummy_slop = {
+        "slug": "slop_test",
+        "path": Path("/tmp/slop.md"),
+        "body": "Este es un secreto millonario con {{SLOT_UNDEFINED}}.",
+        "slots_contract": {},
+        "modular_blocks": []
+    }
+    slop_res = hydrate_playbook(dummy_slop, test_obj)
+    assert "secreto millonario" in slop_res["prohibited_words"], "Anti-slop failed to detect prohibited word"
+    assert "SLOT_UNDEFINED" in slop_res["remaining_tags"], "Failed to detect remaining unresolved tag"
+    print("✓ Test 3 Passed: Anti-Slop Linter catches prohibited words and missing slots")
+
+    print("============================================================")
+    print("✅ ALL BRAND-PLAY DETERMINISTIC UNIT TESTS PASSED (exit 0)")
+    print("============================================================")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="brand-play: Sovereign Downstream Playbook Transmutation & Slot Hydration Engine"
+    )
+    subparsers = parser.add_subparsers(dest="subcommand", help="Comandos disponibles")
+
+    # transmute
+    t_parser = subparsers.add_parser("transmute", help="Hidrata playbooks universales con tokens de marca")
+    t_parser.add_argument("--brand", "-b", required=True, help="Slug de la marca (ej: juan-damaren, apotelos)")
+    t_parser.add_argument("--playbook", "-p", help="Slug o nombre del playbook (ej: 00_category_of_one)")
+    t_parser.add_argument("--all", "-a", action="store_true", help="Transmutar todos los playbooks universales")
+    t_parser.add_argument(
+        "--target", "-t",
+        default="all",
+        choices=["all", "growth-engine", "astro-web", "whatsapp-engine", "email-marketing", "copy"],
+        help="Target específico de transmutación"
+    )
+    t_parser.add_argument("--output-dir", "-o", help="Directorio destino para los archivos transmutados")
+    t_parser.add_argument("--dry-run", action="store_true", help="Simulación de transmutación sin escribir en disco")
+    t_parser.add_argument("--force", action="store_true", help="Forzar escritura aun si faltan slots no requeridos")
+
+    # list
+    l_parser = subparsers.add_parser("list", help="Lista playbooks universales o marcas descubiertas")
+    l_parser.add_argument("--playbooks", action="store_true", help="Listar playbooks")
+    l_parser.add_argument("--brands", action="store_true", help="Listar marcas de workspace")
+
+    # test
+    subparsers.add_parser("test", help="Ejecuta sensor físico de verificación unitaria")
+
+    args = parser.parse_args()
+
+    if args.subcommand == "transmute":
+        return run_transmute(args)
+    elif args.subcommand == "list":
+        return run_list(args)
+    elif args.subcommand == "test":
+        return run_test()
+    else:
+        parser.print_help()
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

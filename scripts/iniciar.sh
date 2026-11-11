@@ -566,6 +566,8 @@ BIFROST_VK_PYDANTICAI=vk-pydanticai
 HERMES_MODEL_ENDPOINT=http://bifrost:8080/v1
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
 TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
+ZEROPS_TOKEN=${ZEROPS_TOKEN:-}
+ZCP_API_KEY=${ZEROPS_TOKEN:-}
 EOF
     chmod 600 "$HERMES_ENV" 2>/dev/null || true
 else
@@ -588,21 +590,59 @@ else
     [ -n "${LINEAR_API_KEY:-}" ] && update_hermes_env "LINEAR_API_KEY" "$LINEAR_API_KEY"
     [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && update_hermes_env "TELEGRAM_BOT_TOKEN" "$TELEGRAM_BOT_TOKEN"
     [ -n "${TELEGRAM_ALLOWED_USERS:-}" ] && update_hermes_env "TELEGRAM_ALLOWED_USERS" "$TELEGRAM_ALLOWED_USERS"
+    [ -n "${ZEROPS_TOKEN:-}" ] && update_hermes_env "ZEROPS_TOKEN" "$ZEROPS_TOKEN"
+    [ -n "${ZEROPS_TOKEN:-}" ] && update_hermes_env "ZCP_API_KEY" "$ZEROPS_TOKEN"
 fi
 if [ -f "$REPO_DIR/scripts/linear_bridge.py" ]; then
     cp -f "$REPO_DIR/scripts/linear_bridge.py" "$PROJECT_ROOT/localstorage/hermes/linear_bridge.py" 2>/dev/null || true
 fi
 
-# 2a-sexies. Sincronización simétrica de apotelos CLI hacia Hermes y LocalStorage compartido
+# 2a-sexies. Sincronización simétrica de catálogo de binarios y CLIs hacia LocalStorage y Hermes
 mkdir -p "$PROJECT_ROOT/localstorage/bin" 2>/dev/null || true
+if [ -d "$PROJECT_ROOT/.bin" ]; then
+    cp -fp "$PROJECT_ROOT/.bin"/* "$PROJECT_ROOT/localstorage/bin/" 2>/dev/null || true
+fi
 if [ -f "$REPO_DIR/scripts/apotelos" ]; then
     cp -f "$REPO_DIR/scripts/apotelos" "$PROJECT_ROOT/localstorage/bin/apotelos" 2>/dev/null || true
-    chmod +x "$PROJECT_ROOT/localstorage/bin/apotelos" 2>/dev/null || true
 fi
+if [ -f "$REPO_DIR/scripts/brand-play" ]; then
+    cp -f "$REPO_DIR/scripts/brand-play" "$PROJECT_ROOT/localstorage/bin/brand-play" 2>/dev/null || true
+fi
+if [ -f "$REPO_DIR/bin/orchesbrand" ]; then
+    cp -f "$REPO_DIR/bin/orchesbrand" "$PROJECT_ROOT/localstorage/bin/orchesbrand" 2>/dev/null || true
+elif [ -f "$PROJECT_ROOT/localstorage/bin/orchesbrand" ]; then
+    cp -f "$PROJECT_ROOT/localstorage/bin/orchesbrand" "$REPO_DIR/bin/orchesbrand" 2>/dev/null || true
+fi
+if [ -f "/usr/local/bin/yq" ]; then
+    cp -f "/usr/local/bin/yq" "$PROJECT_ROOT/localstorage/bin/yq" 2>/dev/null || true
+fi
+if [ -f "/usr/bin/node" ]; then
+    cp -f "/usr/bin/node" "$PROJECT_ROOT/localstorage/bin/node" 2>/dev/null || true
+fi
+if [ -f "/opt/zerops/bin/zcli" ]; then
+    cp -f "/opt/zerops/bin/zcli" "$PROJECT_ROOT/localstorage/bin/zcli" 2>/dev/null || true
+elif [ -f "/usr/local/bin/zcli" ]; then
+    cp -f "/usr/local/bin/zcli" "$PROJECT_ROOT/localstorage/bin/zcli" 2>/dev/null || true
+fi
+chmod +x "$PROJECT_ROOT/localstorage/bin"/* 2>/dev/null || true
+
+# Garantizar symlinks en ZCP local
+for cli_bin in gentle-ai apotelos brand-play orchesbrand linear-cli anti-slop-linter skills-suite-validate ssot-parity-check; do
+    if [ -f "$PROJECT_ROOT/localstorage/bin/$cli_bin" ]; then
+        sudo ln -sfn "$PROJECT_ROOT/localstorage/bin/$cli_bin" "/usr/local/bin/$cli_bin" 2>/dev/null || true
+        ln -sfn "$PROJECT_ROOT/localstorage/bin/$cli_bin" "$PROJECT_ROOT/.bin/$cli_bin" 2>/dev/null || true
+    fi
+done
+
 if ssh -q -o BatchMode=yes -o ConnectTimeout=2 hermes "true" 2>/dev/null; then
-    ssh hermes "mkdir -p /var/www/scripts" 2>/dev/null || true
-    scp -q "$REPO_DIR/scripts/apotelos" hermes:/var/www/scripts/apotelos 2>/dev/null || true
-    ssh hermes "chmod +x /var/www/scripts/apotelos && sudo ln -sfn /var/www/scripts/apotelos /usr/local/bin/apotelos" 2>/dev/null || true
+    ssh hermes "
+        for f in /mnt/localstorage/bin/*; do
+            if [ -f \"\$f\" ] && [ -x \"\$f\" ]; then
+                sudo ln -sfn \"\$f\" \"/usr/local/bin/\$(basename \"\$f\")\" 2>/dev/null || true
+            fi
+        done
+        gentle-ai install --agents hermes --scope global 2>/dev/null || true
+    " 2>/dev/null || true
 fi
 
 # 2a-bis. Aprovisionar Persistencia Híbrida 3-Tier Zero-Data-Loss de Engram
