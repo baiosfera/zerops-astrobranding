@@ -142,178 +142,58 @@ async def send_whatsapp_otp(phone: str, client_name: str) -> dict:
         except Exception as e:
             return {"error": str(e)}
 
-# --- Zerops Control Plane & Platform Orchestration Tools ---
-
-import subprocess
-import shutil
-
-def _get_zcli_bin() -> str:
-    """Dynamically resolves zcli executable across any Zerops container or host environment."""
-    path = shutil.which("zcli")
-    if path:
-        return path
-    for candidate in ["/usr/local/bin/zcli", "/mnt/localstorage/bin/zcli", "/opt/zerops/bin/zcli"]:
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            return candidate
-    return "zcli"
-
-def get_current_project_id() -> str:
-    """Dynamically resolves active Zerops project ID from runtime environment."""
-    return (os.getenv("ZEROPS_ProjectId") or os.getenv("projectId") or "").strip()
-
-def _ensure_zcli_auth() -> bool:
-    """Ensures zcli is authenticated against the Zerops API."""
-    token = (os.getenv("ZCP_API_KEY") or os.getenv("ZEROPS_TOKEN") or "").strip()
-    if not token:
-        return False
-    zcli_bin = _get_zcli_bin()
-    try:
-        chk = subprocess.run([zcli_bin, "service", "list"], capture_output=True, text=True, timeout=5)
-        if chk.returncode == 0 and "unauthenticated" not in chk.stderr.lower():
-            return True
-        log_res = subprocess.run([zcli_bin, "login", token], capture_output=True, text=True, timeout=10)
-        return log_res.returncode == 0
-    except Exception:
-        return False
+# --- Zerops Control Plane & Platform Orchestration Tools (Native MCP Bridge) ---
 
 def _clean_service_name(name: str) -> str:
     name = name.strip().lower()
     name = name.replace("/var/www/", "").strip("/")
     return name.split(".")[0]
 
-def list_zerops_services() -> str:
-    """Lists all active and configured services in the Zerops project with their current status (via zcli)."""
-    _ensure_zcli_auth()
-    project_id = get_current_project_id()
-    cmd = [_get_zcli_bin(), "service", "list"]
-    if project_id:
-        cmd.append(f"--projectId={project_id}")
+def call_zerops_mcp_tool(tool_name: str, arguments: dict = None) -> str:
+    """Invokes any native Zerops MCP tool (zerops_discover, zerops_import, zerops_deploy, zerops_scale, zerops_logs, etc.)."""
+    import asyncio
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-        if res.returncode == 0 and res.stdout.strip():
-            return res.stdout.strip()
-    except Exception as e:
-        logger.warning(f"zcli service list error: {e}")
+        from mcp_bridge import call_zerops_mcp
+    except ImportError:
+        from hermes.mcp_bridge import call_zerops_mcp
+    return asyncio.run(call_zerops_mcp(tool_name, arguments or {}))
 
-    # Fallback: query internal cluster DNS sockets dynamically
-    candidate_services = ["paperclip", "bifrost", "freellmapi", "hermes", "pidev", "nats", "database", "valkey", "localstorage", "webdev", "webprod"]
-    results = []
-    import socket
-    for s in candidate_services:
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(0.5)
-            ports = [80, 3000, 8000, 8080, 3100, 4222, 5432, 6379, 22]
-            reachable = False
-            for p in ports:
-                if sock.connect_ex((s, p)) == 0:
-                    reachable = True
-                    break
-            sock.close()
-            if reachable:
-                results.append(f"• {s}: ACTIVO (Reachable en red interna)")
-        except Exception:
-            pass
-    if results:
-        return "Servicios detectados en la red interna Zerops:\n" + "\n".join(results)
-    return "No fue posible contactar zcli ni resolver servicios en red interna."
+def list_zerops_services() -> str:
+    """Lists all active and configured services in the Zerops project via native MCP zerops_discover."""
+    return call_zerops_mcp_tool("zerops_discover", {})
+
+def zerops_get_service_logs(service_name: str, limit: int = 50) -> str:
+    """Fetches recent runtime logs from a specific Zerops service container via native MCP zerops_logs."""
+    clean = _clean_service_name(service_name)
+    return call_zerops_mcp_tool("zerops_logs", {"serviceHostname": clean, "limit": limit})
+
+def zerops_deploy_service(service_name: str, working_dir: str = "") -> str:
+    """Triggers code deployment for a Zerops service using native MCP zerops_deploy."""
+    clean = _clean_service_name(service_name)
+    args = {"targetService": clean}
+    if working_dir:
+        args["workingDir"] = working_dir
+    return call_zerops_mcp_tool("zerops_deploy", args)
 
 def start_zerops_service(service_name: str) -> str:
-    """Starts/turns on a Zerops service stack by name."""
-    _ensure_zcli_auth()
-    service_name = _clean_service_name(service_name)
-    project_id = get_current_project_id()
-    cmd = [_get_zcli_bin(), "service", "start", service_name]
-    if project_id:
-        cmd.append(f"--projectId={project_id}")
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-    if res.returncode == 0:
-        return f"✅ El servicio '{service_name}' está siendo iniciado en Zerops."
-    return f"❌ Error iniciando '{service_name}': {res.stderr.strip() or res.stdout.strip()}"
+    """Scales up/starts a Zerops service to 1 container via native MCP zerops_scale."""
+    clean = _clean_service_name(service_name)
+    return call_zerops_mcp_tool("zerops_scale", {"serviceHostname": clean, "minContainers": 1, "maxContainers": 1})
 
 def stop_zerops_service(service_name: str) -> str:
-    """Stops/turns off a Zerops service stack by name."""
-    _ensure_zcli_auth()
-    service_name = _clean_service_name(service_name)
-    project_id = get_current_project_id()
-    cmd = [_get_zcli_bin(), "service", "stop", service_name]
-    if project_id:
-        cmd.append(f"--projectId={project_id}")
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-    if res.returncode == 0:
-        return f"🛑 El servicio '{service_name}' está siendo detenido en Zerops."
-    return f"❌ Error deteniendo '{service_name}': {res.stderr.strip() or res.stdout.strip()}"
+    """Scales down/stops a Zerops service to 0 containers via native MCP zerops_scale."""
+    clean = _clean_service_name(service_name)
+    return call_zerops_mcp_tool("zerops_scale", {"serviceHostname": clean, "minContainers": 0, "maxContainers": 0})
 
 def delete_zerops_service(service_name: str) -> str:
-    """Deletes/removes a Zerops service stack by name safely."""
-    _ensure_zcli_auth()
-    service_name = _clean_service_name(service_name)
-    project_id = get_current_project_id()
-    cmd = [_get_zcli_bin(), "service", "delete", service_name, "--confirm"]
-    if project_id:
-        cmd.append(f"--projectId={project_id}")
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
-    if res.returncode == 0:
-        return f"🗑️ El servicio '{service_name}' fue eliminado exitosamente en Zerops."
-    return f"❌ Error eliminando '{service_name}': {res.stderr.strip() or res.stdout.strip()}"
+    """Deletes a Zerops service safely via native MCP zerops_delete."""
+    clean = _clean_service_name(service_name)
+    return call_zerops_mcp_tool("zerops_delete", {"serviceHostname": clean, "confirm": True})
 
 def get_zerops_service_status(service_name: str) -> str:
     """Checks current status and reachability of a specific Zerops service."""
-    service_name = _clean_service_name(service_name)
-    output = list_zerops_services()
-    for line in output.splitlines():
-        if service_name in line.lower():
-            return f"Estado de '{service_name}': {line.strip()}"
-    return f"El servicio '{service_name}' no aparece actualmente en el proyecto activo."
-
-def _resolve_service_id(service_name: str) -> Optional[str]:
-    """Resolves a Zerops service name to its serviceId dynamically."""
-    _ensure_zcli_auth()
-    project_id = get_current_project_id()
-    cmd = [_get_zcli_bin(), "service", "list"]
-    if project_id:
-        cmd.append(f"--projectId={project_id}")
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        clean = _clean_service_name(service_name)
-        for line in res.stdout.splitlines():
-            parts = [p.strip() for p in line.split("│") if p.strip()]
-            if len(parts) >= 2 and parts[0] != "ID":
-                if parts[1].lower() == clean:
-                    return parts[0]
-    except Exception:
-        pass
-    return None
-
-def zerops_get_service_logs(service_name: str, limit: int = 50) -> str:
-    """Fetches recent runtime logs from a specific Zerops service container via zcli."""
-    _ensure_zcli_auth()
-    service_id = _resolve_service_id(service_name)
-    if not service_id:
-        return f"❌ No se pudo resolver el ID del servicio '{service_name}' en el proyecto activo."
-    project_id = get_current_project_id()
-    cmd = [_get_zcli_bin(), "service", "log", f"--service-id={service_id}", f"--limit={limit}"]
-    if project_id:
-        cmd.append(f"--project-id={project_id}")
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-    if res.returncode == 0 and res.stdout.strip():
-        return f"📜 Logs de '{service_name}' (últimas {limit} líneas):\n{res.stdout.strip()}"
-    return f"❌ Error leyendo logs de '{service_name}': {res.stderr.strip() or 'Sin logs'}"
-
-def zerops_deploy_service(service_name: str, working_dir: str = "") -> str:
-    """Pushes code and triggers deployment for a Zerops service using zcli push."""
-    _ensure_zcli_auth()
-    service_name = _clean_service_name(service_name)
-    project_id = get_current_project_id()
-    cmd = [_get_zcli_bin(), "push", service_name, "--no-wait"]
-    if working_dir:
-        cmd.append(f"--working-dir={working_dir}")
-    if project_id:
-        cmd.append(f"--projectId={project_id}")
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    if res.returncode == 0:
-        return f"🚀 Despliegue disparado en Zerops para '{service_name}':\n{res.stdout.strip()}"
-    return f"❌ Error desplegando '{service_name}': {res.stderr.strip() or res.stdout.strip()}"
+    clean = _clean_service_name(service_name)
+    return call_zerops_mcp_tool("zerops_discover", {})
 
 # --- PiDev & Gentle-Pi Coding Agent Tools ---
 

@@ -1,0 +1,7 @@
+{
+  "name": "pidev",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node -e 'console.log(\"pidev headless daemon ready\"); process.exit(0)'"
+  }
+}

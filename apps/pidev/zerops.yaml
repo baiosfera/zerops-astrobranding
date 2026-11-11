@@ -4,8 +4,7 @@ zerops:
       base: ubuntu/nodejs@26
       prepareCommands:
         - sudo apt-get update && sudo apt-get install -y --no-install-recommends git curl ca-certificates tar gzip build-essential
-        - npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-        - npm install -g gentle-pi
+        - npm install -g --ignore-scripts @earendil-works/pi-coding-agent gentle-pi
       buildCommands:
         - gentle-shell setup || true
       deployFiles:
@@ -20,14 +19,20 @@ zerops:
         - port: 3000
           httpSupport: true
       initCommands:
-        - sudo mkdir -p /mnt/localstorage/pidev /var/www/webdev && sudo chown -R zerops:zerops /mnt/localstorage/pidev
+        - sudo mkdir -p /mnt/localstorage/pidev /var/www/webdev && sudo chown -R zerops:zerops /mnt/localstorage/pidev /var/www/webdev
+        - sudo npm install -g --ignore-scripts @earendil-works/pi-coding-agent gentle-pi || true
+        - sudo mkdir -p /home/zerops/.local/lib/node_modules/gentle-pi/.gentle-ai/v4.4.0 && sudo cp -f /mnt/localstorage/bin/gentle-ai /home/zerops/.local/lib/node_modules/gentle-pi/.gentle-ai/v4.4.0/gentle-ai && sudo chmod +x /home/zerops/.local/lib/node_modules/gentle-pi/.gentle-ai/v4.4.0/gentle-ai || true
+        - sudo chown -R zerops:zerops /home/zerops
       envVariables:
         PORT: "3000"
         HOST: "0.0.0.0"
         NODE_ENV: "production"
         NATS_URL: ${nats_connectionString}
-        PI_READ_ONLY: "true"
-        PI_OBSERVATIONAL_ONLY: "true"
+        PI_READ_ONLY: "false"
+        PI_OBSERVATIONAL_ONLY: "false"
+        GENTLE_SHELL_NO_AUTO_SETUP: "1"
         GENTLE_SHELL_HOME: "/mnt/localstorage/pidev/gentle-shell"
         PI_CODING_AGENT_DIR: "/mnt/localstorage/pidev/pi"
-      start: gentle-shell --mode rpc || sleep infinity
+        OPENAI_BASE_URL: "http://bifrost:8080/v1"
+        OPENAI_API_KEY: "vk-pidev"
+      start: node server.mjs

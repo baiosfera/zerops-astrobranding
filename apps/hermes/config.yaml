@@ -14,4 +14,4 @@ models:
 integrations:
   nats_url: "nats://nats:4222"
   telegram:
-    enabled: false
+    enabled: true

@@ -42,7 +42,7 @@ try:
     from tools import (
         get_system_health, calculate_natal_chart, send_whatsapp_otp,
         list_zerops_services, start_zerops_service, stop_zerops_service, delete_zerops_service, get_zerops_service_status,
-        zerops_get_service_logs, zerops_deploy_service,
+        zerops_get_service_logs, zerops_deploy_service, call_zerops_mcp_tool,
         pidev_get_status, pidev_dispatch_task,
         read_file, write_file, edit_file, list_directory, run_command,
         search_web, fetch_web_page, download_file,
@@ -59,7 +59,7 @@ except (ImportError, ValueError):
     from .tools import (
         get_system_health, calculate_natal_chart, send_whatsapp_otp,
         list_zerops_services, start_zerops_service, stop_zerops_service, delete_zerops_service, get_zerops_service_status,
-        zerops_get_service_logs, zerops_deploy_service,
+        zerops_get_service_logs, zerops_deploy_service, call_zerops_mcp_tool,
         pidev_get_status, pidev_dispatch_task,
         read_file, write_file, edit_file, list_directory, run_command,
         search_web, fetch_web_page, download_file,
@@ -108,6 +108,27 @@ HERMES_TOOLS = [
             "name": "list_zerops_services",
             "description": "Lista todos los servicios desplegados en el proyecto de Zerops y su estado actual (ACTIVE / STOPPED).",
             "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "call_zerops_mcp_tool",
+            "description": "Invoca directamente cualquier herramienta nativa del servidor MCP de Zerops (zcp serve: zerops_discover, zerops_import, zerops_scale, zerops_deploy, zerops_subdomain, zerops_env, etc.).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": "Nombre de la herramienta MCP nativa (ej: 'zerops_discover', 'zerops_import', 'zerops_scale', 'zerops_subdomain')"
+                    },
+                    "arguments": {
+                        "type": "object",
+                        "description": "Diccionario de argumentos para la herramienta MCP"
+                    }
+                },
+                "required": ["tool_name"]
+            }
         }
     },
     {
@@ -758,6 +779,7 @@ TOOL_DISPATCH = {
     "apotelos_cli": lambda a: apotelos_cli(a.get("subcommand", ""), a.get("args", "")),
     "get_system_health": lambda a: get_system_health(),
     "list_zerops_services": lambda a: list_zerops_services(),
+    "call_zerops_mcp_tool": lambda a: call_zerops_mcp_tool(a.get("tool_name", ""), a.get("arguments", {})),
     "get_zerops_service_status": lambda a: get_zerops_service_status(a.get("service_name", "")),
     "start_zerops_service": lambda a: start_zerops_service(a.get("service_name", "")),
     "stop_zerops_service": lambda a: stop_zerops_service(a.get("service_name", "")),
@@ -1152,9 +1174,9 @@ class HermesAgent:
         
         intent = classify_query_intent(user_query)
         task_type_header = "chat" if intent == "chat" else "code"
-        # Always provide tools and canonical SOUL.md; Hermes model decides autonomously
+        # Always provide tools and canonical fresh SOUL.md; Hermes model decides autonomously
         active_tools = self.tools
-        active_system_prompt = self.system_prompt
+        active_system_prompt = load_hermes_soul()
 
         messages = [
             {"role": "system", "content": active_system_prompt},

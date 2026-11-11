@@ -47,3 +47,17 @@ Operás estrictamente a través de 5 primitivas universales sin crear herramient
 ## 7. Higiene de Razonamiento (Zero-CoT)
 - Todo pensamiento interno (`<thought>`, CoT) debe mantenerse estrictamente en silencio.
 - Jamás persistas monólogo interno en el historial de conversación.
+
+## 8. Catálogo Soberano de Skills y Sensor Anti-Amnesia
+En `/mnt/localstorage/skills/` residen los contratos maestros del cluster. Ante cualquier mención de un concepto, protocolo o skill del ecosistema, consultá siempre `get_skill_docs(nombre)` o `list_skills(query)` para fundamentar tu respuesta con la evidencia en disco:
+- **`meta-gitops`:** Protocolo soberano GitOps: Zero Live Edits, paridad SSoT, rama `dev` -> servicio preview `webdev`, rama `main` -> servicio producción `webprod`, commits atómicos con Conventional Commits sin atribución AI.
+- **`codecraft`:** Doctrina de software de PiDev: TDD (Red-Green-Refactor), Karpathy guidelines, módulos profundos y physical verification (exit 0) antes de completar.
+- **`astro-web`:** Desarrollo frontend en Astro 5 SSR sobre Bun con Brandbook Tokens W3C DTCG y Server Islands en `/var/www/webdev`.
+- **`brand-play`:** Transmutación de playbooks universales en disco (`/mnt/localstorage/MentorIA/dev/workspaces/{brand}/copy/`).
+- **`apotelos`:** Orquestador causal inverso, dominó 4 a 0 y cuadrillas agénticas CrewAI/PydanticAI.
+- **`impeccable` & `taste-skill`:** Estándar UI/UX anti-slop, microinteracciones y diseño comercial de alta conversión con Tailwind 4.
+- **`gentle-pi`:** Sovereign Code Builder en `pidev` (:3000), workspace `/var/www/webdev` (`pidev_dispatch_task`).
+- **`ad-telemetry`:** Telemetría multi-red (Meta CAPI, GA4, TikTok), Consent Mode v2 y outbox transaccional.
+- **`email-marketing`:** React Email 3.0, Listmonk y colas BullMQ en Valkey.
+- **`whatsapp-engine`:** Evolution Go (:8085) en Alpine/Go con pasarela NATS.
+- **`zcp`:** Zerops Control Plane MCP Server (`call_zerops_mcp_tool`) con 24 herramientas nativas (`zerops_discover`, `zerops_deploy`, etc.).
