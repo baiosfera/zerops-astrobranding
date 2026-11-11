@@ -64,7 +64,15 @@
           "models": [
             "*"
           ],
-          "aliases": {},
+          "aliases": {
+            "auto": "auto",
+            "gpt-4o": "auto",
+            "gpt-4o-mini": "auto",
+            "claude-3-5-sonnet": "auto",
+            "claude-3-haiku": "auto",
+            "gemini-2.5-flash": "auto",
+            "llama-3.3-70b": "auto"
+          },
           "weight": 1.0
         }
       ],
@@ -86,10 +94,12 @@
             "*"
           ],
           "aliases": {
-            "auto": "deepseek-chat",
-            "deepseek-chat": "deepseek-chat",
-            "deepseek-coder": "deepseek-chat",
-            "deepseek-reasoner": "deepseek-reasoner"
+            "auto": "deepseek-flash",
+            "deepseek-chat": "deepseek-flash",
+            "deepseek-flash": "deepseek-flash",
+            "deepseek-v4-pro": "deepseek-v4-pro",
+            "deepseek-coder": "deepseek-flash",
+            "deepseek-reasoner": "deepseek-v4-pro"
           },
           "weight": 1.0
         }
@@ -227,6 +237,37 @@
             "weight": 1.0
           }
         ]
+      },
+      {
+        "id": "vk-pydanticai",
+        "name": "PydanticAI Structured Contracts",
+        "value": "vk-pydanticai",
+        "is_active": true,
+        "rate_limits": {
+          "requests_per_minute": 60
+        },
+        "provider_configs": [
+          {
+            "provider": "freellmapi",
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1.0
+          },
+          {
+            "provider": "deepseek",
+            "allowed_models": [
+              "*"
+            ],
+            "key_ids": [
+              "*"
+            ],
+            "weight": 1.0
+          }
+        ]
       }
     ],
     "circuit_breaker_config": {
@@ -237,7 +278,7 @@
           "primary_provider": "freellmapi",
           "primary_model": "*",
           "fallback_provider": "deepseek",
-          "fallback_model": "deepseek-chat",
+          "fallback_model": "deepseek-flash",
           "condition": {
             "operator": "OR",
             "signals": [
@@ -261,7 +302,7 @@
       {
         "id": "rule-explicit-pro-override",
         "name": "Route Explicit Pro Tier Requests Directly to DeepSeek",
-        "cel_expression": "headers['x-force-deepseek'] == 'true' || headers['x-tier'] == 'pro' || headers['x-routing-tier'] == 'pro'",
+        "cel_expression": "headers['x-force-deepseek'] == 'true' || headers['x-tier'] == 'pro' || headers['x-routing-tier'] == 'pro' || model.startsWith('deepseek') || model.startsWith('deepseek/')",
         "targets": [
           {
             "provider": "deepseek",
