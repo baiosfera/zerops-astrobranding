@@ -49,18 +49,16 @@ sync_ecosystem_core() {
     if [ -d "$templates_src" ]; then
         echo "• [Core 2/3] Sincronizando Plantillas Operacionales y Componentes Astro..."
         mkdir -p "$STORAGE_BASE/templates"
-        # Sincronizar blueprints operacionales y componentes Lego Astro a la raíz de templates
-        rsync -au --delete \
-            --exclude 'platform' \
-            --exclude 'plantilla-universal-web-zerops-v4.md' \
-            --exclude 'prompt-universal-despliegue-zerops.md' \
-            "$templates_src/" "$STORAGE_BASE/templates/"
-        # Preservar el Master Blueprint de plataforma en subcarpeta platform/ para AGY
-        mkdir -p "$STORAGE_BASE/templates/platform"
-        if [ -f "$templates_src/plantilla-universal-web-zerops-v4.md" ]; then
-            cp -f "$templates_src/plantilla-universal-web-zerops-v4.md" "$STORAGE_BASE/templates/platform/"
-        fi
+        rsync -au --delete "$templates_src/" "$STORAGE_BASE/templates/"
         echo "  ✓ Plantillas y componentes Lego Astro sincronizados en $STORAGE_BASE/templates"
+    fi
+
+    # 2.1 Blueprints de Plataforma Zerops/AGY (Repo -> Storage)
+    local blueprints_src="/var/www/zerops-astrobranding/blueprints"
+    if [ -d "$blueprints_src" ]; then
+        mkdir -p "$STORAGE_BASE/blueprints"
+        rsync -au --delete "$blueprints_src/" "$STORAGE_BASE/blueprints/"
+        echo "  ✓ Blueprints maestros de plataforma asegurados en $STORAGE_BASE/blueprints"
     fi
 
     # 3. Binarios Soberanos (PATH Clúster)
