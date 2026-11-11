@@ -40,7 +40,7 @@ sync_ecosystem_core() {
     if [ -d "$playbooks_src" ]; then
         echo "• [Core 1/3] Sincronizando Playbooks Universales desde Drive..."
         mkdir -p "$STORAGE_BASE/playbooks"
-        rsync -au "$playbooks_src/" "$STORAGE_BASE/playbooks/"
+        cp -u "$playbooks_src"/*.md "$STORAGE_BASE/playbooks/" 2>/dev/null || true
         echo "  ✓ Playbooks universales asegurados en $STORAGE_BASE/playbooks"
     fi
 
