@@ -48,13 +48,15 @@ sync_ecosystem_core() {
     local templates_src="/var/www/zerops-astrobranding/templates"
     if [ -d "$templates_src" ]; then
         echo "• [Core 2/3] Sincronizando Plantillas Operacionales y Componentes Astro..."
-        mkdir -p "$STORAGE_BASE/templates/platform"
+        mkdir -p "$STORAGE_BASE/templates"
         # Sincronizar blueprints operacionales y componentes Lego Astro a la raíz de templates
         rsync -au --delete \
+            --exclude 'platform' \
             --exclude 'plantilla-universal-web-zerops-v4.md' \
             --exclude 'prompt-universal-despliegue-zerops.md' \
             "$templates_src/" "$STORAGE_BASE/templates/"
         # Preservar el Master Blueprint de plataforma en subcarpeta platform/ para AGY
+        mkdir -p "$STORAGE_BASE/templates/platform"
         if [ -f "$templates_src/plantilla-universal-web-zerops-v4.md" ]; then
             cp -f "$templates_src/plantilla-universal-web-zerops-v4.md" "$STORAGE_BASE/templates/platform/"
         fi
