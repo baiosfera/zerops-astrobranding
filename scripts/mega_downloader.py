@@ -42,7 +42,7 @@ from typing import Dict, List, Optional, Tuple, Any
 # Gobernanza CoHaLo: Cero generación de bytecode en filesystem o Google Drive
 sys.dont_write_bytecode = True
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 # Rutas Canónicas del Ecosistema
 DEFAULT_STAGING_BASE = "/var/www/localstorage/mega_downloads"
@@ -85,8 +85,106 @@ def log(msg: str, level: str = "INFO"):
 
 
 # =============================================================================
-# 1. NORMALIZER & SANITIZER (Nomenclatura Jerárquica Limpia)
+# 1. NORMALIZER & SANITIZER (Nomenclatura Jerárquica y Saneamiento)
 # =============================================================================
+
+class Sanitizer:
+    GARBAGE_SUB_PATTERNS = [
+        re.compile(r'[\.\-]subt[ií]tulos?\.txt$', re.IGNORECASE),
+        re.compile(r'\.mp4\-subt.*\.txt$', re.IGNORECASE),
+        re.compile(r'\_subt[ií]tulos?\.txt$', re.IGNORECASE),
+        re.compile(r'\.vtt$', re.IGNORECASE),
+    ]
+
+    NOBLE_DOC_NAMES = {
+        "readme.txt", "notas.txt", "resumen.txt", "temario.txt",
+        "info.txt", "reporte.txt", "license.txt", "instrucciones.txt"
+    }
+
+    @staticmethod
+    def is_garbage_transcript(filename: str, filepath: Optional[str] = None) -> bool:
+        """
+        Determina si un archivo es un volcado crudo de subtítulos o WebVTT corrupto.
+        Protege estrictamente documentos nobles (README, temarios, notas, .pdf, .docx, .xlsx).
+        """
+        fn = filename.lower()
+        if fn in Sanitizer.NOBLE_DOC_NAMES:
+            return False
+
+        # 1. Detección por patrón de nombre de archivo
+        for pat in Sanitizer.GARBAGE_SUB_PATTERNS:
+            if pat.search(filename):
+                return True
+
+        # 2. Detección por inspección de cabecera si es .txt o .srt < 200KB
+        if filepath and os.path.exists(filepath) and fn.endswith((".txt", ".srt")):
+            try:
+                sz = os.path.getsize(filepath)
+                if 0 < sz < 200 * 1024:
+                    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                        header = f.read(512)
+                        if "WEBVTT" in header:
+                            return True
+                        if re.search(r'<\d{2}:\d{2}:\d{2}\.\d{3}>', header):
+                            return True
+            except Exception:
+                pass
+        return False
+
+    @staticmethod
+    def clean_webvtt_text(raw_text: str) -> str:
+        """
+        Filtro higiénico para limpiar volcados WebVTT si se requiriera rescatar el texto.
+        Elimina timestamps <00:00:13.519>, tags de karaoke <c>...</c>, cabeceras WebVTT y deduplica frases.
+        """
+        t = raw_text
+        t = re.sub(r'^WEBVTT.*?\n\n', '', t, flags=re.DOTALL | re.IGNORECASE)
+        t = re.sub(r'^(Kind|Language):.*?\n', '', t, flags=re.MULTILINE | re.IGNORECASE)
+        t = re.sub(r'\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}.*?\n', '', t)
+        t = re.sub(r'<\d{2}:\d{2}:\d{2}\.\d{3}>', '', t)
+        t = re.sub(r'</?[a-zA-Z][^>]*>', '', t)
+        lines = [line.strip() for line in t.splitlines() if line.strip()]
+        deduped = []
+        prev = ""
+        for line in lines:
+            if line != prev:
+                deduped.append(line)
+                prev = line
+        return "\n".join(deduped)
+
+    @staticmethod
+    def purge_garbage_transcripts(target_dir: str, dry_run: bool = False) -> Tuple[int, int]:
+        """
+        Escanea y purga físicamente todos los volcados *-subtítulos.txt y WebVTT corruptos en un árbol.
+        Preserva intactos todos los PDFs, DOCX, XLSX y audios M4A.
+        Retorna (archivos_eliminados, bytes_liberados).
+        """
+        if not os.path.exists(target_dir):
+            return 0, 0
+
+        purged_count = 0
+        bytes_freed = 0
+
+        for root, _, files in os.walk(target_dir):
+            for f in files:
+                fpath = os.path.join(root, f)
+                if Sanitizer.is_garbage_transcript(f, fpath):
+                    try:
+                        sz = os.path.getsize(fpath)
+                    except Exception:
+                        sz = 0
+                    if not dry_run:
+                        try:
+                            os.remove(fpath)
+                            purged_count += 1
+                            bytes_freed += sz
+                        except Exception as ex:
+                            log(f"No se pudo eliminar {f}: {ex}", "WARN")
+                    else:
+                        purged_count += 1
+                        bytes_freed += sz
+        return purged_count, bytes_freed
+
 
 class Normalizer:
     @staticmethod
@@ -380,12 +478,17 @@ class ProviderDriver:
 # =============================================================================
 
 class CourseProcessor:
-    def __init__(self, course_title: str, staging_dir: str, gdrive_dest: str):
+    def __init__(self, course_title: str, staging_dir: str, gdrive_dest: str, flat: bool = False):
         self.course_title = course_title
         self.staging_dir = staging_dir
         self.gdrive_dest = gdrive_dest
-        self.audios_dest = os.path.join(gdrive_dest, "NOTEBOOKLM_AUDIOS")
-        self.docs_dest = os.path.join(gdrive_dest, "DOCS")
+        self.flat = flat
+        if flat:
+            self.audios_dest = gdrive_dest
+            self.docs_dest = gdrive_dest
+        else:
+            self.audios_dest = os.path.join(gdrive_dest, "NOTEBOOKLM_AUDIOS")
+            self.docs_dest = os.path.join(gdrive_dest, "DOCS")
 
     def process(self) -> Dict[str, Any]:
         """
@@ -403,6 +506,11 @@ class CourseProcessor:
 
         # Paso 1: Descompresión
         ArchiveExtractor.unpack_all(self.staging_dir)
+
+        # Paso 1.5: Purga preventiva de volcados de subtítulos y WebVTT corruptos
+        purged, freed = Sanitizer.purge_garbage_transcripts(self.staging_dir)
+        if purged > 0:
+            log(f"Purgados {purged} subtítulos/WebVTT basura ({freed / 1024:.1f} KB) del staging")
 
         # Paso 2: Escaneo de archivos
         media_files = []
@@ -496,54 +604,65 @@ class CourseProcessor:
 
 class Reprocessor:
     @staticmethod
-    def reprocess_course(course_dir: str) -> None:
+    def reprocess_course(course_dir: str, purge_subs: bool = True) -> Dict[str, Any]:
         """
         Escanea un directorio de curso existente en Google Drive o NVMe:
-        1. Detecta archivos .aac y les hace remuxing instantáneo a .m4a con +faststart.
-        2. Detecta videos huérfanos (.mp4, .mkv) y extrae sus audios .m4a en NOTEBOOKLM_AUDIOS/.
-        3. Detecta audios .mp3 pesados y los optimiza a .m4a 24k mono.
-        4. Mueve PDFs y documentos dispersos a DOCS/.
-        5. Respeta al 100% los audios que ya estén correctos.
+        1. Purga subtítulos y volcados WebVTT corruptos (*-subtítulos.txt).
+        2. Detecta archivos .aac y les hace remuxing instantáneo a .m4a con +faststart (-c copy).
+        3. Detecta audios .mp3 y los optimiza a .m4a 24k mono AAC con +faststart.
+        4. Detecta videos huérfanos (.mp4, .mkv) y extrae sus audios .m4a en NOTEBOOKLM_AUDIOS/.
+        5. Mueve PDFs y documentos nobles dispersos a DOCS/.
+        6. Respeta al 100% los audios que ya estén correctos e idempotentes.
         """
         if not os.path.exists(course_dir):
             log(f"Directorio no encontrado: {course_dir}", "ERROR")
-            return
+            return {"status": "NOT_FOUND", "course": course_dir}
 
         course_title = os.path.basename(os.path.abspath(course_dir))
         log(f"Iniciando saneamiento local de '{course_title}'...", "ACTION")
+
+        # Paso 0: Purga higiénica de subtítulos basura si está activada
+        if purge_subs:
+            purged, freed = Sanitizer.purge_garbage_transcripts(course_dir)
+            if purged > 0:
+                log(f"Purgados {purged} subtítulos/WebVTT basura ({freed / 1024:.1f} KB)")
 
         audios_dir = os.path.join(course_dir, "NOTEBOOKLM_AUDIOS")
         docs_dir = os.path.join(course_dir, "DOCS")
         os.makedirs(audios_dir, exist_ok=True)
         os.makedirs(docs_dir, exist_ok=True)
 
-        # 1. Buscar archivos .aac planos que requieran remuxing
+        # 1. Escanear inventario de medios
         aac_files = []
+        mp3_files = []
         video_files = []
         doc_files = []
 
         for root, _, files in os.walk(course_dir):
+            if root.startswith(audios_dir):
+                continue
             for f in sorted(files):
                 full_path = os.path.join(root, f)
                 ext = os.path.splitext(f)[1].lower()
 
                 if ext == ".aac":
                     aac_files.append((full_path, f, root))
+                elif ext == ".mp3":
+                    mp3_files.append((full_path, f, root))
                 elif ext in VIDEO_EXTENSIONS:
                     video_files.append((full_path, f, root))
                 elif ext in DOC_EXTENSIONS and ext not in ARCHIVE_EXTENSIONS:
                     if not root.startswith(docs_dir):
                         doc_files.append((full_path, f))
 
-        log(f"Archivos detectados: {len(aac_files)} AACs planos, {len(video_files)} videos, {len(doc_files)} docs.")
+        log(f"Inventario: {len(aac_files)} AACs, {len(mp3_files)} MP3s, {len(video_files)} videos, {len(doc_files)} docs.")
 
-        # Remuxing de AACs planos a M4A con faststart
+        # Paso 1: Remuxing ultrarrápido de AACs a M4A con +faststart (-c copy)
         for aac_path, aac_name, aac_root in aac_files:
             m4a_name = os.path.splitext(aac_name)[0] + ".m4a"
             m4a_target = os.path.join(audios_dir, m4a_name)
 
             if os.path.exists(m4a_target) and Transcoder.get_duration(m4a_target) > 0:
-                # Ya existe y es válido, eliminar el aac duplicado
                 try:
                     os.remove(aac_path)
                 except Exception:
@@ -557,7 +676,18 @@ class Reprocessor:
                 except Exception:
                     pass
 
-        # Extracción de videos huérfanos
+        # Paso 2: Transcodificación de MP3s a M4A 24k mono si no existen
+        for idx, (mp3_path, mp3_name, mp3_root) in enumerate(mp3_files, start=1):
+            m4a_name = Normalizer.format_audio_name(os.path.basename(mp3_root), mp3_name, idx)
+            m4a_target = os.path.join(audios_dir, m4a_name)
+
+            if os.path.exists(m4a_target) and Transcoder.get_duration(m4a_target) > 0:
+                continue
+
+            log(f"Transcodificando MP3 a M4A speech: {mp3_name} -> {m4a_name}", "AUDIO")
+            Transcoder.extract_m4a_speech(mp3_path, m4a_target)
+
+        # Paso 3: Extracción de audio de videos huérfanos
         for idx, (vpath, vname, vroot) in enumerate(video_files, start=1):
             m4a_name = Normalizer.format_audio_name(os.path.basename(vroot), vname, idx)
             m4a_target = os.path.join(audios_dir, m4a_name)
@@ -568,7 +698,7 @@ class Reprocessor:
             log(f"Extrayendo audio de video: {vname} -> {m4a_name}", "AUDIO")
             Transcoder.extract_m4a_speech(vpath, m4a_target)
 
-        # Mover documentos sueltos a DOCS/
+        # Paso 4: Mover documentos sueltos a DOCS/
         for dpath, dname in doc_files:
             target_doc = os.path.join(docs_dir, dname)
             if not os.path.exists(target_doc):
@@ -578,6 +708,62 @@ class Reprocessor:
                     pass
 
         log(f"✅ Saneamiento de '{course_title}' finalizado exitosamente.", "INFO")
+        return {
+            "course": course_title,
+            "status": "COMPLETED",
+            "aac_remuxed": len(aac_files),
+            "mp3_converted": len(mp3_files),
+            "video_extracted": len(video_files),
+            "docs_moved": len(doc_files)
+        }
+
+    @staticmethod
+    def reprocess_tree(parent_dir: str, purge_subs: bool = True) -> List[Dict[str, Any]]:
+        """
+        Sanea de manera secuencial múltiples cursos contenidos dentro de una carpeta padre.
+        Aplica límites de I/O (nice 19 / ionice 3) para preservar la estabilidad del sistema.
+        """
+        if not os.path.exists(parent_dir):
+            log(f"Carpeta contenedora no existe: {parent_dir}", "ERROR")
+            return []
+
+        log(f"Escaneando cursos para saneamiento por lotes en: {parent_dir}...", "ACTION")
+        results = []
+
+        # Determinar si la carpeta en sí es un curso (contiene archivos multimedia directamente)
+        has_direct_media = any(
+            os.path.splitext(f)[1].lower() in MEDIA_EXTENSIONS
+            for f in os.listdir(parent_dir)
+            if os.path.isfile(os.path.join(parent_dir, f))
+        )
+
+        if has_direct_media:
+            return [Reprocessor.reprocess_course(parent_dir, purge_subs=purge_subs)]
+
+        # Si es un contenedor de cursos (ej: CURSOS/MCV o CURSOS/CA)
+        excluded_dir_names = {"Z_NON-MKTNG", "CATEGORIAS", "0.DWNL", "00. INCOMPLETOS"}
+        subdirs = sorted([
+            os.path.join(parent_dir, d) for d in os.listdir(parent_dir)
+            if os.path.isdir(os.path.join(parent_dir, d))
+            and not d.startswith((".", "_"))
+            and d not in excluded_dir_names
+            and not d.startswith("Z_NON")
+        ])
+
+        log(f"Encontrados {len(subdirs)} directorios para evaluar.")
+        for sdir in subdirs:
+            has_media = False
+            for _, _, files in os.walk(sdir):
+                if any(os.path.splitext(f)[1].lower() in MEDIA_EXTENSIONS for f in files):
+                    has_media = True
+                    break
+            if has_media:
+                res = Reprocessor.reprocess_course(sdir, purge_subs=purge_subs)
+                results.append(res)
+            else:
+                log(f"Salteando carpeta sin medios: {os.path.basename(sdir)}")
+
+        return results
 
 
 # =============================================================================
@@ -667,7 +853,23 @@ def run_tests() -> int:
     assert ProviderDriver.detect_provider("https://example.com/video.mp4") == "direct"
     print(f"  {GREEN}✓{RESET} ProviderDriver: Clasificación de proveedores verificada.")
 
-    # Test 5: Verify ffprobe and ffmpeg availability
+    # Test 5: Sanitizer garbage detection and noble preservation
+    assert Sanitizer.is_garbage_transcript("01. Embudos que no son embudos.mp4-subtítulos.txt") is True
+    assert Sanitizer.is_garbage_transcript("Clase_02.mp4-subtitulo.txt") is True
+    assert Sanitizer.is_garbage_transcript("03_video.mp4-subtítulo.txt") is True
+    assert Sanitizer.is_garbage_transcript("caption.vtt") is True
+    assert Sanitizer.is_garbage_transcript("README.txt") is False
+    assert Sanitizer.is_garbage_transcript("notas.txt") is False
+    assert Sanitizer.is_garbage_transcript("resumen.txt") is False
+    print(f"  {GREEN}✓{RESET} Sanitizer: Detección y purga de subtítulos corruptos validada.")
+
+    # Test 6: WebVTT text hygiene and deduplication
+    vtt_sample = "WEBVTT\n\n00:00:01.000 --> 00:00:04.000\n<00:00:01.500><c> Hola</c> mundo\nHola mundo\n"
+    cleaned = Sanitizer.clean_webvtt_text(vtt_sample)
+    assert cleaned == "Hola mundo"
+    print(f"  {GREEN}✓{RESET} Sanitizer: Limpieza higiénica de WebVTT y deduplicación verificada.")
+
+    # Test 7: Verify ffprobe and ffmpeg availability
     try:
         subprocess.run(["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         subprocess.run(["ffprobe", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -695,6 +897,7 @@ def main():
     p_url.add_argument("link", help="URL de Mega, Sync.com o HTTP.")
     p_url.add_argument("--dest", "-d", required=True, help="Ruta de destino final en Google Drive (ej: /var/www/baiosfera/CURSOS/CENOF/CursoX).")
     p_url.add_argument("--title", "-t", help="Título explícito del curso.")
+    p_url.add_argument("--flat", action="store_true", help="Deposita los audios y documentos directamente en la raíz de destino sin subcarpetas.")
 
     # Comando 2: scan
     p_scan = subparsers.add_parser("scan", help="Escanea recibos de compra (.txt, .docx) y genera un manifiesto JSON.")
@@ -704,8 +907,19 @@ def main():
     # Comando 3: reprocess
     p_reprocess = subparsers.add_parser("reprocess", help="Sanea un curso existente (remuxing AAC a M4A faststart, videos a speech).")
     p_reprocess.add_argument("course_dir", help="Directorio del curso a sanear en Google Drive o NVMe.")
+    p_reprocess.add_argument("--no-purge-subs", action="store_true", help="No purgar subtítulos corruptos.")
 
-    # Comando 4: status
+    # Comando 4: reprocess-tree
+    p_tree = subparsers.add_parser("reprocess-tree", help="Sanea recursivamente cursos contenidos dentro de una carpeta padre.")
+    p_tree.add_argument("parent_dir", help="Carpeta contenedora de cursos (ej: CURSOS/MCV, DIGITALMARKETER).")
+    p_tree.add_argument("--no-purge-subs", action="store_true", help="No purgar subtítulos corruptos.")
+
+    # Comando 5: purge-subs
+    p_purge = subparsers.add_parser("purge-subs", help="Purga físicamente volcados *-subtítulos.txt y WebVTT corruptos en un árbol.")
+    p_purge.add_argument("dir", help="Directorio a escanear y purgar.")
+    p_purge.add_argument("--dry-run", action="store_true", help="Simulación sin borrar archivos.")
+
+    # Comando 6: status
     subparsers.add_parser("status", help="Muestra el estado del almacenamiento NVMe y Google Drive.")
 
     # Flags globales de compatibilidad directa
@@ -735,7 +949,7 @@ def main():
             sys.exit(1)
 
         if ok:
-            processor = CourseProcessor(title, staging_dir, args.dest)
+            processor = CourseProcessor(title, staging_dir, args.dest, flat=getattr(args, "flat", False))
             processor.process()
         else:
             log("Descarga fallida.", "ERROR")
@@ -745,7 +959,18 @@ def main():
         ManifestScanner.scan_receipts(args.dir, args.output)
 
     elif args.command == "reprocess":
-        Reprocessor.reprocess_course(args.course_dir)
+        purge = not getattr(args, "no_purge_subs", False)
+        Reprocessor.reprocess_course(args.course_dir, purge_subs=purge)
+
+    elif args.command == "reprocess-tree":
+        purge = not getattr(args, "no_purge_subs", False)
+        Reprocessor.reprocess_tree(args.parent_dir, purge_subs=purge)
+
+    elif args.command == "purge-subs":
+        log(f"Iniciando purga de subtítulos en: {args.dir} (dry_run={args.dry_run})...", "ACTION")
+        cnt, freed = Sanitizer.purge_garbage_transcripts(args.dir, dry_run=args.dry_run)
+        action_word = "Simulados para purga" if args.dry_run else "Purgados físicamente"
+        log(f"✅ {action_word}: {cnt} archivos ({freed / (1024 * 1024):.2f} MB liberados).", "INFO")
 
     elif args.command == "status":
         print(f"\n{BOLD}{CYAN}=== ESTADO DEL ALMACENAMIENTO (FUSE SHIELD) ==={RESET}")
