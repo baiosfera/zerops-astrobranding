@@ -97,10 +97,13 @@ def concatenate_audio_group(output_path: str, input_files: List[str]) -> bool:
             os.remove(list_file)
 
 
-def run_sync(dry_run: bool = False, limit: int = None, delay: float = 3.0):
+def run_sync(dry_run: bool = False, limit: int = None, delay: float = 3.0, local_only: bool = False):
     print("==================================================================")
     print("🚀 SINCRONIZACIÓN DE COMPENDIOS DE AUDIO: VELOCITYMEDIA")
-    print(f"🎯 Cuaderno Destino: {NOTEBOOK_TITLE} ({NOTEBOOK_ID})")
+    if local_only:
+        print("💾 MODO: GENERACIÓN LOCAL SOLAMENTE (Sin subida a NotebookLM)")
+    else:
+        print(f"🎯 Cuaderno Destino: {NOTEBOOK_TITLE} ({NOTEBOOK_ID})")
     print("==================================================================")
 
     groups = plan_master_compendiums(SOURCE_ROOT)
@@ -109,12 +112,12 @@ def run_sync(dry_run: bool = False, limit: int = None, delay: float = 3.0):
         groups = groups[:limit]
         print(f"• Ejecución limitada a: {limit} compendios")
 
-    bridge = None if dry_run else NotebookLMBridge()
-    manifest_mgr = PartitionedManifest()
-    uploaded_fps = manifest_mgr.get_uploaded_fingerprints()
+    bridge = None if (dry_run or local_only) else NotebookLMBridge()
+    manifest_mgr = None if local_only else PartitionedManifest()
+    uploaded_fps = set() if local_only else manifest_mgr.get_uploaded_fingerprints()
 
     existing_titles = {}
-    if not dry_run:
+    if not dry_run and not local_only:
         try:
             raw_sources = bridge.client.get_notebook_sources_with_types(NOTEBOOK_ID)
             existing_titles = {
@@ -146,7 +149,13 @@ def run_sync(dry_run: bool = False, limit: int = None, delay: float = 3.0):
         else:
             print(f"    [DRY-RUN] Generaría: {master_path} (~{est_mb:.1f} MB)")
 
-        # 2. Comprobación de idempotencia
+        # 2. Modo local-only: salta toda subida y registro a NotebookLM
+        if local_only:
+            print(f"    💾 Guardado en NVMe local (sin subida)")
+            success_count += 1
+            continue
+
+        # 3. Comprobación de idempotencia en NotebookLM
         clean_title = master_name.strip().lower()
         if not dry_run and clean_title in existing_titles:
             src_id = existing_titles[clean_title]
@@ -172,7 +181,7 @@ def run_sync(dry_run: bool = False, limit: int = None, delay: float = 3.0):
             success_count += 1
             continue
 
-        # 3. Subida hacia NotebookLM
+        # 4. Subida hacia NotebookLM
         if dry_run:
             print(f"    [DRY-RUN] Subiría {master_name} -> {NOTEBOOK_TITLE}")
             success_count += 1
@@ -227,11 +236,12 @@ def run_sync(dry_run: bool = False, limit: int = None, delay: float = 3.0):
 def main():
     parser = argparse.ArgumentParser(description="Compactador y Sincronizador de Audio de VelocityMedia a NotebookLM")
     parser.add_argument("--dry-run", action="store_true", help="Simula sin realizar concatenaciones ni subidas reales")
+    parser.add_argument("--local-only", action="store_true", help="Solo genera los compendios concatenados en disco local NVMe sin subir a NotebookLM")
     parser.add_argument("--limit", type=int, default=None, help="Límite máximo de compendios a procesar")
     parser.add_argument("--delay", type=float, default=3.0, help="Delay entre subidas en segundos")
     args = parser.parse_args()
 
-    run_sync(dry_run=args.dry_run, limit=args.limit, delay=args.delay)
+    run_sync(dry_run=args.dry_run, limit=args.limit, delay=args.delay, local_only=args.local_only)
 
 
 if __name__ == "__main__":
