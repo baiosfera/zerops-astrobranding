@@ -1093,6 +1093,88 @@ def trigger_engram_background_sync(payload: dict, source: str = "post_tool") -> 
     except Exception:
         return False
 
+RESEARCH_STATE_FILE = "/tmp/.research_grounding_state.json"
+
+RESEARCH_DISCOVERY_SERVERS = {"context7", "exa", "tavily", "jina", "firecrawl", "brave", "duckduckgo"}
+
+RESEARCH_VERBATIM_TOOLS = {
+    "read_url", "extract_pdf", "guess_datetime_url", "query-docs",
+    "web_fetch_exa", "tavily_extract", "firecrawl_scrape",
+    "firecrawl_extract", "firecrawl_research_read_paper", "firecrawl_research_inspect_paper"
+}
+
+RESEARCH_MANDATE_PATTERNS = re.compile(
+    r'(?i)(?:\b(?:meta-research|estado del arte|sota|anti-amn|sin amn|memoria preentrenada|'
+    r'investig[aáe]|investiguen|benchmark|breaking changes?|versi[oó]n actual|[uú]ltima versi[oó]n|'
+    r'documentaci[oó]n oficial)\b|\bresearch\b.*?\b(?:en vivo|web|api|sota|fuentes?|mcp|docs?)\b)'
+)
+
+RESEARCH_TRANSCRIPT_ANY_TOKENS = (
+    "web_search_exa", "web_fetch_exa", "tavily_search", "tavily_extract", "tavily_map",
+    "brave_web_search", "duckduckgo_web_search", "context7", "firecrawl",
+    '"ServerName": "jina"', '"ServerName":"jina"', "read_url", "extract_pdf",
+    "r.jina.ai", "s.jina.ai", '"TypeName": "research"', '"TypeName":"research"', '"typeName": "research"'
+)
+
+RESEARCH_TRANSCRIPT_VERBATIM_TOKENS = (
+    "read_url", "extract_pdf", "r.jina.ai", "query-docs", "web_fetch_exa",
+    "tavily_extract", "firecrawl_scrape", "firecrawl_extract",
+    "firecrawl_research_read_paper", '"TypeName": "research"', '"TypeName":"research"', '"typeName": "research"'
+)
+
+def _record_research_state(source: str, detail: str, phase: str) -> None:
+    """Persist live epistemic activity (discovery vs verbatim) with 2h merge window."""
+    now_ms = int(time.time() * 1000)
+    prev = {}
+    if os.path.exists(RESEARCH_STATE_FILE):
+        try:
+            with open(RESEARCH_STATE_FILE, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                if time.time() - (loaded.get("timestamp", 0) / 1000.0) < 7200:
+                    prev = loaded
+        except Exception:
+            prev = {}
+    data = {
+        "timestamp": now_ms,
+        "source": source,
+        "detail": detail,
+        "phase": phase,
+        "has_discovery": bool(prev.get("has_discovery") or phase in ("discovery", "subagent")),
+        "has_verbatim": bool(prev.get("has_verbatim") or phase in ("verbatim", "subagent")),
+    }
+    try:
+        with open(RESEARCH_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+def _inspect_turn_research(payload: dict) -> tuple:
+    """Inspect current turn (since last USER_INPUT) for live research & verbatim reads."""
+    if "test_has_research_in_turn" in payload or "test_has_verbatim_in_turn" in payload:
+        return bool(payload.get("test_has_research_in_turn", False)), bool(payload.get("test_has_verbatim_in_turn", False)), True
+
+    transcript_path = payload.get("transcriptPath", "") or payload.get("common", {}).get("transcriptPath", "")
+    if not transcript_path or not os.path.exists(transcript_path):
+        return False, False, bool(payload.get("test_force_research_stop", False))
+
+    has_any = False
+    has_verbatim = False
+    try:
+        with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
+            t_lines = f.readlines()
+        for tl in reversed(t_lines):
+            if '"type":"USER_INPUT"' in tl or '"type": "USER_INPUT"' in tl or '"source":"USER_EXPLICIT"' in tl or '"source": "USER_EXPLICIT"' in tl:
+                break
+            if any(tok in tl for tok in RESEARCH_TRANSCRIPT_ANY_TOKENS):
+                has_any = True
+            if any(tok in tl for tok in RESEARCH_TRANSCRIPT_VERBATIM_TOKENS):
+                has_verbatim = True
+            if has_any and has_verbatim:
+                break
+    except Exception:
+        pass
+    return has_any, has_verbatim, True
+
 def evaluate_hook(payload: dict) -> dict:
     # 0. SessionStart Handling (Mandatory Anti-AMN Recall with Multi-Hook Deduplication)
     if payload.get("session_start") or payload.get("event") == "SessionStart" or payload.get("hookType") == "SessionStart":
@@ -1344,6 +1426,54 @@ def evaluate_hook(payload: dict) -> dict:
                                 except Exception:
                                     pass
 
+            # 0.5.4 Anti-AMN Research & Verbatim Grounding Stop Gate (research / meta-research backbone)
+            if not payload.get("test_bypass_research_stop"):
+                user_prompt = payload.get("test_user_prompt") or extract_user_prompt(payload)
+                if user_prompt and RESEARCH_MANDATE_PATTERNS.search(user_prompt):
+                    has_any_res, has_verb_res, can_inspect = _inspect_turn_research(payload)
+                    res_stop_counter_file = "/tmp/.research_stop_force_count"
+                    if can_inspect and (not has_any_res or not has_verb_res):
+                        count = 0
+                        if os.path.exists(res_stop_counter_file):
+                            try:
+                                with open(res_stop_counter_file, "r", encoding="utf-8") as f:
+                                    count = int(f.read().strip())
+                            except Exception:
+                                count = 0
+                        if count < 1:
+                            try:
+                                with open(res_stop_counter_file, "w", encoding="utf-8") as f:
+                                    f.write(str(count + 1))
+                            except Exception:
+                                pass
+                            if not has_any_res:
+                                return {
+                                    "decision": "continue",
+                                    "reason": (
+                                        "🏛️ MANDATO ANTI-AMN (research F0–F3): Se solicitó investigación técnica/SOTA externa "
+                                        "y no se detectaron llamadas de grounding en vivo en este turno. Ejecutá 'research' "
+                                        "(context7, exa, tavily, jina, firecrawl; fallbacks brave/duckduckgo o subagente 'research') antes de responder."
+                                    )
+                                }
+                            return {
+                                "decision": "continue",
+                                "reason": (
+                                    "🏛️ REGLA 'SNIPPET IS NOT EVIDENCE' (research Fase 3 — Jina Core): "
+                                    "Ejecutaste búsqueda de descubrimiento pero falta lectura verbatim de la fuente primaria. "
+                                    "Leé la URL canónica con 'jina:read_url' (o 'curl r.jina.ai/<url>', 'context7:query-docs', 'web_fetch_exa') antes de concluir."
+                                )
+                            }
+                        if os.path.exists(res_stop_counter_file):
+                            try:
+                                os.remove(res_stop_counter_file)
+                            except Exception:
+                                pass
+                    elif os.path.exists(res_stop_counter_file):
+                        try:
+                            os.remove(res_stop_counter_file)
+                        except Exception:
+                            pass
+
         triggered_stop_sync = trigger_engram_background_sync(payload, source="stop")
         if payload.get("test_inspect_engram_sync"):
             return {"engramSyncTriggered": triggered_stop_sync, "source": "stop"}
@@ -1427,6 +1557,30 @@ def evaluate_hook(payload: dict) -> dict:
                     ]
                 }
 
+        if user_prompt and RESEARCH_MANDATE_PATTERNS.search(user_prompt) and not payload.get("test_bypass_research_nudge"):
+            res_fresh = False
+            if os.path.exists(RESEARCH_STATE_FILE):
+                try:
+                    with open(RESEARCH_STATE_FILE, "r", encoding="utf-8") as rf:
+                        r_data = json.load(rf)
+                        if (time.time() - (r_data.get("timestamp", 0) / 1000.0)) < 1800 and r_data.get("has_verbatim", True):
+                            res_fresh = True
+                except Exception:
+                    pass
+            if not res_fresh:
+                return {
+                    "injectSteps": [
+                        {
+                            "systemMessage": {
+                                "systemMessage": (
+                                    "🏛️ ANTI-AMN ACTIVO (research F0–F3): Groundeá con 'context7' / 'exa' / 'tavily' + "
+                                    "'jina:read_url' (fallbacks F2: 'brave' -> 'duckduckgo') o subagente 'research' antes de emitir afirmaciones técnicas."
+                                )
+                            }
+                        }
+                    ]
+                }
+
         return {}
 
     # 2. PreToolUse Handling
@@ -1434,25 +1588,24 @@ def evaluate_hook(payload: dict) -> dict:
     tool_name = tool_call.get("name", "")
     args = tool_call.get("args", {})
 
-    # 0.05 Epistemic Activity Recorder (Records live research execution)
+    # 0.05 Epistemic Activity Recorder (Records live research execution across discovery & verbatim tiers)
     if tool_name == "invoke_subagent":
         type_name = str(args.get("TypeName", "")).lower()
         prompt_txt = str(args.get("Prompt", "")).lower()
-        if type_name == "research" or any(k in prompt_txt for k in ["research", "investig", "benchmark", "sota", "api", "docs"]):
-            try:
-                with open("/tmp/.research_grounding_state.json", "w") as f:
-                    json.dump({"timestamp": int(time.time() * 1000), "source": "invoke_subagent", "detail": type_name}, f)
-            except Exception:
-                pass
+        if type_name in ("research", "meta-research") or any(k in prompt_txt for k in ["research", "investig", "benchmark", "sota", "api", "docs"]):
+            _record_research_state("invoke_subagent", type_name or "research", "subagent")
     elif tool_name == "call_mcp_tool":
         server = str(args.get("ServerName", "")).lower()
         mcp_tool = str(args.get("ToolName", "")).lower()
-        if server in ["context7", "exa", "brave", "tavily", "firecrawl", "duckduckgo"] or any(k in mcp_tool for k in ["search", "docs", "scrape", "crawl", "fetch"]):
-            try:
-                with open("/tmp/.research_grounding_state.json", "w") as f:
-                    json.dump({"timestamp": int(time.time() * 1000), "source": "call_mcp_tool", "detail": f"{server}:{mcp_tool}"}, f)
-            except Exception:
-                pass
+        if server in RESEARCH_DISCOVERY_SERVERS or any(k in mcp_tool for k in ["search", "docs", "scrape", "crawl", "fetch", "read_url", "extract_pdf"]):
+            phase = "verbatim" if mcp_tool in RESEARCH_VERBATIM_TOOLS else "discovery"
+            _record_research_state("call_mcp_tool", f"{server}:{mcp_tool}", phase)
+    elif tool_name == "run_command":
+        cmd_raw = str(args.get("CommandLine", ""))
+        if "r.jina.ai/" in cmd_raw:
+            _record_research_state("run_command", "curl:r.jina.ai", "verbatim")
+        elif "s.jina.ai/" in cmd_raw:
+            _record_research_state("run_command", "curl:s.jina.ai", "discovery")
 
     # 0. Anti-AMN & F0 Epistemic Inflow: Enrutamiento afirmativo hacia skill research
     if tool_name == "search_web":
@@ -1461,7 +1614,8 @@ def evaluate_hook(payload: dict) -> dict:
             "reason": (
                 "Contrato Epistémico F0 (Anti-AMN): Para investigación y grounding en vivo, ejecutá "
                 "exclusivamente la skill 'research' mediante 'call_mcp_tool' "
-                "(servidores: context7, exa, brave, tavily, firecrawl) o mediante subagente 'invoke_subagent' (typeName: 'research')."
+                "(primarios: context7, exa, tavily, jina, firecrawl; fallbacks: brave, duckduckgo) "
+                "o mediante subagente 'invoke_subagent' (TypeName: 'research')."
             )
         }
 
@@ -1674,7 +1828,7 @@ def evaluate_hook(payload: dict) -> dict:
                     try:
                         with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
                             for line in f.readlines():
-                                if any(k in line for k in ["web_search_exa", "tavily_search", "brave_web_search", "context7", "firecrawl", '"TypeName": "research"']):
+                                if any(k in line for k in RESEARCH_TRANSCRIPT_ANY_TOKENS):
                                     has_research_recent = True
                                     break
                     except Exception:
@@ -1699,8 +1853,47 @@ def evaluate_hook(payload: dict) -> dict:
                         f"🏛️ MANDATO EPISTÉMICO F0 (Supreme Directive Invariante 5): "
                         f"Para mutar o crear [{os.path.basename(target_file)}], es mandatorio contrastar previamente "
                         "la realidad técnica exterior ejecutando la skill 'research' (vía subagente 'invoke_subagent' con "
-                        "typeName 'research' o herramientas MCP: context7, exa, tavily, brave, firecrawl). "
+                        "typeName 'research' o herramientas MCP: context7, exa, tavily, jina, firecrawl; fallbacks brave/duckduckgo). "
                         "Prohibido definir o mutar skills basándose en memoria pre-entrenada (AMN) o suposiciones."
+                    )
+                }
+
+        # A3.6 F4 Master Plan Anti-AMN Gate (Enforces live research prior to formal F4 plan creation)
+        is_target_final_plan = (
+            ("/artifacts/plans/" in target_file or target_file.startswith("artifacts/plans/"))
+            and target_file.endswith(".md")
+            and not any(x in target_file.lower() for x in [".executed.", ".superseded.", "report", ".test_hide", "draft", "grilling"])
+            and not is_plan_draft(target_file)
+            and not (content_to_check and any(k in content_to_check.lower() for k in ["status: draft", "estado: borrador", "draft: true", "borrador: true"]))
+        )
+        if is_target_final_plan and not payload.get("test_bypass_research"):
+            has_plan_research = False
+            if os.path.exists(RESEARCH_STATE_FILE):
+                try:
+                    with open(RESEARCH_STATE_FILE, "r", encoding="utf-8") as rf:
+                        r_data = json.load(rf)
+                        if (time.time() - (r_data.get("timestamp", 0) / 1000.0)) < 7200:
+                            has_plan_research = True
+                except Exception:
+                    pass
+            if not has_plan_research:
+                transcript_path = payload.get("transcriptPath", "")
+                if transcript_path and os.path.exists(transcript_path):
+                    try:
+                        with open(transcript_path, "r", encoding="utf-8", errors="ignore") as tf:
+                            for line in tf.readlines():
+                                if any(k in line for k in RESEARCH_TRANSCRIPT_ANY_TOKENS):
+                                    has_plan_research = True
+                                    break
+                    except Exception:
+                        pass
+            if not has_plan_research:
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        f"🏛️ MANDATO EPISTÉMICO F0->F4 (research Anti-AMN): Para formalizar el plan maestro [{os.path.basename(target_file)}], "
+                        "contrastá previamente la arquitectura con 'research' (context7 / exa / tavily + jina:read_url o subagente 'research'). "
+                        "Los borradores tempranos usan prefijo 'draft_' o 'status: draft'."
                     )
                 }
 

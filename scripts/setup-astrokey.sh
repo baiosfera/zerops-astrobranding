@@ -356,25 +356,27 @@ elif [ -d "$MCP_SCHEMAS_SRC" ]; then
     echo "  ✅ Esquemas MCP desplegados."
 fi
 
-# 10. Inyección y Merge de Servidores MCP en Antigravity
-echo "• Inyectando y sincronizando configuración de Servidores MCP..."
+# 10. Archivo de MCPs Astrológicos/NLM deshabilitados (On-Demand vía CLI/omni_engine)
+echo "• Manteniendo MCPs astrológicos/NLM apagados en mcp_config.disabled.json (On-Demand)..."
 if [ -f "$MCP_REGISTRY" ]; then
-    for cfg in "$HOME/.gemini/antigravity-cli/mcp_config.json" "/var/www/.gemini/config/mcp_config.json" "/home/zerops/.gemini/antigravity-cli/mcp_config.json"; do
-        if [ -f "$cfg" ] || [ -d "$(dirname "$cfg")" ]; then
-            TMP_EXPANDED=$(mktemp)
-            eval "cat << 'ENV_EOF'
+    TMP_EXPANDED=$(mktemp)
+    eval "cat << 'ENV_EOF'
 $(cat "$MCP_REGISTRY")
 ENV_EOF" > "$TMP_EXPANDED" 2>/dev/null || cp "$MCP_REGISTRY" "$TMP_EXPANDED"
-            
-            if [ -f "$cfg" ]; then
-                jq -s '.[0] * .[1]' "$cfg" "$TMP_EXPANDED" > "${cfg}.tmp" && mv "${cfg}.tmp" "$cfg"
-            else
-                cp "$TMP_EXPANDED" "$cfg"
-            fi
-            rm -f "$TMP_EXPANDED"
-            echo "  ✅ Servidores MCP inyectados en $cfg"
+
+    for disabled_cfg in "$HOME/.gemini/config/mcp_config.disabled.json" "$HOME/.gemini/antigravity-cli/mcp_config.disabled.json" "/var/www/.gemini/config/mcp_config.disabled.json"; do
+        if [ -d "$(dirname "$disabled_cfg")" ]; then
+            cp -f "$TMP_EXPANDED" "$disabled_cfg"
         fi
     done
+
+    for active_cfg in "$HOME/.gemini/config/mcp_config.json" "$HOME/.gemini/antigravity-cli/mcp_config.json" "/var/www/.gemini/config/mcp_config.json" "/var/www/.gemini/antigravity-cli/mcp_config.json"; do
+        if [ -f "$active_cfg" ] && [ ! -L "$active_cfg" ]; then
+            jq 'del(.mcpServers.bazi_reader, .mcpServers.lunar, .mcpServers.zmanim, .mcpServers.kundali, .mcpServers.notebooklm)' "$active_cfg" > "${active_cfg}.tmp" && mv "${active_cfg}.tmp" "$active_cfg"
+        fi
+    done
+    rm -f "$TMP_EXPANDED"
+    echo "  ✅ MCPs astrológicos locales apagados fuera de mcp_config.json activo"
 fi
 
 # 11. Inyección de Suites de Astrología y Branding en AGENTS.md

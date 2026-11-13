@@ -30,7 +30,7 @@ cat > "$PERSISTENT_GEMINI/config/mcp_config.json" << EOF
   "mcpServers": {
     "brave": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "args": ["-y", "@brave/brave-search-mcp-server"],
       "env": {
         "BRAVE_API_KEY": "${BRAVE_API_KEY:-}"
       },
@@ -45,36 +45,33 @@ cat > "$PERSISTENT_GEMINI/config/mcp_config.json" << EOF
       "args": ["-y", "duckduckgo-mcp-server"],
       "disabled": false
     },
-    "engram": {
-      "args": [
-        "mcp"
-      ],
-      "command": "/var/www/.bin/engram",
-      "disabled": false
-    },
     "exa": {
-      "command": "npx",
-      "args": ["-y", "exa-mcp-server"],
-      "env": {
-        "EXA_API_KEY": "${EXA_API_KEY:-}"
-      },
-      "disabled": false
+      "disabled": false,
+      "serverUrl": "https://mcp.exa.ai/mcp",
+      "headers": {
+        "x-api-key": "${EXA_API_KEY:-}"
+      }
     },
     "firecrawl": {
-      "command": "npx",
-      "args": ["-y", "firecrawl-mcp"],
-      "env": {
-        "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY:-}"
-      },
-      "disabled": false
+      "disabled": false,
+      "serverUrl": "https://mcp.firecrawl.dev/v2/mcp",
+      "headers": {
+        "Authorization": "Bearer ${FIRECRAWL_API_KEY:-}"
+      }
+    },
+    "jina": {
+      "disabled": false,
+      "serverUrl": "https://mcp.jina.ai/v1",
+      "headers": {
+        "Authorization": "Bearer ${JINA_API_KEY:-}"
+      }
     },
     "tavily": {
-      "command": "npx",
-      "args": ["-y", "tavily-mcp"],
-      "env": {
-        "TAVILY_API_KEY": "${TAVILY_API_KEY:-}"
-      },
-      "disabled": false
+      "disabled": false,
+      "serverUrl": "https://mcp.tavily.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${TAVILY_API_KEY:-}"
+      }
     },
     "zerops": {
       "args": [

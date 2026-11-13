@@ -567,6 +567,10 @@ def run_tests(evaluate_hook, has_recent_backup):
         f.write("# Active Test Plan\n")
 
     res_state_file = "/tmp/.research_grounding_state.json"
+    res_state_backup = None
+    if os.path.exists(res_state_file):
+        with open(res_state_file, "r") as rf:
+            res_state_backup = rf.read()
     with open(res_state_file, "w") as f:
         json.dump({"timestamp": int(time.time() * 1000), "source": "test_research"}, f)
 
@@ -1281,6 +1285,143 @@ def run_tests(evaluate_hook, has_recent_backup):
             })
             assert res_clean_tool.get("decision") == "allow", f"Expected allow on clean tool, got {res_clean_tool}"
             print("✓ Test 76 Passed: Anti-Frankenstein Python Tool Guard (Universal Primitives Architecture)")
+
+            # Test 77: Epistemic Recorder tracks Jina Verbatim & Brave/DuckDuckGo Fallbacks
+            res_state_p = "/tmp/.research_grounding_state.json"
+            if os.path.exists(res_state_p):
+                os.remove(res_state_p)
+            evaluate_hook({
+                "toolCall": {
+                    "name": "call_mcp_tool",
+                    "args": {"ServerName": "duckduckgo", "ToolName": "duckduckgo_web_search", "Arguments": {"query": "test"}}
+                }
+            })
+            with open(res_state_p, "r") as rf:
+                st_ddg = json.load(rf)
+            assert st_ddg.get("has_discovery") is True and st_ddg.get("has_verbatim") is False, f"Expected discovery-only for DDG, got {st_ddg}"
+
+            evaluate_hook({
+                "toolCall": {
+                    "name": "call_mcp_tool",
+                    "args": {"ServerName": "jina", "ToolName": "read_url", "Arguments": {"url": "https://example.com"}}
+                }
+            })
+            with open(res_state_p, "r") as rf:
+                st_jina = json.load(rf)
+            assert st_jina.get("has_discovery") is True and st_jina.get("has_verbatim") is True, f"Expected verbatim merged with discovery for Jina, got {st_jina}"
+            print("✓ Test 77 Passed: Epistemic Recorder tracks Discovery vs Jina Verbatim tiers")
+
+            # Test 78: search_web deny message routes cleanly to Jina + Primaries + Brave/DuckDuckGo Fallbacks
+            res_sw = evaluate_hook({"toolCall": {"name": "search_web", "args": {"query": "test"}}})
+            assert res_sw.get("decision") == "deny" and "jina" in res_sw.get("reason", "") and "duckduckgo" in res_sw.get("reason", ""), f"Expected Jina & fallback routing in search_web deny, got {res_sw}"
+            print("✓ Test 78 Passed: search_web Anti-AMN routing includes Jina and fallbacks")
+
+            # Test 79: F4 Master Plan Anti-AMN Gate (A3.6) blocks ungrounded F4 plans, allows drafts & grounded plans
+            if os.path.exists(res_state_p):
+                os.remove(res_state_p)
+            res_plan_block = evaluate_hook({
+                "test_bypass_linear": True,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {"Path": "/var/www/artifacts/plans/sota_plan.md", "Content": "# Master Plan\n## Scope\n"}
+                }
+            })
+            assert res_plan_block.get("decision") == "deny" and "MANDATO EPISTÉMICO F0->F4" in res_plan_block.get("reason", ""), f"Expected deny on ungrounded F4 plan, got {res_plan_block}"
+
+            res_draft_allow = evaluate_hook({
+                "test_bypass_linear": True,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {"Path": "/var/www/artifacts/plans/draft_sota_plan.md", "Content": "# Draft\nstatus: draft\n"}
+                }
+            })
+            assert res_draft_allow.get("decision") == "allow", f"Expected allow on F0 draft plan, got {res_draft_allow}"
+
+            evaluate_hook({
+                "toolCall": {
+                    "name": "run_command",
+                    "args": {"CommandLine": "curl -sL https://r.jina.ai/https://example.com/docs"}
+                }
+            })
+            res_plan_allow = evaluate_hook({
+                "test_bypass_linear": True,
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {"Path": "/var/www/artifacts/plans/sota_plan.md", "Content": "# Master Plan\n## Scope\n"}
+                }
+            })
+            assert res_plan_allow.get("decision") == "allow", f"Expected allow on F4 plan after r.jina.ai grounding, got {res_plan_allow}"
+            print("✓ Test 79 Passed: F4 Master Plan Anti-AMN Gate enforces live research while keeping drafts unblocked")
+
+            # Test 80: Stop Gate (0.5.4) enforces Anti-AMN research + Jina Verbatim ('Snippet is Not Evidence')
+            if os.path.exists("/tmp/.research_stop_force_count"):
+                os.remove("/tmp/.research_stop_force_count")
+            res_stop_no_res = evaluate_hook({
+                "is_stop_event": True,
+                "terminationReason": "NO_TOOL_CALL",
+                "test_bypass_linear": True,
+                "test_bypass_correction_gate": True,
+                "test_bypass_gov_gate": True,
+                "test_user_prompt": "Investiga el estado del arte actual usando meta-research",
+                "test_has_research_in_turn": False,
+                "test_has_verbatim_in_turn": False,
+            })
+            assert res_stop_no_res.get("decision") == "continue" and "MANDATO ANTI-AMN" in res_stop_no_res.get("reason", ""), f"Expected Stop continue on missing research, got {res_stop_no_res}"
+
+            if os.path.exists("/tmp/.research_stop_force_count"):
+                os.remove("/tmp/.research_stop_force_count")
+            res_stop_snippet = evaluate_hook({
+                "is_stop_event": True,
+                "terminationReason": "NO_TOOL_CALL",
+                "test_bypass_linear": True,
+                "test_bypass_correction_gate": True,
+                "test_bypass_gov_gate": True,
+                "test_user_prompt": "Investiga el estado del arte actual usando meta-research",
+                "test_has_research_in_turn": True,
+                "test_has_verbatim_in_turn": False,
+            })
+            assert res_stop_snippet.get("decision") == "continue" and "SNIPPET IS NOT EVIDENCE" in res_stop_snippet.get("reason", ""), f"Expected Stop continue on snippet-only research, got {res_stop_snippet}"
+
+            res_stop_ok = evaluate_hook({
+                "is_stop_event": True,
+                "terminationReason": "NO_TOOL_CALL",
+                "test_bypass_linear": True,
+                "test_bypass_correction_gate": True,
+                "test_bypass_gov_gate": True,
+                "test_user_prompt": "Investiga el estado del arte actual usando meta-research",
+                "test_has_research_in_turn": True,
+                "test_has_verbatim_in_turn": True,
+            })
+            assert res_stop_ok == {}, f"Expected clean Stop allow after research + verbatim read, got {res_stop_ok}"
+            print("✓ Test 80 Passed: Anti-AMN Stop Gate enforces research execution and Jina Verbatim reading")
+
+            # Test 81: PreInvocation Anti-AMN Nudge stays silent after Jina Verbatim grounding
+            if os.path.exists(test_plan_path):
+                os.remove(test_plan_path)
+            if os.path.exists(res_state_p):
+                os.remove(res_state_p)
+            res_pi_nudge = evaluate_hook({
+                "invocationNum": 1,
+                "initialNumSteps": 0,
+                "test_bypass_dedup": True,
+                "lastUserInput": "Investiga cuál es la versión actual SOTA de FastAPI",
+            })
+            assert "injectSteps" in res_pi_nudge and "ANTI-AMN ACTIVO" in str(res_pi_nudge), f"Expected PreInvocation Anti-AMN nudge when ungrounded, got {res_pi_nudge}"
+
+            evaluate_hook({
+                "toolCall": {
+                    "name": "call_mcp_tool",
+                    "args": {"ServerName": "jina", "ToolName": "read_url", "Arguments": {"url": "https://fastapi.tiangolo.com"}}
+                }
+            })
+            res_pi_silent = evaluate_hook({
+                "invocationNum": 2,
+                "initialNumSteps": 1,
+                "test_bypass_dedup": True,
+                "lastUserInput": "Investiga cuál es la versión actual SOTA de FastAPI",
+            })
+            assert res_pi_silent == {}, f"Expected silent PreInvocation after Jina Verbatim grounding, got {res_pi_silent}"
+            print("✓ Test 81 Passed: PreInvocation Anti-AMN nudge activates only when ungrounded")
         finally:
             if cache_backup:
                 with open(test_cache, "w") as f:
@@ -1288,6 +1429,19 @@ def run_tests(evaluate_hook, has_recent_backup):
 
 
     finally:
+        if os.path.exists("/tmp/.research_stop_force_count"):
+            try:
+                os.remove("/tmp/.research_stop_force_count")
+            except Exception:
+                pass
+        if res_state_backup is not None:
+            with open(res_state_file, "w") as rf:
+                rf.write(res_state_backup)
+        elif os.path.exists(res_state_file):
+            try:
+                os.remove(res_state_file)
+            except Exception:
+                pass
         if os.path.exists("/tmp/.gov_mutation_stop_force_count"):
             try:
                 os.remove("/tmp/.gov_mutation_stop_force_count")
