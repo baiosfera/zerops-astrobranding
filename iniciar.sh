@@ -45,6 +45,9 @@ link_skills() {
     [ -f "${skill_path}SKILL.md" ] || continue
     local name
     name=$(basename "$skill_path")
+    if [ -d "$AGENTS_SKILLS_DIR/$name" ] && [ ! -L "$AGENTS_SKILLS_DIR/$name" ]; then
+      rm -rf "$AGENTS_SKILLS_DIR/$name"
+    fi
     ln -sfn "$SKILLS_DIR/$name" "$AGENTS_SKILLS_DIR/$name"
   done
   log "Skills symlinked cleanly: $SKILLS_DIR -> $AGENTS_SKILLS_DIR"
