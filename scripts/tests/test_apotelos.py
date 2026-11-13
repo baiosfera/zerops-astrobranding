@@ -338,20 +338,20 @@ class TestDynamicZeropsDiscovery(unittest.TestCase):
             display_name="Ropa Fitness Pro",
             funnel_type=apotelos.CommercialFunnelType.DIRECT_CHECKOUT,
             domain_strategy="multi_tenant_astro",
-            custom_domain="fitness.glamur.com",
+            custom_domain="fitness.example.com",
             unique_mechanism={"name": "Tejido Compresivo 4D", "contrast": "Frente a licras comunes"},
             primary_offer={"structure": "Set Deportivo 2x1", "pricing": {"currency": "USD", "amount": 69}},
             target_avatar={"pain_points": ["Costuras molestas", "Baja durabilidad"]},
             conversion_events=["Purchase", "InitiateCheckout"]
         )
         eco = apotelos.UniversalBrandEcosystem(
-            brand_slug="glamur-fit",
-            umbrella_name="Glamur Holding",
+            brand_slug="example-fit",
+            umbrella_name="Example Holding",
             verticals={"fitness-apparel": v1}
         )
         manifest = apotelos.compile_blackboard_manifest(eco, v1)
         self.assertEqual(manifest.domain_spec["strategy"], "multi_tenant_astro")
-        self.assertEqual(manifest.domain_spec["custom_domain"], "fitness.glamur.com")
+        self.assertEqual(manifest.domain_spec["custom_domain"], "fitness.example.com")
         self.assertEqual(manifest.domain_spec["ip_cost_delta"], "$0")
 
         # Test Dossier generation
@@ -360,7 +360,7 @@ class TestDynamicZeropsDiscovery(unittest.TestCase):
             dossier_path = apotelos.generate_markdown_dossier(eco, output_path=out_file)
             self.assertTrue(dossier_path.exists())
             content = dossier_path.read_text(encoding="utf-8")
-            self.assertIn("# DOSSIER SSoT: Glamur Holding", content)
+            self.assertIn("# DOSSIER SSoT: Example Holding", content)
             self.assertIn("fitness-apparel", content)
             self.assertIn("Tejido Compresivo 4D", content)
             self.assertIn("multi_tenant_astro", content)

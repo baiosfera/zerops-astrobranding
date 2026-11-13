@@ -99,7 +99,8 @@ def check_skills_parity(drive_base: str, local_base: str, auto_fix: bool = False
     return errors
 
 if __name__ == "__main__":
-    d_base = sys.argv[1] if len(sys.argv) > 1 else "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123"
+    proj = (os.getenv("ENGRAM_PROJECT") or os.getenv("PROJECT_NAME") or "default").lower()
+    d_base = sys.argv[1] if len(sys.argv) > 1 else f"/var/www/baiosfera/0ZEROPS-AGY/{proj}"
     l_base = sys.argv[2] if len(sys.argv) > 2 else "/var/www"
     fix_arg = False
     if len(sys.argv) > 3 and sys.argv[3] in ("1", "true", "--fix"):

@@ -95,9 +95,9 @@ services:
       minFreeRamPercent: 10
     priority: 4
 
-  # Tier 4 Runtime: AstroBranding Fullstack Webapp (Priority 2 - Consumes all services)
-  - hostname: astrobranding
-    type: ubuntu/bun@1.3.9
+  # Tier 4 Runtime: Frontend Webapp (Priority 2 - Consumes all services)
+  - hostname: web
+    type: ubuntu/bun@1.4
     startWithoutCode: true
     enableSubdomainAccess: true
     minContainers: 1

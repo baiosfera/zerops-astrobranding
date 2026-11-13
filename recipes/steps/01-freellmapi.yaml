@@ -12,7 +12,5 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.25
       minFreeRamPercent: 10
-    envVariables:
-      FREEAPI_ADMIN_EMAIL: ${FREEAPI_ADMIN_EMAIL_SECRET}
-      FREEAPI_ADMIN_PASSWORD: ${FREEAPI_ADMIN_PASSWORD_SECRET}
-      FREEAPI_CONFIG_JSON: ${FREEAPI_CONFIG_JSON_SECRET}
+    # Inject secrets (FREEAPI_ADMIN_EMAIL, FREEAPI_ADMIN_PASSWORD, FREEAPI_CONFIG_JSON,
+    # FREEAPI_ENCRYPTION_KEY) via vault or `zerops_env`; runtime wiring lives in runtime-freellmapi/zerops.yaml.

@@ -44,7 +44,7 @@ function getMetrics() {
   try {
     const scriptPath = fs.existsSync("/var/www/zerops-astrobranding/scripts/cockpit-status.ts")
       ? "/var/www/zerops-astrobranding/scripts/cockpit-status.ts"
-      : "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/cockpit-status.ts";
+      : "/var/www/.bin/cockpit-status";
     const runner = typeof globalThis.Bun !== "undefined" ? "bun" : "node --no-warnings --experimental-strip-types";
     const raw = execSync(`${runner} "${scriptPath}" --json`, {
       encoding: "utf-8",

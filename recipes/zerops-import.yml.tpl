@@ -4,16 +4,13 @@ project:
 
 services:
   - hostname: database
-    type: postgresql@18
-    mode: ${DB_MODE}
+    type: postgresql:${DB_MODE}@18
 
   - hostname: valkey
-    type: valkey@7.2
-    mode: ${VALKEY_MODE}
+    type: valkey:${VALKEY_MODE}@7.2
 
   - hostname: nats
-    type: nats@2.12
-    mode: NON_HA
+    type: nats:single@2.12
 
   - hostname: localstorage
     type: local-storage:single@1
@@ -28,8 +25,10 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.25
       minFreeRamPercent: 10
-    envSecrets:
-      FREEAPI_ENCRYPTION_KEY: <@generateRandomString(<64>)>
+    vault:
+      FREEAPI_ENCRYPTION_KEY:
+        value: <@generateRandomString(<64>)>
+        sensitive: true
 
   - hostname: bifrost
     type: alpine/go@1.22
@@ -41,8 +40,10 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.25
       minFreeRamPercent: 10
-    envSecrets:
-      BIFROST_MASTER_VK: <@generateRandomString(<32>)>
+    vault:
+      BIFROST_MASTER_VK:
+        value: <@generateRandomString(<32>)>
+        sensitive: true
 
   - hostname: hermes
     type: ubuntu/python@3.12
@@ -54,9 +55,7 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.5
       minFreeRamPercent: 10
-    envVariables:
-      PROJECT_NAME: ${PROJECT_NAME}
-      CREWAI_TELEMETRY_OPT_OUT: "true"
+    # Non-secret env vars (PROJECT_NAME, CREWAI_TELEMETRY_OPT_OUT) belong in runtime-hermes/zerops.yaml run.envVariables.
 
   - hostname: pidev
     type: ubuntu/nodejs@26
@@ -68,9 +67,10 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.25
       minFreeRamPercent: 10
-    envVariables:
-      PI_READ_ONLY: "false"
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+    vault:
+      DEEPSEEK_API_KEY:
+        value: ${DEEPSEEK_API_KEY}
+        sensitive: true
 
   - hostname: paperclip
     type: ubuntu/nodejs@26
@@ -82,6 +82,10 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.5
       minFreeRamPercent: 10
-    envSecrets:
-      PAPERCLIP_BETTER_AUTH_SECRET: <@generateRandomString(<32>)>
-      PAPERCLIP_SIGNING_SECRET: <@generateRandomString(<32>)>
+    vault:
+      PAPERCLIP_BETTER_AUTH_SECRET:
+        value: <@generateRandomString(<32>)>
+        sensitive: true
+      PAPERCLIP_SIGNING_SECRET:
+        value: <@generateRandomString(<32>)>
+        sensitive: true

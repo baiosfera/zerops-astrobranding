@@ -140,6 +140,6 @@ cockpit-web restart
 ## 6. Sincronización y Mantenimiento SSoT
 
 - **Clonabilidad Garantizada**: Toda la infraestructura del Cockpit está sincronizada en:
-  1. [`0zcp-123/scripts/setup-zcp.sh`](file:///var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/setup-zcp.sh): Despliega automáticamente `cockpit-status`, `cockpit-web` y la regla de proxy reverso `/cockpit/` en Nginx.
-  2. [`unisetup.sh`](file:///var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh): Garantiza que cualquier nuevo contenedor ZCP arranque con el Cockpit 100% operativo sin intervención manual.
-  3. `docs/MANUAL_COCKPIT.md` y `0zcp-123/scripts/MANUAL_COCKPIT.md`: Espejados de forma idéntica en Google Drive SSoT.
+  1. [`scripts/setup-zcp.sh`](file:///var/www/zerops-astrobranding/scripts/setup-zcp.sh): Despliega automáticamente `cockpit-status`, `cockpit-web` y la regla de proxy reverso `/cockpit/` en Nginx.
+  2. [`iniciar.sh`](file:///var/www/zerops-astrobranding/iniciar.sh): Garantiza que cualquier nuevo contenedor ZCP arranque con el Cockpit operativo sin intervención manual.
+  3. `docs/MANUAL_COCKPIT.md` y `scripts/MANUAL_COCKPIT.md`: Versionados en Git upstream.

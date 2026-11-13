@@ -6,7 +6,8 @@
 set -euo pipefail
 
 LOCAL_SKILLS="/var/www/.agents/skills"
-DRIVE_SKILLS="/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills"
+PROJ_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
+DRIVE_SKILLS="${PROJ_KEY:+/var/www/baiosfera/0ZEROPS-AGY/$PROJ_KEY/.agents/skills}"
 SOVEREIGN_REPO="/var/www/zerops-astro-skills"
 
 CHECK_ONLY=false
@@ -19,9 +20,11 @@ if [ ! -d "$LOCAL_SKILLS" ]; then
     exit 1
 fi
 
-if [ ! -d "$DRIVE_SKILLS" ]; then
-    echo "❌ Error: Directorio SSoT de skills en Google Drive no existe: $DRIVE_SKILLS"
-    exit 1
+HAS_DRIVE=false
+if [ -n "$DRIVE_SKILLS" ] && [ -d "$DRIVE_SKILLS" ]; then
+    HAS_DRIVE=true
+else
+    echo "ℹ️ Drive SSoT no configurado/encontrado ($DRIVE_SKILLS); verificando paridad git <-> local."
 fi
 
 echo "============================================================"
@@ -48,14 +51,16 @@ if [ -d "$SOVEREIGN_REPO" ]; then
     done
 fi
 
-for s_path in "$DRIVE_SKILLS"/*; do
-    [ -d "$s_path" ] || continue
-    s_name="$(basename "$s_path")"
-    if echo "$s_name" | grep -qE "$EXCLUDED_REGEX"; then
-        continue
-    fi
-    SOVEREIGN_SET["$s_name"]=1
-done
+if [ "$HAS_DRIVE" = true ]; then
+    for s_path in "$DRIVE_SKILLS"/*; do
+        [ -d "$s_path" ] || continue
+        s_name="$(basename "$s_path")"
+        if echo "$s_name" | grep -qE "$EXCLUDED_REGEX"; then
+            continue
+        fi
+        SOVEREIGN_SET["$s_name"]=1
+    done
+fi
 
 for skill in "${!SOVEREIGN_SET[@]}"; do
     source_dir="$LOCAL_SKILLS/$skill"
@@ -67,25 +72,28 @@ for skill in "${!SOVEREIGN_SET[@]}"; do
         fi
     fi
 
-    drive_skill_dir="$DRIVE_SKILLS/$skill"
+    if [ "$HAS_DRIVE" = true ]; then
+        target_dir="$DRIVE_SKILLS/$skill"
+    else
+        target_dir="$SOVEREIGN_REPO/$skill"
+    fi
 
-    # Deep tree check using rsync --dry-run
-    # Si rsync detecta algún cambio (archivos nuevos, modificados, o eliminados), stdout no estará vacío (descontando headers)
-    DRIFT_OUTPUT=$(rsync -avnc --delete "$source_dir/" "$drive_skill_dir/" | grep -vE "^building file list|^created directory|^sent|^total size|^$")
+    DRIFT_OUTPUT=$(rsync -avnc --delete "$source_dir/" "$target_dir/" 2>/dev/null | grep -vE "^building file list|^created directory|^sent|^total size|^$" || true)
 
     if [ -n "$DRIFT_OUTPUT" ]; then
         DRIFT_COUNT=$((DRIFT_COUNT + 1))
         if [ "$CHECK_ONLY" = true ]; then
             echo "  ⚠️ Drift detectado en: $skill"
         else
-            mkdir -p "$drive_skill_dir"
-            # Sincronización exacta, borrando zombies en el destino
-            rsync -a --delete "$source_dir/" "$drive_skill_dir/"
+            if [ "$HAS_DRIVE" = true ]; then
+                mkdir -p "$target_dir"
+                rsync -a --delete "$source_dir/" "$target_dir/"
+            fi
             if [ -d "$SOVEREIGN_REPO" ]; then
                 mkdir -p "$SOVEREIGN_REPO/$skill"
                 rsync -a --delete --exclude=".git" "$source_dir/" "$SOVEREIGN_REPO/$skill/"
             fi
-            echo "  ✓ Sincronizada a SSoT Drive & Git Repo: $skill"
+            echo "  ✓ Sincronizada SSoT: $skill"
             SYNCED=$((SYNCED + 1))
         fi
     fi

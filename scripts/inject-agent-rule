@@ -54,14 +54,14 @@ def main():
     with open(agents_file, "w", encoding="utf-8") as f:
         f.write(final_output)
 
-    # Dual-Target SSoT Mirroring (Google Drive SSoT parity)
-    drive_ssot = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/AGENTS.md"
-    if agents_file == "/var/www/AGENTS.md" and os.path.isdir(os.path.dirname(drive_ssot)):
+    # Dual-Target SSoT Mirroring (zerops-astrobranding catalog)
+    catalog_agents = "/var/www/zerops-astrobranding/AGENTS.md"
+    if agents_file == "/var/www/AGENTS.md" and os.path.isdir(os.path.dirname(catalog_agents)):
         try:
-            with open(drive_ssot, "w", encoding="utf-8") as f:
+            with open(catalog_agents, "w", encoding="utf-8") as f:
                 f.write(final_output)
         except Exception as e:
-            print(f"Aviso SSoT Mirror: No se pudo replicar en {drive_ssot}: {e}", file=sys.stderr)
+            print(f"Aviso SSoT Mirror: No se pudo replicar en {catalog_agents}: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

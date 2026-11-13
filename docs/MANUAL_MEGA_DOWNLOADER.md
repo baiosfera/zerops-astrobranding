@@ -141,4 +141,4 @@ nlm-tutor ingest "/var/www/baiosfera/CURSOS/CENOF/MiCurso" --setup
   bash -n /var/www/.bin/mega-downloader
   mega-downloader --test
   ```
-* **SSoT Indivisible**: La versión activa en `/var/www/zerops-astrobranding/scripts/mega_downloader.py` se sincroniza automáticamente con `/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/mega_downloader.py`.
+* **Git SSoT**: La versión canónica reside en `/var/www/zerops-astrobranding/scripts/mega_downloader.py`.

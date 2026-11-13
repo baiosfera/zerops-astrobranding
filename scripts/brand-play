@@ -697,7 +697,7 @@ def main() -> int:
 
     # transmute
     t_parser = subparsers.add_parser("transmute", help="Hidrata playbooks universales con tokens de marca")
-    t_parser.add_argument("--brand", "-b", required=True, help="Slug de la marca (ej: juan-damaren, apotelos)")
+    t_parser.add_argument("--brand", "-b", required=True, help="Slug de la marca (ej: $PROJECT_NAME, apotelos)")
     t_parser.add_argument("--playbook", "-p", help="Slug o nombre del playbook (ej: 00_category_of_one)")
     t_parser.add_argument("--all", "-a", action="store_true", help="Transmutar todos los playbooks universales")
     t_parser.add_argument(

@@ -44,15 +44,14 @@ def parse_markdown(filepath):
                 keys[current_platform] = key_match.group(1).strip()
     return keys
 
-# Candidate locations for free LLM provider keys
+# Candidate locations for free LLM provider keys (brand-agnostic + optional active project)
+proj_key = (os.getenv("ENGRAM_PROJECT") or os.getenv("PROJECT_NAME") or "").lower()
 b_path_candidates = [
     "/var/www/baiosfera/0ZEROPS-AGY/users-apis/Baiosfera/baiosfera_freellm.md",
-    "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/apis/baiosfera_freellm.md",
 ]
 d_path_candidates = [
-    "/var/www/baiosfera/0ZEROPS-AGY/users-apis/Damaren/damaren_freellm.md",
-    "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/apis/freellm_keys.md",
-]
+    f"/var/www/baiosfera/0ZEROPS-AGY/{proj_key}/apis/freellm_keys.md",
+] if proj_key else []
 
 b_path = next((p for p in b_path_candidates if os.path.exists(p)), "")
 d_path = next((p for p in d_path_candidates if os.path.exists(p)), "")

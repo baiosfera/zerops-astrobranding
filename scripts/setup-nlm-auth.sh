@@ -8,7 +8,7 @@
 #   - Ephemeral interactive noVNC login bridge (nlm-vnc-login) on port 6080.
 #   - Zero overhead in idle (0 MB RAM): ephemeral Xvfb/VNC/Chrome auto-kill.
 #   - Idempotent cron auto-refresh every 15 min (nlm auth refresh).
-#   - Full SSoT two-way sync with Google Drive (0zcp-123/mcp/.nlm-auth/).
+#   - Full SSoT two-way sync with Google Drive ($PROJ_KEY/mcp/.nlm-auth/).
 # ==============================================================================
 set -euo pipefail
 
@@ -16,12 +16,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
 DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
-DRIVE_SSOT="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123"
+PROJ_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
+DRIVE_SSOT="${PROJ_KEY:+$DRIVE_MOUNT/0ZEROPS-AGY/$PROJ_KEY}"
 
 if [ -d "$DRIVE_SSOT" ]; then
     SSOT_ROOT="$DRIVE_SSOT"
-elif [ -d "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" ]; then
-    SSOT_ROOT="$(cd "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" && pwd)"
+elif [ -d "$SCRIPT_DIR/.." ] && [ -d "$SCRIPT_DIR/../.agents" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 elif [ -d "$REPO_DIR/.agents" ]; then
     SSOT_ROOT="$REPO_DIR"
 else
@@ -353,16 +354,16 @@ run_install() {
 
     cat << 'EOF' > /var/www/.bin/setup-nlm-auth.sh
 #!/usr/bin/env bash
-exec bash /var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/setup-nlm-auth.sh "$@"
+exec bash /var/www/zerops-astrobranding/scripts/setup-nlm-auth.sh "$@"
 EOF
     chmod +x /var/www/.bin/setup-nlm-auth.sh
 
     cat << 'EOF' > /var/www/.bin/nlm-vnc-login
 #!/usr/bin/env bash
 if [[ "${1:-}" =~ ^(-h|--help|help)$ ]]; then
-    exec bash /var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/setup-nlm-auth.sh --help
+    exec bash /var/www/zerops-astrobranding/scripts/setup-nlm-auth.sh --help
 fi
-exec bash /var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/setup-nlm-auth.sh --login "$@"
+exec bash /var/www/zerops-astrobranding/scripts/setup-nlm-auth.sh --login "$@"
 EOF
     chmod +x /var/www/.bin/nlm-vnc-login
 

@@ -1,96 +1,16 @@
+# zerops-astrobranding is the sovereign Catalog, Recipes, Blueprints & ZCP Tooling Hub.
+# Modular application services live in standalone baiosfera/* repositories:
+#   - Web frontend/SSR: baiosfera/template-astro-web (ubuntu/bun@1.4)
+#   - Runtime services: baiosfera/runtime-{bifrost,freellmapi,hermes,pidev,paperclip,evolution,whatsappbot,videoworker}
 zerops:
-  - setup: webdev
+  - setup: catalog
     build:
-      base: ubuntu/bun@1.3
-      envVariables:
-        BUN_INSTALL: ./.bun
+      base: ubuntu/bun@1.4
       buildCommands:
-        - bun install
-        - bun run build
+        - bash -n iniciar.sh scripts/*.sh
+        - python3 -B scripts/hooks/tool-guard.py --test
       deployFiles:
         - .
-      cache:
-        - node_modules
-        - .bun/install/cache
-    deploy:
-      readinessCheck:
-        httpGet:
-          port: 3000
-          path: /health
     run:
-      base: ubuntu/bun@1.3
-      volume:
-        hostname: localstorage
-        mountPath: /mnt/localstorage
-        readOnly: false
-      ports:
-        - port: 3000
-          httpSupport: true
-      envVariables:
-        PORT: 3000
-        HOST: "0.0.0.0"
-        NODE_ENV: production
-        DATABASE_URL: ${database_connectionString}
-        VALKEY_URL: ${valkey_connectionString}
-        NATS_URL: ${nats_connectionString}
-        EVOLUTION_URL: "http://evolution:8085"
-        WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY}
-        WOMPI_PRIVATE_KEY: ${WOMPI_PRIVATE_KEY}
-        WOMPI_INTEGRITY_SECRET: ${WOMPI_INTEGRITY_SECRET}
-        WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET}
-      initCommands:
-        - case "$DATABASE_URL" in \${*|"") echo "ℹ️ DB no aprovisionada, omitiendo migración" ;; *) bun run db:migrate || true ;; esac
-      start: zcp-devsup run
-      healthCheck:
-        httpGet:
-          port: 3000
-          path: /health
-      prepareCommands:
-        - sudo sh -c 'u=https://github.com/zeropsio/zcp/releases/download/v9.219.0/zcp-devsup-linux-amd64; f=/usr/local/bin/zcp-devsup; if command -v curl >/dev/null; then curl -fsSL "$u" -o "$f"; else wget -qO "$f" "$u"; fi && chmod 0755 "$f"'
-
-  - setup: webprod
-    build:
-      base: ubuntu/bun@1.3
-      envVariables:
-        BUN_INSTALL: ./.bun
-      buildCommands:
-        - bun install
-        - bun run build
-      deployFiles:
-        - .
-      cache:
-        - node_modules
-        - .bun/install/cache
-    deploy:
-      readinessCheck:
-        httpGet:
-          port: 3000
-          path: /health
-    run:
-      base: ubuntu/bun@1.3
-      volume:
-        hostname: localstorage
-        mountPath: /mnt/localstorage
-        readOnly: false
-      ports:
-        - port: 3000
-          httpSupport: true
-      envVariables:
-        PORT: 3000
-        HOST: "0.0.0.0"
-        NODE_ENV: production
-        DATABASE_URL: ${database_connectionString}
-        VALKEY_URL: ${valkey_connectionString}
-        NATS_URL: ${nats_connectionString}
-        EVOLUTION_URL: "http://evolution:8085"
-        WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY}
-        WOMPI_PRIVATE_KEY: ${WOMPI_PRIVATE_KEY}
-        WOMPI_INTEGRITY_SECRET: ${WOMPI_INTEGRITY_SECRET}
-        WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET}
-      initCommands:
-        - case "$DATABASE_URL" in \${*|"") echo "ℹ️ DB no aprovisionada, omitiendo migración" ;; *) bun run db:migrate || true ;; esac
-      start: exec bun run apps/web/dist/server/entry.mjs
-      healthCheck:
-        httpGet:
-          port: 3000
-          path: /health
+      base: ubuntu/bun@1.4
+      start: sleep infinity

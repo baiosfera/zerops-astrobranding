@@ -59,41 +59,19 @@ UNIVERSAL_AI_CLICHES: List[Tuple[str, str, str]] = [
     (r"\bas\s+an\s+ai\s+language\s+model\b", "ai_leak", "AI language model self-reference", "Remove all synthetic AI self-identifications."),
 ]
 
-# Sovereign Brand Taboos & Forbidden Vocabulary (Domain-Specific Invariants)
-BRAND_TABOOS: Dict[str, List[Tuple[str, str, str]]] = {
-    "elplacerdc": [
-        (r"\bsagrad[ao]s?\b", "brand_taboo", "Término místico sagrado/a", "El Placer de Compartir es hedonista, erótico y consensuado; no místico."),
-        (r"\bsantuario\b", "brand_taboo", "Término místico santuario", "Sustituye por 'sede cultural', 'club privado' o 'espacio'."),
-        (r"\btemplo\b", "brand_taboo", "Término místico templo", "Sustituye por 'entorno de conexión' o 'espacio seguro'."),
-        (r"\baltar\b", "brand_taboo", "Término místico altar", "Prohibido en la narrativa de El Placer de Compartir."),
-        (r"\bte\s+reconoceremos\s+al\s+instante\b", "brand_taboo", "Frase prohibida de admisión", "Sustituye por validación rigurosa de perfil y código de acceso."),
-        (r"\bcuántic[ao]s?\b", "brand_taboo", "Jerga cuántica no verificada", "Usa términos relacionales, psicológicos o de consentimiento."),
-        (r"\bchamanic[ao]s?\b", "brand_taboo", "Término chamánico", "Prohibido en la narrativa de El Placer de Compartir."),
-        (r"\bmístic[ao]s?\b", "brand_taboo", "Término místico", "Sustituye por sensualidad, erotismo o conexión auténtica."),
-        (r"\besotéric[ao]s?\b", "brand_taboo", "Término esotérico", "Usa marco secular, ético y hedonista."),
-    ],
-    "catalinaglamur": [
-        (r"\bbarat[ao]s?\b", "brand_taboo", "Término barato/a", "Catalina Glamur es alta gama y lujo silencioso; usa 'inversión accesible' o evita referencias a bajo costo."),
-        (r"\bganga\b", "brand_taboo", "Término ganga", "Prohibido en marcas de lujo."),
-        (r"\bdescuentazo\b", "brand_taboo", "Término descuentazo", "Sustituye por 'condición preferencial' o 'privilegio de membresía'."),
-        (r"\bliquidación\b", "brand_taboo", "Término liquidación", "Prohibido en colecciones de alta joyería o moda de autor."),
-    ],
-    "damaren": [
-        (r"\bbarat[ao]s?\b", "brand_taboo", "Término barato/a", "Damaren prioriza calidad artesanal y diseño."),
-        (r"\bdescuentazo\b", "brand_taboo", "Término descuentazo", "Usa 'beneficio exclusivo'."),
-    ],
-}
+# Optional runtime brand taboos map (loaded dynamically from active brandbook.json)
+BRAND_TABOOS: Dict[str, List[Tuple[str, str, str]]] = {}
 
 
 class AntiSlopLinter:
     """Deterministic physical linter validating copy against slop and brand constraints."""
 
-    def __init__(self, brand: Optional[str] = None):
-        self.brand = (brand or os.getenv("PROJECT_NAME") or "elplacerdc").strip().lower()
+    def __init__(self, brand: Optional[str] = None, extra_taboos: Optional[List[str]] = None):
+        self.brand = (brand or os.getenv("PROJECT_NAME") or "default").strip().lower()
         self.rules: List[AntiSlopRule] = []
-        self._load_rules()
+        self._load_rules(extra_taboos or [])
 
-    def _load_rules(self) -> None:
+    def _load_rules(self, extra_taboos: List[str]) -> None:
         # 1. Load universal AI clichés
         for pattern_str, rule_type, label, suggestion in UNIVERSAL_AI_CLICHES:
             self.rules.append(
@@ -105,15 +83,16 @@ class AntiSlopLinter:
                 )
             )
 
-        # 2. Load static brand taboos
-        if self.brand in BRAND_TABOOS:
-            for pattern_str, rule_type, label, suggestion in BRAND_TABOOS[self.brand]:
+        # 2. Load explicit caller-provided or config taboos
+        for term in extra_taboos:
+            if isinstance(term, str) and len(term.strip()) > 2:
+                clean_term = term.strip()
                 self.rules.append(
                     AntiSlopRule(
-                        pattern=re.compile(pattern_str, re.IGNORECASE),
-                        rule_type=rule_type,
-                        label=label,
-                        suggestion=suggestion,
+                        pattern=re.compile(rf"\b{re.escape(clean_term)}\b", re.IGNORECASE),
+                        rule_type="brand_taboo",
+                        label=f"Término prohibido: {clean_term}",
+                        suggestion=f"Evitá '{clean_term}' y usá el léxico aprobado del brandbook activo.",
                     )
                 )
 
@@ -188,10 +167,10 @@ def run_unit_tests() -> int:
     print("============================================================")
 
     # Test 1: Clean text passes with zero violations
-    linter = AntiSlopLinter(brand="elplacerdc")
+    linter = AntiSlopLinter(brand="acme-club")
     clean_text = (
-        "Accede al club privado The Corset Society. Disfruta de un entorno seguro, "
-        "confortable y exclusivo en Bogotá para adultos de mente abierta."
+        "Accede al club privado de arquitectura y diseño. Disfruta de un entorno seguro, "
+        "confortable y exclusivo para miembros verificados."
     )
     v1 = linter.lint_text(clean_text)
     assert len(v1) == 0, f"Expected 0 violations, got {len(v1)}: {v1}"
@@ -205,21 +184,22 @@ def run_unit_tests() -> int:
     assert "cliche_spanish" in rule_types, "Expected cliche_spanish violation"
     print("✓ Test 2: Universal AI clichés detected accurately.")
 
-    # Test 3: Brand taboo is detected for elplacerdc
-    taboo_text = "Te invitamos a nuestro templo sagrado donde te reconoceremos al instante."
-    v3 = linter.lint_text(taboo_text)
+    # Test 3: Brand taboo is detected from dynamic rules (brand A)
+    linter_a = AntiSlopLinter(brand="brand-alpha", extra_taboos=["templo", "sagrado", "al instante"])
+    taboo_text = "Te invitamos a nuestro templo sagrado donde te atenderemos al instante."
+    v3 = linter_a.lint_text(taboo_text)
     assert len(v3) >= 3, f"Expected at least 3 violations, got {len(v3)}"
     matched = [v.matched_text.lower() for v in v3]
     assert any("templo" in m for m in matched), "Expected 'templo' match"
     assert any("sagrado" in m for m in matched), "Expected 'sagrado' match"
-    print("✓ Test 3: Brand taboos for 'elplacerdc' detected accurately.")
+    print("✓ Test 3: Dynamic brand taboos detected accurately.")
 
-    # Test 4: Brand taboo is detected for catalinaglamur
-    linter_cat = AntiSlopLinter(brand="catalinaglamur")
-    cat_text = "Aprovecha este descuentazo en joyas baratas para tu boda."
-    v4 = linter_cat.lint_text(cat_text)
+    # Test 4: Brand taboo is detected from dynamic rules (brand B)
+    linter_b = AntiSlopLinter(brand="brand-beta", extra_taboos=["descuentazo", "baratas"])
+    beta_text = "Aprovecha este descuentazo en piezas baratas para tu evento."
+    v4 = linter_b.lint_text(beta_text)
     assert len(v4) >= 2, f"Expected at least 2 violations, got {len(v4)}"
-    print("✓ Test 4: Brand taboos for 'catalinaglamur' detected accurately.")
+    print("✓ Test 4: Secondary brand taboos detected accurately.")
 
     print("============================================================")
     print("🎉 All 4 unit tests PASSED successfully (Exit 0)!")
@@ -230,7 +210,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Anti-Slop Strategic Linter & Brand Lexicon Gate")
     parser.add_argument("--file", "-f", type=Path, help="Path to file to lint (.astro, .md, .ts, etc.)")
     parser.add_argument("--text", "-t", type=str, help="Raw text string to lint")
-    parser.add_argument("--brand", "-b", type=str, help="Brand identifier (elplacerdc, catalinaglamur, etc.)")
+    parser.add_argument("--brand", "-b", type=str, help="Brand identifier (e.g. $PROJECT_NAME)")
     parser.add_argument("--test", action="store_true", help="Run self-contained physical unit tests")
     parser.add_argument("--quiet", "-q", action="store_true", help="Quiet mode (exit code only)")
 

@@ -162,7 +162,7 @@ Para evitar que todas las verticales se vean idénticas y compartan los mismos c
 
 #### Regla de Bifurcación Arquetípica en Verticales
 Cada vertical en `dev/verticals/{slug}.json` declara cuál de los 3 ecosistemas calculados por Chroma y Fontgen adopta según su Avatar y Rol en el Ecosistema:
-1. **Vertical Personal / High-Ticket / Monopolio (ej. `juan-damaren`)**:
+1. **Vertical Personal / High-Ticket / Monopolio (ej. `<founder-brand>`)**:
    - Color: `eco_solar_architect` (Oro Solar Mate `#daa24f` + Obsidiana Cálida `#090502`).
    - Tipografía: `eco-1` (*Quiet Luxury Air Authority* - Serif de alta jerarquía).
 2. **Vertical B2B / Ingeniería / Automatización DFY (ej. `baiosfera`, `apotelos`)**:

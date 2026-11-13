@@ -13,7 +13,7 @@
 En esta sesión completamos hitos de infraestructura, metacognición y diseño que transforman radicalmente la forma en que este repositorio debe desplegarse y modularizarse:
 
 1. **Auditoría, Poda y Blindaje de las 65 Skills Soberanas (v8.2)**:
-   - Repositorio público independiente: **[https://github.com/elplacerdc/zerops-astro-skills](https://github.com/elplacerdc/zerops-astro-skills)**.
+   - Repositorio público independiente: **[https://github.com/baiosfera/zerops-astro-skills](https://github.com/baiosfera/zerops-astro-skills)**.
    - **Colisión de Trigger Resuelta**: La skill de framework fue renombrada a [`astro-web`](file:///var/www/zerops-astro-skills/astro-web/SKILL.md) con triggers específicos (`astro-framework`, `astro 5`, etc.), erradicando colisiones con consultas astrológicas.
    - **Cluster A (Oráculo & Diagnósticos)**: [`oraculo`](file:///var/www/zerops-astro-skills/oraculo/SKILL.md) v4.7 compila el reporte denso unificado `astrobranding_[MARCA].md` con 12 Shards. Los sub-diagnósticos (`diag-a` a `diag-e`) poseen Ingestión Dual (RFC 6901 pointers + fallback) y tests herméticos deterministas (<50ms, 0 tokens).
    - **Cluster E (`zcp` v6.3)**: Consagrada la **Ley de Autoescalado Frugal**: `cpuMode: SHARED`, omisión de límites de CPU y RAM para casillas vacías en GUI y elasticidad nativa Zerops, y dual-threshold (`minFreeRamGB: 0.25`, `minFreeRamPercent: 10`).
@@ -25,7 +25,7 @@ En esta sesión completamos hitos de infraestructura, metacognición y diseño q
 2. **Reconstrucción y Publicación de Brandview Visualizer Studio**:
    - Rescatado del backup legado y reescrito desde cero en [`/var/www/brandview`](file:///var/www/brandview).
    - Stack moderno: **SolidJS + Vite v6 + Hono Backend** con sincronización en tiempo real vía WebSocket y JSON Patch (`fast-json-patch`).
-   - Publicado en GitHub: **[https://github.com/elplacerdc/brandview](https://github.com/elplacerdc/brandview)**.
+   - Publicado en GitHub: **[https://github.com/baiosfera/brandview](https://github.com/baiosfera/brandview)**.
    - Cuenta con recetas Zerops listas: `zerops.yaml` (Node 22) e `import.yaml` (receta Frugal-First).
 
 3. **Invariante de Base de Datos y Persistencia Relacional**:
@@ -117,13 +117,13 @@ verticalAutoscaling:
 ### Paso 3: Actualizar README.md y Metadatos de GitHub
 1. **Descripción en GitHub:**
    ```bash
-   gh repo edit elplacerdc/zerops-astrobranding --description "Modular Astro 5, Tailwind 4 & Brandview Starter Kit for Zerops Cloud with Profile-Based Frugal Scaling"
+   gh repo edit baiosfera/zerops-astrobranding --description "Agnostic Catalog, Recetas & Tooling Hub for Zerops Cloud"
    ```
 2. **`README.md` en la Raíz:**
-   - Presentar el starter kit y sus perfiles de despliegue.
-   - Documentar la arquitectura de 2 niveles: Plano de Control (ZCP) vs Runtimes LXC.
-   - Documentar la integración con Brandview Studio (`https://github.com/elplacerdc/brandview`).
-   - Enlace directo al catálogo de skills: `https://github.com/elplacerdc/zerops-astro-skills`.
+   - Presentar el catálogo y sus perfiles de despliegue.
+   - Documentar la arquitectura de 2 niveles: Plano de Control (ZCP) vs Runtimes LXC (`baiosfera/runtime-*`).
+   - Documentar la integración con Brandview Studio (`https://github.com/baiosfera/brandview`).
+   - Enlace directo al catálogo de skills: `https://github.com/baiosfera/zerops-astro-skills`.
    - Instrucciones claras con `./setup.sh` e `iniciar.sh`.
 
 ---
@@ -147,7 +147,7 @@ verticalAutoscaling:
 3. **Frugal-First Autoscaling:** Todo servicio nuevo nace con `cpuMode: SHARED`, `minContainers: 1`, `maxContainers: 2`, omitiendo límites de CPU/RAM.
 4. **Cero Leaks de Secretos:** Nunca escribir tokens ni claves privadas en texto plano; referenciar variables `$VAR`.
 5. **Sin Co-Autorías de IA:** No incluir `Co-Authored-By` en ningún commit.
-6. **ZCP-First & Indivisible SSoT:** Si se modifica algún script compartido en `0zcp-123/scripts/`, respaldar previamente en `bak/scripts/`.
+6. **Git SSoT Parity:** Sincronizar cambios en `zerops-astrobranding/scripts/` y `zerops-astro-skills/` validando con `ssot-parity-check`.
 
 ---
 
@@ -180,10 +180,10 @@ Para que cualquier agente sucesor (AGY) opere con certeza matemática y sin ensa
 
 | Hito | Nombre & Receta | Servicios | Cableado y Secretos | Skills Requeridas | Criterios de Aceptación Física |
 |---|---|---|---|---|---|
-| **Hito 3** | **Hermes Agent + NATS JetStream**<br>`recipes/steps/03-hermes-nats.yaml` | `nats:single@2.12`<br>`hermes` (Ubuntu Python 3.12) | - `HERMES_LLM_API_BASE`: `http://bifrost:8080/v1`<br>- `HERMES_LLM_API_KEY`: `sk-bf-f702a2c4-c967-4ea3-90bc-7c8f5dad5cd0` (Virtual Key `Hermes Agent Autonomous` en PG18)<br>- `NATS_URL`: `nats://nats:4222` | [`nats`](file:///var/www/zerops-astro-skills/nats/SKILL.md)<br>[`hermes-agent`](file:///var/www/zerops-astro-skills/hermes-agent/SKILL.md) | - Endpoint `/health` HTTP 200 en Hermes<br>- Publicación y suscripción en NATS JetStream<br>- Inferencia LLM ejecutada a través de Bifrost con Virtual Key |
-| **Hito 4** | **Evolution API / WhatsApp Engine**<br>`recipes/steps/04-evolution.yaml` | `evolution` (Alpine Go 1.22 / Node) | - Base en PostgreSQL 18 (`database`)<br>- Cache/Sesiones en Valkey 7.2 (`valkey`)<br>- Eventos en NATS (`nats`)<br>- LLM Virtual Key: `sk-bf-426d0421-f755-4634-ad98-7dad075ba60b` (`Evolution WhatsApp Bot`) | [`whatsapp-engine`](file:///var/www/zerops-astro-skills/whatsapp-engine/SKILL.md) | - Handshake QR / sesión activa<br>- Eventos despachados a NATS JetStream<br>- Proxy LLM operativo contra Bifrost |
-| **Hito 5** | **Listmonk / Marketing Transaccional**<br>`recipes/steps/05-listmonk.yaml` | `listmonk` | - Base relacional en PostgreSQL 18 (`database`)<br>*(Nota: requiere andamiar `apps/listmonk` y su bloque en `zerops.yaml` previo a su despliegue físico).* | [`listmonk`](file:///var/www/zerops-astro-skills/listmonk/SKILL.md)<br>[`email-marketing`](file:///var/www/zerops-astro-skills/email-marketing/SKILL.md) | - Dashboard administrativo y API REST `/api/health` activos |
-| **Hito 6** | **AstroBranding Sovereign Fullstack**<br>`recipes/steps/06-astro-web.yaml` | `objectstorage` (S3)<br>`astrobranding` (Ubuntu Bun 1.3 / Node 24) | - Ingestión de 15 Shards astrológicos<br>- Colas BullMQ sobre Valkey 7.2 (`valkey`)<br>- S3 Object Storage montado<br>- LLM Virtual Key: `sk-bf-9eef443c-d7fe-48ac-8eb0-706702bf9ea9` (`AstroBranding Production`) | [`astro-web`](file:///var/www/zerops-astro-skills/astro-web/SKILL.md)<br>[`frnt`](file:///var/www/zerops-astro-skills/frnt/SKILL.md)<br>[`brandbook`](file:///var/www/zerops-astro-skills/brandbook/SKILL.md) | - SSR en puerto 3000 con React 19 Islands<br>- Shards astrológicos consumidos desde packages/engine |
+| **Hito 3** | **Hermes Agent + NATS JetStream**<br>`recipes/steps/03-hermes-nats.yaml` | `nats:single@2.12`<br>`hermes` (Ubuntu Python 3.12) | - `HERMES_LLM_API_BASE`: `http://bifrost:8080/v1`<br>- `HERMES_LLM_API_KEY`: `${HERMES_LLM_API_KEY}` (Virtual Key en PG18)<br>- `NATS_URL`: `nats://nats:4222` | [`nats`](file:///var/www/zerops-astro-skills/nats/SKILL.md)<br>[`hermes-agent`](file:///var/www/zerops-astro-skills/hermes-agent/SKILL.md) | - Endpoint `/health` HTTP 200 en Hermes<br>- Publicación y suscripción en NATS JetStream<br>- Inferencia LLM ejecutada a través de Bifrost con Virtual Key |
+| **Hito 4** | **Evolution API / WhatsApp Engine**<br>`recipes/steps/04-evolution.yaml` | `evolution` (Alpine Go / whatsmeow) | - Base en PostgreSQL 18 (`database`)<br>- Cache/Sesiones en Valkey 7.2 (`valkey`)<br>- Eventos en NATS (`nats`)<br>- LLM Virtual Key: `${EVOLUTION_LLM_API_KEY}` (`Evolution WhatsApp Bot`) | [`whatsapp-engine`](file:///var/www/zerops-astro-skills/whatsapp-engine/SKILL.md) | - Handshake QR / sesión activa<br>- Eventos despachados a NATS JetStream<br>- Proxy LLM operativo contra Bifrost |
+| **Hito 5** | **Listmonk / Marketing Transaccional**<br>`recipes/steps/05-listmonk.yaml` | `listmonk` | - Base relacional en PostgreSQL 18 (`database`) | [`listmonk`](file:///var/www/zerops-astro-skills/listmonk/SKILL.md)<br>[`email-marketing`](file:///var/www/zerops-astro-skills/email-marketing/SKILL.md) | - Dashboard administrativo y API REST `/api/health` activos |
+| **Hito 6** | **AstroBranding Sovereign Fullstack**<br>`recipes/steps/06-astro-web.yaml` | `objectstorage` (S3)<br>`web` (Ubuntu Bun 1.3+) | - Ingestión de 15 Shards astrológicos<br>- Colas BullMQ sobre Valkey 7.2 (`valkey`)<br>- S3 Object Storage montado<br>- LLM Virtual Key: `${ASTRO_LLM_API_KEY}` (`AstroBranding Production`) | [`astro-web`](file:///var/www/zerops-astro-skills/astro-web/SKILL.md)<br>[`frnt`](file:///var/www/zerops-astro-skills/frnt/SKILL.md)<br>[`brandbook`](file:///var/www/zerops-astro-skills/brandbook/SKILL.md) | - SSR en puerto 3000 con React 19 Islands<br>- Shards astrológicos consumidos desde packages/engine |
 
 ### D. Consolidación Final: Esqueleto Canónico Completo (`import.yaml`)
 Una vez completada y auditada la secuencia quirúrgica de hitos 1 a 6, el monorepo queda listo para que cualquier futuro despliegue en frío del esqueleto se realice de una sola vez mediante el manifiesto canónico `import.yaml`. Se eliminaron las recetas de bundles falsos (`landing-minimal`, `ecommerce`, etc.) ya que AstroBranding es una aplicación agnóstica que consume la malla completa.

@@ -98,8 +98,8 @@ VERTICAL_PROFILES = {
         "surface_light": {"oklch": "oklch(0.94 0.02 150)", "hex": "#dcfce7", "desc": "Suelo Nutricio"},
         "text_light": {"oklch": "oklch(0.18 0.04 150)", "hex": "#064e3b", "desc": "Follaje Maduro"}
     },
-    "juan-damaren": {
-        "name": "Juan Damaren",
+    "quiet-luxury": {
+        "name": "Quiet Luxury Archetype",
         "archetype": "El Maestro de Marca / Lujo Silencioso",
         "concept": "Elegancia atemporal, negro obsidiana, blanco platino y acentos de latón bruñido.",
         "astro": {

@@ -98,9 +98,9 @@ knowledge-sync --test
 
 ## 4. Persistencia en Google Drive SSoT
 
-* **Script ejecutable:** `/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/knowledge_sync.py`
-* **Skill del Agente:** `/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/zerops-astro-skills/knowledge-engine/`
-* **Documentación SSoT:** `/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/docs/MANUAL_KNOWLEDGE.md`
+* **Script ejecutable:** `/var/www/zerops-astrobranding/scripts/knowledge_sync.py`
+* **Skill del Agente:** `/var/www/zerops-astro-skills/knowledge-engine/`
+* **Documentación SSoT:** `/var/www/zerops-astrobranding/docs/MANUAL_KNOWLEDGE.md`
 * **Bitácora de Sincronización:** `/var/www/baiosfera/.knowledge_manifest/`
   * `clusters.json`: Mapeo canónico de los 18 cuadernos con sus UUIDs en NotebookLM.
   * `cluster_events_*.jsonl`: Registro append-only de fuentes subidas con hash MD5 para evitar duplicados.

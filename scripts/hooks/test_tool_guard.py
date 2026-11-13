@@ -305,10 +305,11 @@ def run_tests(evaluate_hook):
     assert pi_res == {}, f"Expected silent PreInvocation without active gates, got {pi_res}"
     print("✓ Test 24 Passed: Passive PreInvocation banners suppressed (zero token noise)")
 
-    # Test 25: Universal Physical Sensor Integration (Real exit + transparent counts)
-    skills_val = subprocess.run(["/var/www/.bin/skills-suite-validate"], capture_output=True, text=True)
+    # Test 25: Universal Physical Sensor Integration (Real exit 0 + transparent counts)
+    skills_val = subprocess.run(["/var/www/.bin/skills-suite-validate", "-q"], capture_output=True, text=True)
+    assert skills_val.returncode == 0, f"Expected skills-suite-validate exit 0, got {skills_val.returncode}: {skills_val.stderr}\n{skills_val.stdout}"
     assert "HONEST SKILLS AUDIT SUMMARY" in skills_val.stdout, f"Unexpected skills-suite-validate output: {skills_val.stdout}"
-    print(f"✓ Test 25 Passed: Universal Physical Sensor reports honest status (rc={skills_val.returncode})")
+    print("✓ Test 25 Passed: Universal Physical Sensor verified (skills-suite-validate exit 0)")
 
     # Test 26: Skill Trigger Radar & Contextual Detection verified
     test_skills = detect_skills_in_prompt("vamos a configurar ghcicd y hacer git push")

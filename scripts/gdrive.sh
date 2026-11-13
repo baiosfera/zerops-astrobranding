@@ -468,14 +468,15 @@ fi
 
 # 8.5 BACKBROUND SYNC LOCALSTORAGE
 echo "[ZCP-BOOT] Lanzando sincronización asíncrona a localstorage..."
-nohup bash /var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/sync-localstorage.sh > /tmp/sync-localstorage.log 2>&1 &
+nohup bash /var/www/zerops-astrobranding/scripts/sync-localstorage.sh > /tmp/sync-localstorage.log 2>&1 &
 
 # 8.5 BACKGROUND SYNC LOCALSTORAGE
 echo "[ZCP-BOOT] Lanzando sincronizacion asincrona a localstorage..."
-nohup bash /var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/sync-localstorage.sh > /tmp/sync-localstorage.log 2>&1 &
+nohup bash /var/www/zerops-astrobranding/scripts/sync-localstorage.sh > /tmp/sync-localstorage.log 2>&1 &
 
 # 9. ARTIFACTS PERSISTENCE INVARIANT (Google Drive SSoT Live Symlink)
-SSOT_ARTIFACTS="$MOUNT_DIR/0ZEROPS-AGY/0zcp-123/artifacts"
+PROJ_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
+SSOT_ARTIFACTS="${PROJ_KEY:+$MOUNT_DIR/0ZEROPS-AGY/$PROJ_KEY/artifacts}"
 LOCAL_ARTIFACTS="/var/www/artifacts"
 sudo mkdir -p "$SSOT_ARTIFACTS" 2>/dev/null || true
 if [ -d "$LOCAL_ARTIFACTS" ] && [ ! -L "$LOCAL_ARTIFACTS" ]; then

@@ -26,8 +26,7 @@ sys.dont_write_bytecode = True
 try:
     for _c_dir in [
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "__pycache__"),
-        "/var/www/baiosfera/CURSOS/MCV/__pycache__",
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/__pycache__"
+        "/var/www/zerops-astrobranding/scripts/__pycache__",
     ]:
         if os.path.isdir(_c_dir):
             shutil.rmtree(_c_dir, ignore_errors=True)

@@ -9,12 +9,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="/var/www"
 DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
-DRIVE_SSOT="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123"
+PROJ_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
+DRIVE_SSOT="${PROJ_KEY:+$DRIVE_MOUNT/0ZEROPS-AGY/$PROJ_KEY}"
 
 if [ -d "$DRIVE_SSOT" ]; then
     SSOT_ROOT="$DRIVE_SSOT"
-elif [ -d "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" ]; then
-    SSOT_ROOT="$(cd "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" && pwd)"
+elif [ -d "$SCRIPT_DIR/.." ] && [ -d "$SCRIPT_DIR/../.agents" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 elif [ -d "$REPO_DIR/.agents" ]; then
     SSOT_ROOT="$REPO_DIR"
 else
@@ -243,7 +244,7 @@ import os, re
 
 gemini_path = "/home/zerops/.gemini/GEMINI.md"
 dest_local = "/home/zerops/.gemini/antigravity-cli/skills/_shared/sdd-orchestrator-full.md"
-dest_drive = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/references/sdd-orchestrator-full.md"
+dest_drive = "/var/www/.agents/references/sdd-orchestrator-full.md"
 
 if os.path.isfile(gemini_path):
     with open(gemini_path, "r", encoding="utf-8") as f:

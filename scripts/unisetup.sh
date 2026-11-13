@@ -12,12 +12,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
 DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
-DRIVE_SSOT="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123"
+PROJ_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
+DRIVE_SSOT="${PROJ_KEY:+$DRIVE_MOUNT/0ZEROPS-AGY/$PROJ_KEY}"
 
 if [ -d "$DRIVE_SSOT" ]; then
     SSOT_ROOT="$DRIVE_SSOT"
-elif [ -d "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" ]; then
-    SSOT_ROOT="$(cd "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" && pwd)"
+elif [ -d "$SCRIPT_DIR/.." ] && [ -d "$SCRIPT_DIR/../.agents" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 elif [ -d "$REPO_DIR/.agents" ]; then
     SSOT_ROOT="$REPO_DIR"
 else
@@ -285,7 +286,7 @@ except Exception: pass
             "$PROJECT_ROOT/.bin/engram" import "$ENGRAM_DUMP" 2>/dev/null || engram import "$ENGRAM_DUMP" 2>/dev/null || true
         fi
     else
-        # Proyecto Downstream / Cliente (glamur, elplacerdc, damaren o cualquier nuevo): Hidratación aditiva Zero-Data-Loss 3-Tier
+        # Proyecto Downstream / Cliente: Hidratación aditiva Zero-Data-Loss 3-Tier
         echo "• Hidratando memoria LTM 3-Tier Zero-Data-Loss para proyecto $ACTIVE_LOWER..."
         if command -v engram-sync >/dev/null 2>&1; then
             engram-sync --pull --project "$ACTIVE_LOWER" || true

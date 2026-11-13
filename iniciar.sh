@@ -51,16 +51,31 @@ link_skills() {
 }
 
 link_bin() {
-  mkdir -p "$LOCAL_BIN" "$LOCAL_BIN/hooks"
-  for s in ssot-parity-check.sh skills-suite-validate.sh zcp-sync linear-cli; do
+  mkdir -p "$LOCAL_BIN" "$LOCAL_BIN/hooks" "$HOME/.local/bin"
+  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli apotelos brand-play engram-sync; do
     if [ -f "$CATALOG_DIR/scripts/$s" ]; then
       chmod +x "$CATALOG_DIR/scripts/$s"
-      ln -sfn "$CATALOG_DIR/scripts/$s" "$LOCAL_BIN/${s%.sh}"
+      local bin_name="${s%.sh}"
+      ln -sfn "$CATALOG_DIR/scripts/$s" "$LOCAL_BIN/$bin_name"
+      ln -sfn "$CATALOG_DIR/scripts/$s" "$HOME/.local/bin/$bin_name"
     fi
   done
-  if [ -f "$CATALOG_DIR/scripts/hooks/tool-guard.py" ]; then
-    ln -sfn "$CATALOG_DIR/scripts/hooks/tool-guard.py" "$LOCAL_BIN/hooks/tool-guard.py"
+  if [ -f "$CATALOG_DIR/bin/orchesbrand" ]; then
+    chmod +x "$CATALOG_DIR/bin/orchesbrand"
+    ln -sfn "$CATALOG_DIR/bin/orchesbrand" "$LOCAL_BIN/orchesbrand"
+    ln -sfn "$CATALOG_DIR/bin/orchesbrand" "$HOME/.local/bin/orchesbrand"
   fi
+  if [ -f "$CATALOG_DIR/scripts/anti_slop_linter.py" ]; then
+    chmod +x "$CATALOG_DIR/scripts/anti_slop_linter.py"
+    ln -sfn "$CATALOG_DIR/scripts/anti_slop_linter.py" "$LOCAL_BIN/anti-slop-linter"
+    ln -sfn "$CATALOG_DIR/scripts/anti_slop_linter.py" "$HOME/.local/bin/anti-slop-linter"
+  fi
+  for h in tool-guard.py test_tool_guard.py; do
+    if [ -f "$CATALOG_DIR/scripts/hooks/$h" ]; then
+      chmod +x "$CATALOG_DIR/scripts/hooks/$h"
+      ln -sfn "$CATALOG_DIR/scripts/hooks/$h" "$LOCAL_BIN/hooks/$h"
+    fi
+  done
   sudo ln -sfn "$CATALOG_DIR/iniciar.sh" /usr/local/bin/zcp-update || true
 }
 

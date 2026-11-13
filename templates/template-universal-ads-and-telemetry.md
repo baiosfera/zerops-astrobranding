@@ -1,8 +1,7 @@
 # 🚀 PLANTILLA MAESTRA: ECOSISTEMA UNIVERSAL DE ANUNCIOS, TELEMETRÍA TRI-RED Y BRIDGE FRAPPE (v1.0 SOTA)
 
 > **Destino:** Cualquier marca, cliente, tienda o servicio en Zerops (`${PROJECT_NAME}`).  
-> **Ubicación Canónica (Monorepo):** `/var/www/zerops-astrobranding/templates/template-universal-ads-and-telemetry.md`  
-> **Ubicación SSoT (Google Drive):** `/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/artifacts/templates/template-universal-ads-and-telemetry.md`  
+> **Ubicación Canónica (Catálogo):** `/var/www/zerops-astrobranding/templates/template-universal-ads-and-telemetry.md`  
 > **Gobernanza:** `00-SUPREME-DIRECTIVE.md` (v8.5) · `ad-telemetry` · `meta-skill` · `meta-script` · `codecraft`  
 > **Principios Soberanos:** Cero Hardcoding, Iniciar.sh-First, Motor en Inglés / Pantallas en Español, Desacople a Prueba de Fallos (Fail-Safe Decoupling).
 

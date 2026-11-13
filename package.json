@@ -1,20 +1,16 @@
 {
   "name": "zerops-astrobranding",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "description": "Zerops AstroBranding sovereign catalog, recipes, blueprints and ZCP tooling hub",
   "scripts": {
     "setup": "./iniciar.sh",
     "bootstrap": "bun scripts/bootstrap.mjs",
-    "dev": "bun --filter @astrobranding/astrobranding dev",
-    "build": "bun --filter '*' build",
-    "start": "bun --filter @astrobranding/astrobranding start",
     "check": "tsc --noEmit",
     "check:arch": "bun scripts/architecture-check.mjs",
-    "db:migrate": "bun packages/database/src/migrate.ts"
+    "check:parity": "bash scripts/ssot-parity-check.sh",
+    "validate:skills": "bash scripts/skills-suite-validate.sh -q",
+    "test:hooks": "python3 -B scripts/hooks/tool-guard.py --test"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

@@ -136,7 +136,7 @@ Los cuadernos en Google NotebookLM Pro están indexados con títulos canónicos:
 ## 🛠️ 6. Mantenimiento y Recuperación ante Fallos
 
 1. **Persistencia SSoT de Dependencias**:
-   - `poppler-utils` (`pdftotext`) está declarado en [`setup-zcp.sh`](file:///var/www/zerops-astrobranding/scripts/setup-zcp.sh) tanto en el repositorio local como en Google Drive SSoT ([`setup-zcp.sh` en Drive](file:///var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/setup-zcp.sh)).
+   - `poppler-utils` (`pdftotext`) está declarado en [`setup-zcp.sh`](file:///var/www/zerops-astrobranding/scripts/setup-zcp.sh) dentro del repositorio upstream.
    - En un reinicio en frío, `iniciar.sh -> unisetup.sh -> setup-zcp.sh` garantiza su instalación automática.
 2. **Idempotencia Absoluta**:
    - Cada compendio y archivo genera una huella SHA-256 única. Si el archivo no ha cambiado, `push` lo omite automáticamente sin consumir ancho de banda ni cuotas de API.

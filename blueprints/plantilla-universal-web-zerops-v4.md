@@ -880,7 +880,7 @@ Para cualquier proyecto o marca desplegada en Zerops, el agente conversacional d
   * **Nivel Worker:** El servicio `whatsappbot` procesa la lógica conversacional de forma asíncrona, eliminando en un 100% las tormentas de reintentos y timeouts.
 
 ### 2. Ingesta Agnóstica de Marca desde SSoT Local Storage (Zero Hardcoding):
-- **Cero Acoplamiento a Marcas Específicas:** Ningún archivo de plantilla, script, skill o receta debe contener cadenas quemadas (`elplacerdc`, `Segi`, `The Corset Society`, etc.).
+- **Cero Acoplamiento a Marcas Específicas:** Ningún archivo de plantilla, script, skill o receta debe contener nombres reales de clientes, firmas o proyectos privados.
 - **Resolución Dinámica de Identidad:** La personalidad, arquetipo, dialecto regional, políticas y catálogo se leen dinámicamente desde:
   `/mnt/localstorage/${PROJECT_NAME}/dev/brandbook.json` y `/mnt/localstorage/${PROJECT_NAME}/dev/system_prompt.md`.
 - **Sanitización Dinámica de Enlaces:** El validador post-LLM restringe los enlaces emitidos estrictamente a los dominios canónicos declarados en el brandbook activo (`canonical_urls`) y canales de mensajería oficiales (`wa.me`), erradicando enlaces rotos o 404s.

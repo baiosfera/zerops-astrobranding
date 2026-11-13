@@ -90,13 +90,13 @@ Un modelo de embeddings convierte texto libre en vectores numéricos de punto fl
 
 ### B. Claves Soberanas Registradas en el Ecosistema
 
-| Nombre de la Clave | ID en Gateway | Prefijo de Llave Virtual | Ámbito de Uso |
+| Nombre de la Clave | ID / Alias en Gateway | Variable en Zerops | Ámbito de Uso |
 |---|---|---|---|
-| **Production Sovereign Key** | `vk-production-main` | `sk-bf-e60f18ef...` | Clave maestra del entorno de producción |
-| **Hermes Agent Autonomous** | `b1d77788-a64a...` | `sk-bf-f702a2c4...` | Agente autónomo de backend y mesh |
-| **AstroBranding Production** | `9abaddac-33aa...` | `sk-bf-9eef443c...` | Aplicación web frontend Astro 5 |
-| **Evolution WhatsApp Bot** | `2a06eb8b-e15f...` | `sk-bf-426d0421...` | Gateway de mensajería y bot comercial |
-| **Antigravity AGY Operator** | `9cb0cbcd-c8bf...` | `sk-bf-e948df3c...` | Control plane y operador del sistema |
+| **Production Sovereign Key** | `vk-production-main` | `$BIFROST_MASTER_VK` | Clave maestra del entorno de producción |
+| **Hermes Agent Autonomous** | `vk-hermes-agent` | `$HERMES_LLM_API_KEY` | Agente autónomo de backend y mesh |
+| **AstroBranding Production** | `vk-astrobranding` | `$ASTRO_LLM_API_KEY` | Aplicación web frontend Astro 5 |
+| **Evolution WhatsApp Bot** | `vk-evolution-bot` | `$EVOLUTION_LLM_API_KEY` | Gateway de mensajería y bot comercial |
+| **Antigravity AGY Operator** | `vk-agy-operator` | `$AGY_BIFROST_KEY` | Control plane y operador del sistema |
 
 ---
 

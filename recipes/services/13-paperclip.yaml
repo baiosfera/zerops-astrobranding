@@ -15,20 +15,5 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.25
       minFreeRamPercent: 10
-    envVariables:
-      PORT: "3100"
-      HOST: "0.0.0.0"
-      NODE_ENV: "production"
-      DATABASE_URL: ${database_connectionString}
-      BETTER_AUTH_SECRET: ${PAPERCLIP_BETTER_AUTH_SECRET}
-      PAPERCLIP_TOOL_ACTION_SIGNING_SECRET: ${PAPERCLIP_SIGNING_SECRET}
-      PAPERCLIP_STORAGE_PROVIDER: "local_disk"
-      PAPERCLIP_STORAGE_LOCAL_DIR: "/mnt/localstorage/paperclip/storage"
-      PAPERCLIP_HOME: "/mnt/localstorage/paperclip"
-      PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
-      PAPERCLIP_DEPLOYMENT_EXPOSURE: "public"
-      PAPERCLIP_BIND: "lan"
-      PAPERCLIP_AUTH_BASE_URL_MODE: "explicit"
-      PAPERCLIP_ADMIN_EMAIL: ${PAPERCLIP_ADMIN_EMAIL_SECRET}
-      PAPERCLIP_ADMIN_PASSWORD: ${PAPERCLIP_ADMIN_PASSWORD_SECRET}
-      HERMES_GATEWAY_URL: "http://hermes:8000"
+    # Runtime env vars (PORT, HOST, NODE_ENV, DATABASE_URL, HERMES_GATEWAY_URL, PAPERCLIP_*)
+    # live in baiosfera/runtime-paperclip zerops.yaml; secrets belong in vault / zerops_env.

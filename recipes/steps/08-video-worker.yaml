@@ -13,9 +13,5 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.5
       minFreeRamPercent: 15
-    envVariables:
-      NATS_URL: ${nats_connectionString}
-      VALKEY_URL: ${valkey_connectionString}
-      NODE_ENV: "production"
-      MAX_CONCURRENT_RENDERS: "1"
-      VIDEO_OUTPUT_DIR: "/var/www/output"
+    # Non-secret runtime vars (NATS_URL, VALKEY_URL, NODE_ENV, MAX_CONCURRENT_RENDERS,
+    # VIDEO_OUTPUT_DIR) live in baiosfera/runtime-videoworker zerops.yaml run.envVariables.

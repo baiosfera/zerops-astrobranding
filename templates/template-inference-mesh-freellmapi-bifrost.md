@@ -139,7 +139,7 @@ Para evitar el monopolio de un solo proveedor rápido (Cerebras) y aprovechar la
 # 1. Probar FreeLLMAPI enrutamiento dinámico 'auto' (usando unified_api_key de SQLite settings)
 curl -s http://freellmapi:3001/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer freellmapi-1a51f9aa17ab766b7e98b5b2ae3353a6bfb216d86868a4ef" \
+  -H "Authorization: Bearer ${FREELLMAPI_CLIENT_KEY}" \
   -d '{"model":"auto","messages":[{"role":"user","content":"ping"}]}' | jq .choices[0].message.content
 
 # 2. Probar Bifrost con alias transparente de Hermes (hermes-3-* mapeado a auto)

@@ -11,12 +11,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
 DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
-DRIVE_SSOT="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123"
+PROJ_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
+DRIVE_SSOT="${PROJ_KEY:+$DRIVE_MOUNT/0ZEROPS-AGY/$PROJ_KEY}"
 
 if [ -d "$DRIVE_SSOT" ]; then
     SSOT_ROOT="$DRIVE_SSOT"
-elif [ -d "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" ]; then
-    SSOT_ROOT="$(cd "$SCRIPT_DIR/../../0ZEROPS-AGY/0zcp-123" && pwd)"
+elif [ -d "$SCRIPT_DIR/.." ] && [ -d "$SCRIPT_DIR/../.agents" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 elif [ -d "$REPO_DIR/.agents" ]; then
     SSOT_ROOT="$REPO_DIR"
 else
@@ -327,7 +328,7 @@ elif [ -d "$NLM_AUTH_SRC" ]; then
     echo "  ✅ Sesión de NotebookLM restaurada con éxito."
 fi
 
-for nlm_candidate in "/var/www/notebook.json" "$ZCP_ROOT/apis/notebook.json" "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/apis/notebook.json"; do
+for nlm_candidate in "/var/www/notebook.json" "$ZCP_ROOT/apis/notebook.json" "$DRIVE_MOUNT/users-apis/notebook.json"; do
     if [ -f "$nlm_candidate" ]; then
         echo "• Sincronizando sesión de NotebookLM con $nlm_candidate..."
         nlm login --manual -f "$nlm_candidate" --force 2>/dev/null || true
