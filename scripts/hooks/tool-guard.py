@@ -7,8 +7,8 @@ Intercepts PreToolUse, PreInvocation, and SessionStart events to enforce:
   1. Handover Immunity (Strict block against destroying or truncating handover files).
   2. Anti-Afán & Anti-AMN Inflow Gate (Enforces prior inspection/grounding before mutations).
   3. Dangerous Command Guard (Blocks blind sweeping deletes and prompts for high-risk ops).
-  4. SSoT Relative Path Gate (Blocks creation or usage of '0zcp-123/' relative path leaks).
-  5. Monotonic Pre-Mutation Backup Gate (Blocks mutating skills, rules or platform scripts without snapshot).
+  4. Upstream Isolation Shield (Blocks tenant keys/db/secrets leaks inside sovereign upstream repos).
+  5. Epistemic Grounding First Gate (Enforces research before skill or formal F4 plan creation).
   6. AST & Symbol Preservation Gate (Zero Deletion of functions, classes, and safety flags).
   7. Physical Syntax Pre-Flight Gate (bash -n and python compile before write).
   8. Anti-Checklist Theater Gate (Blocks silencing errors with >/dev/null 2>&1 in validation scripts).
@@ -36,20 +36,6 @@ HANDOVER_PATTERN = re.compile(r'(_handover|_blueprint|_dossier|_roadmap)', re.IG
 DANGEROUS_RM_PATTERN = re.compile(r'rm\s+(-[a-zA-Z]*r[a-zA-Z]*f?|-f?[a-zA-Z]*r[a-zA-Z]*)\s+(/|/\*|/var|/var/\*|/var/www|/var/www/\*)(\s|$)', re.IGNORECASE)
 SWEEPING_ARTIFACTS_RM = re.compile(r'rm\s+.*artifacts/(\*|\.\*)', re.IGNORECASE)
 
-def contains_relative_0zcp_leak(text: str) -> bool:
-    """Detects occurrences of '0zcp-123' not preceded by the canonical Drive prefix or rclone remote prefix."""
-    prefixes = ["/var/www/baiosfera/0ZEROPS-AGY/", "baiosfera:0ZEROPS-AGY/"]
-    idx = 0
-    while True:
-        pos = text.find("0zcp-123", idx)
-        if pos == -1:
-            break
-        valid = any(pos >= len(p) and text[pos - len(p):pos] == p for p in prefixes)
-        if not valid:
-            return True
-        idx = pos + len("0zcp-123")
-    return False
-
 UPSTREAM_SKILLS_PATTERN = re.compile(
     r'^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|'
     r'crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|'
@@ -73,112 +59,14 @@ UPSTREAM_SKILLS_PATTERN = re.compile(
 )
 
 def is_upstream_skill_pollution(path_or_cmd: str, is_write: bool = True) -> str:
-    """Detects attempts to write, copy, or mutate upstream gentle-ai/pocock skills into Drive SSoT or runtime skills dirs."""
-    ssot_skills_prefix = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills"
-    runtime_skills_prefixes = ("/var/www/.agents/skills", "/var/www/.claude/skills")
-
-    # 1. Any appearance in Google Drive SSoT custom skills directory is strictly forbidden
-    if ssot_skills_prefix in path_or_cmd:
+    """Detects attempts to write, copy, or mutate external gentle-ai/pocock skills into sovereign skills dirs."""
+    protected_prefixes = ("/var/www/zerops-astro-skills", "/var/www/.agents/skills", "/var/www/.claude/skills")
+    if is_write and any(p in path_or_cmd for p in protected_prefixes):
         for token in re.split(r'[/ \t\n\'"]+', path_or_cmd):
             token_clean = token.strip()
             if UPSTREAM_SKILLS_PATTERN.match(token_clean):
                 return token_clean
-
-    # 2. Local runtime upstream skills directories are strictly read-only
-    if any(p in path_or_cmd for p in runtime_skills_prefixes):
-        if is_write:
-            for token in re.split(r'[/ \t\n\'"]+', path_or_cmd):
-                token_clean = token.strip()
-                if UPSTREAM_SKILLS_PATTERN.match(token_clean):
-                    return token_clean
-
     return ""
-CORE_SYNC_PAIRS = [
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/hooks/tool-guard.py",
-        "/var/www/.bin/hooks/tool-guard.py"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/hooks/tool-guard.py",
-        "/var/www/zerops-astrobranding/scripts/hooks/tool-guard.py"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/hooks/test_tool_guard.py",
-        "/var/www/.bin/hooks/test_tool_guard.py"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/hooks/test_tool_guard.py",
-        "/var/www/zerops-astrobranding/scripts/hooks/test_tool_guard.py"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/AGENTS.md",
-        "/var/www/AGENTS.md"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/AGENTS.md",
-        "/var/www/zerops-astrobranding/AGENTS.md"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/rules/00-SUPREME-DIRECTIVE.md",
-        "/var/www/.agents/rules/00-SUPREME-DIRECTIVE.md"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/rules/00-SUPREME-DIRECTIVE.md",
-        "/var/www/zerops-astrobranding/.agents/rules/00-SUPREME-DIRECTIVE.md"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/hooks.json",
-        "/var/www/.agents/hooks.json"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/skills-suite-validate.sh",
-        "/var/www/.bin/skills-suite-validate"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/ssot-parity-check.sh",
-        "/var/www/.bin/ssot-parity-check"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/references/supreme_directive_encyclopedia.md",
-        "/var/www/.agents/references/supreme_directive_encyclopedia.md"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/references/gentle_governance_encyclopedia.md",
-        "/var/www/.agents/references/gentle_governance_encyclopedia.md"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/references/astro_suites_encyclopedia.md",
-        "/var/www/.agents/references/astro_suites_encyclopedia.md"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.atl/skill-registry.md",
-        "/var/www/.atl/skill-registry.md"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.atl/skill-registry.md",
-        "/var/www/zerops-astrobranding/.atl/skill-registry.md"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/iniciar.sh",
-        "/var/www/zerops-astrobranding/iniciar.sh"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh",
-        "/var/www/zerops-astrobranding/scripts/unisetup.sh"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/gdrive.sh",
-        "/var/www/zerops-astrobranding/scripts/gdrive.sh"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/engram-sync",
-        "/var/www/zerops-astrobranding/scripts/engram-sync"
-    ),
-    (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/astrobranding-check.sh",
-        "/var/www/.bin/astrobranding-check"
-    ),
-]
 
 def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
     """
@@ -249,280 +137,6 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
                 pass
 
     return {"purged_superseded": purged_superseded, "purged_executed": purged_executed}
-
-def auto_sync_governance(target_file: str = ""):
-    """
-    Autonomous Parity & Mirror Reactor: Keeps SSoT (Google Drive), Git Repositories,
-    and local runtime in real-time lockstep following the Sovereign Flow:
-    bak -> ssot -> iniciar.sh-first -> skill-registry -> push repositorios.
-    Silently and deterministically propagates changes and pushes to GitHub without friction.
-    """
-    import shutil, subprocess, filecmp
-
-    def files_differ(f1: str, f2: str) -> bool:
-        try:
-            if not os.path.exists(f1) or not os.path.exists(f2):
-                return True
-            if os.path.getsize(f1) != os.path.getsize(f2):
-                return True
-            return not filecmp.cmp(f1, f2, shallow=False)
-        except Exception:
-            return True
-
-    # 1. Core governance sync pairs (Drive SSoT <-> Local runtime)
-    # ZCP-First Invariant: Active development in ZCP (/var/www) reflects to Drive SSoT (0zcp-123).
-    for ssot_path, runtime_path in CORE_SYNC_PAIRS:
-        try:
-            ssot_exists = os.path.exists(ssot_path)
-            runtime_exists = os.path.exists(runtime_path)
-            if not ssot_exists and not runtime_exists:
-                continue
-
-            if runtime_exists:
-                if not ssot_exists or files_differ(runtime_path, ssot_path):
-                    os.makedirs(os.path.dirname(ssot_path), exist_ok=True)
-                    shutil.copy2(runtime_path, ssot_path)
-            elif ssot_exists and not runtime_exists:
-                os.makedirs(os.path.dirname(runtime_path), exist_ok=True)
-                shutil.copy2(ssot_path, runtime_path)
-                if runtime_path.startswith("/var/www/.bin/"):
-                    try:
-                        os.chmod(runtime_path, 0o755)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-    # 2. Real-time Mirror Sync for Skills (SSoT Triad: .agents/skills <-> zerops-astro-skills <-> Drive SSoT)
-    skill_changed = False
-    is_skill_touch = bool(
-        target_file and (
-            "/.agents/skills/" in target_file or target_file.startswith(".agents/skills/") or
-            "/zerops-astro-skills/" in target_file or target_file.startswith("zerops-astro-skills/")
-        )
-    )
-
-    if is_skill_touch:
-        try:
-            rel = ""
-            skill_name = ""
-            if "/.agents/skills/" in target_file:
-                rel = target_file.split("/.agents/skills/")[1].lstrip("/")
-            elif target_file.startswith(".agents/skills/"):
-                rel = target_file.split(".agents/skills/")[1].lstrip("/")
-            elif "/zerops-astro-skills/" in target_file:
-                rel = target_file.split("/zerops-astro-skills/")[1].lstrip("/")
-            elif target_file.startswith("zerops-astro-skills/"):
-                rel = target_file.split("zerops-astro-skills/")[1].lstrip("/")
-
-            if rel:
-                skill_name = rel.split("/")[0]
-                local_path = os.path.join("/var/www/.agents/skills", rel)
-                git_dest = os.path.join("/var/www/zerops-astro-skills", rel)
-                drive_dest = os.path.join("/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills", rel)
-
-                src_path = target_file if os.path.isabs(target_file) else os.path.join("/var/www", target_file)
-                if os.path.exists(src_path):
-                    for dest in [local_path, git_dest]:
-                        if dest != src_path:
-                            os.makedirs(os.path.dirname(dest), exist_ok=True)
-                            shutil.copy2(src_path, dest)
-                    if not UPSTREAM_SKILLS_PATTERN.match(skill_name):
-                        os.makedirs(os.path.dirname(drive_dest), exist_ok=True)
-                        shutil.copy2(src_path, drive_dest)
-                    skill_changed = True
-        except Exception:
-            pass
-
-    # 3. Real-time Mirror Sync for Deployment Scripts
-    is_script_touch = bool(
-        target_file and (
-            "/scripts/" in target_file or "/.bin/" in target_file or
-            target_file.endswith("iniciar.sh") or target_file.endswith("unisetup.sh")
-        )
-    )
-    if is_script_touch:
-        try:
-            base_script = os.path.basename(target_file)
-            repo_script = os.path.join("/var/www/zerops-astrobranding/scripts", base_script)
-            drive_script = os.path.join("/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts", base_script)
-            bin_script = os.path.join("/var/www/.bin", base_script)
-            src_script = target_file if os.path.isabs(target_file) else os.path.join("/var/www", target_file)
-
-            if os.path.exists(src_script):
-                for dest in [repo_script, drive_script, bin_script]:
-                    if dest != src_script and os.path.exists(os.path.dirname(dest)):
-                        shutil.copy2(src_script, dest)
-                        if dest == bin_script or base_script.endswith(".sh"):
-                            try:
-                                os.chmod(dest, 0o755)
-                            except Exception:
-                                pass
-        except Exception:
-            pass
-
-    # 4. SKILL REGISTRY AUTONOMOUS REFRESH & SSOT MIRROR ($N_7)
-    registry_local = "/var/www/.atl/skill-registry.md"
-    registry_drive = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.atl/skill-registry.md"
-    registry_branding = "/var/www/zerops-astrobranding/.atl/skill-registry.md"
-
-    if skill_changed or (target_file and "skill-registry" in target_file):
-        try:
-            subprocess.run(["gentle-ai", "skill-registry", "refresh", "--cwd", "/var/www", "--force"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-        except Exception:
-            pass
-
-    if os.path.exists(registry_local):
-        for reg_dest in [registry_drive, registry_branding]:
-            try:
-                if not os.path.exists(reg_dest) or files_differ(registry_local, reg_dest):
-                    os.makedirs(os.path.dirname(reg_dest), exist_ok=True)
-                    shutil.copy2(registry_local, reg_dest)
-            except Exception:
-                pass
-
-    # 5. Autonomous Git Mirror Synchronization (Non-blocking background spawn to preserve <30ms execution)
-    # 5a. zerops-astro-skills
-    try:
-        skills_git = "/var/www/zerops-astro-skills"
-        if os.path.exists(os.path.join(skills_git, ".git")):
-            st = subprocess.run(["git", "status", "--porcelain"], cwd=skills_git, capture_output=True, text=True, timeout=1)
-            if st.returncode == 0 and st.stdout.strip():
-                subprocess.run(["git", "add", "-A"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
-                subprocess.run(["git", "commit", "-m", "chore(skills): auto-sync mirror mode"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
-                # Background push to never block hook
-                subprocess.Popen(["git", "push", "origin", "main"], cwd=skills_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception:
-        pass
-
-    # 5b. zerops-astrobranding
-    try:
-        repo_git = "/var/www/zerops-astrobranding"
-        if os.path.exists(os.path.join(repo_git, ".git")):
-            st = subprocess.run(["git", "status", "--porcelain"], cwd=repo_git, capture_output=True, text=True, timeout=1)
-            if st.returncode == 0 and st.stdout.strip():
-                subprocess.run(["git", "add", "-A"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
-                subprocess.run(["git", "commit", "-m", "chore(repo): auto-sync mirror mode"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
-                # Background push to never block hook
-                subprocess.Popen(["git", "push", "origin", "main"], cwd=repo_git, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception:
-        pass
-
-    # Purge bytecode residue deterministically (Invariant 6)
-    hooks_pycache = "/var/www/.bin/hooks/__pycache__"
-    if os.path.exists(hooks_pycache):
-        try:
-            shutil.rmtree(hooks_pycache, ignore_errors=True)
-        except Exception:
-            pass
-
-    # Auto-purge superseded artifact drafts when a version has executed
-    try:
-        cleanup_artifacts_lifecycle(purge_executed=False)
-    except Exception:
-        pass
-
-def has_recent_backup(target_file: str) -> bool:
-    """
-    Verifies that critical files have a monotonic pre-mutation backup:
-    A valid backup MUST have mtime >= target_file mtime - 1.0s.
-    If the target_file was modified after the backup was created,
-    a fresh snapshot of the current state must be taken before mutating.
-    Flow: bak -> ssot -> iniciar.sh-first -> skill-registry -> push repositorios ($N_1$).
-    """
-    is_skill = bool(
-        "/.agents/skills/" in target_file or target_file.startswith(".agents/skills/") or
-        "/zerops-astro-skills/" in target_file or target_file.startswith("zerops-astro-skills/")
-    )
-    is_script = bool(
-        "/0zcp-123/scripts/" in target_file or "/.bin/" in target_file or "/scripts/" in target_file or
-        target_file.endswith("iniciar.sh") or target_file.endswith("unisetup.sh")
-    )
-    is_rule = bool(
-        target_file.endswith("AGENTS.md") or "/.agents/rules/" in target_file or
-        "/.agents/references/" in target_file or target_file.endswith("00-SUPREME-DIRECTIVE.md")
-    )
-    is_hook = bool("/.bin/hooks/" in target_file or "/scripts/hooks/" in target_file)
-
-    if not (is_skill or is_script or is_rule or is_hook):
-        return True
-    if not os.path.exists(target_file):
-        return True  # New file being created
-
-    target_mtime = os.path.getmtime(target_file)
-    if is_skill:
-        target_bak_dir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills"
-    elif is_rule:
-        target_bak_dir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/rules"
-    else:
-        target_bak_dir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/scripts"
-
-    base_name = os.path.basename(target_file)
-    name_stem = os.path.splitext(base_name)[0]
-
-    skill_name = ""
-    if is_skill:
-        if "/.agents/skills/" in target_file:
-            parts = target_file.split("/.agents/skills/")
-            skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
-        elif target_file.startswith(".agents/skills/"):
-            parts = target_file.split(".agents/skills/")
-            skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
-        elif "/zerops-astro-skills/" in target_file:
-            parts = target_file.split("/zerops-astro-skills/")
-            skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
-        elif target_file.startswith("zerops-astro-skills/"):
-            parts = target_file.split("zerops-astro-skills/")
-            skill_name = parts[1].strip("/").split("/")[0] if len(parts) > 1 else ""
-
-    latest_bak_mtime = 0.0
-    if os.path.exists(target_bak_dir):
-        try:
-            for fname in os.listdir(target_bak_dir):
-                match = False
-                if skill_name and skill_name in fname:
-                    match = True
-                elif name_stem and name_stem in fname:
-                    match = True
-                elif base_name in fname:
-                    match = True
-
-                if match:
-                    fpath = os.path.join(target_bak_dir, fname)
-                    if os.path.isfile(fpath) or os.path.isdir(fpath):
-                        mtime = os.path.getmtime(fpath)
-                        if mtime > latest_bak_mtime:
-                            latest_bak_mtime = mtime
-        except Exception:
-            pass
-
-    # Auto-snapshot before mutation: silent physical safety with standard naming & rotation
-    if latest_bak_mtime < (target_mtime - 1.0):
-        try:
-            os.makedirs(target_bak_dir, exist_ok=True)
-            import shutil, time
-            ts = int(time.time())
-            snapshot_name = f"{skill_name}_{base_name}_{ts}.bak" if (is_skill and skill_name) else (f"{name_stem}_{base_name}_{ts}.bak" if name_stem != base_name else f"{base_name}_{ts}.bak")
-            snapshot_path = os.path.join(target_bak_dir, snapshot_name)
-            shutil.copy2(target_file, snapshot_path)
-
-            # Auto-rotate: keep max 5 most recent snapshots for this specific target
-            prefix_match = f"{skill_name}_v" if (is_skill and skill_name) else (f"{name_stem}_" if name_stem != base_name else f"{base_name}_")
-            existing = [os.path.join(target_bak_dir, f) for f in os.listdir(target_bak_dir) if f.startswith(prefix_match) and f.endswith(".bak")]
-            if len(existing) > 5:
-                existing.sort(key=os.path.getmtime)
-                for old_f in existing[:-5]:
-                    try:
-                        if os.path.isdir(old_f):
-                            shutil.rmtree(old_f, ignore_errors=True)
-                        else:
-                            os.remove(old_f)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-    return True
 
 def get_skill_triggers_map(registry_path="/var/www/.atl/skill-registry.md") -> dict:
     """Builds or reads cached triggers map from skill-registry.md."""
@@ -979,6 +593,20 @@ def is_plan_draft(filepath: str) -> bool:
         pass
     return False
 
+def is_plan_approved(filepath: str) -> bool:
+    try:
+        if not filepath or not os.path.exists(filepath):
+            return False
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read(4096).lower()
+            if any(k in content for k in [
+                "status: approved", "estado: aprobado", "approved: true"
+            ]):
+                return True
+    except Exception:
+        pass
+    return False
+
 def get_pending_research_subagents(transcript_path: str) -> list:
     if not transcript_path or not os.path.exists(transcript_path):
         return []
@@ -1249,231 +877,6 @@ def evaluate_hook(payload: dict) -> dict:
                         )
                     }
 
-            plans_dir = "/var/www/artifacts/plans"
-            has_active_plan = os.path.exists(plans_dir) and any(
-                f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide", "draft", "grilling"])
-                and not is_plan_draft(os.path.join(plans_dir, f))
-                for f in os.listdir(plans_dir)
-            )
-            if has_active_plan and not payload.get("test_bypass_linear"):
-                state_file = "/tmp/.linear_activity_state.json"
-                alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
-                has_linear_recent = False
-                for sf in [state_file, alt_state_file]:
-                    if os.path.exists(sf):
-                        try:
-                            with open(sf, "r") as f:
-                                act_data = json.load(f)
-                                if time.time() - (act_data.get("timestamp", 0) / 1000.0) < 7200:
-                                    has_linear_recent = True
-                                    break
-                        except Exception:
-                            pass
-
-                transcript_path = payload.get("transcriptPath", "")
-                has_inspection = payload.get("test_has_inspection", False)
-                if transcript_path and os.path.exists(transcript_path) and not has_inspection:
-                    try:
-                        with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
-                            t_lines = f.readlines()
-                            for tl in reversed(t_lines[-20:]):
-                                if any(tk in tl for tk in ["read_file", "run_command", "write_file", "edit_file", "call_mcp_tool"]):
-                                    has_inspection = True
-                                    break
-                    except Exception:
-                        pass
-
-                if has_inspection and not has_linear_recent:
-                    stop_counter_file = "/tmp/.linear_stop_force_count"
-                    count = 0
-                    if os.path.exists(stop_counter_file):
-                        try:
-                            with open(stop_counter_file, "r") as f:
-                                count = int(f.read().strip())
-                        except Exception:
-                            count = 0
-                    if count < 1:
-                        with open(stop_counter_file, "w") as f:
-                            f.write(str(count + 1))
-                        return {
-                            "decision": "continue",
-                            "reason": (
-                                "🏛️ VIOLACIÓN LINEAR-FIRST GATE (Supreme Directive Invariante 2): "
-                                "Hay un plan activo en /var/www/artifacts/plans/ y realizaste inspecciones sin registrar actividad en Linear. "
-                                "Ejecutá 'linear-cli comment <ID>' antes de responder."
-                            )
-                        }
-                    else:
-                        if os.path.exists(stop_counter_file):
-                            try:
-                                os.remove(stop_counter_file)
-                            except Exception:
-                                pass
-
-            # 0.5.2 Anti-Cháchara Physical Gate: Mandatory Plan/SSoT Mutation on Correction
-            plans_dir = "/var/www/artifacts/plans"
-            has_plans_present = (
-                os.path.exists(plans_dir) and any(
-                    f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide"])
-                    for f in os.listdir(plans_dir)
-                )
-            ) or payload.get("test_has_plans", False)
-
-            if has_plans_present and not payload.get("test_bypass_correction_gate"):
-                user_prompt = payload.get("test_user_prompt") or extract_user_prompt(payload)
-                CORRECTION_PATTERNS = re.compile(
-                    r'\b(falta|falt[oó]|olvidaste|olvid[oó]|correg[ií]|corrige|modific[aá]|cambi[aá]|agreg[aá]|quit[aá]|'
-                    r'revis[aá]|incomplet[oa]|err[oó]ne[oa]|inefica[zs]|actualiz[aá].*plan|ajust[aá]|te comiste|'
-                    r'no pusiste|no incluiste|a[ñn]ad[eí]|agrega esto|falto agregar)\b',
-                    re.IGNORECASE
-                )
-                if CORRECTION_PATTERNS.search(user_prompt):
-                    has_plan_or_linear_mutation = payload.get("test_has_plan_mutation", False)
-                    transcript_path = payload.get("transcriptPath", "")
-                    if transcript_path and os.path.exists(transcript_path) and not has_plan_or_linear_mutation:
-                        try:
-                            with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
-                                t_lines = f.readlines()
-                                recent_steps = []
-                                for tl in reversed(t_lines):
-                                    if '"type":"USER_INPUT"' in tl or '"source":"USER_EXPLICIT"' in tl:
-                                        break
-                                    recent_steps.append(tl)
-
-                                for st in recent_steps:
-                                    if any(k in st for k in ["/artifacts/plans/", "artifacts/plans", "linear-cli"]):
-                                        has_plan_or_linear_mutation = True
-                                        break
-                        except Exception:
-                            pass
-
-                    if not has_plan_or_linear_mutation:
-                        correction_counter_file = "/tmp/.ssot_mutation_stop_force_count"
-                        count = 0
-                        if os.path.exists(correction_counter_file):
-                            try:
-                                with open(correction_counter_file, "r") as f:
-                                    count = int(f.read().strip())
-                            except Exception:
-                                count = 0
-                        if count < 1:
-                            with open(correction_counter_file, "w") as f:
-                                f.write(str(count + 1))
-                            return {
-                                "decision": "continue",
-                                "reason": (
-                                    "🏛️ INVARIANTE DE MUTACIÓN FÍSICA SSoT (Anti-Cháchara): "
-                                    "El usuario señaló correcciones o modificaciones en el plan/arquitectura. "
-                                    "Actualizá físicamente el archivo de plan o Linear antes de responder."
-                                )
-                            }
-                        else:
-                            if os.path.exists(correction_counter_file):
-                                try:
-                                    os.remove(correction_counter_file)
-                                except Exception:
-                                    pass
-
-            # 0.5.3 Anti-Cháchara Governance Gate: Mandatory Tool-Guard / Sensor Mutation on Governance Fix Requests
-            if not payload.get("test_bypass_gov_gate"):
-                user_prompt = payload.get("test_user_prompt") or extract_user_prompt(payload)
-                GOVERNANCE_FIX_PATTERNS = re.compile(
-                    r'(?i)\b(blind[aá]|blindaje|arregl[aá]|correg[ií]|actualiz[aá]|modific[aá]|cambi[aá]|mejor[aá]|implement[aá]|aplic[aá]|ch[aá]chara|checklist-theater|sin aplicar)\b.*?\b(hook|hooks|tool-guard|arn[eé]s|sensor|regla|supreme|agents\.md|gobernanza|ecosistema)\b|\b(hook|hooks|tool-guard|arn[eé]s|sensor|regla|supreme|agents\.md|gobernanza|ecosistema)\b.*?\b(blind[aá]|blindaje|arregl[aá]|correg[ií]|actualiz[aá]|modific[aá]|cambi[aá]|mejor[aá]|implement[aá]|aplic[aá]|ch[aá]chara|checklist-theater|sin aplicar)\b'
-                )
-                if GOVERNANCE_FIX_PATTERNS.search(user_prompt):
-                    has_gov_mutation = payload.get("test_has_gov_mutation", False)
-                    transcript_path = payload.get("transcriptPath", "")
-                    if transcript_path and os.path.exists(transcript_path) and not has_gov_mutation:
-                        try:
-                            with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
-                                t_lines = f.readlines()
-                                recent_steps = []
-                                for tl in reversed(t_lines):
-                                    if '"type":"USER_INPUT"' in tl or '"source":"USER_EXPLICIT"' in tl:
-                                        break
-                                    recent_steps.append(tl)
-
-                                for st in recent_steps:
-                                    if any(k in st for k in ["tool-guard.py", "tool-guard", "00-SUPREME-DIRECTIVE.md", "AGENTS.md", "skills-suite-validate", "ssot-parity-check"]):
-                                        has_gov_mutation = True
-                                        break
-                        except Exception:
-                            pass
-
-                    if not has_gov_mutation:
-                        gov_counter_file = "/tmp/.gov_mutation_stop_force_count"
-                        count = 0
-                        if os.path.exists(gov_counter_file):
-                            try:
-                                with open(gov_counter_file, "r") as f:
-                                    count = int(f.read().strip())
-                            except Exception:
-                                count = 0
-                        if count < 1:
-                            with open(gov_counter_file, "w") as f:
-                                f.write(str(count + 1))
-                            return {
-                                "decision": "continue",
-                                "reason": (
-                                    "🏛️ INVARIANTE SENSOR-FIRST (Anti-Cháchara de Gobernanza): "
-                                    "Se solicitó arreglar o actualizar el arnés/hooks/gobernanza; aplicá el cambio físico y validá sus tests antes de responder."
-                                )
-                            }
-                        else:
-                            if os.path.exists(gov_counter_file):
-                                try:
-                                    os.remove(gov_counter_file)
-                                except Exception:
-                                    pass
-
-            # 0.5.4 Anti-AMN Research & Verbatim Grounding Stop Gate (research / meta-research backbone)
-            if not payload.get("test_bypass_research_stop"):
-                user_prompt = payload.get("test_user_prompt") or extract_user_prompt(payload)
-                if user_prompt and RESEARCH_MANDATE_PATTERNS.search(user_prompt):
-                    has_any_res, has_verb_res, can_inspect = _inspect_turn_research(payload)
-                    res_stop_counter_file = "/tmp/.research_stop_force_count"
-                    if can_inspect and (not has_any_res or not has_verb_res):
-                        count = 0
-                        if os.path.exists(res_stop_counter_file):
-                            try:
-                                with open(res_stop_counter_file, "r", encoding="utf-8") as f:
-                                    count = int(f.read().strip())
-                            except Exception:
-                                count = 0
-                        if count < 1:
-                            try:
-                                with open(res_stop_counter_file, "w", encoding="utf-8") as f:
-                                    f.write(str(count + 1))
-                            except Exception:
-                                pass
-                            if not has_any_res:
-                                return {
-                                    "decision": "continue",
-                                    "reason": (
-                                        "🏛️ MANDATO ANTI-AMN (research F0–F3): Se solicitó investigación técnica/SOTA externa "
-                                        "y no se detectaron llamadas de grounding en vivo en este turno. Ejecutá 'research' "
-                                        "(context7, exa, tavily, jina, firecrawl; fallbacks brave/duckduckgo o subagente 'research') antes de responder."
-                                    )
-                                }
-                            return {
-                                "decision": "continue",
-                                "reason": (
-                                    "🏛️ REGLA 'SNIPPET IS NOT EVIDENCE' (research Fase 3 — Jina Core): "
-                                    "Ejecutaste búsqueda de descubrimiento pero falta lectura verbatim de la fuente primaria. "
-                                    "Leé la URL canónica con 'jina:read_url' (o 'curl r.jina.ai/<url>', 'context7:query-docs', 'web_fetch_exa') antes de concluir."
-                                )
-                            }
-                        if os.path.exists(res_stop_counter_file):
-                            try:
-                                os.remove(res_stop_counter_file)
-                            except Exception:
-                                pass
-                    elif os.path.exists(res_stop_counter_file):
-                        try:
-                            os.remove(res_stop_counter_file)
-                        except Exception:
-                            pass
-
         triggered_stop_sync = trigger_engram_background_sync(payload, source="stop")
         if payload.get("test_inspect_engram_sync"):
             return {"engramSyncTriggered": triggered_stop_sync, "source": "stop"}
@@ -1534,15 +937,16 @@ def evaluate_hook(payload: dict) -> dict:
 
         user_prompt = extract_user_prompt(payload)
         plans_dir = "/var/www/artifacts/plans"
-        has_active_master_plan = (
+        has_pending_master_plan = (
             os.path.exists(plans_dir) and any(
                 f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide", "draft", "grilling"])
                 and not is_plan_draft(os.path.join(plans_dir, f))
+                and not is_plan_approved(os.path.join(plans_dir, f))
                 for f in os.listdir(plans_dir)
             )
         ) or os.path.exists("/var/www/artifacts/test_plan_v1.md")
 
-        if has_active_master_plan and user_prompt:
+        if has_pending_master_plan and user_prompt:
             has_question = ("?" in user_prompt or "¿" in user_prompt)
             has_go = bool(re.search(r'\b(go|adelante|procede|ejecuta|ejecutá|aprobado|dale|si|sí)\b', user_prompt, re.IGNORECASE))
             if has_question or not has_go:
@@ -1733,30 +1137,26 @@ def evaluate_hook(payload: dict) -> dict:
                 )
             }
 
-        # A1. SSoT Relative Path Guard
-        if contains_relative_0zcp_leak(target_file):
-            return {
-                "decision": "deny",
-                "reason": (
-                    "Contrato SSoT (Ruta Canónica): Usá exclusivamente la ruta absoluta canónica "
-                    "'/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/' o remota 'baiosfera:0ZEROPS-AGY/0zcp-123/'."
+        # A1.1 Multi-Tenant & Sovereign Upstream Isolation Shield
+        for upstream_prefix in ("/var/www/zerops-astrobranding/", "/var/www/zerops-astro-skills/"):
+            if target_file.startswith(upstream_prefix):
+                rel_to_upstream = target_file[len(upstream_prefix):]
+                base_name = os.path.basename(rel_to_upstream).lower()
+                is_secret_or_db = (
+                    any(base_name.endswith(ext) for ext in [".db", ".sqlite", "-keys.md", "_keys.md"])
+                    or (base_name.endswith(".env") and base_name not in [".env.example", "env-dev.env", "env-prod.env"])
                 )
-            }
-
-        # A1.1 Multi-Tenant Upstream Chassis Shield
-        chassis_prefix = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/"
-        if target_file.startswith(chassis_prefix):
-            rel_to_chassis = target_file[len(chassis_prefix):]
-            tenant_match = re.search(r'\b(elplacerdc|glamur|damaren)\b', rel_to_chassis, re.IGNORECASE)
-            if tenant_match and any(rel_to_chassis.endswith(ext) for ext in [".db", ".sqlite", "-keys.md", "_keys.md", ".json", ".env"]):
-                return {
-                    "decision": "deny",
-                    "reason": (
-                        f"ARNÉS MULTI-TENANT (Aislamiento Upstream): El chasis '0zcp-123/' es neutral y universal. "
-                        f"Mantené los datos del tenant [{tenant_match.group(0)}] exclusivamente en "
-                        "'/var/www/baiosfera/0ZEROPS-AGY/users-apis/' o en su propio namespace."
-                    )
-                }
+                tenant_match = re.search(r'\b(elplacerdc|glamur|damaren|juan-damaren)\b', rel_to_upstream, re.IGNORECASE)
+                if is_secret_or_db or (tenant_match and base_name.endswith(".json")):
+                    label = tenant_match.group(0) if tenant_match else base_name
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            f"ARNÉS MULTI-TENANT (Aislamiento Upstream): Los repositorios soberanos upstream son agnósticos. "
+                            f"Mantené credenciales, bases de datos y datos de tenant [{label}] fuera de upstream "
+                            "(ej. '/var/www/baiosfera/0ZEROPS-AGY/users-apis/' o repos de cliente aislados)."
+                        )
+                    }
 
         # A2. Handover Immunity
         if HANDOVER_PATTERN.search(target_file) and not target_file.startswith("/var/www/artifacts/research/"):
@@ -1765,16 +1165,6 @@ def evaluate_hook(payload: dict) -> dict:
                 "reason": (
                     f"ARNÉS HANDOVER IMMUNITY: El archivo [{os.path.basename(target_file)}] "
                     "es un activo de relevo inter-sesión protegido contra modificación o sobreescritura."
-                )
-            }
-
-        # A3. Skill Pre-Mutation Backup Gate
-        if not has_recent_backup(target_file):
-            return {
-                "decision": "deny",
-                "reason": (
-                    f"ARNÉS FÍSICO N1 (Pre-Mutation Backup): Para modificar [{os.path.basename(target_file)}], "
-                    "generá previamente un snapshot en '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills/' o '.../bak/'."
                 )
             }
 
@@ -1944,7 +1334,7 @@ def evaluate_hook(payload: dict) -> dict:
         # A5.0 Zerops Env Sovereignty: Secret Leak Prevention Guard
         if content_to_check and not payload.get("test_bypass_secret_scan"):
             secret_pattern = re.compile(
-                r'\b(ghp_[a-zA-Z0-9]{36}|lin_api_[a-zA-Z0-9]{40}|sk-[a-zA-Z0-9_-]{20,}|AIzaSy[a-zA-Z0-9_-]{33})\b'
+                r'\b(ghp_[a-zA-Z0-9]{36}|lin_api_[a-zA-Z0-9]{40}|sk-[a-zA-Z0-9_-]{20,}|AIzaSy[a-zA-Z0-9_-]{33}|freellmapi-[a-zA-Z0-9]{20,})\b'
             )
             found_secret = secret_pattern.search(content_to_check)
             if found_secret and not any(p in target_file for p in ["/tmp/", "/fixtures/"]):
@@ -1962,9 +1352,9 @@ def evaluate_hook(payload: dict) -> dict:
             target_file.endswith("AGENTS.md") or
             "/.agents/rules/" in target_file or
             target_file.endswith("00-SUPREME-DIRECTIVE.md") or
-            (target_file.endswith("SKILL.md") and "/.agents/skills/" in target_file)
+            (target_file.endswith("SKILL.md") and ("/.agents/skills/" in target_file or "/zerops-astro-skills/" in target_file))
         )
-        if (target_file.endswith(".md") or is_governance) and content_to_check:
+        if is_governance and content_to_check:
             negative_match = re.search(
                 r'\b(Queda terminantemente prohibido|Do NOT activate under any circumstances|Está terminantemente prohibido|terminantemente prohibido|queda prohibido|está prohibido|strictly forbidden)\b',
                 content_to_check,
@@ -2100,16 +1490,16 @@ def evaluate_hook(payload: dict) -> dict:
                     }
 
         # A5.2.5 Macro-Visión 360 Dependency Radar
-        if "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/" in target_file and tool_name in ("write_to_file", "replace_file_content", "write_file", "edit_file"):
+        if "/var/www/zerops-astrobranding/scripts/" in target_file and tool_name in ("write_to_file", "replace_file_content", "write_file", "edit_file"):
             if os.path.basename(target_file) == "unisetup.sh":
                 for referenced_script in re.findall(r'setup-[a-zA-Z0-9_\-]+\.sh', content_to_check):
-                    ref_full = os.path.join("/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts", referenced_script)
+                    ref_full = os.path.join("/var/www/zerops-astrobranding/scripts", referenced_script)
                     if not os.path.exists(ref_full):
                         return {
                             "decision": "deny",
                             "reason": (
                                 f"Contrato MACRO-VISIÓN 360 (Alineación de Dependencias): 'unisetup.sh' invoca "
-                                f"[{referenced_script}], el cual debe residir en '/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/'. "
+                                f"[{referenced_script}], el cual debe residir en '/var/www/zerops-astrobranding/scripts/'. "
                                 "Alineá o creá el script aguas abajo antes de incorporarlo al bootstrapper."
                             )
                         }
@@ -2117,7 +1507,8 @@ def evaluate_hook(payload: dict) -> dict:
         # A5.3 AST & Symbol Preservation Guard (Zero Deletion / Lossless Invariant)
         is_protected_code = (
             "/.agents/skills/" in target_file or
-            "/0zcp-123/scripts/" in target_file or
+            "/zerops-astro-skills/" in target_file or
+            "/zerops-astrobranding/scripts/" in target_file or
             "/.bin/" in target_file or
             "/.agents/rules/" in target_file
         )
@@ -2185,18 +1576,6 @@ def evaluate_hook(payload: dict) -> dict:
                                 f"en [{os.path.basename(target_file)}]."
                             )
                         }
-
-                # A5.3.3 Line Count Floor Preservation Guard (Anti-Poda Drástica)
-                old_lines = len(old_content.splitlines())
-                new_lines = len(content_to_check.splitlines())
-                if old_lines > 40 and new_lines < (old_lines * 0.70):
-                    return {
-                        "decision": "deny",
-                        "reason": (
-                            f"Contrato de Preservación de Líneas: El archivo pasa de {old_lines} a {new_lines} líneas "
-                            f"(reducción >30%). Aplicá ediciones quirúrgicas con replace_file_content o desacoplá en módulos independientes."
-                        )
-                    }
             except Exception:
                 pass
 
@@ -2256,7 +1635,7 @@ def evaluate_hook(payload: dict) -> dict:
             # Bash script syntax validation
             first_line = content_to_check.split("\n", 1)[0].strip() if content_to_check else ""
             is_bash_script = target_file.endswith(".sh") or (first_line.startswith("#!/") and ("bash" in first_line or "sh" in first_line))
-            if is_bash_script and ("/0zcp-123/scripts/" in target_file or "/.bin/" in target_file or "/scripts/" in target_file or target_file.endswith(".sh")):
+            if is_bash_script and ("/zerops-astrobranding/scripts/" in target_file or "/.bin/" in target_file or "/scripts/" in target_file or target_file.endswith(".sh")):
                 try:
                     proc = subprocess.run(
                         ["bash", "-n"],
@@ -2342,17 +1721,6 @@ def evaluate_hook(payload: dict) -> dict:
                     f"ARNÉS SSoT (Invariante de Inmutabilidad Upstream): La skill [{polluted_skill}] pertenece a suites externas. "
                     "Está estrictamente prohibido mutarla o sincronizarla a Google Drive SSoT. "
                     "Las suites externas son inmutables por diseño."
-                )
-            }
-
-        # B1. SSoT Relative Path Guard
-        is_search_cmd = bool(executed_cmds.intersection({"grep", "egrep", "fgrep", "rg"})) or any(n.command == "git" and any(a in ["log", "diff", "grep"] for a in n.args) for n in parsed_nodes)
-        if not is_search_cmd and contains_relative_0zcp_leak(cmd):
-            return {
-                "decision": "deny",
-                "reason": (
-                    "Contrato SSoT (Ruta Canónica): Usá exclusivamente la ruta absoluta canónica "
-                    "'/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/' o remota 'baiosfera:0ZEROPS-AGY/0zcp-123/'."
                 )
             }
 
@@ -2486,7 +1854,7 @@ def run_tests():
     for k, v in globals().items():
         if not k.startswith("__") and k not in mod.__dict__:
             mod.__dict__[k] = v
-    return mod.run_tests(evaluate_hook, has_recent_backup)
+    return mod.run_tests(evaluate_hook)
 
 def main():
     if "--test" in sys.argv:

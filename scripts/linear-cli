@@ -179,23 +179,34 @@ function discoverServices() {
  * Validates physical tests across dynamically discovered services and universal sensors.
  */
 function validateApplicationTests() {
-  console.log("🛡️ [F5 Reality Gate] Verificando tests físicos de la aplicación en runtime...");
+  console.log("🛡️ [F5 Reality Gate] Verificando tests físicos reales...");
   const services = discoverServices();
   let executedCount = 0;
 
   for (const svc of services) {
     const svcPath = path.join("/var/www", svc);
     const pkgPath = path.join(svcPath, "package.json");
-    const isPython = fs.existsSync(path.join(svcPath, "requirements.txt")) || fs.existsSync(path.join(svcPath, "agent.py")) || fs.existsSync(path.join(svcPath, "main.py")) || fs.existsSync(path.join(svcPath, "pytest.ini"));
+    const isPython = fs.existsSync(path.join(svcPath, "requirements.txt")) || fs.existsSync(path.join(svcPath, "pyproject.toml")) || fs.existsSync(path.join(svcPath, "pytest.ini"));
     const hasPytestIni = fs.existsSync(path.join(svcPath, "pytest.ini"));
     const hasTestsDir = fs.existsSync(path.join(svcPath, "tests")) || fs.existsSync(path.join(svcPath, "test"));
     let hasPkgTest = false;
     try {
       if (fs.existsSync(pkgPath)) {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-        hasPkgTest = Boolean(pkg.scripts && pkg.scripts.test);
+        hasPkgTest = Boolean(pkg.scripts && pkg.scripts.test && !String(pkg.scripts.test).includes("no test specified"));
       }
     } catch (e) {}
+
+    // Sovereign local repos run locally on ZCP; runtime containers run via SSH in container
+    const isLocalRepo = ["zerops-astrobranding", "zerops-astro-skills"].includes(svc);
+    if (isLocalRepo) {
+      if (fs.existsSync(path.join(svcPath, "scripts/hooks/tool-guard.py"))) {
+        console.log("🧪 [F5 Reality Gate] Ejecutando tool-guard.py --test...");
+        execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(svcPath, "scripts/hooks/tool-guard.py")} --test`, { stdio: "inherit", timeout: 90000 });
+        executedCount++;
+      }
+      continue;
+    }
 
     if (hasPkgTest || (isPython && (hasPytestIni || hasTestsDir)) || hasTestsDir) {
       let testCmd = "bun test";
@@ -204,31 +215,29 @@ function validateApplicationTests() {
       } else if (isPython) {
         testCmd = hasPytestIni ? "pytest" : "python3 -m unittest discover tests";
       }
-      console.log(`🧪 [F5 Reality Gate] Ejecutando suite de pruebas en "${svc}" (${testCmd})...`);
+      console.log(`🧪 [F5 Reality Gate] Ejecutando suite en "${svc}" (${testCmd})...`);
       try {
         execSync(`ssh ${svc} "cd /var/www && ${testCmd}"`, { stdio: "inherit", timeout: 60000 });
         executedCount++;
-        console.log(`✅ [F5 Reality Gate] Tests en "${svc}" validados con éxito (${testCmd} exit code 0).`);
+        console.log(`✅ [F5 Reality Gate] Tests en "${svc}" exit code 0.`);
       } catch (testErr) {
         console.error(`❌ F5 REALITY GATE RECHAZADO: Fallaron los tests en "${svc}".`);
-        console.error("Prohibido marcar Done en Linear mientras la suite de pruebas físicas esté fallando.");
         process.exit(1);
       }
     }
   }
 
   if (executedCount === 0) {
-    console.log("ℹ️ [F5 Reality Gate] No se detectaron suites de pruebas activas en servicios candidatos.");
+    console.warn("⚠️ [F5 Reality Gate] 0 suites de aplicación ejecutadas para los servicios activos.");
   }
 
-  // Universal Skills Sensor validation
   if (fs.existsSync("/var/www/.bin/skills-suite-validate")) {
-    console.log("🛡️ [F5 Reality Gate] Ejecutando Sensor Universal de Habilidades (skills-suite-validate)...");
+    console.log("🛡️ [F5 Reality Gate] Ejecutando skills-suite-validate...");
     try {
-      execSync("/var/www/.bin/skills-suite-validate", { stdio: "inherit", timeout: 90000 });
-      console.log("✅ [F5 Reality Gate] Sensor Universal de Habilidades validado (exit code 0).");
+      execSync("/var/www/.bin/skills-suite-validate -q", { stdio: "inherit", timeout: 90000 });
+      console.log("✅ [F5 Reality Gate] skills-suite-validate exit code 0.");
     } catch (err) {
-      console.error("❌ F5 REALITY GATE RECHAZADO: Falló la validación de habilidades.");
+      console.error("❌ F5 REALITY GATE RECHAZADO: Falló skills-suite-validate.");
       process.exit(1);
     }
   }
@@ -236,57 +245,53 @@ function validateApplicationTests() {
 
 /**
  * Physical Definition of Done (DoD) Verifier:
- * 1. Checks that services declared in ticket are deployed in Zerops (deployed: true).
- * 2. Executes curl / endpoint probes defined in DoD (must exit 0 and return HTTP 200).
+ * 1. Discovers runtime services dynamically from zerops_discover cache (fails closed on infra tickets if cache absent).
+ * 2. Executes curl / endpoint probes defined in DoD (must exit 0).
  */
 function validateIssueDoD(resolvedIssue) {
   if (!resolvedIssue || !resolvedIssue.description) return;
-  console.log(`🛡️ [F5 Reality Gate] Verificando Definition of Done físico para [${resolvedIssue.identifier || resolvedIssue.id}]...`);
+  console.log(`🛡️ [F5 Reality Gate] Verificando DoD físico para [${resolvedIssue.identifier || resolvedIssue.id}]...`);
 
   const desc = resolvedIssue.description;
   const title = resolvedIssue.title || "";
-
-  // 1. Check for undeployed runtime services mentioned in ticket
-  const KNOWN_SERVICES = ["freellmapi", "bifrost", "hermes", "paperclip", "pidev", "webdev", "webprod"];
-  const isInfraTicket = /(aprovisionar|provision|desplegar|deploy|infraestructura|subdominio|puerto|runtime)/i.test(title + " " + desc);
+  const isInfraTicket = /(aprovisionar|provision|desplegar|deploy|infraestructura|subdominio|puerto|runtime|zerops_import)/i.test(title + " " + desc);
 
   if (isInfraTicket) {
     const cacheFile = "/tmp/.zerops_discover_cache.json";
-    if (fs.existsSync(cacheFile)) {
-      try {
-        const cache = JSON.parse(fs.readFileSync(cacheFile, "utf-8"));
-        const services = cache.services || [];
-        for (const svc of KNOWN_SERVICES) {
-          const mentioned = new RegExp(`\\b${svc}\\b`, "i").test(title + " " + desc);
-          if (mentioned) {
-            const svcInfo = services.find(s => s.hostname === svc);
-            if (svcInfo && svcInfo.deployed === false) {
-              console.error(`❌ F5 REALITY GATE RECHAZADO: El servicio "${svc}" tiene deployed: false en Zerops.`);
-              console.error(`   El hito [${resolvedIssue.identifier || resolvedIssue.id}] declara infraestructura/despliegue para "${svc}".`);
-              console.error(`   Prohibido marcar Done hasta que el servicio esté formalmente desplegado en Zerops con zerops_deploy.`);
-              process.exit(1);
-            }
-          }
+    if (!fs.existsSync(cacheFile)) {
+      console.error(`❌ F5 REALITY GATE RECHAZADO: Ticket de infraestructura/runtime sin estado vivo de Zerops (${cacheFile} ausente).`);
+      console.error("   Ejecutá 'zerops_discover' antes de marcar Done para verificar deployed: true en vivo.");
+      process.exit(1);
+    }
+    try {
+      const cache = JSON.parse(fs.readFileSync(cacheFile, "utf-8"));
+      const services = cache.services || [];
+      for (const svcInfo of services) {
+        const svc = svcInfo.hostname;
+        if (!svc) continue;
+        const mentioned = new RegExp(`\\b${svc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(title + " " + desc);
+        if (mentioned && svcInfo.deployed === false && !svcInfo.isInfrastructure) {
+          console.error(`❌ F5 REALITY GATE RECHAZADO: El servicio "${svc}" tiene deployed: false en Zerops.`);
+          console.error("   Prohibido marcar Done hasta completar zerops_deploy en vivo.");
+          process.exit(1);
         }
-      } catch (e) {}
+      }
+    } catch (e) {
+      console.error(`❌ Error leyendo ${cacheFile}: ${e.message}`);
+      process.exit(1);
     }
   }
 
-  // 2. Extract curl assertions from DoD
   const curlMatches = desc.match(/curl\s+[^`\n\r|]+/g) || [];
   for (const rawCurl of curlMatches) {
-    let cleanCurl = rawCurl.trim();
-    cleanCurl = cleanCurl.replace(/^[`'"]+|[`'"]+$/g, "");
+    let cleanCurl = rawCurl.trim().replace(/^[`'"]+|[`'"]+$/g, "");
     if (!cleanCurl.includes("http")) continue;
-
-    console.log(`📡 [F5 Gate DoD] Ejecutando aserción física: ${cleanCurl}`);
+    console.log(`📡 [F5 Gate DoD] Ejecutando sonda: ${cleanCurl}`);
     try {
       execSync(cleanCurl, { stdio: "pipe", timeout: 10000 });
-      console.log(`✅ [F5 Gate DoD] Sonda física exitosa (HTTP 200 / exit 0): ${cleanCurl}`);
+      console.log(`✅ [F5 Gate DoD] Sonda exitosa: ${cleanCurl}`);
     } catch (curlErr) {
-      console.error(`❌ F5 REALITY GATE RECHAZADO: Falló la aserción física del DoD en [${resolvedIssue.identifier || resolvedIssue.id}]:`);
-      console.error(`   Comando: ${cleanCurl}`);
-      console.error("Prohibido marcar Done en Linear si los endpoints o sondas del DoD no responden físicamente en vivo.");
+      console.error(`❌ F5 REALITY GATE RECHAZADO: Falló sonda del DoD (${cleanCurl}).`);
       process.exit(1);
     }
   }
@@ -299,29 +304,12 @@ function checkGitParity() {
   const baseDir = "/var/www";
   const repos = [];
 
-  if (process.env.LINEAR_SERVICE) {
-    if (fs.existsSync(path.join(baseDir, "scratch/repo/.git"))) {
-      repos.push(path.join(baseDir, "scratch/repo"));
-    }
-    const svcRepo = path.join(baseDir, process.env.LINEAR_SERVICE);
-    if (fs.existsSync(path.join(svcRepo, ".git"))) {
-      repos.push(svcRepo);
-    }
+  if (process.env.LINEAR_SERVICE && fs.existsSync(path.join(baseDir, process.env.LINEAR_SERVICE, ".git"))) {
+    repos.push(path.join(baseDir, process.env.LINEAR_SERVICE));
   } else {
-    // Sovereign repositories that must maintain strict git parity with upstream
-    const sovereignRepos = ["zerops-astrobranding", "zerops-astro-skills"];
-    for (const name of sovereignRepos) {
+    for (const name of ["zerops-astrobranding", "zerops-astro-skills"]) {
       const repoPath = path.join(baseDir, name);
-      if (fs.existsSync(path.join(repoPath, ".git"))) {
-        repos.push(repoPath);
-      }
-    }
-    // Also verify customer app repositories if actively cloned under /var/www
-    for (const appName of ["webdev", "webprod"]) {
-      const appPath = path.join(baseDir, appName);
-      if (fs.existsSync(path.join(appPath, ".git"))) {
-        repos.push(appPath);
-      }
+      if (fs.existsSync(path.join(repoPath, ".git"))) repos.push(repoPath);
     }
   }
 
@@ -841,6 +829,13 @@ async function main() {
       process.exit(1);
     }
 
+    const resolvedBatch = [];
+    for (const rawId of issueIds) {
+      const r = await resolveIssueId(rawId);
+      if (r?.id) resolvedBatch.push(r);
+      else console.error(`⚠️ Issue ${rawId} not found, skipping.`);
+    }
+
     if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
       if (!evidence || evidence.trim().length < 10) {
         console.error("❌ F5 REALITY GATE RECHAZADO (Anti-Checklist Theater):");
@@ -850,7 +845,9 @@ async function main() {
       }
 
       validateApplicationTests();
-      validateIssueDoD(resolved);
+      for (const r of resolvedBatch) {
+        validateIssueDoD(r);
+      }
 
       console.log("🛡️ [F5 Gate Batch] Validating SSoT Parity & Git Push once for batch...");
       try {
@@ -873,13 +870,8 @@ async function main() {
       }
     `;
 
-    for (const rawId of issueIds) {
+    for (const resolved of resolvedBatch) {
       try {
-        const resolved = await resolveIssueId(rawId);
-        if (!resolved?.id) {
-          console.error(`⚠️ Issue ${rawId} not found, skipping.`);
-          continue;
-        }
 
         if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
           const commentBody = `### 🏁 Cierre de Hito (F5 Reality Attestation Batch)\n\n**Evidencia Física:**\n${evidence}\n\n*Validado automáticamente por linear-cli con sensores físicos exit code 0.*`;
@@ -896,10 +888,10 @@ async function main() {
         if (updateRes?.issueUpdate?.success && updated) {
           console.log(`✅ [${updated.identifier}] -> "${updated.state?.name}"`);
         } else {
-          console.error(`❌ Failed to update ${rawId}`);
+          console.error(`❌ Failed to update ${resolved.identifier || resolved.id}`);
         }
       } catch (e) {
-        console.error(`❌ Error updating ${rawId}:`, e.message);
+        console.error(`❌ Error updating ${resolved.identifier || resolved.id}:`, e.message);
       }
     }
     recordLinearActivity("update-status-batch", issueIds.join(","));

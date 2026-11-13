@@ -85,8 +85,10 @@ cat > "$PERSISTENT_GEMINI/config/mcp_config.json" << EOF
 }
 EOF
 
-# Sincronizar configuración MCP en todos los perfiles
+# Sincronizar configuración MCP en todos los perfiles con permisos restrictivos (600)
+chmod 600 "$PERSISTENT_GEMINI/config/mcp_config.json"
 cp "$PERSISTENT_GEMINI/config/mcp_config.json" "$PERSISTENT_GEMINI/antigravity-cli/mcp_config.json"
+chmod 600 "$PERSISTENT_GEMINI/antigravity-cli/mcp_config.json"
 
 for base_dir in "$HOME/.gemini" "/home/zerops/.gemini" "/root/.gemini"; do
     if [ -d "$base_dir" ] || [ "$base_dir" = "$HOME/.gemini" ]; then
