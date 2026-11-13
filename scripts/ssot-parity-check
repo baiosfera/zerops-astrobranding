@@ -183,7 +183,7 @@ fi
 # 2.1 Python Tooling Syntax (In-Memory AST, 0 bytes en disco) & Bytecode Hygiene
 echo "--- Checking Python Tooling Syntax & Bytecode Hygiene (Zero Disk Writes) ---"
 PYTHON_SCRIPTS=(
-    "mcv_downloader.py"
+    "mega_downloader.py"
     "nlm_tutor.py"
 )
 for py_script in "${PYTHON_SCRIPTS[@]}"; do
@@ -199,8 +199,8 @@ for py_script in "${PYTHON_SCRIPTS[@]}"; do
     fi
 done
 
-if [ -f "/var/www/baiosfera/CURSOS/MCV/mcv_downloader.py" ]; then
-    compare_files "mcv_downloader.py runtime parity" "/var/www/baiosfera/CURSOS/MCV/mcv_downloader.py" "$DRIVE_BASE/scripts/mcv_downloader.py"
+if [ -f "$DRIVE_BASE/scripts/mega_downloader.py" ] && [ -f "$LOCAL_BASE/zerops-astrobranding/scripts/mega_downloader.py" ]; then
+    compare_files "mega_downloader.py parity" "$LOCAL_BASE/zerops-astrobranding/scripts/mega_downloader.py" "$DRIVE_BASE/scripts/mega_downloader.py"
 fi
 
 if [ -d "$DRIVE_BASE/scripts/__pycache__" ]; then
