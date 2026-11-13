@@ -1172,6 +1172,23 @@ if [ -f "$PROJECT_ROOT/gdrive.env" ]; then
 fi
 rm -f "$PROJECT_ROOT/.env" "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT"/key*.md "$PROJECT_ROOT"/key*.env 2>/dev/null || true
 
+# 4b2. Higiene física de cachés efímeros en ZCP (npm/_npx/_cacache/uv) para evitar disparo de disco
+echo "• [4b2/4] Limpiando cachés efímeros de npm, _npx huérfanos y uv..."
+npm cache clean --force >/dev/null 2>&1 || rm -rf "$HOME/.npm/_cacache" 2>/dev/null || true
+if command -v uv >/dev/null 2>&1; then
+    uv cache clean >/dev/null 2>&1 || true
+else
+    rm -rf "$HOME/.cache/uv" 2>/dev/null || true
+fi
+if [ -d "$HOME/.npm/_npx" ]; then
+    for npx_dir in "$HOME/.npm/_npx"/*; do
+        [ -d "$npx_dir" ] || continue
+        if grep -q '"paperclipai"' "$npx_dir/package.json" 2>/dev/null; then
+            rm -rf "$npx_dir" 2>/dev/null || true
+        fi
+    done
+fi
+
 # 4c. Instalar utilidad global zcp-update para actualizaciones ultrarrápidas (< 3s)
 if [ -w /usr/local/bin ] || command -v sudo >/dev/null 2>&1; then
     cat << 'UEOF' | sudo tee /usr/local/bin/zcp-update > /dev/null

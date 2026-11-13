@@ -322,3 +322,10 @@ paperclipai auth bootstrap-ceo
 
 All services (`hermes`, `paperclip`, `crewai`, `bifrost`, `freellmapi`, `webprod`, `evolution`, `database`, `valkey`, `nats`, `localstorage`) run in independent Incus LXC containers.
 The control plane container (`zcp`) can be stopped (`zcli service stop zcp`) without affecting live Telegram operations, Paperclip governance, or scheduled autonomous swarms.
+
+## 9. Frugalidad de Disco, RAM y `deployFiles` (Invariante Anti-Bloat)
+
+* **`zcp` (`verticalAutoscaling`):** Configurar `minCpu: 1`, `minRam: 1`, `minFreeRamGB: 0.75` (`SHARED`) para evitar reservas de ~5.7 GB RAM innecesarias. Limpiar `~/.npm/_cacache`, `~/.npm/_npx` huérfanos (ej. `paperclipai`) y `~/.cache/uv` vía `iniciar.sh` / `zcp-update`.
+* **`paperclip` (`deployFiles`):** Nunca desplegar `devDependencies`, `.git`, `tests`, `docs`, `ui/src`, `ui/storybook` ni `.map` al contenedor de `run`. Compilar `@paperclipai/db` (`node packages/db/dist/migrate.js`) y ejecutar `CI=true pnpm prune --prod` al final de `buildCommands`.
+* **`hermes` (`vendor/`):** Instalar con `pip install --no-cache-dir` y purgar `__pycache__` en `./vendor`. Si no se usa memoria vectorial local de CrewAI (`lancedb`/`pyarrow`/`onnxruntime`/`chromadb`), omitir `crewai` para bajar `vendor/` de ~461 MB a <80 MB.
+* **PostgreSQL (`database`):** El perfil `oltp-hobby` fija `minCpu: 1`. Los datos suelen ser <200 MB; vigilar retención de `db.public.logs` de Bifrost (~42 KB/fila).

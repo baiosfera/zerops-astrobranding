@@ -2,7 +2,7 @@
 
 > **Destino:** Para cualquier Agente AGY en cualquier entorno ZCP / Proyecto Zerops.  
 > **Fundamento:** Estado del Arte Zerops (Octubre 2026), Arquitectura Lego Desacoplada, Worker WhatsApp Dedicado, SSoT Dinámico en PostgreSQL 18 y Matriz de Blindajes Físicos (268 BAI).  
-> **Ubicación Canónica:** `/var/www/artifacts/templates/prompt-universal-despliegue-zerops.md`
+> **Ubicación Canónica:** `/var/www/artifacts/blueprints/prompt-universal-despliegue-zerops.md`
 
 ---
 
