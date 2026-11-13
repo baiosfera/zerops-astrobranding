@@ -13,6 +13,7 @@ zerops:
       buildCommands:
         - pnpm install --no-frozen-lockfile
         - pnpm --filter @paperclipai/db build
+        - ./node_modules/.bin/esbuild packages/db/src/migrate.ts --bundle --platform=node --format=esm --external:postgres --external:drizzle-orm --external:embedded-postgres --outfile=packages/db/dist/migrate.mjs
         - pnpm --filter @paperclipai/ui build
         - pnpm --filter @paperclipai/plugin-sdk build
         - PAPERCLIP_TSC_EMIT_ONLY=1 pnpm --filter @paperclipai/server build
@@ -37,7 +38,7 @@ zerops:
           httpSupport: true
       initCommands:
         - sudo mkdir -p /mnt/localstorage/paperclip/storage /mnt/localstorage/paperclip/instances/default && sudo chown -R zerops:zerops /mnt/localstorage/paperclip && sudo chmod -R 777 /mnt/localstorage/paperclip
-        - node packages/db/dist/migrate.js || true
+        - node packages/db/dist/migrate.mjs || true
       envVariables:
         PORT: "3100"
         HOST: "0.0.0.0"
