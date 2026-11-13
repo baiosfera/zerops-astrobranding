@@ -1,123 +1,164 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Seed FreeLLMAPI Declarative Configuration in Zerops (Sovereign Secret Injection)
-# Usage: ./scripts/seed-freellmapi-keys.sh [--keys /path/to/keys.md]
+# Seed FreeLLMAPI & AI Mesh Shared Vault Secrets (v3.0 Declarative SSoT)
+# Compiles BOTH primary free-tier pools (baiosfera_freellm.md + damaren_freellm.md)
+# and upserts all runtime Vault secrets directly into Zerops Project Shared Vault.
+# Usage: ./scripts/seed-freellmapi-keys.sh [--keys <file>] [--pool <md>] [--rotate] [--dry-run] [--restart]
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
 
 log_info() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 log_ok()   { echo -e "\033[1;32m[OK]\033[0m $*"; }
 log_warn() { echo -e "\033[1;33m[WARN]\033[0m $*"; }
 log_err()  { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; }
 
-KEYS_FILE="${1:-}"
-ADMIN_EMAIL="${FREELLMAPI_ADMIN_EMAIL:-admin@${PROJECT_NAME:-localhost}.internal}"
-if [ -z "${FREELLMAPI_ADMIN_PASSWORD:-}" ]; then
-    ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9!@#%')
-else
-    ADMIN_PASSWORD="$FREELLMAPI_ADMIN_PASSWORD"
-fi
+KEYS_FILE=""
+ROTATE=false
+DRY_RUN=false
+SKIP_RESTART=true
+PROJECT_OVERRIDE=""
+EXTRA_POOLS=()
 
-python3 - <<EOF
-import os, sys, re, json, subprocess
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --keys|-k)
+            KEYS_FILE="${2:-}"
+            shift 2
+            ;;
+        --pool)
+            EXTRA_POOLS+=("${2:-}")
+            shift 2
+            ;;
+        --project|-p)
+            PROJECT_OVERRIDE="${2:-}"
+            shift 2
+            ;;
+        --rotate)
+            ROTATE=true
+            shift
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --restart)
+            SKIP_RESTART=false
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: seed-freellmapi-keys.sh [--keys <keys.md>] [--pool <freellm.md>] [--project <name>] [--rotate] [--dry-run] [--restart]"
+            exit 0
+            ;;
+        *)
+            if [ -z "$KEYS_FILE" ] && [ -f "$1" ]; then
+                KEYS_FILE="$1"
+            fi
+            shift
+            ;;
+    esac
+done
 
-keys_file = "$KEYS_FILE"
-admin_email = "$ADMIN_EMAIL"
-admin_password = "$ADMIN_PASSWORD"
+log_info "Compiling FreeLLMAPI multi-account declarative configuration and Shared Vault secrets..."
 
-def parse_markdown(filepath):
-    keys = {}
-    current_platform = None
-    if not os.path.exists(filepath):
-        return keys
-    with open(filepath, 'r') as f:
-        for line in f:
-            line = line.strip()
-            plat_match = re.search(r'\*\*Plataforma:\*\*\s*\`([^\`]+)\`', line)
-            if plat_match:
-                current_platform = plat_match.group(1).strip()
-            key_match = re.search(r'\*\*API Key:\*\*\s*\`([^\`]+)\`', line)
-            if key_match and current_platform:
-                keys[current_platform] = key_match.group(1).strip()
-    return keys
+PYTHONPATH="$LIB_DIR" python3 - "$KEYS_FILE" "$ROTATE" "$DRY_RUN" "$SKIP_RESTART" "$PROJECT_OVERRIDE" "${EXTRA_POOLS[@]}" << 'EOF_PY'
+import json
+import os
+import sys
+from vault_env import (
+    DEFAULT_FREELLM_POOLS,
+    ZcpVaultClient,
+    build_freellm_declarative_config,
+    collect_freellm_pools,
+    generate_secret,
+    parse_kv_file,
+)
 
-# Candidate locations for free LLM provider keys (brand-agnostic + optional active project)
-proj_key = (os.getenv("ENGRAM_PROJECT") or os.getenv("PROJECT_NAME") or "").lower()
-b_path_candidates = [
-    "/var/www/baiosfera/0ZEROPS-AGY/users-apis/Baiosfera/baiosfera_freellm.md",
-]
-d_path_candidates = [
-    f"/var/www/baiosfera/0ZEROPS-AGY/{proj_key}/apis/freellm_keys.md",
-] if proj_key else []
+keys_file = sys.argv[1].strip()
+rotate = sys.argv[2] == "true"
+dry_run = sys.argv[3] == "true"
+skip_restart = sys.argv[4] == "true"
+project_override = sys.argv[5].strip()
+extra_pools = [p for p in sys.argv[6:] if p]
 
-b_path = next((p for p in b_path_candidates if os.path.exists(p)), "")
-d_path = next((p for p in d_path_candidates if os.path.exists(p)), "")
+kv = parse_kv_file(keys_file) if keys_file else {}
+pools = list(DEFAULT_FREELLM_POOLS)
+for p in extra_pools:
+    if p not in pools:
+        pools.append(p)
 
-b_keys = parse_markdown(b_path) if b_path else {}
-d_keys = parse_markdown(d_path) if d_path else {}
+keys_list, custom_providers, loaded_sources = collect_freellm_pools(pools, extra_kv=kv)
+if not keys_list and not custom_providers:
+    print("[ERROR] No FreeLLM provider keys found in primary pools or keys file.", file=sys.stderr)
+    sys.exit(1)
 
-# Also inspect optional keys_file passed as argument
-if keys_file and os.path.exists(keys_file):
-    with open(keys_file, 'r') as f:
-        content = f.read()
-    for plat in ['groq', 'cerebras', 'opencode', 'openrouter', 'ollama', 'huggingface']:
-        m = re.search(rf'{plat.upper()}_API_KEY=([^\s]+)', content)
-        if m and plat not in b_keys:
-            b_keys[plat] = m.group(1).strip()
+cfg = build_freellm_declarative_config(keys_list, custom_providers)
+cfg_json = json.dumps(cfg, separators=(",", ":"))
 
-keys_list = []
-for plat, key in b_keys.items():
-    if plat != 'aisa' and key:
-        keys_list.append({"platform": plat, "key": key, "label": f"{plat}-primary", "enabled": True})
+print(f"[INFO] Compiled {len(keys_list)} FreeLLM keys from {len(loaded_sources)} pool file(s), {len(cfg['models'])} curated models, {len(cfg['fallback'])} fallback priorities.")
 
-for plat, key in d_keys.items():
-    if plat != 'aisa' and key:
-        keys_list.append({"platform": plat, "key": key, "label": f"{plat}-secondary", "enabled": True})
+if dry_run:
+    print(json.dumps({
+        "dry_run": True,
+        "sources": loaded_sources,
+        "key_labels": [k["label"] for k in keys_list],
+        "model_count": len(cfg["models"]),
+        "fallback_count": len(cfg["fallback"]),
+        "routing": cfg["routing"],
+        "config_json_bytes": len(cfg_json),
+    }, indent=2))
+    sys.exit(0)
 
-custom_providers = []
-aisa_key = b_keys.get('aisa') or d_keys.get('aisa')
-if aisa_key:
-    custom_providers.append({
-        "baseUrl": "https://api.aisa.one/v1",
-        "apiKey": aisa_key,
-        "label": "Aisa One Gateway",
-        "models": [{"model": "gpt-4o-mini", "displayName": "Aisa GPT-4o Mini", "supportsTools": True}]
-    })
+with ZcpVaultClient() as zcp:
+    live_project, existing = zcp.get_project_envs()
+    proj_slug = (project_override or kv.get("PROJECT_NAME") or os.getenv("PROJECT_NAME") or live_project or "zerops").strip()
+    domain_slug = proj_slug.lower().replace(" ", "-")
 
-config = {
-    "admin": {"email": admin_email, "password": admin_password},
-    "keys": keys_list,
-    "customProviders": custom_providers,
-    "routing": {"strategy": "balanced", "keySelectionStrategy": "least-remaining"}
-}
+    payload: dict[str, str] = {
+        "FREEAPI_CONFIG_JSON_SECRET": cfg_json,
+        "PROJECT_NAME": proj_slug,
+    }
+    if "ENGRAM_PROJECT" not in existing:
+        payload["ENGRAM_PROJECT"] = os.getenv("ENGRAM_PROJECT") or proj_slug
 
-json_str = json.dumps(config, separators=(',', ':'))
-print(f"Generated FreeLLMAPI config with {len(keys_list)} keys, {len(custom_providers)} custom providers.")
+    admin_email = (kv.get("FREELLMAPI_ADMIN_EMAIL") or kv.get("FREELLMAPI_EMAIL") or f"admin@{domain_slug}.internal").strip()
+    admin_pass = (kv.get("FREELLMAPI_ADMIN_PASSWORD") or kv.get("FREELLMAPI_PASSWORD") or "").strip()
 
-# Write config directly to destination on persistent volume if mounted or via SSH
-out_file = "/tmp/freellmapi_generated_config.json"
-with open(out_file, "w") as f:
-    f.write(json_str)
+    if rotate or "FREEAPI_ADMIN_EMAIL_SECRET" not in existing:
+        payload["FREEAPI_ADMIN_EMAIL_SECRET"] = admin_email
+    if admin_pass and len(admin_pass) >= 8:
+        payload["FREEAPI_ADMIN_PASSWORD_SECRET"] = admin_pass
+    elif rotate or "FREEAPI_ADMIN_PASSWORD_SECRET" not in existing:
+        payload["FREEAPI_ADMIN_PASSWORD_SECRET"] = generate_secret(24)
 
-EOF
+    if rotate or "FREEAPI_ENCRYPTION_KEY" not in existing:
+        payload["FREEAPI_ENCRYPTION_KEY"] = generate_secret(32, hex_only=True)
 
-if [ -f "/tmp/freellmapi_generated_config.json" ]; then
-    log_info "Transfiriendo configuración a volumen de almacenamiento freellmapi..."
-    if ssh -o BatchMode=yes -o ConnectTimeout=5 freellmapi "test -d /mnt/localstorage/freellmapi" 2>/dev/null; then
-        scp /tmp/freellmapi_generated_config.json freellmapi:/mnt/localstorage/freellmapi/config.json
-        ssh freellmapi "chmod 600 /mnt/localstorage/freellmapi/config.json && cp /mnt/localstorage/freellmapi/config.json /var/www/config.json && echo 'FREELLM_ADMIN_EMAIL=\"$ADMIN_EMAIL\"' | sudo tee -a /etc/environment >/dev/null && echo 'FREELLM_ADMIN_PASSWORD=\"$ADMIN_PASSWORD\"' | sudo tee -a /etc/environment >/dev/null"
-        log_ok "Configuración inyectada con éxito en freellmapi."
-    else
-        log_warn "Servicio freellmapi no alcanzable vía SSH aún. Archivo temporal listo en /tmp/freellmapi_generated_config.json."
-    fi
-    rm -f /tmp/freellmapi_generated_config.json
-fi
+    if rotate or "FREELLMAPI_CLIENT_KEY" not in existing:
+        payload["FREELLMAPI_CLIENT_KEY"] = f"sk-freellmapi-{generate_secret(32)}"
 
-if [ -x "$SCRIPT_DIR/sync-freellm-auth.sh" ]; then
-    log_info "Reconciliando credenciales en base de datos SQLite..."
-    FREELLM_ADMIN_EMAIL="$ADMIN_EMAIL" FREELLM_ADMIN_PASSWORD="$ADMIN_PASSWORD" "$SCRIPT_DIR/sync-freellm-auth.sh" || log_warn "Reconciliación de credenciales diferida."
-fi
-log_ok "Proceso de seeding de claves completado."
+    if rotate or "BIFROST_MASTER_VK" not in existing:
+        payload["BIFROST_MASTER_VK"] = f"vk-bifrost-{generate_secret(28)}"
+
+    if rotate or "PAPERCLIP_BETTER_AUTH_SECRET" not in existing:
+        payload["PAPERCLIP_BETTER_AUTH_SECRET"] = generate_secret(32)
+    if rotate or "PAPERCLIP_SIGNING_SECRET" not in existing:
+        payload["PAPERCLIP_SIGNING_SECRET"] = generate_secret(32)
+
+    pc_email = (kv.get("PAPERCLIP_ADMIN_EMAIL") or admin_email).strip()
+    pc_pass = (kv.get("PAPERCLIP_ADMIN_PASSWORD") or admin_pass or "").strip()
+    if rotate or "PAPERCLIP_ADMIN_EMAIL_SECRET" not in existing:
+        payload["PAPERCLIP_ADMIN_EMAIL_SECRET"] = pc_email
+    if pc_pass and len(pc_pass) >= 8:
+        payload["PAPERCLIP_ADMIN_PASSWORD_SECRET"] = pc_pass
+    elif rotate or "PAPERCLIP_ADMIN_PASSWORD_SECRET" not in existing:
+        payload["PAPERCLIP_ADMIN_PASSWORD_SECRET"] = generate_secret(24)
+
+    summary = zcp.upsert_project_envs(payload, skip_restart=skip_restart)
+    print(f"[INFO] Project '{live_project}' Shared Vault hydrated: upserted {len(payload)} vars (existing_sensitive={summary['existing_sensitive']}, existing_plain={summary['existing_plain']}, new={summary['new_auto']}).")
+EOF_PY
+
+log_ok "FreeLLMAPI & AI Mesh Shared Vault seeding complete."

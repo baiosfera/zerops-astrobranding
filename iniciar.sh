@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# iniciar.sh — Sovereign Lightweight ZCP Bootstrapper (v3.0)
-# Clean, brand-free, binary-free bootstrap for Zerops Control Plane (zcp).
+# iniciar.sh — Sovereign Lightweight ZCP Bootstrapper & Project Vault Hydrator (v3.1)
+# Clean, brand-free bootstrap for Zerops Control Plane (zcp).
+# Supports optional `--keys <path>` (default: users-apis/api_keys_global) to hydrate
+# brand/project secrets & multi-pool FreeLLMAPI config directly into zerops_env.
 # ==============================================================================
 set -euo pipefail
 
@@ -13,20 +15,49 @@ CATALOG_DIR="$REPO_DIR"
 SKILLS_DIR="$BASE_DIR/zerops-astro-skills"
 AGENTS_SKILLS_DIR="$BASE_DIR/.agents/skills"
 LOCAL_BIN="$BASE_DIR/.bin"
-UPDATE_ONLY=false
+DEFAULT_KEYS_FILE="/var/www/baiosfera/0ZEROPS-AGY/users-apis/api_keys_global"
 
-if [ "${1:-}" = "--update" ]; then
-  UPDATE_ONLY=true
-fi
+UPDATE_ONLY=false
+SKIP_VAULT=false
+EXPLICIT_KEYS_FILE=""
+PROJECT_OVERRIDE=""
+
+parse_args() {
+  local args=("$@")
+  local i=0
+  while [ "$i" -lt "${#args[@]}" ]; do
+    case "${args[$i]}" in
+      --update)
+        UPDATE_ONLY=true
+        ;;
+      --skip-vault)
+        SKIP_VAULT=true
+        ;;
+      --keys|-k)
+        i=$((i + 1))
+        EXPLICIT_KEYS_FILE="${args[$i]:-}"
+        ;;
+      --project|-p)
+        i=$((i + 1))
+        PROJECT_OVERRIDE="${args[$i]:-}"
+        ;;
+      -h|--help)
+        echo "Uso: iniciar.sh [--update] [--keys /path/to/keys.md] [--project <slug>] [--skip-vault]"
+        exit 0
+        ;;
+    esac
+    i=$((i + 1))
+  done
+}
 
 log() { echo "[iniciar] $*"; }
 
 install_os_deps() {
   if command -v apt-get >/dev/null 2>&1; then
     sudo apt-get update -qq
-    sudo apt-get install -y -qq curl git jq fuse3 sshfs gettext-base >/dev/null
+    sudo apt-get install -y -qq curl git jq fuse3 sshfs gettext-base python3-yaml >/dev/null
   elif command -v apk >/dev/null 2>&1; then
-    sudo apk add --no-cache curl git jq fuse3 sshfs gettext >/dev/null
+    sudo apk add --no-cache curl git jq fuse3 sshfs gettext py3-yaml >/dev/null
   fi
 }
 
@@ -55,7 +86,7 @@ link_skills() {
 
 link_bin() {
   mkdir -p "$LOCAL_BIN" "$LOCAL_BIN/hooks" "$HOME/.local/bin"
-  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli apotelos brand-play engram-sync engram-mcp; do
+  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli apotelos brand-play engram-sync engram-mcp zeropsenv seed-freellmapi-keys.sh; do
     if [ -f "$CATALOG_DIR/scripts/$s" ]; then
       chmod +x "$CATALOG_DIR/scripts/$s"
       local bin_name="${s%.sh}"
@@ -113,13 +144,54 @@ setup_localstorage() {
   fi
 }
 
+hydrate_project_vault() {
+  [ "$SKIP_VAULT" = true ] && return 0
+
+  local keys_file="${EXPLICIT_KEYS_FILE:-${ZCP_KEYS_FILE:-}}"
+  # Only auto-hydrate without explicit --keys during fresh install (`--update` alone stays read/sync-safe)
+  if [ -z "$keys_file" ] && [ "$UPDATE_ONLY" = false ] && [ -f "$DEFAULT_KEYS_FILE" ]; then
+    keys_file="$DEFAULT_KEYS_FILE"
+  fi
+
+  if [ -z "$keys_file" ]; then
+    if [ "$UPDATE_ONLY" = false ]; then
+      log "WARN: No master keys file detected (expected --keys <path> or $DEFAULT_KEYS_FILE). Run 'zcp-update --update --keys /path/to/keys.md' before deploying runtimes."
+    fi
+    return 0
+  fi
+
+  if [ ! -f "$keys_file" ]; then
+    log "ERROR: Master keys file not found: $keys_file" >&2
+    return 1
+  fi
+
+  local proj_args=()
+  if [ -n "$PROJECT_OVERRIDE" ]; then
+    proj_args=(--project "$PROJECT_OVERRIDE")
+  fi
+
+  if [ -x "$CATALOG_DIR/scripts/setup-keys.sh" ]; then
+    bash "$CATALOG_DIR/scripts/setup-keys.sh" --file "$keys_file" --non-interactive >/dev/null
+  fi
+
+  if [ -x "/usr/local/bin/zcp" ]; then
+    "$LOCAL_BIN/zeropsenv" sync "${proj_args[@]}" "$keys_file"
+    if [ -x "$LOCAL_BIN/seed-freellmapi-keys" ]; then
+      "$LOCAL_BIN/seed-freellmapi-keys" --keys "$keys_file" "${proj_args[@]}"
+    fi
+  else
+    log "WARN: /usr/local/bin/zcp not found; skipped Zerops Vault remote sync."
+  fi
+}
+
 setup_pre_bifrost_deepseek() {
   if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
-    log "DeepSeek V4 API key detected (https://api.deepseek.com) for pre-Bifrost inference."
+    log "DeepSeek API key detected (https://api.deepseek.com) for pre-Bifrost inference."
   fi
 }
 
 main() {
+  parse_args "$@"
   if [ "$UPDATE_ONLY" = false ]; then
     install_os_deps
   fi
@@ -134,6 +206,7 @@ main() {
   sync_governance
   ensure_path
   setup_localstorage
+  hydrate_project_vault
   setup_pre_bifrost_deepseek
   log "Bootstrap complete."
 }

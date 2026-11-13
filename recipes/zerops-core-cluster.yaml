@@ -1,0 +1,91 @@
+# Canonical Core AI & Platform Cluster for Live ZCP Projects (`zerops_import`)
+# Prerequisites:
+#   1. Run `iniciar.sh --keys /path/to/keys.md` (hydrates Project Shared Vault via zerops_env).
+#   2. Ensure `localstorage` exists (provisioned beforehand or via `recipes/services/06-localstorage.yaml`).
+# Runtime configs & cross-service bindings live inside each `baiosfera/runtime-*` repository's `zerops.yaml`.
+services:
+  - hostname: database
+    type: postgresql:single@18
+    profile: oltp-hobby
+    priority: 10
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10
+
+  - hostname: valkey
+    type: valkey:single@7.2
+    profile: hobby
+    priority: 10
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.125
+      minFreeRamPercent: 10
+
+  - hostname: nats
+    type: nats:single@2.12
+    priority: 10
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.125
+      minFreeRamPercent: 10
+
+  - hostname: freellmapi
+    type: ubuntu/nodejs@24
+    buildFromGit: https://github.com/baiosfera/runtime-freellmapi
+    enableSubdomainAccess: true
+    priority: 8
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10
+
+  - hostname: bifrost
+    type: alpine/go@1.22
+    buildFromGit: https://github.com/baiosfera/runtime-bifrost
+    enableSubdomainAccess: true
+    priority: 6
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10
+
+  - hostname: hermes
+    type: ubuntu/python@3.12
+    buildFromGit: https://github.com/baiosfera/runtime-hermes
+    enableSubdomainAccess: true
+    priority: 4
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.5
+      minFreeRamPercent: 10
+
+  - hostname: pidev
+    type: ubuntu/nodejs@26
+    buildFromGit: https://github.com/baiosfera/runtime-pidev
+    enableSubdomainAccess: true
+    priority: 4
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.25
+      minFreeRamPercent: 10
+
+  - hostname: paperclip
+    type: ubuntu/nodejs@26
+    buildFromGit: https://github.com/baiosfera/runtime-paperclip
+    enableSubdomainAccess: true
+    priority: 4
+    minContainers: 1
+    maxContainers: 1
+    verticalAutoscaling:
+      cpuMode: SHARED
+      minFreeRamGB: 0.5
+      minFreeRamPercent: 10

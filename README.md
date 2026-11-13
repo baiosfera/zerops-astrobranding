@@ -7,17 +7,19 @@
 
 ## Day-0 Cold Start on a Fresh `zcp` Container
 
-1. **Bootstrap Control Plane & Sovereign CLIs:**
+1. **Bootstrap Control Plane, Sovereign CLIs & Shared Vault Hydration:**
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/baiosfera/zerops-astrobranding/main/iniciar.sh | bash -s -- --keys /var/www/baiosfera/0ZEROPS-AGY/users-apis/api_keys_global
    ```
-   Installs OS prerequisites (`curl`, `git`, `jq`, `fuse3`, `sshfs`, `gettext-base`), clones `zerops-astrobranding` and `zerops-astro-skills` into `/var/www`, symlinks skills into `/var/www/.agents/skills`, symlinks sovereign CLIs into `/var/www/.bin` and `~/.local/bin`, syncs `AGENTS.md`, `.agents/rules/00-SUPREME-DIRECTIVE.md`, and `.agents/hooks.json`, and exposes `/usr/local/bin/zcp-update` (`iniciar.sh --update`).
+   Installs OS prerequisites (`curl`, `git`, `jq`, `fuse3`, `sshfs`, `gettext-base`, `python3-yaml`), clones `zerops-astrobranding` and `zerops-astro-skills` into `/var/www`, symlinks skills into `/var/www/.agents/skills`, symlinks sovereign CLIs into `/var/www/.bin` and `~/.local/bin`, syncs `AGENTS.md`, `.agents/rules/00-SUPREME-DIRECTIVE.md`, and `.agents/hooks.json`, and exposes `/usr/local/bin/zcp-update` (`iniciar.sh --update`).
+   When passed `--keys <path>` (or when `users-apis/api_keys_global` is present on a fresh run), it automatically syncs API keys into Zerops Project Shared Vault (`zeropsenv sync`) and compiles both primary free-tier AI pools (`Baiosfera/baiosfera_freellm.md` + `Damaren/damaren_freellm.md`) + mesh secrets via `seed-freellmapi-keys`.
 2. **Optional Full Toolchain, Gentle-AI & Browser Setup:**
    - `./zerops-astrobranding/scripts/setup-gentle.sh` — installs `engram`, `gga`, `gentle-ai`, configures `antigravity`, and binds Engram MCP `cwd` to `/var/www` via `engram-mcp`.
    - `./zerops-astrobranding/scripts/setup-zcp.sh` — configures additional ZCP utilities and mounts adopted Zerops services via SSHFS (`zcp-mount`).
 3. **Provision Infrastructure & Runtimes in Zerops:**
+   - Live ZCP AI/platform core cluster via `recipes/zerops-core-cluster.yaml` using `zerops_import` (deploys directly from `baiosfera/runtime-*` via `buildFromGit` and consumes Project Shared Vault).
    - Selective Lego provisioning via `recipes/steps/*.yaml` or `recipes/services/*.yaml` using `zerops_import`.
-   - Full 10-service starter cluster template via `recipes/zerops-import.yml.tpl` (rendered with `envsubst` and `import.yaml`).
+   - Full standalone new-project template via `recipes/zerops-import.yml.tpl` (rendered with `envsubst` for `zcli project project-import`).
 4. **Verify Parity Before Coding:**
    ```bash
    ssot-parity-check
@@ -54,7 +56,8 @@
 │   ├── MANUAL_TUTOR.md
 │   └── MODULARIZATION_GUIDE.md
 ├── recipes/
-│   ├── zerops-import.yml.tpl    # Full modular cluster template
+│   ├── zerops-core-cluster.yaml # Direct `zerops_import` core cluster (`buildFromGit`)
+│   ├── zerops-import.yml.tpl    # Full modular project template (`project.vault`)
 │   ├── services/                # Granular single-service YAML manifests (01..13)
 │   └── steps/                   # Surgical deployment step manifests (01..10)
 ├── scripts/                     # Symlinked CLI tooling (linear-cli, ssot-parity-check, hooks, setup-*)

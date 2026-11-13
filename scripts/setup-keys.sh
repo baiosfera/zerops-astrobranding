@@ -6,6 +6,7 @@
 set -euo pipefail
 
 INTERACTIVE=false
+NON_INTERACTIVE=false
 FILE_ARG=""
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
 
@@ -13,6 +14,9 @@ while [[ "$#" -gt 0 ]]; do
     case "$1" in
         -i|--interactive)
             INTERACTIVE=true
+            shift ;;
+        --non-interactive|--no-interactive)
+            NON_INTERACTIVE=true
             shift ;;
         --file|-f)
             FILE_ARG="${2:-}"
@@ -37,7 +41,12 @@ sanitize_val() {
 }
 
 if [ -z "$FILE_ARG" ]; then
-    for candidate in "$PROJECT_ROOT/key.md" "$PROJECT_ROOT/keys.md" "$PROJECT_ROOT/key.env" "$PROJECT_ROOT/keys.env"; do
+    for candidate in \
+        "/var/www/baiosfera/0ZEROPS-AGY/users-apis/api_keys_global" \
+        "$PROJECT_ROOT/key.md" \
+        "$PROJECT_ROOT/keys.md" \
+        "$PROJECT_ROOT/key.env" \
+        "$PROJECT_ROOT/keys.env"; do
         if [ -f "$candidate" ]; then
             FILE_ARG="$candidate"
             echo "• Archivo de claves detectado automáticamente en: $FILE_ARG"
@@ -46,7 +55,7 @@ if [ -z "$FILE_ARG" ]; then
     done
 fi
 
-if [ -z "$FILE_ARG" ] && [ -t 0 ] && [ "$INTERACTIVE" = false ]; then
+if [ -z "$FILE_ARG" ] && [ -t 0 ] && [ "$INTERACTIVE" = false ] && [ "$NON_INTERACTIVE" = false ]; then
     read -r -p "• Ingrese la ruta del archivo de claves (.md / .env) [o Enter para continuar]: " USER_FILE
     USER_FILE=$(sanitize_val "$USER_FILE")
     [ -n "$USER_FILE" ] && [ -f "$USER_FILE" ] && FILE_ARG="$USER_FILE"
@@ -160,79 +169,23 @@ G10_ASTRO_METAPHYSICAL_KEYS=(
 )
 
 # 1. Ingestión Universal desde archivo (.md, .env, markdown tables o multilínea)
+SETUP_SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 declare -A PARSED_KEYS_MAP=()
 
 if [ -n "$FILE_ARG" ] && [ -f "$FILE_ARG" ]; then
     echo "• Ingestando claves desde archivo: $FILE_ARG"
-    while IFS='=' read -r k v; do
+    while IFS=$'\t' read -r k v; do
         [ -z "$k" ] && continue
         export "$k=$v"
         PARSED_KEYS_MAP["$k"]="$v"
-    done < <(python3 - "$FILE_ARG" << 'EOF_PY'
+    done < <(PYTHONPATH="$SETUP_SCRIPT_DIR/lib" python3 - "$FILE_ARG" << 'EOF_PY'
 import sys
+from vault_env import parse_kv_file
 
-path = sys.argv[1]
-keys = {}
-current_key = None
-
-with open(path, "r", encoding="utf-8", errors="ignore") as f:
-    for line in f:
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        
-        # Check export KEY=VAL or KEY=VAL
-        if "=" in line:
-            left, _, right = line.partition("=")
-            left = left.strip()
-            if left.startswith("export "):
-                left = left[7:].strip()
-            if left.isidentifier():
-                v = right.strip()
-                if not ((v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'"))):
-                    v = v.split(" #")[0].strip()
-                v = v.strip("\"'")
-                keys[left] = v
-                current_key = None
-                continue
-
-        # Check markdown: - **KEY**: VAL or - KEY: VAL
-        if ":" in line and not line.startswith("http"):
-            left, _, right = line.partition(":")
-            left = left.strip().lstrip("-* ").strip("*")
-            if left.isidentifier():
-                v = right.strip()
-                if not ((v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'"))):
-                    v = v.split(" #")[0].strip()
-                v = v.strip("\"'")
-                keys[left] = v
-                current_key = None
-                continue
-
-        # Check multiline
-        if line.isidentifier():
-            current_key = line
-        elif current_key:
-            v = line.strip()
-            if not ((v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'"))):
-                v = v.split(" #")[0].strip()
-            v = v.strip("\"'")
-            keys[current_key] = v
-            current_key = None
-
-syns = {
-    "FIRE_CRAWL_API": "FIRECRAWL_API_KEY",
-    "FIRE_CRAWL_API_KEY": "FIRECRAWL_API_KEY",
-    "GITHUB_API_KEY": "GITHUB_TOKEN",
-    "ASTRO_WAY_API": "ASTROWAY_API_KEY",
-    "ASTRO_API_KEY": "VEDASTRO_API_KEY",
-}
-for old_k, new_k in syns.items():
-    if old_k in keys and new_k not in keys:
-        keys[new_k] = keys[old_k]
-
+keys = parse_kv_file(sys.argv[1])
 for k, v in sorted(keys.items()):
-    print(f"{k}={v}")
+    # Single-line tab delimiter preserves spaces and angle brackets in values cleanly.
+    print(f"{k}\t{v.replace(chr(9), ' ').replace(chr(10), ' ')}")
 EOF_PY
     )
     echo "  ✓ Total claves parseadas e ingestadas desde archivo: ${#PARSED_KEYS_MAP[@]}"
@@ -351,44 +304,55 @@ done
 # 3. Persistir de forma universal y sanitizada en el entorno local
 if [ -n "$COLLECTED_EXPORTS" ]; then
     echo ""
-    echo "• Persistiendo variables de entorno en /etc/environment, .env y subshells..."
+    echo "• Persistiendo variables de entorno en /etc/environment y ~/.env..."
     sudo touch /etc/environment 2>/dev/null || true
-    while IFS='=' read -r k v; do
-        if [ -n "$k" ] && [ -n "$v" ]; then
-            sudo sed -i "/^$k=/d" /etc/environment 2>/dev/null || true
-            sudo bash -c "echo '$k=\"$v\"' >> /etc/environment" 2>/dev/null || true
-        fi
-    done <<< "$COLLECTED_EXPORTS"
-    
-    # Inyectar en subshells de usuario (sin escribir /var/www/.env para proteger el arranque en Zerops)
-    for env_file in "$HOME/.env" "/home/zerops/.env"; do
-        mkdir -p "$(dirname "$env_file")" 2>/dev/null || true
-        touch "$env_file" 2>/dev/null || true
-        while IFS='=' read -r k v; do
-            if [ -n "$k" ] && [ -n "$v" ]; then
-                sed -i "/^$k=/d" "$env_file" 2>/dev/null || true
-                echo "$k=$v" >> "$env_file"
-            fi
-        done <<< "$COLLECTED_EXPORTS"
-    done
+    printf '%s' "$COLLECTED_EXPORTS" | python3 - "$HOME/.env" "/home/zerops/.env" << 'EOF_PERSIST'
+import os, subprocess, sys
 
-    # Inyectar en profile.d para que cualquier subshell / login cargue variables desde /etc/environment
+pairs: dict[str, str] = {}
+for line in sys.stdin.read().splitlines():
+    if "=" in line:
+        k, v = line.split("=", 1)
+        k = k.strip()
+        if k and v:
+            pairs[k] = v
+
+def escape_dq(val: str) -> str:
+    return val.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
+
+def update_env_file(path: str, quoted: bool, use_sudo: bool = False) -> None:
+    existing_lines: list[str] = []
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                existing_lines = f.read().splitlines()
+        except PermissionError:
+            if use_sudo:
+                existing_lines = subprocess.check_output(["sudo", "cat", path], text=True).splitlines()
+    kept = [ln for ln in existing_lines if not any(ln.startswith(f"{k}=") for k in pairs)]
+    for k, v in sorted(pairs.items()):
+        rendered = f'{k}="{escape_dq(v)}"' if quoted else f"{k}={v}"
+        kept.append(rendered)
+    content = "\n".join(kept) + "\n"
+    if use_sudo:
+        subprocess.run(["sudo", "tee", path], input=content, text=True, stdout=subprocess.DEVNULL, check=False)
+    else:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.chmod(path, 0o600)
+
+update_env_file("/etc/environment", quoted=True, use_sudo=True)
+for target in dict.fromkeys(sys.argv[1:]):
+    update_env_file(target, quoted=True, use_sudo=False)
+EOF_PERSIST
+
     sudo bash -c "cat << 'PROFILE_EOF' > /etc/profile.d/zerops_env.sh
 set -a
 [ -f /etc/environment ] && . /etc/environment
 set +a
 PROFILE_EOF" 2>/dev/null || true
-    
-    for rc in "$HOME/.bashrc" "/home/zerops/.bashrc" "/root/.bashrc"; do
-        if [ -f "$rc" ]; then
-            while IFS='=' read -r k v; do
-                if [ -n "$k" ] && [ -n "$v" ]; then
-                    sed -i "/export $k=/d" "$rc" 2>/dev/null || true
-                    echo "export $k=\"$v\"" >> "$rc"
-                fi
-            done <<< "$COLLECTED_EXPORTS"
-        fi
-    done
+
     sudo chown -R zerops:zerops /home/zerops/.env 2>/dev/null || true
     rm -f /var/www/.env /var/www/gdrive.env 2>/dev/null || true
 fi

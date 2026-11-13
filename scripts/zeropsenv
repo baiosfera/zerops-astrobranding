@@ -1,163 +1,131 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Sovereign Zerops Environment Helper & Autonomous Sync (zeropsenv)
-# Version: 2.1 (Direct Platform Env Parser & Autonomous MCP zcp JSON-RPC Sync)
+# Sovereign Zerops Environment Helper & Autonomous Sync (zeropsenv v3.0)
+# Uses shared scripts/lib/vault_env.py for safe quoting, comment stripping,
+# and Zerops Project Shared Vault synchronization via /usr/local/bin/zcp serve.
 # ==============================================================================
 set -euo pipefail
 
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
+
 DO_SYNC=false
 OUTPUT_JSON=false
-ENV_FILE="/etc/environment"
+SKIP_RESTART=true
+PROJECT_OVERRIDE=""
+ENV_FILE=""
 
-for arg in "$@"; do
-    case "$arg" in
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
         sync|--sync)
             DO_SYNC=true
+            shift
+            ;;
+        --restart)
+            SKIP_RESTART=false
+            shift
+            ;;
+        --project|-p)
+            PROJECT_OVERRIDE="${2:-}"
+            shift 2
             ;;
         -j|--json)
             OUTPUT_JSON=true
+            shift
             ;;
         -h|--help)
-            echo "Uso: zeropsenv [sync|--sync] [-j|--json] [/path/to/env_or_keys]"
-            echo "  (sin args)  : Muestra variables detectadas con valores enmascarados."
-            echo "  sync        : Sincroniza las variables hacia Zerops Cloud vía zcp serve (CERO tokens)."
-            echo "  -j, --json  : Imprime el payload JSON para zerops_env."
+            echo "Uso: zeropsenv [sync|--sync] [--restart] [--project <nombre>] [-j|--json] [/path/to/keys.md|.env]"
+            echo "  (sin args)    : Muestra variables detectadas con valores enmascarados."
+            echo "  sync          : Sube claves parseadas al Vault Compartido del proyecto (zerops_env project=true)."
+            echo "  --restart     : Reinicia servicios lectores tras actualizar el Vault."
+            echo "  --project     : Define PROJECT_NAME / ENGRAM_PROJECT explicitamente."
+            echo "  -j, --json    : Imprime resumen estructural en JSON (sin exponer secretos)."
             exit 0
             ;;
         *)
-            if [ -f "$arg" ]; then
-                ENV_FILE="$arg"
+            if [ -f "$1" ]; then
+                ENV_FILE="$1"
             fi
+            shift
             ;;
     esac
 done
 
-if [ ! -f "$ENV_FILE" ]; then
-    [ -f /var/www/.env ] && ENV_FILE="/var/www/.env"
+if [ -z "$ENV_FILE" ]; then
+    for cand in \
+        "/var/www/baiosfera/0ZEROPS-AGY/users-apis/api_keys_global" \
+        "/etc/environment" \
+        "/var/www/.env"; do
+        if [ -f "$cand" ]; then
+            ENV_FILE="$cand"
+            break
+        fi
+    done
 fi
 
-if [ ! -f "$ENV_FILE" ]; then
-    echo "❌ Error: No se encontró archivo de variables en $ENV_FILE ni en el entorno" >&2
+if [ -z "$ENV_FILE" ] || [ ! -f "$ENV_FILE" ]; then
+    echo "❌ Error: No se encontró archivo de variables." >&2
     exit 1
 fi
 
-python3 - << EOF_PY
-import sys, os, re, json, subprocess
+PYTHONPATH="$LIB_DIR" python3 - "$ENV_FILE" "$DO_SYNC" "$OUTPUT_JSON" "$SKIP_RESTART" "$PROJECT_OVERRIDE" << 'EOF_PY'
+import json
+import os
+import sys
+from pathlib import Path
+from vault_env import ZcpVaultClient, parse_kv_file
 
-env_path = "$ENV_FILE"
-output_json = "$OUTPUT_JSON" == "true"
-do_sync = "$DO_SYNC" == "true"
+env_path = sys.argv[1]
+do_sync = sys.argv[2] == "true"
+output_json = sys.argv[3] == "true"
+skip_restart = sys.argv[4] == "true"
+project_override = sys.argv[5].strip()
 
-sys_ignore = re.compile(r"^(PATH|PWD|HOME|USER|SHELL|SHLVL|_|LS_COLORS|DEBIAN_FRONTEND|TERM|HOSTNAME|LANG|LC_.*|SSH_.*|MAIL|LOGNAME|HIST.*|LESS.*)$")
+vars_dict = parse_kv_file(env_path)
 
-vars_dict = {}
-with open(env_path, "r", encoding="utf-8", errors="ignore") as f:
-    for line in f:
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[7:].strip()
-        match = re.match(r"^([A-Za-z0-9_]+)=(.*)$", line)
-        if match:
-            k, v = match.group(1), match.group(2).strip()
-            # Strip trailing comments if unquoted
-            if not ((v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'"))):
-                v = v.split(" #")[0].strip()
-            v = v.strip("\"'")
-            if not sys_ignore.match(k) and v:
-                vars_dict[k] = v
-
-vars_list = [f"{k}={v}" for k, v in sorted(vars_dict.items())]
+if project_override:
+    vars_dict["PROJECT_NAME"] = project_override
+    vars_dict.setdefault("ENGRAM_PROJECT", project_override)
+elif os.getenv("PROJECT_NAME"):
+    vars_dict.setdefault("PROJECT_NAME", os.environ["PROJECT_NAME"].strip())
+    vars_dict.setdefault("ENGRAM_PROJECT", os.getenv("ENGRAM_PROJECT", vars_dict["PROJECT_NAME"]).strip())
 
 if do_sync:
     print("============================================================")
-    print("  🚀 Sincronizando .env hacia Zerops Cloud (zeropsenv v2.0)")
+    print("  🚀 Sincronizando Vault Compartido en Zerops (zeropsenv v3.0)")
     print("============================================================")
     print(f"• Archivo origen: {env_path}")
-    print(f"• Total variables a sincronizar: {len(vars_list)}")
-    print("• Conectando con /usr/local/bin/zcp serve por canal JSON-RPC...")
-    
-    if not os.path.exists("/usr/local/bin/zcp"):
-        print("❌ Error: No se encontró el binario /usr/local/bin/zcp en este contenedor.")
-        sys.exit(1)
-
-    proc = subprocess.Popen(["/usr/local/bin/zcp", "serve"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    def send_and_wait(msg):
-        proc.stdin.write(json.dumps(msg) + "\n")
-        proc.stdin.flush()
-        req_id = msg.get("id")
-        while True:
-            line = proc.stdout.readline()
-            if not line:
-                return None
-            try:
-                data = json.loads(line)
-                if req_id is not None and data.get("id") == req_id:
-                    return data
-            except Exception:
-                continue
-
-    try:
-        init_res = send_and_wait({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "zeropsenv-cli", "version": "2.0"}
-            }
-        })
-        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
-        proc.stdin.flush()
-
-        resp = send_and_wait({
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/call",
-            "params": {
-                "name": "zerops_env",
-                "arguments": {
-                    "action": "set",
-                    "project": True,
-                    "skipRestart": True,
-                    "variables": vars_list
-                }
-            }
-        })
-        proc.terminate()
-        
-        result_text = resp.get("result", {}).get("content", [{}])[0].get("text", "") if resp else ""
-        if resp and not resp.get("error"):
-            print("✅ Sincronización exitosa: Variables inyectadas en Zerops Cloud.")
-        else:
-            err_msg = resp.get("error", {}).get("message", result_text[:200]) if resp else "Sin respuesta"
-            print(f"⚠️ Aviso del plano de control: {err_msg}")
-    except Exception as e:
-        proc.kill()
-        print(f"❌ Error durante el enlace con zcp: {e}")
-        sys.exit(1)
+    with ZcpVaultClient() as zcp:
+        live_project, _ = zcp.get_project_envs()
+        effective_proj = vars_dict.get("PROJECT_NAME") or live_project
+        if effective_proj:
+            vars_dict["PROJECT_NAME"] = effective_proj
+            vars_dict.setdefault("ENGRAM_PROJECT", os.getenv("ENGRAM_PROJECT") or effective_proj)
+        summary = zcp.upsert_project_envs(vars_dict, skip_restart=skip_restart)
+    print(f"• Variables procesadas: {len(vars_dict)} (sensibles existentes={summary['existing_sensitive']}, planas={summary['existing_plain']}, nuevas={summary['new_auto']})")
+    print("✅ Sincronización exitosa hacia Zerops Project Shared Vault.")
     print("============================================================")
 elif output_json:
-    payload = {
+    print(json.dumps({
         "action": "set",
         "project": True,
-        "variables": vars_list
-    }
-    print(json.dumps(payload, indent=2))
+        "source": env_path,
+        "count": len(vars_dict),
+        "keys": sorted(vars_dict.keys()),
+    }, indent=2))
 else:
     print("============================================================")
-    print("  🌐 Zerops Environment Helper (zeropsenv v2.0)")
+    print("  🌐 Zerops Environment Helper (zeropsenv v3.0)")
     print("============================================================")
     print(f"• Archivo origen: {env_path}")
-    print(f"• Total variables listas: {len(vars_dict)}\n")
+    print(f"• Total variables válidas: {len(vars_dict)}\n")
     print("Variables detectadas (valores enmascarados):")
     for k in sorted(vars_dict.keys()):
         v = vars_dict[k]
         masked = f"{v[:3]}...{v[-3:]}" if len(v) > 8 else "<set>"
-        print(f"  🔑 {k:<28} : {masked}")
-    print("\n💡 Para sincronizar en frío a Zerops Cloud, ejecutá:")
-    print("   zeropsenv sync")
+        print(f"  🔑 {k:<32} : {masked}")
+    print("\n💡 Para sincronizar al Vault Compartido del proyecto:")
+    print(f"   zeropsenv sync {env_path}")
     print("============================================================")
 EOF_PY

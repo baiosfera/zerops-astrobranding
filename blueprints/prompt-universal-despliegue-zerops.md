@@ -84,7 +84,7 @@ BRAND_SSOT_PATH: "/mnt/localstorage/[APP_IDENTITY]/dev" # Ruta persistente del B
 ================================================================================
 
 PROTOCOLO DE EJECUCIÓN AUTÓNOMO:
-1. Inspecciona el entorno con `zerops_discover` y define la estrategia según los slots requeridos.
+1. En un `zcp` nuevo o tras actualizar, hidrata el Vault Compartido del proyecto con `/var/www/zerops-astrobranding/iniciar.sh --keys /var/www/baiosfera/0ZEROPS-AGY/users-apis/<Marca>/<marca>.md` (o `api_keys_global` base + `seed-freellmapi-keys`, que compila las dos cuentas primarias `baiosfera_freellm.md` y `damaren_freellm.md`). Inspecciona el entorno con `zerops_discover` y define la estrategia según los slots requeridos (`recipes/zerops-core-cluster.yaml` o `recipes/services/*.yaml` via `zerops_import`).
 2. Crea el Proyecto en Linear (`linear-cli set-project "[PROJECT_NAME]"`) y genera las tareas específicas para los slots seleccionados.
 3. Configura el chasis y el repositorio downstream sin contaminar el upstream.
 4. Aprovisiona los servicios Zerops requeridos con cpuMode: SHARED y doble colchón de RAM.
