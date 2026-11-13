@@ -2,7 +2,7 @@
 """
 orchesbrand — Sovereign Agnostic Brand Pipeline CLI for Zerops Astrobranding.
 Governed by meta-script (v1.0) and CoHaLo Engineering.
-Automates fontgen, chroma, and brandbook token synthesis across all MentorIA verticals.
+Automates fontgen, chroma, and brandbook token synthesis across all configured project verticals.
 Complies with W3C DTCG 2025.10 and OKLCH / WCAG 2.2 AAA standards.
 """
 
@@ -14,9 +14,10 @@ import subprocess
 from pathlib import Path
 from typing import Tuple, List, Dict, Any
 
-DEFAULT_WORKSPACE_BASE = Path("/mnt/localstorage/MentorIA/dev/workspaces")
+_PROJECT_NAME = os.getenv("PROJECT_NAME", "default").strip() or "default"
+DEFAULT_WORKSPACE_BASE = Path(f"/mnt/localstorage/{_PROJECT_NAME}/dev/workspaces")
 if not DEFAULT_WORKSPACE_BASE.exists():
-    DEFAULT_WORKSPACE_BASE = Path("/var/www/localstorage/MentorIA/dev/workspaces")
+    DEFAULT_WORKSPACE_BASE = Path(f"/var/www/localstorage/{_PROJECT_NAME}/dev/workspaces")
 
 FONTGEN_ENGINE_CANDIDATES = [
     Path("/var/www/.agents/skills/fontgen/scripts/fontgen_engine.py"),
@@ -387,12 +388,12 @@ def audit_vertical(vertical: str, base_dir: Path) -> Tuple[bool, List[str]]:
 def main():
     parser = argparse.ArgumentParser(
         prog="orchesbrand",
-        description="Sovereign Brand Pipeline CLI for MentorIA (fontgen, chroma, brandbook DTCG)"
+        description="Sovereign Brand Pipeline CLI (fontgen, chroma, brandbook DTCG)"
     )
     parser.add_argument(
         "--vertical",
         default="all",
-        help="Target vertical slug (apotelos, astrotipia, baiosfera, juan-damaren, seo-maps, synthemika, or 'all'). Default: all"
+        help="Target vertical slug (or 'all' to discover from workspace/verticals). Default: all"
     )
     parser.add_argument(
         "--phases",
@@ -419,7 +420,9 @@ def main():
     base_dir = Path(args.workspace_dir)
     phases = [p.strip().lower() for p in args.phases.split(",") if p.strip()]
 
-    all_verticals = ["apotelos", "astrotipia", "baiosfera", "juan-damaren", "seo-maps", "synthemika"]
+    discovered = [p.name for p in sorted(base_dir.iterdir()) if p.is_dir()] if base_dir.exists() else []
+    env_verticals = [v.strip().lower() for v in os.getenv("VERTICAL_SLUGS", "").split(",") if v.strip()]
+    all_verticals = env_verticals or discovered or [os.getenv("BRAND_SLUG", _PROJECT_NAME.lower())]
     if args.vertical.strip().lower() == "all":
         targets = all_verticals
     else:

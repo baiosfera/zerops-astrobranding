@@ -104,7 +104,7 @@ Para que ningún agente (AGY, Hermes o Pidev) en un ZCP limpio opere a ciegas, l
   4. Ejecución Simétrica de la CLI Apotelos (`/usr/local/bin/apotelos`):
      - Hermes dispone de `/usr/local/bin/apotelos` instalado y symlinkeado nativamente en su contenedor Ubuntu Python 3.12 (`/var/www/scripts/apotelos`).
      - El agente ejecuta `apotelos list`, `apotelos audit`, `apotelos plan`, `apotelos run` y `apotelos dossier` de forma autónoma vía `run_command` sin requerir invocaciones externas.
-     - Ingestión directa de contratos ontológicos desde `/mnt/localstorage/MentorIA/dev/verticals/` y playbooks desde `/mnt/localstorage/playbooks/`.
+     - Ingestión directa de contratos ontológicos desde `/mnt/localstorage/${PROJECT_NAME}/dev/verticals/` y playbooks desde `/mnt/localstorage/playbooks/`.
   5. Despliegue de cuadrillas especializadas conectadas al Gateway Bifrost a **$0 tokens de AGY**:
      - **`Copywriting & Velocity Selling Crew` (`growth-engine`)**:
        * Formulación de ofertas irresistibles de Hormozi ($100M Offers) y StoryBrand 2.0.
@@ -153,7 +153,7 @@ Para que ningún agente (AGY, Hermes o Pidev) en un ZCP limpio opere a ciegas, l
   - `/var/www/artifacts/templates/plantilla-universal-web-zerops-v4.md`
   - `/var/www/zerops-astrobranding/templates/astro/` (`SeoHead.astro`, `CookieConsent.astro`, `contact.ts`, `phone.ts`, `discountStrategy.ts`)
 - **Alcance:**
-  1. Ingesta del Blackboard manifest generado en el Plan 3 y de los artefactos de copy hidratados por `brand-play` (`/mnt/localstorage/MentorIA/dev/workspaces/{brand}/copy/`).
+  1. Ingesta del Blackboard manifest generado en el Plan 3 y de los artefactos de copy hidratados por `brand-play` (`/mnt/localstorage/${PROJECT_NAME}/dev/workspaces/{brand}/copy/`).
   2. Ejecución headless vía listener HTTP en `:3000` (`pi --approve --provider bifrost --model bifrost/deepseek-chat -p '<prompt>' < /dev/null`) con enrutamiento a Bifrost a $0 tokens.
   3. Ejecución de `apotelos scaffold --vertical=<slug>` para materializar el código Astro 5 SSR:
      - Inyección e hidratación de componentes modulares desde `/var/www/zerops-astrobranding/templates/astro/`:

@@ -25,14 +25,14 @@ flowchart TD
     end
 
     subgraph UpstreamProviders["8 Verified Keys Pool (2 Layers)"]
-        C1["Cerebras Baiosfera (2000+ tps)"]
-        C2["Cerebras Damaren"]
-        G1["Groq Baiosfera (Fast OSS)"]
-        G2["Groq Damaren"]
-        O1["Ollama Cloud Baiosfera (Frontier)"]
-        O2["Ollama Cloud Damaren"]
-        R1["OpenRouter Free Baiosfera"]
-        R2["OpenRouter Free Damaren"]
+        C1["Cerebras Primary (2000+ tps)"]
+        C2["Cerebras Secondary"]
+        G1["Groq Primary (Fast OSS)"]
+        G2["Groq Secondary"]
+        O1["Ollama Cloud Primary (Frontier)"]
+        O2["Ollama Cloud Secondary"]
+        R1["OpenRouter Free Primary"]
+        R2["OpenRouter Free Secondary"]
     end
 
     subgraph Fallback["Commercial Pro Tier Fallback"]
@@ -122,14 +122,14 @@ Para evitar el monopolio de un solo proveedor rápido (Cerebras) y aprovechar la
 
 | Proveedor | Capa | Clave / Cuenta | Modelos Destacados | Latencia Media |
 |---|---|---|---|---|
-| **Cerebras Cloud** | Baiosfera | `csk-pncx...` | `gpt-oss-120b`, `qwen-3.8-27b`, `llama3.1-8b` | ~112 ms |
-| **Cerebras Cloud** | Damaren | `csk-j34f...` | `gpt-oss-120b`, `qwen-3.8-27b` | ~115 ms |
-| **Groq Cloud** | Baiosfera | `gsk_ih6P...` | `openai/gpt-oss-120b`, `llama-3.3-70b-versatile` | ~150 ms |
-| **Groq Cloud** | Damaren | `gsk_1uBX...` | `openai/gpt-oss-120b`, `llama-3.1-8b-instant` | ~148 ms |
-| **Ollama Cloud** | Baiosfera | `bac6ba88...` | `gpt-oss:120b`, `nemotron-3-super`, `gemma4:31b` | ~350 ms |
-| **Ollama Cloud** | Damaren | `287e7e10...` | `gpt-oss:20b`, `nemotron-3-ultra`, `beam` | ~340 ms |
-| **OpenRouter** | Baiosfera | `sk-or-v1-...` | Modelos con sufijo `:free` | ~400 ms |
-| **OpenRouter** | Damaren | `sk-or-v1-...` | Modelos con sufijo `:free` | ~390 ms |
+| **Cerebras Cloud** | Primary | `<CEREBRAS_KEY_1>` | `gpt-oss-120b`, `qwen-3.8-27b`, `llama3.1-8b` | ~112 ms |
+| **Cerebras Cloud** | Secondary | `<CEREBRAS_KEY_2>` | `gpt-oss-120b`, `qwen-3.8-27b` | ~115 ms |
+| **Groq Cloud** | Primary | `<GROQ_KEY_1>` | `openai/gpt-oss-120b`, `llama-3.3-70b-versatile` | ~150 ms |
+| **Groq Cloud** | Secondary | `<GROQ_KEY_2>` | `openai/gpt-oss-120b`, `llama-3.1-8b-instant` | ~148 ms |
+| **Ollama Cloud** | Primary | `<OLLAMA_KEY_1>` | `gpt-oss:120b`, `nemotron-3-super`, `gemma4:31b` | ~350 ms |
+| **Ollama Cloud** | Secondary | `<OLLAMA_KEY_2>` | `gpt-oss:20b`, `nemotron-3-ultra`, `beam` | ~340 ms |
+| **OpenRouter** | Primary | `<OPENROUTER_KEY_1>` | Modelos con sufijo `:free` | ~400 ms |
+| **OpenRouter** | Secondary | `<OPENROUTER_KEY_2>` | Modelos con sufijo `:free` | ~390 ms |
 
 ---
 
