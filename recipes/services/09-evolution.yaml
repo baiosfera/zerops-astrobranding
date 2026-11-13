@@ -1,7 +1,7 @@
-# Service: EvolutionGo WhatsApp Messaging Engine (Go 1.22 Alpine)
+# Service: EvolutionGo WhatsApp Messaging Engine (Go 1.26 on Ubuntu base)
 services:
   - hostname: evolution
-    type: alpine/go@1.22
+    type: ubuntu/go@1.22
     priority: 6
     startWithoutCode: true
     enableSubdomainAccess: true

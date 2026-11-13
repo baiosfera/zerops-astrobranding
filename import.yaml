@@ -58,7 +58,7 @@ services:
     priority: 6
 
   - hostname: evolution
-    type: alpine/go@1.22
+    type: ubuntu/go@1.22
     startWithoutCode: true
     enableSubdomainAccess: true
     minContainers: 1

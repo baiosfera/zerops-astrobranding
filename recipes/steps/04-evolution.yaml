@@ -1,7 +1,7 @@
-# Hito 4: EvolutionGo WhatsApp Engine (Go 1.22 Alpine / whatsmeow)
+# Hito 4: EvolutionGo WhatsApp Engine (Go 1.26 Ubuntu / whatsmeow)
 services:
   - hostname: evolution
-    type: alpine/go@1.22
+    type: ubuntu/go@1.22
     priority: 5
     startWithoutCode: true
     enableSubdomainAccess: true
