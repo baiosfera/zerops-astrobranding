@@ -23,7 +23,7 @@ The platform separates platform orchestration from application execution across 
 │   ├── bifrost/            # [Runtime 2] Maxim AI Enterprise Gateway (Go 1.22, chromem semantic cache, PG18) [:8080]
 │   ├── freellmapi/         # [Runtime 3] Multi-Provider Free LLM Proxy with 429 Circuit Breaker (localstorage SQLite) [:3001]
 │   ├── evolution/          # [Runtime 4] Native WhatsApp Engine (Go whatsmeow, NATS JetStream events, PG18, Valkey) [:8085]
-│   ├── hermes/             # [Runtime 5] Autonomous Copilot (Python 3.12, NATS JetStream daemon, Bifrost proxy) [:8000]
+│   ├── hermes/             # [Runtime 5] Autonomous Copilot & CrewAI 1.15.30+ Mandatory Primary Squads (Python 3.12, NATS, Bifrost) [:8000]
 │   └── listmonk/           # [Runtime 6] High-Performance Newsletter & Transactional Email Engine [:9000]
 ├── recipes/
 │   ├── steps/              # Sequential Surgical Deployment Recipes (01 to 06)
@@ -65,7 +65,7 @@ For non-technical founders, marketing operators, and end clients. A dedicated vi
 - **Modular Toggle Matrix**:
   - **LLM Gateway (Mandatory & Automatic)**: Bifrost (:8080) + FreeLLMAPI (:3001) are automatically provisioned as the core AI backbone with automatic fallback and zero-cost inference.
   - **WhatsApp Messaging Toggle**: Enables Evolution Go (whatsmeow) for conversational sales and abandoned cart recovery.
-  - **Autonomous Agents Toggle**: Enables Hermes Agent copilot with NATS JetStream event mesh.
+  - **Autonomous Agents Toggle**: Enables Hermes Agent copilot with **mandatory CrewAI 1.15.30+ primary multi-agent squads** (`crewai_engine/`), PydanticAI structured extraction, and NATS JetStream event mesh.
   - **Email Marketing Toggle**: Enables Listmonk for automated transactional and newsletter delivery.
   - **Multi-Payment Gateways Toggle**: Activates Wompi, ePayco, dLocal Go, or Stripe checkouts.
   - **AstroBranding / Oráculo Engine Toggle (Optional)**: Can be activated for projects requiring astrological branding diagnosis (Carta Natal, BaZi, Human Design). If a client already has an established logo and brandbook, this layer is skipped while keeping all other web features active.

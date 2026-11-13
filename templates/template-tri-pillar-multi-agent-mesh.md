@@ -248,7 +248,9 @@ Hermes exposes an HTTP Gateway v1 server compatible with Paperclip agent orchest
 
 ## 5. Dual-Engine Swarm Execution
 
-### When to Use PydanticAI vs CrewAI
+### When to Use PydanticAI vs CrewAI (Invariante: CrewAI es Obligatorio)
+> **Invariante Arquitectónico:** **CrewAI (`1.15.30+`) es un pilar primario NO OPCIONAL** de la malla Tri-Pillar y del pipeline Apotelos (`crewai_engine/`). `PydanticAI` lo complementa para extracciones rápidas, nunca lo reemplaza ni se desinstala `crewai`.
+
 - **PydanticAI (`apps/hermes/tools.py` -> `extract_structured_data`)**:
   - Memory: <35 MB RAM.
   - Latency: <100ms.
@@ -327,5 +329,5 @@ The control plane container (`zcp`) can be stopped (`zcli service stop zcp`) wit
 
 * **`zcp` (`verticalAutoscaling`):** Configurar `minCpu: 1`, `minRam: 1`, `minFreeRamGB: 0.75` (`SHARED`) para evitar reservas de ~5.7 GB RAM innecesarias. Limpiar `~/.npm/_cacache`, `~/.npm/_npx` huérfanos (ej. `paperclipai`) y `~/.cache/uv` vía `iniciar.sh` / `zcp-update`.
 * **`paperclip` (`deployFiles`):** Nunca desplegar `devDependencies`, `.git`, `tests`, `docs`, `ui/src`, `ui/storybook` ni `.map` al contenedor de `run`. Compilar `@paperclipai/db` (`node packages/db/dist/migrate.js`) y ejecutar `CI=true pnpm prune --prod` al final de `buildCommands`.
-* **`hermes` (`vendor/`):** Instalar con `pip install --no-cache-dir` y purgar `__pycache__` en `./vendor`. Si no se usa memoria vectorial local de CrewAI (`lancedb`/`pyarrow`/`onnxruntime`/`chromadb`), omitir `crewai` para bajar `vendor/` de ~461 MB a <80 MB.
+* **`hermes` (`vendor/` & CrewAI obligatorio):** **CrewAI (`1.15.30+`) es pilar primario NO OPCIONAL** de la arquitectura (nunca omitir `crewai`). Su huella en `vendor/` (`~460–500 MB` por `lancedb`/`pyarrow`/`onnxruntime`/`chromadb`) es el **baseline esperado de producción**. Optimizar instalando con `pip install --no-cache-dir` y purgando `__pycache__` en `./vendor`.
 * **PostgreSQL (`database`):** El perfil `oltp-hobby` fija `minCpu: 1`. Los datos suelen ser <200 MB; vigilar retención de `db.public.logs` de Bifrost (~42 KB/fila).

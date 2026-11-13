@@ -45,7 +45,8 @@ Para que ningún agente (AGY, Hermes o Pidev) en un ZCP limpio opere a ciegas, l
 ┌───────────────────────────────────────┐     ┌────────────────────────────────────────┐
 │     RUNTIME PYTHON (hermes :8000)     │     │       RUNTIME WEBDEV (pidev / web)     │
 │  - Hermes-Agent Daemon 24/7           │     │  - Pidev Headless Agent (gentle-pi)    │
-│  - Cuadrillas CrewAI & PydanticAI     │     │  - Framework: Astro 5 SSR en Bun 1.3+  │
+│  - Cuadrillas CrewAI (OBLIGATORIO)    │     │  - Framework: Astro 5 SSR en Bun 1.3+  │
+│    & PydanticAI (complemento rápido)  │     │  - Componentes hidratados (Apotelos)   │
 │  - $0 Tokens AGY (Bifrost FreeLLMAPI) │     │  - Componentes hidratados (Apotelos)   │
 │  - Playbooks: /mnt/localstorage/      │     │  - Server Actions & Checkout Funnels   │
 │  - Skills: seo-aeo-geo, growth-engine │     │  - Skills: astro-web, ad-telemetry,    │
