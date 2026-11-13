@@ -175,6 +175,27 @@ function discoverServices() {
   return services;
 }
 
+function runCatalogSuites() {
+  let ran = 0;
+  const zc = "/var/www/zerops-astrobranding";
+  if (fs.existsSync(path.join(zc, "scripts/hooks/tool-guard.py"))) {
+    console.log("🧪 [F5 Reality Gate] Ejecutando tool-guard.py --test...");
+    execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(zc, "scripts/hooks/tool-guard.py")} --test`, { stdio: "inherit", timeout: 90000 });
+    ran++;
+  }
+  if (fs.existsSync(path.join(zc, "scripts/anti_slop_linter.py"))) {
+    console.log("🧪 [F5 Reality Gate] Ejecutando anti_slop_linter.py --test...");
+    execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(zc, "scripts/anti_slop_linter.py")} --test`, { stdio: "inherit", timeout: 30000 });
+    ran++;
+  }
+  if (fs.existsSync(path.join(zc, "scripts/tests/test_apotelos.py"))) {
+    console.log("🧪 [F5 Reality Gate] Ejecutando test_apotelos.py...");
+    execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(zc, "scripts/tests/test_apotelos.py")}`, { stdio: "inherit", timeout: 30000 });
+    ran++;
+  }
+  return ran;
+}
+
 /**
  * Validates physical tests across dynamically discovered services and universal sensors.
  */
@@ -182,13 +203,20 @@ function validateApplicationTests(resolvedIssue = null) {
   console.log("🛡️ [F5 Reality Gate] Verificando tests físicos reales...");
   const services = discoverServices();
   const issueText = `${resolvedIssue?.title || ""} ${resolvedIssue?.description || ""}`.toLowerCase();
-  const nonCatalogServices = services.filter((s) => !["zerops-astrobranding", "zerops-astro-skills"].includes(s));
-  const targetedRuntimeServices = nonCatalogServices.filter((s) => new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(issueText));
-  const isCatalogScoped = /\b(zerops-astrobranding|zerops-astro-skills|tool-guard|ssot-parity|linear-cli|iniciar\.sh|setup-zcp|setup-gentle|template-astro-web|runtime-|baiosfera)\b/.test(issueText)
-    && targetedRuntimeServices.length === 0;
-  let executedCount = 0;
+  const catalogMarkers = /\b(zerops-astrobranding|zerops-astro-skills|tool-guard|ssot-parity|linear-cli|iniciar\.sh|setup-zcp|setup-gentle|template-astro-web|runtime-|baiosfera)\b|recipes\/|env-\*\.env/i.test(issueText);
+  const cleanedForRuntimeMatch = issueText.replace(/\bpre-bifrost\b/g, "");
+  const targetedRuntimeServices = services.filter((s) => new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(cleanedForRuntimeMatch));
+  const isCatalogScoped = catalogMarkers && targetedRuntimeServices.length === 0;
+  let executedCount = runCatalogSuites();
+  const runtimeQueue = isCatalogScoped ? [] : (targetedRuntimeServices.length > 0 ? targetedRuntimeServices : services);
 
-  for (const svc of services) {
+  if (isCatalogScoped) {
+    for (const skipped of services) {
+      console.log(`ℹ️ [F5 Reality Gate] Omitiendo contenedor runtime externo "${skipped}" (alcance exclusivamente upstream/catálogo).`);
+    }
+  }
+
+  for (const svc of runtimeQueue) {
     const svcPath = path.join("/var/www", svc);
     const pkgPath = path.join(svcPath, "package.json");
     const isPython = fs.existsSync(path.join(svcPath, "requirements.txt")) || fs.existsSync(path.join(svcPath, "pyproject.toml")) || fs.existsSync(path.join(svcPath, "pytest.ini"));
@@ -201,32 +229,6 @@ function validateApplicationTests(resolvedIssue = null) {
         hasPkgTest = Boolean(pkg.scripts && pkg.scripts.test && !String(pkg.scripts.test).includes("no test specified"));
       }
     } catch (e) {}
-
-    // Sovereign local repos run locally on ZCP; runtime containers run via SSH in container
-    const isLocalRepo = ["zerops-astrobranding", "zerops-astro-skills"].includes(svc);
-    if (isLocalRepo) {
-      if (fs.existsSync(path.join(svcPath, "scripts/hooks/tool-guard.py"))) {
-        console.log("🧪 [F5 Reality Gate] Ejecutando tool-guard.py --test...");
-        execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(svcPath, "scripts/hooks/tool-guard.py")} --test`, { stdio: "inherit", timeout: 90000 });
-        executedCount++;
-      }
-      if (fs.existsSync(path.join(svcPath, "scripts/anti_slop_linter.py"))) {
-        console.log("🧪 [F5 Reality Gate] Ejecutando anti_slop_linter.py --test...");
-        execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(svcPath, "scripts/anti_slop_linter.py")} --test`, { stdio: "inherit", timeout: 30000 });
-        executedCount++;
-      }
-      if (fs.existsSync(path.join(svcPath, "scripts/tests/test_apotelos.py"))) {
-        console.log("🧪 [F5 Reality Gate] Ejecutando test_apotelos.py...");
-        execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(svcPath, "scripts/tests/test_apotelos.py")}`, { stdio: "inherit", timeout: 30000 });
-        executedCount++;
-      }
-      continue;
-    }
-
-    if (isCatalogScoped) {
-      console.log(`ℹ️ [F5 Reality Gate] Omitiendo contenedor runtime externo "${svc}" (alcance exclusivamente upstream/catálogo).`);
-      continue;
-    }
 
     if (hasPkgTest || (isPython && (hasPytestIni || hasTestsDir)) || hasTestsDir) {
       let testCmd = "bun test";
