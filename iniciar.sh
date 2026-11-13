@@ -8,7 +8,8 @@ set -euo pipefail
 BASE_DIR="/var/www"
 CATALOG_REPO="https://github.com/baiosfera/zerops-astrobranding.git"
 SKILLS_REPO="https://github.com/baiosfera/zerops-astro-skills.git"
-CATALOG_DIR="$BASE_DIR/zerops-astrobranding"
+REPO_DIR="$BASE_DIR/zerops-astrobranding"
+CATALOG_DIR="$REPO_DIR"
 SKILLS_DIR="$BASE_DIR/zerops-astro-skills"
 AGENTS_SKILLS_DIR="$BASE_DIR/.agents/skills"
 LOCAL_BIN="$BASE_DIR/.bin"
@@ -84,6 +85,10 @@ main() {
     install_os_deps
   fi
   sync_repo "$CATALOG_REPO" "$CATALOG_DIR"
+  if [ "${INICIAR_REEXEC:-0}" != "1" ] && [ -f "$REPO_DIR/iniciar.sh" ]; then
+    export INICIAR_REEXEC=1
+    exec bash "$REPO_DIR/iniciar.sh" "$@"
+  fi
   sync_repo "$SKILLS_REPO" "$SKILLS_DIR"
   link_skills
   link_bin
