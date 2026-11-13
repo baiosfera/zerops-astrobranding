@@ -18,9 +18,9 @@ zerops:
         - PAPERCLIP_TSC_EMIT_ONLY=1 pnpm --filter @paperclipai/server build
         - pnpm --filter @paperclipai/server build:runtime
         - sed -i 's|/build/source|/var/www|g' server/dist-runtime/*.mjs
+        - CI=true pnpm prune --prod || true
         - rm -f server/dist-runtime/*.map server/dist/*.map
         - rm -rf .git docs doc tests ui/src ui/storybook packages/paperclip-runner server/src
-        - CI=true pnpm prune --prod || true
       deployFiles:
         - .
       cache:
