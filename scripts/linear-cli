@@ -178,9 +178,14 @@ function discoverServices() {
 /**
  * Validates physical tests across dynamically discovered services and universal sensors.
  */
-function validateApplicationTests() {
+function validateApplicationTests(resolvedIssue = null) {
   console.log("🛡️ [F5 Reality Gate] Verificando tests físicos reales...");
   const services = discoverServices();
+  const issueText = `${resolvedIssue?.title || ""} ${resolvedIssue?.description || ""}`.toLowerCase();
+  const nonCatalogServices = services.filter((s) => !["zerops-astrobranding", "zerops-astro-skills"].includes(s));
+  const targetedRuntimeServices = nonCatalogServices.filter((s) => new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(issueText));
+  const isCatalogScoped = /\b(zerops-astrobranding|zerops-astro-skills|tool-guard|ssot-parity|linear-cli|iniciar\.sh|setup-zcp|setup-gentle|template-astro-web|runtime-|baiosfera)\b/.test(issueText)
+    && targetedRuntimeServices.length === 0;
   let executedCount = 0;
 
   for (const svc of services) {
@@ -205,6 +210,21 @@ function validateApplicationTests() {
         execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(svcPath, "scripts/hooks/tool-guard.py")} --test`, { stdio: "inherit", timeout: 90000 });
         executedCount++;
       }
+      if (fs.existsSync(path.join(svcPath, "scripts/anti_slop_linter.py"))) {
+        console.log("🧪 [F5 Reality Gate] Ejecutando anti_slop_linter.py --test...");
+        execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(svcPath, "scripts/anti_slop_linter.py")} --test`, { stdio: "inherit", timeout: 30000 });
+        executedCount++;
+      }
+      if (fs.existsSync(path.join(svcPath, "scripts/tests/test_apotelos.py"))) {
+        console.log("🧪 [F5 Reality Gate] Ejecutando test_apotelos.py...");
+        execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(svcPath, "scripts/tests/test_apotelos.py")}`, { stdio: "inherit", timeout: 30000 });
+        executedCount++;
+      }
+      continue;
+    }
+
+    if (isCatalogScoped) {
+      console.log(`ℹ️ [F5 Reality Gate] Omitiendo contenedor runtime externo "${svc}" (alcance exclusivamente upstream/catálogo).`);
       continue;
     }
 
@@ -717,7 +737,7 @@ async function main() {
         process.exit(1);
       }
 
-      validateApplicationTests();
+      validateApplicationTests(resolved);
       validateIssueDoD(resolved);
 
       console.log("🛡️ [F5 Gate] Validating SSoT Parity & Git Push before closing issue...");

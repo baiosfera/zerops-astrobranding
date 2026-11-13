@@ -27,46 +27,37 @@ if [ -f "$SCRIPT_DIR/zcp-validate.sh" ]; then
     sudo ln -sf "$PERSISTENT_BIN/zcp-validate" /usr/local/bin/zcp-validate 2>/dev/null || true
 fi
 
-# 1.1 Despliegue de Herramienta Soberana Linear CLI (linear-cli)
-if [ -f "$SCRIPT_DIR/linear-cli" ]; then
-    cp -f "$SCRIPT_DIR/linear-cli" "$PERSISTENT_BIN/linear-cli"
-    chmod +x "$PERSISTENT_BIN/linear-cli"
-    cp "$PERSISTENT_BIN/linear-cli" "$HOME/.local/bin/linear-cli" 2>/dev/null || true
-    cp "$PERSISTENT_BIN/linear-cli" "/home/zerops/.local/bin/linear-cli" 2>/dev/null || true
-    sudo ln -sf "$PERSISTENT_BIN/linear-cli" /usr/local/bin/linear-cli 2>/dev/null || true
-fi
-
-# 1.1b Despliegue de Herramienta Soberana Apotelos CLI (apotelos)
-if [ -f "$SCRIPT_DIR/apotelos" ]; then
-    cp -f "$SCRIPT_DIR/apotelos" "$PERSISTENT_BIN/apotelos"
-    chmod +x "$PERSISTENT_BIN/apotelos"
-    cp "$PERSISTENT_BIN/apotelos" "$HOME/.local/bin/apotelos" 2>/dev/null || true
-    cp "$PERSISTENT_BIN/apotelos" "/home/zerops/.local/bin/apotelos" 2>/dev/null || true
-    sudo ln -sf "$PERSISTENT_BIN/apotelos" /usr/local/bin/apotelos 2>/dev/null || true
-fi
-
-# 1.2 Despliegue de Utilidad Universal de Sincronización (zcp-sync)
-if [ -f "$SCRIPT_DIR/zcp-sync" ]; then
-    cp -f "$SCRIPT_DIR/zcp-sync" "$PERSISTENT_BIN/zcp-sync"
-    chmod +x "$PERSISTENT_BIN/zcp-sync"
-    cp "$PERSISTENT_BIN/zcp-sync" "$HOME/.local/bin/zcp-sync" 2>/dev/null || true
-    cp "$PERSISTENT_BIN/zcp-sync" "/home/zerops/.local/bin/zcp-sync" 2>/dev/null || true
-    sudo ln -sf "$PERSISTENT_BIN/zcp-sync" /usr/local/bin/zcp-sync 2>/dev/null || true
-fi
-
-# 1.3 Despliegue de Sincronizador 3-Tier Zero-Data-Loss de Engram (engram-sync) y Sensores Soberanos
-for core_cli in "engram-sync:engram-sync" "ssot-parity-check:ssot-parity-check.sh" "skills-suite-validate:skills-suite-validate.sh" "zcp-mount:zcp-mount"; do
+# 1.1 - 1.3 Enlazar CLIs soberanas desde SSoT (sin pisar symlinks de iniciar.sh)
+mkdir -p "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
+for core_cli in \
+    "linear-cli:linear-cli" \
+    "apotelos:apotelos" \
+    "brand-play:brand-play" \
+    "zcp-sync:zcp-sync" \
+    "engram-sync:engram-sync" \
+    "engram-mcp:engram-mcp" \
+    "ssot-parity-check:ssot-parity-check.sh" \
+    "skills-suite-validate:skills-suite-validate.sh" \
+    "skills-sync:skills-sync.sh" \
+    "anti-slop-linter:anti_slop_linter.py" \
+    "zcp-mount:zcp-mount"; do
     cli_name="${core_cli%%:*}"
     cli_src_file="${core_cli#*:}"
     if [ -f "$SCRIPT_DIR/$cli_src_file" ]; then
-        cp -f "$SCRIPT_DIR/$cli_src_file" "$PERSISTENT_BIN/$cli_name"
-        chmod +x "$PERSISTENT_BIN/$cli_name"
-        mkdir -p "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
-        ln -sfn "$PERSISTENT_BIN/$cli_name" "$HOME/.local/bin/$cli_name" 2>/dev/null || true
-        ln -sfn "$PERSISTENT_BIN/$cli_name" "/home/zerops/.local/bin/$cli_name" 2>/dev/null || true
+        chmod +x "$SCRIPT_DIR/$cli_src_file"
+        ln -sfn "$SCRIPT_DIR/$cli_src_file" "$PERSISTENT_BIN/$cli_name"
+        ln -sfn "$SCRIPT_DIR/$cli_src_file" "$HOME/.local/bin/$cli_name" 2>/dev/null || true
+        ln -sfn "$SCRIPT_DIR/$cli_src_file" "/home/zerops/.local/bin/$cli_name" 2>/dev/null || true
         sudo ln -sfn "$PERSISTENT_BIN/$cli_name" "/usr/local/bin/$cli_name" 2>/dev/null || true
     fi
 done
+if [ -f "$ZCP_ROOT/bin/orchesbrand" ]; then
+    chmod +x "$ZCP_ROOT/bin/orchesbrand"
+    ln -sfn "$ZCP_ROOT/bin/orchesbrand" "$PERSISTENT_BIN/orchesbrand"
+    ln -sfn "$ZCP_ROOT/bin/orchesbrand" "$HOME/.local/bin/orchesbrand" 2>/dev/null || true
+    ln -sfn "$ZCP_ROOT/bin/orchesbrand" "/home/zerops/.local/bin/orchesbrand" 2>/dev/null || true
+    sudo ln -sfn "$PERSISTENT_BIN/orchesbrand" /usr/local/bin/orchesbrand 2>/dev/null || true
+fi
 
 # 1.4 Despliegue de Utilidad Soberana Paperclip CLI (paperclip / paperclipai) y Symlink de Persistencia
 if [ -d "/mnt/localstorage/paperclip" ] || [ -d "$PROJECT_ROOT/localstorage/paperclip" ]; then

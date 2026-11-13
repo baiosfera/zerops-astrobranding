@@ -55,7 +55,7 @@ link_skills() {
 
 link_bin() {
   mkdir -p "$LOCAL_BIN" "$LOCAL_BIN/hooks" "$HOME/.local/bin"
-  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli apotelos brand-play engram-sync; do
+  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli apotelos brand-play engram-sync engram-mcp; do
     if [ -f "$CATALOG_DIR/scripts/$s" ]; then
       chmod +x "$CATALOG_DIR/scripts/$s"
       local bin_name="${s%.sh}"
@@ -80,6 +80,27 @@ link_bin() {
     fi
   done
   sudo ln -sfn "$CATALOG_DIR/iniciar.sh" /usr/local/bin/zcp-update || true
+}
+
+sync_governance() {
+  mkdir -p "$BASE_DIR/.agents/rules" "$HOME/.gemini/antigravity-cli/rules"
+  [ -f "$CATALOG_DIR/AGENTS.md" ] && cp -f "$CATALOG_DIR/AGENTS.md" "$BASE_DIR/AGENTS.md"
+  if [ -f "$CATALOG_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
+    cp -f "$CATALOG_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$BASE_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md"
+    cp -f "$CATALOG_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$HOME/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md"
+  fi
+  [ -f "$CATALOG_DIR/.agents/hooks.json" ] && cp -f "$CATALOG_DIR/.agents/hooks.json" "$BASE_DIR/.agents/hooks.json"
+}
+
+ensure_path() {
+  local path_line='export PATH="/var/www/.bin:$HOME/.local/bin:$PATH"'
+  if [ -f "$HOME/.bashrc" ] && ! grep -q '/var/www/.bin' "$HOME/.bashrc" 2>/dev/null; then
+    printf '\n# ZCP sovereign CLIs\n%s\n' "$path_line" >> "$HOME/.bashrc"
+  fi
+  if [ -d /etc/profile.d ]; then
+    echo "$path_line" | sudo tee /etc/profile.d/zcp_path.sh >/dev/null 2>&1 || true
+    sudo chmod +x /etc/profile.d/zcp_path.sh 2>/dev/null || true
+  fi
 }
 
 setup_localstorage() {
@@ -110,6 +131,8 @@ main() {
   sync_repo "$SKILLS_REPO" "$SKILLS_DIR"
   link_skills
   link_bin
+  sync_governance
+  ensure_path
   setup_localstorage
   setup_pre_bifrost_deepseek
   log "Bootstrap complete."

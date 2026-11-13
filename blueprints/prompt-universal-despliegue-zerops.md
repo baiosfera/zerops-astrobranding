@@ -1,8 +1,8 @@
-# 🌐 PROMPT MAESTRO UNIVERSAL & AGNOSTICO — ZEROPS-FIRST (v2.3 SOTA)
+# 🌐 PROMPT MAESTRO UNIVERSAL & AGNOSTICO — ZEROPS-FIRST (v2.4 SOTA)
 
 > **Destino:** Para cualquier Agente AGY en cualquier entorno ZCP / Proyecto Zerops.  
-> **Fundamento:** Estado del Arte Zerops (Octubre 2026), Arquitectura Lego Desacoplada, Worker WhatsApp Dedicado, SSoT Dinámico en PostgreSQL 18 y Matriz de Blindajes Físicos (268 BAI).  
-> **Ubicación Canónica:** `/var/www/artifacts/blueprints/prompt-universal-despliegue-zerops.md`
+> **Fundamento:** Estado del Arte Zerops, Arquitectura Lego Desacoplada en 9 repositorios `baiosfera/*`, Worker WhatsApp Dedicado, SSoT Dinámico en PostgreSQL 18 y Matriz de Blindajes Físicos.  
+> **Ubicación Canónica:** `/var/www/zerops-astrobranding/blueprints/prompt-universal-despliegue-zerops.md`
 
 ---
 
@@ -15,22 +15,22 @@ Tu misión es desplegar, configurar y entregar de forma autónoma la aplicación
 LOS 3 PILARES INDIVISIBLES DEL ECOSISTEMA
 ================================================================================
 
-1. LOS PLANOS DEL EDIFICIO (Upstream Inmutable):
-   - `/var/www/zerops-astrobranding` es el chasis maestro y repositorio de herramientas (Astro 5 SSR, Bun 1.3+, Tailwind CSS 4, CLIs compartidas).
-   - Permanece 100% inmutable y desacoplado de la lógica de clientes.
-   - El código del proyecto se desarrolla en su propio repositorio downstream independiente, vinculado al upstream solo para heredar actualizaciones (`git remote rename origin upstream`, `git remote add origin <CLIENT_REPO_URL>`).
+1. LOS PLANOS DEL EDIFICIO (Catálogo Upstream Inmutable vs Plantillas `baiosfera/*`):
+   - `/var/www/zerops-astrobranding` es exclusivamente el **Catálogo & Registry de Plataforma** (`iniciar.sh`, `recipes/`, `blueprints/`, `scripts/`), mientras `/var/www/zerops-astro-skills` aloja las skills soberanas.
+   - Cada runtime reusable vive aislado en su propio repositorio plantilla (`baiosfera/template-astro-web` y los 8 runtimes `baiosfera/runtime-{freellmapi,bifrost,hermes,evolution,whatsappbot,paperclip,pidev,videoworker}`).
+   - El código del cliente se desarrolla en su propio repositorio aislado (`<marca>/<app>`), nunca dentro de `baiosfera/*`, usando el token de `/var/www/baiosfera/0ZEROPS-AGY/users-apis/<Marca>/<marca>-keys.md`.
 
 2. EL ARQUITECTO Y CONSTRUCTOR (Modelo Lego Desacoplado por Demanda):
    - Cero perfiles artificiales rígidos (como minimal/ecommerce) y cero pipelines en cascada forzados.
-   - Frontera Sagrada del Plano de Control: El contenedor `zcp` es un orquestador efímero (se enciende exclusivamente para programar, auditar o actualizar; permanece apagado en operaciones normales). Todo el runtime de producción corre 24/7 en contenedores Incus LXC dedicados (Astro, Bifrost, Evolution, Whatsappbot, Postgres, Valkey).
+   - Frontera Sagrada del Plano de Control: El contenedor `zcp` opera siempre a 1 contenedor (`minContainers: 1`, `maxContainers: 1`, `cpuMode: SHARED`) y nunca corre builds ni servers de frameworks. Todo runtime corre en contenedores Incus LXC dedicados (`web`, `bifrost`, `freellmapi`, `hermes`, `evolution`, `whatsappbot`, `paperclip`, `pidev`, `videoworker`, `database`, `valkey`, `nats`).
    - La arquitectura se compone bajo demanda mediante Slots de Capacidad Aditivos:
-     * Slot Frontend: Astro 5 SSR en Bun 1.3 con adaptador @astrojs/node en modo standalone (os: ubuntu, bind 0.0.0.0, puerto 3000).
-     * Slot Persistencia (opcional): PostgreSQL 18 (oltp-hobby).
-     * Slot Caché / Locks (opcional): Valkey 7.2 (hobby).
-     * Slot Eventos / RPC (opcional): NATS 2.12 (JetStream <0.3ms P99).
-     * Slot Storage (opcional): Object Storage S3 (assets >500KB).
-     * Slots IA / Integraciones (opcional): Bifrost (:8080), EvolutionGo (:8085), Listmonk (:9000).
-     * Slot WhatsApp Bot (opcional): Worker agéntico desacoplado en Ubuntu Bun 1.3 (`whatsappbot`, puerto 3005) consumiendo `http://bifrost:8080` por DNS interno privado.
+     * Slot Frontend (`web`): `baiosfera/template-astro-web` — Astro 5 SSR en `ubuntu/bun@1.4` (`dist/`, `package.json`, `node_modules`, bind `0.0.0.0`, puerto `3000`).
+     * Slot Persistencia (opcional): PostgreSQL 18 (`postgresql:single@18`, `oltp-hobby`).
+     * Slot Caché / Locks (opcional): Valkey 7.2 (`valkey:single@7.2`, `hobby`).
+     * Slot Eventos / RPC (opcional): NATS 2.12 (`nats:single@2.12`, JetStream <0.3ms P99).
+     * Slot Storage (opcional): Local Storage (`local-storage:single@1` at `/mnt/localstorage`) y/o Object Storage S3 (`object-storage`).
+     * Slots IA / Orquestación (opcional): `runtime-freellmapi` (:3001), `runtime-bifrost` (:8080), `runtime-hermes` (:8000, incluye CrewAI embebido), `runtime-evolution` (:8085), `runtime-paperclip` (:3100), `runtime-pidev` (:3000), `runtime-videoworker` (efímero), `listmonk` (:9000).
+     * Slot WhatsApp Bot (opcional): `runtime-whatsappbot` en `ubuntu/bun@1.4` (`whatsappbot`, puerto `3005`) consumiendo `http://bifrost:8080` por DNS interno privado.
      * Slot Afiliados / Embajadores (opcional & desacoplado): Módulo pluggable mediante Strategy Pattern. Si el proyecto no lo define, el bot y la web operan con tarifa plena al 100% sin mencionar referidos ni códigos `?ref`.
    - Invariantes de Hardware Zerops:
      * Base OS: SIEMPRE "os: ubuntu" en build y runtime para evitar fallas de musl libc con Rollup/Vite y módulos C nativos.
@@ -53,7 +53,7 @@ LOS 3 PILARES INDIVISIBLES DEL ECOSISTEMA
    - Red & 502 Bad Gateway: Los adaptadores de servidor (Node/Bun) deben incluir siempre HOST: "0.0.0.0" en envVariables (escuchar en localhost rompe el balanceador L7).
    - Bifrost & IA: config_store en PostgreSQL 18 persistente (cero SQLite efímero); vector_store en chromem o qdrant (NUNCA Valkey por ausencia de RediSearch). Dual-Tier Predictive Intent Routing (`x-tier: production` para ventas/tickets/herramientas directo a Pro; FreeLLMAPI con timeout 2.5s y Circuit Breaker de 120s para FAQs). `bifrost-cli` en `zcp` es solo arnés interactivo/TUI de desarrollo, nunca proxy de producción.
    - Valkey & Locks: Locks de idempotencia distribuida de 24h para webhooks de WhatsApp (`SET lock:wa:{id} 1 NX EX 86400`) erradicando reprocesamiento de eventos dentro del día. Locks transaccionales en checkout/pagos (`SET lock:checkout:{id} 1 NX EX 60`).
-   - WhatsApp & Worker Desacoplado: NUNCA alojar en Astro SSR ni en `zcp`. Guardia de descarte de webhooks stale >120s (`extractMessageEpochMs`) para eliminar tormentas de respuestas por buffers de reconexión en Evolution API. Acknowledge ultraliviano <15ms. Human Takeover soberano: `#stop`, `#off`, `#silencio`, `#desactivar` establecen 10 años de silencio permanente; mensajes manuales subsiguientes del operador DEBEN preservar el stop y no degradarlo a 2h; `#mute` silencia 24h; solo `#bot` reactiva. Persistencia obligatoria de `bot_status` (`stopped` | `muted` | `active`) en PostgreSQL 18 `leads.metadata` con re-hidratación automática de Valkey ante cache-miss o reinicios. Worker agéntico en Bun 1.3 con Tool Calling determinista en PostgreSQL 18 (pgvector innecesario en <100 entidades), memoria híbrida, pacing simulado (1.5s–3.0s con presencia typing) y transcripción Groq Whisper v3 Turbo <350ms. El worker carga el Brandbook SSoT dinámicamente desde `/mnt/localstorage/${PROJECT_NAME}/dev/system_prompt.md` y construye el prompt hacia Bifrost (Bifrost es agnóstico).
+   - WhatsApp & Worker Desacoplado: NUNCA alojar en Astro SSR ni en `zcp`. Guardia de descarte de webhooks stale >120s (`extractMessageEpochMs`) para eliminar tormentas de respuestas por buffers de reconexión en Evolution API. Acknowledge ultraliviano <15ms. Human Takeover soberano: `#stop`, `#off`, `#silencio`, `#desactivar` establecen 10 años de silencio permanente; mensajes manuales subsiguientes del operador DEBEN preservar el stop y no degradarlo a 2h; `#mute` silencia 24h; solo `#bot` reactiva. Persistencia obligatoria de `bot_status` (`stopped` | `muted` | `active`) en PostgreSQL 18 `leads.metadata` con re-hidratación automática de Valkey ante cache-miss o reinicios. Worker agéntico en Bun 1.4 con Tool Calling determinista en PostgreSQL 18 (pgvector innecesario en <100 entidades), memoria híbrida, pacing simulado (1.5s–3.0s con presencia typing) y transcripción Groq Whisper v3 Turbo <350ms. El worker carga el Brandbook SSoT dinámicamente desde `/mnt/localstorage/${PROJECT_NAME}/dev/system_prompt.md` y construye el prompt hacia Bifrost (Bifrost es agnóstico).
    - Listmonk & Email: Desacople asíncrono obligatorio (cero llamadas síncronas en ruta crítica de checkout para prevenir 504). Plantillas HTML compiladas <85KB (anti-clipping Gmail).
    - Postgres 18 & Entidades Dinámicas en Tiempo Presente: Catálogos de eventos, servicios o agendas gobernados por PostgreSQL 18 SSoT con tiempo presente continuo (`date >= NOW()` en UTC-5). El frontend Astro SSR y el bot consumen la misma tabla en tiempo real. Lo que ocurrió en el pasado (`date < NOW()`) se reconoce como histórico y nunca se ofrece para reservar. Cero arrays estáticos en código o prompts.
    - CoHaLo Positivo & Sustracción Elegante (Zero Negative Prompting): Prohibido llenar código, prompts o plantillas con directivas prohibitivas o defensivas ("NO HACEMOS TAL COSA", "NO VENDEMOS X", "PROHIBIDO PREGUNTAR POR Y"). La verdad de catálogo define afirmativamente lo que existe. Lo que no está registrado en base de datos se asume inexistente sin avisos negativos.
@@ -70,14 +70,14 @@ DEPLOYMENT_ROUTE: "[DEPLOYMENT_ROUTE]"      # greenfield (desde cero) | brownfie
 CLIENT_REPO_URL: "[CLIENT_REPO_URL]"        # URL de GitHub del cliente (o local para dev)
 DOMAIN_PRODUCTION: "[DOMAIN_PRODUCTION]"    # Dominio de producción (ej: "auraboutique.com")
 CAPACITY_SLOTS:                             # Seleccionar ÚNICAMENTE los slots que el negocio requiere HOY:
-  - frontend_astro_ssr                      # Obligatorio: Astro 5 SSR en Bun 1.3 (Ubuntu)
+  - frontend_astro_ssr                      # Obligatorio: baiosfera/template-astro-web (Astro 5 SSR en ubuntu/bun@1.4)
   - database_postgres                       # Opcional: PostgreSQL 18
   - cache_valkey                            # Opcional: Valkey 7.2
   # - events_nats                           # Opcional: NATS 2.12
   # - storage_s3                            # Opcional: Object Storage S3
   # - ai_gateway_bifrost                    # Opcional: Maxim AI Bifrost
   # - whatsapp_evolution                    # Opcional: EvolutionGo WhatsApp Transport (:8085)
-  # - whatsapp_bot_worker                   # Opcional: Worker Agéntico WhatsApp Dedicado en Bun (NATS + Tool Calling + Brandbook SSoT)
+  # - whatsapp_bot_worker                   # Opcional: Worker Agéntico WhatsApp Dedicado en Bun 1.4 (NATS + Tool Calling + Brandbook SSoT)
   # - email_listmonk                        # Opcional: Listmonk Newsletter
   # - affiliate_growth_engine               # Opcional: Motor Lego de Afiliados con Strategy Pattern
 BRAND_SSOT_PATH: "/mnt/localstorage/[APP_IDENTITY]/dev" # Ruta persistente del Brandbook (fallback: /var/www/baiosfera/PROYECTOS/[APP_IDENTITY])

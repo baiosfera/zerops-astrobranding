@@ -803,6 +803,40 @@ def _inspect_turn_research(payload: dict) -> tuple:
         pass
     return has_any, has_verbatim, True
 
+def _extract_zerops_discover_obj(tool_res):
+    """Unwrap direct JSON dicts, strings, or MCP content wrappers into a zerops_discover dict."""
+    candidates = [tool_res]
+    while candidates:
+        cur = candidates.pop(0)
+        if not cur:
+            continue
+        if isinstance(cur, str):
+            try:
+                cur = json.loads(cur)
+            except Exception:
+                m = re.search(r'\{[\s\S]*"services"[\s\S]*\}', cur)
+                if m:
+                    try:
+                        cur = json.loads(m.group(0))
+                    except Exception:
+                        cur = None
+                else:
+                    cur = None
+        if isinstance(cur, dict):
+            if "services" in cur and isinstance(cur["services"], list):
+                return cur
+            for key in ("result", "output", "toolResult", "data"):
+                if key in cur and cur[key] is not None:
+                    candidates.append(cur[key])
+            content = cur.get("content")
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and item.get("text"):
+                        candidates.append(item["text"])
+                    elif isinstance(item, str):
+                        candidates.append(item)
+    return None
+
 def evaluate_hook(payload: dict) -> dict:
     # 0. SessionStart Handling (Mandatory Anti-AMN Recall with Multi-Hook Deduplication)
     if payload.get("session_start") or payload.get("event") == "SessionStart" or payload.get("hookType") == "SessionStart":
@@ -900,8 +934,8 @@ def evaluate_hook(payload: dict) -> dict:
                 tool_res = payload.get("toolResult") or payload.get("result") or ""
                 if tool_res:
                     try:
-                        res_obj = json.loads(tool_res) if isinstance(tool_res, str) else tool_res
-                        if isinstance(res_obj, dict) and "services" in res_obj:
+                        res_obj = _extract_zerops_discover_obj(tool_res)
+                        if res_obj:
                             with open("/tmp/.zerops_discover_cache.json", "w") as f:
                                 json.dump(res_obj, f, indent=2)
                     except Exception:

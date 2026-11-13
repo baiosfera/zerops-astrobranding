@@ -233,6 +233,35 @@ fi
 if command -v gentle-ai >/dev/null 2>&1; then
     echo "• Configurando stack de Gentle AI para el agente: $TARGET_AGENT..."
     CI=true GENTLE_NO_UPDATE_PROMPT=1 gentle-ai install --agents "$TARGET_AGENT" --scope=global 2>/dev/null || true
+    # Garantizar cwd=/var/www para Engram MCP independientemente del cwd del launcher de plugins
+    if [ -f "$SCRIPT_DIR/engram-mcp" ]; then
+        chmod +x "$SCRIPT_DIR/engram-mcp"
+        ln -sfn "$SCRIPT_DIR/engram-mcp" "$PROJECT_ROOT/.bin/engram-mcp"
+        ln -sfn "$SCRIPT_DIR/engram-mcp" "/home/zerops/.local/bin/engram-mcp" 2>/dev/null || true
+    fi
+    python3 - << 'EOF_ENGRAM_MCP'
+import json, os
+for cfg in {
+    os.path.expanduser("~/.gemini/config/plugins/gentle-ai-engram/mcp_config.json"),
+    "/home/zerops/.gemini/config/plugins/gentle-ai-engram/mcp_config.json",
+}:
+    if not os.path.isfile(cfg):
+        continue
+    try:
+        with open(cfg, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        srv = data.setdefault("mcpServers", {}).setdefault("engram", {})
+        if os.path.isfile("/var/www/.bin/engram-mcp"):
+            srv["command"] = "/var/www/.bin/engram-mcp"
+            srv["args"] = []
+        srv["cwd"] = "/var/www"
+        with open(cfg, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+        print(f"  ✓ Engram MCP cwd=/var/www blindado en {cfg}")
+    except Exception as e:
+        print(f"  ⚠️ No se pudo actualizar {cfg}: {e}")
+EOF_ENGRAM_MCP
     echo "• Compilando registro de skills (.atl/skill-registry.md)..."
     gentle-ai skill-registry refresh --force 2>/dev/null || true
     echo "• Verificando salud del ecosistema Gentle AI..."

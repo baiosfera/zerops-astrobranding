@@ -87,6 +87,7 @@ LINK_PAIRS=(
     "orchesbrand:$CATALOG_REPO/bin/orchesbrand"
     "anti-slop-linter:$CATALOG_REPO/scripts/anti_slop_linter.py"
     "engram-sync:$CATALOG_REPO/scripts/engram-sync"
+    "engram-mcp:$CATALOG_REPO/scripts/engram-mcp"
     "zcp-sync:$CATALOG_REPO/scripts/zcp-sync"
     "skills-sync:$CATALOG_REPO/scripts/skills-sync.sh"
 )

@@ -429,6 +429,7 @@ def run_tests(evaluate_hook):
     res_val_write = evaluate_hook({
         "transcriptPath": "/nonexistent",
         "test_bypass_linear": True,
+        "test_bypass_research": True,
         "toolCall": {
             "name": "write_to_file",
             "args": {
@@ -1327,10 +1328,39 @@ def run_tests(evaluate_hook):
             })
             assert res_pi_silent == {}, f"Expected silent PreInvocation after Jina Verbatim grounding, got {res_pi_silent}"
             print("✓ Test 81 Passed: PreInvocation Anti-AMN nudge activates only when ungrounded")
+
+            # Test 82: PostToolUse zerops_discover unwraps MCP content[0].text and refreshes cache
+            evaluate_hook({
+                "is_post_tool": True,
+                "toolCall": {
+                    "name": "call_mcp_tool",
+                    "args": {"ServerName": "zerops", "ToolName": "zerops_discover", "Arguments": {}}
+                },
+                "toolResult": {
+                    "content": [{
+                        "type": "text",
+                        "text": json.dumps({
+                            "services": [
+                                {"hostname": "freellmapi", "deployed": True, "isInfrastructure": False},
+                                {"hostname": "bifrost", "deployed": True, "isInfrastructure": False}
+                            ]
+                        })
+                    }]
+                }
+            })
+            with open(test_cache, "r") as f:
+                refreshed_cache = json.load(f)
+            assert any(s.get("hostname") == "freellmapi" and s.get("deployed") is True for s in refreshed_cache.get("services", [])), f"Expected refreshed cache from MCP content wrapper, got {refreshed_cache}"
+            print("✓ Test 82 Passed: PostToolUse zerops_discover unwraps MCP wrapper cleanly")
         finally:
-            if cache_backup:
+            if cache_backup is not None:
                 with open(test_cache, "w") as f:
                     f.write(cache_backup)
+            elif os.path.exists(test_cache):
+                try:
+                    os.remove(test_cache)
+                except Exception:
+                    pass
 
 
     finally:

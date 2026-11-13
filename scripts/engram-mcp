@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Ensures Engram MCP always starts with /var/www as working directory regardless of plugin spawn cwd.
+set -euo pipefail
+
+cd /var/www
+
+ENGRAM_BIN="/var/www/.bin/engram"
+if [ ! -x "$ENGRAM_BIN" ]; then
+  ENGRAM_BIN="$(command -v engram || true)"
+fi
+
+if [ -z "$ENGRAM_BIN" ] || [ ! -x "$ENGRAM_BIN" ]; then
+  echo "ERROR: engram binary not found in /var/www/.bin/engram or PATH" >&2
+  exit 1
+fi
+
+exec "$ENGRAM_BIN" mcp --tools=agent "$@"
