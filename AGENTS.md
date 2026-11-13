@@ -7,6 +7,8 @@ ZCP control-plane container `zcp` inside this Zerops project. `zerops_*` MCP = p
 
 After bootstrap or adopt provision closes, service code SSHFS-mounts at `/var/www/{hostname}/` — the mount IS the service's runtime filesystem. **Edit** files there with Read/Edit/Write, not SSH. **Run** build/test/framework commands (`npm run build`, `npm test`, `php artisan`, `pytest`, DB migrations) INSIDE the service over SSH — `ssh {hostname} "cd /var/www && <cmd>"` — because the runtime and its dependencies live in the service container, not on this host; there the same code sits at `/var/www` (no `{hostname}` segment). That SSH is the expected path for running code, not an escape hatch. Long-running dev servers are the one exception — start them via `zerops_dev_server`, never a backgrounded `ssh "… &"` (the channel dies with the call). Missing a CLI/tool? `zerops` has passwordless sudo on the container — install it ad-hoc (`ssh {hostname} "sudo apk add <pkg>"` on Alpine, `sudo apt-get install` on Debian — `cat /etc/os-release` if unsure) rather than working around its absence. That install is **ephemeral** (gone on the next deploy = fresh container); a tool the build or runtime needs durably goes in `prepareCommands` in `zerops.yaml`. That ad-hoc affordance covers the app's OWN tooling only — anything under `/opt/zerops/**` is platform-owned; a broken or missing binary there (e.g. `zcli`) is report-not-repair: never patch it with a compat shim, reinstall, or replacement.
 
+**zcp's own Zerops key stays in this container.** `$ZCP_API_KEY` is the key zcp acts with: never pipe, copy or pass it to another service (over `ssh` or any other way), and never `zcli login` with it, here or anywhere — a login writes the key to disk, where it outlives the session and the app's dependencies can read it. Deploys go through `zerops_deploy`; when it, or any `zerops_*` tool, cannot do what is needed, say so to the person instead of running zcli yourself.
+
 `zerops.yaml` lives at `/var/www/{hostname}/zerops.yaml`; per-service rules MAY exist at `/var/www/{hostname}/CLAUDE.md` — read if present. If `ls /var/www/{hostname}/` is empty, the service hasn't been bootstrapped yet — run `zerops_workflow action="start" workflow="bootstrap" route="adopt"` first.
 
 
@@ -83,93 +85,21 @@ Shape: `{code, error, suggestion?, apiCode?, diagnostic?, apiMeta?, checks?, rec
 <!-- ZCP:END -->
 
 <!-- CUSTOM:BEGIN -->
+## 🏛️ Gobernanza Soberana & Contratos ZCP
+Regido por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) (F0–F5 unificado para `agy` + Engram, 7 Invariantes Soberanos, CoHaLo Positivo y verificación real). Enciclopedia: [`.agents/references/supreme_directive_encyclopedia.md`](file:///var/www/.agents/references/supreme_directive_encyclopedia.md).
 
-## 🏛️ Gobernanza Soberana & Marco Normativo (v8.4)
-Toda ejecución se rige por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) (Fases F0–F5, 7 Invariantes Soberanos, Invariante de Doble Dominio Software vs Prompts, CoHaLo Positivo, Reality Over Checklist Theater y Grounding Epistémico Continuo). Referencia enciclopédica: [`.agents/references/supreme_directive_encyclopedia.md`](file:///var/www/.agents/references/supreme_directive_encyclopedia.md).
+## 🧭 Topología ZCP & Despliegue Modular
+1. **ZCP Single-Node & SHARED**: `zcp` opera estrictamente a 1 contenedor (`minContainers: 1, maxContainers: 1`, `cpuMode: SHARED`). Prohibido escalar horizontalmente `zcp`. Builds, tests y procesos de cada runtime corren por SSH en su contenedor dedicado (`ssh {hostname} "cd /var/www && <cmd>"`), nunca dentro de `zcp`.
+2. **Arquitectura Lego & Service Discovery**: Cada servicio (`freellmapi`, `bifrost`, `hermes`, `nats`, `paperclip`, `pidev`, `astro-web`) es modular y se interconecta dinámicamente vía DNS interno privado (`zerops_discover`). Invariantes probados: **Bifrost** usa PostgreSQL 18 (`config_store`/`logs_store`) y `chromem`/`qdrant` (nunca `redis` contra Valkey 7.2); **FreeLLMAPI** persiste en `localstorage` con cooldown 429.
+3. **Soberanía GitOps (Upstream vs Cliente)**:
+   - `baiosfera/*`: exclusivo **upstream** (`zerops-astrobranding`, `zerops-astro-skills`, chasis y plantillas generales). Prohibido alojar código de clientes aquí.
+   - `<marca>/<app>`: repositorio aislado del cliente, usando su token en `/var/www/baiosfera/0ZEROPS-AGY/users-apis/<Marca>/<marca>-keys.md` (nunca el token de Baiosfera para repos de clientes).
+   - `zcp-update` (`iniciar.sh --update`): sincroniza upstream bidireccionalmente vía Git (`--ff-only` seguro) sin pisar cambios locales ni mezclar secretos.
 
-## 🧭 PROTOCOLO DE DESPLIEGUE MODULAR POR LENGUAJE NATURAL (INVARIANTE ABSOLUTO)
-1. **Frontera Sagrada del Plano de Control (`zcp`) e Invariante Single-Node**:
-   - Este contenedor `zcp` es exclusivamente el orquestador de plataforma y espacio con estado (stateful). Debe permanecer **ESTRICTAMENTE configurado a 1 solo contenedor** (`minContainers: 1, maxContainers: 1`). Prohibido el autoescalado horizontal en ZCP (provoca split-brain, contenedores vacíos sin sincronizar y pérdida aparente de datos al balancear).
-   - **Frugalidad SHARED**: Opera en `cpuMode: SHARED` para máxima economía de recursos sin sacrificar calidad. La cuota de CPU/recursos de la cuenta se consulta en tiempo real vía panel o `zerops_discover`, nunca se asume ni hardcodea.
-   - Los runtimes de aplicación, builds pesados y servidores de desarrollo (`bun run dev`, `bun test`, etc.) se ejecutan dentro de sus contenedores LXC dedicados en Zerops (`ssh {hostname} "cd /var/www && <cmd>"`), nunca dentro de ZCP.
-2. **Rol de `iniciar.sh`**:
-   - `iniciar.sh` conecta Google Drive SSoT, clona repositorios, enlaza herramientas en `/usr/local/bin` e inyecta credenciales.
-   - El arranque en frío deja el plano de control listo y en espera de órdenes operativas; el despliegue de runtimes de aplicación se activa de forma desacoplada y bajo demanda.
-3. **Despliegues Autónomos por Lenguaje Natural**:
-   - El usuario activa los despliegues hablando en lenguaje natural (ej: *"instala freellmapi y bifrost"*, *"instala hermes y nats"*, *"instala la tienda online de N producto"*, *"instala brandview studio"* o *"instala el ecosistema completo"*).
-   - Al recibir la orden, el agente (AGY) **ejecuta el hito de punta a punta de forma autónoma, sin fricción y validando con tests físicos de comportamiento**:
-     - Lee la receta correspondiente en `recipes/steps/` o `recipes/`.
-     - Consulta la skill correspondiente en `zerops-astro-skills` (`bifrost`, `freellmapi`, `nats`, `hermes-agent`, `evolution-api`, `astro-web`, `zcp`).
-     - Aprovisiona vía `zerops_workflow action="start" workflow="bootstrap"` o `develop`.
-     - Inyecta secrets en `zerops_env` y cablea las variables de servicio.
-     - **Invariantes Técnicos Probados**:
-       - **Bifrost**: `config_store` y `logs_store` en PostgreSQL 18. `vector_store.type` en `chromem` o `qdrant` (nunca `redis` contra Valkey 7.2 por ausencia de RediSearch `FT.*`). Registra las 5 Virtual Keys en `/api/governance/virtual-keys`.
-       - **FreeLLMAPI**: Persistencia en `localstorage`, circuit breaker 429 con cooldown y rotación de keys.
-      - **Arquitectura Lego Desacoplada & Orden Libre de Steps (Zero-Hardcoding)**:
-        - Los hitos y servicios son **100% modulares y aditivos**: pueden solicitarse en cualquier orden o de forma completamente aislada.
-        - **Cero Acoplamiento Artificial**: Cada caso de uso aprovisiona únicamente los servicios que requiere (ej. una landing o checkout no requiere el stack de IA si no lo utiliza).
-        - **Service Discovery Dinámico**: Los servicios se interconectan en caliente vía DNS interno privado (`http://bifrost:8080`, `http://evolution:8085`, `http://listmonk:9000`). El agente inspecciona en vivo (`zerops_discover`) y solo cablea lo existente.
-        - **GitOps Multi-Servicio & Staging Efímero en Apps (`astro-web`)**:
-          * La plantilla `zerops-astrobranding` es puramente chasis/herramientas y nunca corre workflows de deploy propios.
-          * Las apps personalizadas usan el modelo **Multi-Servicio** (`<app>-prod` en rama `main`, `<app>-dev` o `<app>-stage` en rama `dev`/`stage`).
-          * El entorno `stage` es **efímero**: se crea para validar cambios en `stage.midominio.com` y puede eliminarse al terminar para costo cero.
-          * **Soberanía de Namespaces de Repositorios (Invariante Upstream vs Cliente)**:
-            - `baiosfera/*`: **Exclusivo Upstream** (chasis `zerops-astrobranding`, catálogo `zerops-astro-skills`, compendios, tooling). **PROHIBIDO** alojar código o crear repositorios de clientes bajo `baiosfera`.
-            - `https://github.com/<marca>/web` (o `<cliente>/<app>`): **Repositorio Soberano del Cliente** (aislado bajo su propia organización o usuario en GitHub).
-            - **Resolución de Tokens de GitHub**: El agente DEBE resolver las credenciales específicas del cliente en `/var/www/baiosfera/0ZEROPS-AGY/users-apis/<Marca>/<marca>-keys.md` (ej. `GITHUB_TOKEN_GLAMUR`, `GITHUB_TOKEN_ELPLACERDC`), NUNCA usar el token global de Baiosfera para repos de clientes.
-            - **Mapeo Canónico de Ramas**: La rama `main` despliega en `webprod` (producción); la rama `dev` despliega en `webdev` (desarrollo/preview).
-     - Valida la salud física (`/health`, `/metrics`), paridad SSoT (`ssot-parity-check`) y commit descriptivo en Git.
-
-## 🛑 Contratos Operativos ZCP & Seguridad
-1. **Jerarquía ZCP-First & SSoT Indivisible**: El desarrollo activo ocurre en ZCP (`/var/www`). Los cambios validados se reflejan indivisiblemente hacia Google Drive SSoT (`/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/`). Drive solo fluye hacia ZCP en arranques fríos (`iniciar.sh` $\to$ `unisetup.sh`).
-2. **Entorno y Secretos (Soberanía Zerops Env)**: Toda variable o secreto se gestiona en la plataforma vía `zerops_env`, se inyecta en el runtime (`/etc/environment` y shell) y se referencia exclusivamente por variable de entorno (`$VAR` o `process.env`). Los archivos `.env` o `gdrive.env` temporales se purgan tras el bootstrap.
-3. **Seguridad Nativa a Nivel de Proceso**: `tool-guard.py` intercepta en `PreToolUse`/`PreInvocation` comandos destructivos, fugas de rutas relativas (`0zcp-123/`), protege handovers, asegura backups pre-mutación y deduplica eventos para máxima eficiencia de tokens.
-4. **Higiene de Procesos & Purga de Zombies**: Comandos con `timeout 10s` y `WaitMsBeforeAsync: 10000`. Servidores continuos vía `zerops_dev_server`. Purga periódica obligatoria de procesos verdaderamente huérfanos/zombies (STAT Z o PPID 1 sin TTY asignado; una sesión agy viva con TTY NUNCA es zombie) para proteger los recursos compartidos del contenedor.
-5. **Grounding Epistémico & Anti-Amnesia (Supremacía Absoluta de `research`)**: Al inicio de CADA sesión es mandatorio ejecutar `mem_context` o `mem_search` y `zerops_discover` antes de emitir juicios. Para romper el aislamiento de la caja negra, la skill `research` (12 motores: Context7, Exa, Tavily, Brave, Jina Reader, Firecrawl) es la navaja suiza de obligatoriedad extrema. Toda tarea de arquitectura, diseño o saneamiento/creación de skills exige obligatoriamente delegar a subagentes dedicados (`invoke_subagent` con typeName `research`) para extraer especificaciones técnicas fidedignas antes de mutar código o redactar planes. **Mandato de Espera Epistémica**: Cuando se despachen subagentes de `research`, es MANDATORIO esperar sus reportes antes de apresurarse a redactar conclusiones, formular planes o abrir rondas de grilling. `docu` documenta la verdad técnica; `cohalo` estructura el prompting afirmativo; `skill-improver` unbundlea Dual-RAG; `writing-*` refina la claridad. Prohibido operar desde memoria pre-entrenada estocástica (AMN).
-6. **Claridad Arquitectónica, Aislamiento de Borradores & Sensor-First Anti-Cháchara**: Comunicación concisa, sin burocracia superficial ni checklist theater. En F0–F3 el diseño y clarificación (grilling) reside exclusivamente en borradores (`draft_*.md`) o en chat/Engram; el ticketaje en Linear se reserva exclusivamente para F4. En iniciativas complejas ($\ge 3$ pasos o multi-servicio), el grilling estructurado en F1 se activa por defecto tras el inflow de F0 sin requerir solicitud manual. En F4, se presenta el plan en `/var/www/artifacts/plans/<slug>_v1.md`, se dan de alta los tickets modulares en Linear (invariante anti-monolítico: 1 BAI por subsistema o runtime desacoplado, cero tickets gigantes) y se solicita Go explícito. Ante cualquier corrección, omisión o requerimiento de blindaje del arnés/hooks/gobernanza (Invariante Sensor-First Anti-Cháchara), el agente erradica disculpas y explicaciones en chat: implementa mandatoriamente el sensor físico en `tool-guard.py` con test unitario en `run_tests()` (exit 0) o muta de inmediato el artefacto físico (borrador `draft_*.md`, plan maestro o Linear), persistiendo en Engram (`mem_save`) antes de responder. En F5, el mensaje valida la entrega con sensores físicos (exit 0) e informa explícitamente qué quedó desplegado y probado en vivo con los siguientes pasos lógicos.
-7. **Invariante de Doble Dominio (Software vs Prompts)**:
-   - **Scripts y Código (Python/Bash/TS)**: Rige CoHaLo Engineering (contexto acotado sin variables globales mutables, harness con validación de sintaxis física `python3 -m py_compile`/`bash -n` y pruebas exit code 0 `bun test`/`pytest`, loops deterministas sin silenciar errores) y Skill-Improver (preservación invariable de AST de funciones y clases, cero mutilación, módulos profundos). NUNCA limitar código de software por presupuesto de palabras o tokens.
-   - **Prompts & Skills (Markdown/Instrucciones)**: Rige CoHaLo Prompting (Positive Guidance afirmativo, directivas de dominio cerrado) y Skill-Improver (revelación progresiva Dual-RAG, router `SKILL.md` $\le$ 480 palabras / ~550 tokens, especificaciones desacopladas en `references/`).
-8. **Soberanía de Storage y Aislamiento de Marcas (Local Storage vs Drive SSoT)**:
-   - **Prioridad de Marca Nativa en Local Storage**: El volumen persistente `localstorage` (`/mnt/localstorage` o `/var/www/localstorage`) debe priorizar y aislar los assets de la marca nativa del proyecto activo (`${PROJECT_NAME}`, ej. `ELPLACERDC`) para evitar saturación de disco local y colisiones de personalidad en los agentes.
-   - **Google Drive como SSoT Universal Multi-Marca**: `/var/www/baiosfera/PROYECTOS/` y `/var/www/baiosfera/ASTROLOGÍA/DIAG/` son el repositorio global indestructible donde conviven todas las marcas y clientes del ecosistema.
-   - **Flexibilidad Sin Bloqueos ("Zero-Lock / Sin Cárcel")**: El usuario puede ejecutar libremente `zcp-sync <MARCA>` para cualquier cliente cuando lo necesite de forma manual. La herramienta advierte de forma constructiva si la marca difiere de `${PROJECT_NAME}`, pero no bloquea la sincronización.
-
-## 📦 Catálogo y Herramientas Soberanas
-- **Catálogo Oficial (141 skills)**: [`.atl/skill-registry.md`](file:///var/www/.atl/skill-registry.md).
-- **Bootstrapper Universal**: [`iniciar.sh`](file:///var/www/zerops-astrobranding/iniciar.sh) (raíz frío) y [`unisetup.sh`](file:///var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh) aprovisionan dependencias, herramientas y sincronizan SSoT sin drift.
-- **Herramientas Globales en PATH**: `ssot-parity-check`, `skills-suite-validate`, `bifrost-cli`, `zcp-preflight-gate`, `zcp-wa`, `zcp-mail`.
-
+## 🛑 Contratos Operativos & Higiene
+- **Secretos & Env**: Gestionar secretos vía `zerops_env` (`$VAR` / `process.env`); purgar temporales tras bootstrap.
+- **Anti-AMN (`research`)**: En arquitectura, APIs externas o skills, contrastar fuentes primarias con subagentes `research` y herramientas MCP (`context7`, `exa`, `tavily`, `brave`, `firecrawl`) antes de editar o planificar; esperar reportes completos.
+- **Higiene de Procesos**: Comandos cortos (`timeout 10s`), servidores largos vía `zerops_dev_server`. Mantener sesiones interactivas TTY vivas.
+- **Storage & Multi-Proyecto**: `/var/www/localstorage` prioriza el proyecto activo (`ENGRAM_PROJECT`); Google Drive (`/var/www/baiosfera/PROYECTOS/`, `users-apis/`, `0ZEROPS-AGY/<proyecto>/engram`) actúa como archivo multi-proyecto.
+- **CLIs en PATH**: `ssot-parity-check`, `skills-suite-validate`, `engram-sync`, `linear-cli`, `zcp-update`, `apotelos`, `brand-play`, `orchesbrand`.
 <!-- CUSTOM:END -->
-
-
-<!-- ZEROPS:REFLOG -->
-### 2026-10-17 — Bootstrap: Provision PostgreSQL 18, Valkey 7.2, NATS 2.12, Object Storage, and EvolutionGo for Catalina Glamur
-
-- **Runtime:** webdev (ubuntu/bun@1.3, standard)
-- **Stage:** webstage
-- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2), nats (nats:single@2.12), objectstorage (object-storage), localstorage (local-storage:single@1)
-- **Runtime:** evolution (alpine/go@1.22, simple)
-- **Dependencies:** database (postgresql:single@18), valkey (valkey:single@7.2)
-- **Session:** 0a836147c72d8e6a
-
-> This is a historical record. Verify current state via `zerops_discover`.
-<!-- /ZEROPS:REFLOG -->
-
-<!-- ZEROPS:REFLOG -->
-### 2026-10-23 — Bootstrap: Adoptar todos los servicios y runtimes existentes para Catalina Glamur
-
-- **Runtime:** brand (alpine/bun@1.3, dev)
-- **Dependencies:** valkey (valkey:single@7.2), database (postgresql:single@18), nats (nats:single@2.12), localstorage (local-storage:single@1)
-- **Runtime:** webdev (ubuntu/bun@1.3, dev)
-- **Dependencies:** valkey (valkey:single@7.2), database (postgresql:single@18), nats (nats:single@2.12), localstorage (local-storage:single@1)
-- **Runtime:** webprod (ubuntu/bun@1.3, dev)
-- **Dependencies:** valkey (valkey:single@7.2), database (postgresql:single@18), nats (nats:single@2.12), localstorage (local-storage:single@1)
-- **Runtime:** evolution (alpine/go@1.22, dev)
-- **Dependencies:** valkey (valkey:single@7.2), database (postgresql:single@18), nats (nats:single@2.12), localstorage (local-storage:single@1)
-- **Runtime:** videoworker (ubuntu/nodejs@22, dev)
-- **Dependencies:** valkey (valkey:single@7.2), database (postgresql:single@18), nats (nats:single@2.12), localstorage (local-storage:single@1)
-- **Session:** ee91036594bc4646
-
-> This is a historical record. Verify current state via `zerops_discover`.
-<!-- /ZEROPS:REFLOG -->

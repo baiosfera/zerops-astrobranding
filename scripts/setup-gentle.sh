@@ -237,11 +237,9 @@ if command -v gentle-ai >/dev/null 2>&1; then
     echo "• Verificando salud del ecosistema Gentle AI..."
     gentle-ai doctor || true
 
-    # 3b. Optimización de Prompt Prefix en GEMINI.md (Dual-RAG JIT Mode)
-    if [ -f "/home/zerops/.gemini/GEMINI.md" ]; then
-        echo "• Optimizando GEMINI.md (Offloading sdd-orchestrator a Dual-RAG JIT)..."
-        python3 - << 'EOF_OPT'
-import os
+    # 3b. Optimización idempotente de GEMINI.md + Rules Budget Guard (Dual-RAG JIT Mode)
+    python3 - << 'EOF_OPT'
+import os, re
 
 gemini_path = "/home/zerops/.gemini/GEMINI.md"
 dest_local = "/home/zerops/.gemini/antigravity-cli/skills/_shared/sdd-orchestrator-full.md"
@@ -251,45 +249,49 @@ if os.path.isfile(gemini_path):
     with open(gemini_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    start_marker = None
-    end_marker = None
-    if "<!-- gentle-ai:orchestrator -->" in content and "<!-- /gentle-ai:agent-routing -->" in content:
-        start_marker = "<!-- gentle-ai:orchestrator -->"
-        end_marker = "<!-- /gentle-ai:agent-routing -->"
-    elif "<!-- gentle-ai:sdd-orchestrator -->" in content and "<!-- /gentle-ai:sdd-orchestrator -->" in content:
-        start_marker = "<!-- gentle-ai:sdd-orchestrator -->"
-        end_marker = "<!-- /gentle-ai:sdd-orchestrator -->"
-
-    if start_marker and end_marker:
-        start_idx = content.find(start_marker)
-        end_idx = content.find(end_marker)
-
-        if start_idx != -1 and end_idx != -1 and (end_idx - start_idx) > 1000:
-            extracted = content[start_idx:end_idx + len(end_marker)]
+    # Capture full payload if any large block (>1000 chars) exists before compacting
+    blocks = re.findall(r'<!-- gentle-ai:orchestrator -->.*?<!-- /gentle-ai:agent-routing -->', content, flags=re.DOTALL)
+    for b in blocks:
+        if len(b) > 1000:
             os.makedirs(os.path.dirname(dest_local), exist_ok=True)
             with open(dest_local, "w", encoding="utf-8") as f:
-                f.write(extracted)
+                f.write(b)
             os.makedirs(os.path.dirname(dest_drive), exist_ok=True)
             with open(dest_drive, "w", encoding="utf-8") as f:
-                f.write(extracted)
+                f.write(b)
+            break
 
-            replacement = f"""{start_marker}
-## Agent Teams Lite — Orchestrator (Dual-RAG JIT Mode)
+    jit_pointer = (
+        "<!-- gentle-ai:orchestrator -->\n"
+        "## Agent Teams Lite — Orchestrator (Dual-RAG JIT Mode)\n\n"
+        "Spec-Driven Development (SDD) & ODD orchestrator protocol is offloaded to conserve token budget.\n"
+        "When the user requests an SDD/ODD change, phase agent delegation, or Agent Teams workflow, read:\n"
+        "file:///home/zerops/.gemini/antigravity-cli/skills/_shared/sdd-orchestrator-full.md\n"
+        "<!-- /gentle-ai:agent-routing -->\n"
+    )
+    cleaned = re.sub(
+        r'(?:<!-- gentle-ai:orchestrator -->|## Agent Teams Lite — Orchestrator \(Dual-RAG JIT Mode\)).*?(?:<!-- /gentle-ai:agent-routing -->|<!-- /gentle-ai:sdd-orchestrator -->|skills/_shared/sdd-orchestrator-full\.md)\n*',
+        '',
+        content,
+        flags=re.DOTALL,
+    ).strip()
+    new_content = f"{cleaned}\n\n{jit_pointer}" if cleaned else jit_pointer
+    with open(gemini_path, "w", encoding="utf-8") as f:
+        f.write(new_content)
+    print("  ✓ GEMINI.md deduplicado y compactado a 1 bloque Dual-RAG JIT.")
 
-Spec-Driven Development (SDD) & ODD orchestrator protocol is offloaded to conserve token budget.
-When the user requests an SDD/ODD change, phase agent delegation, or Agent Teams workflow, read:
-file:///home/zerops/.gemini/antigravity-cli/skills/_shared/sdd-orchestrator-full.md
-{end_marker}"""
-            new_content = content[:start_idx] + replacement + content[end_idx + len(end_marker):]
-            rule_target = "- Verify technical claims before stating them. If unsure, investigate first."
-            rule_add = "- Explicit visible paths in chat: never output bare markdown links where the URL is hidden behind the file name (e.g. [file.md](...)). Always print the full absolute path in plain text or code blocks so it can be seen and copied directly in the terminal."
-            if rule_target in new_content and rule_add not in new_content:
-                new_content = new_content.replace(rule_target, f"{rule_target}\n{rule_add}")
-            with open(gemini_path, "w", encoding="utf-8") as f:
-                f.write(new_content)
-            print("  ✓ GEMINI.md optimizado: orchestrator offloaded a Dual-RAG JIT y regla de rutas visibles inyectada.")
+# Keep heavy gentle-ai orchestrator rules on-demand (model_decision) so always_on stays under agy budget
+for rule_name in ("gentle-ai-03-orchestrator-part1.md", "gentle-ai-04-agent-routing-part1.md"):
+    rpath = os.path.join("/home/zerops/.gemini/config/rules", rule_name)
+    if os.path.isfile(rpath):
+        with open(rpath, "r", encoding="utf-8") as rf:
+            rtxt = rf.read()
+        if "trigger: always_on" in rtxt:
+            rtxt = rtxt.replace("trigger: always_on", "trigger: model_decision", 1)
+            with open(rpath, "w", encoding="utf-8") as wf:
+                wf.write(rtxt)
+            print(f"  ✓ {rule_name} ajustada a trigger: model_decision (agy budget hygiene).")
 EOF_OPT
-    fi
 fi
 
 INJECT_CMD="inject-agent-rule"

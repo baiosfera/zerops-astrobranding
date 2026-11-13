@@ -273,9 +273,13 @@ fi
 # 3.1 Lifecycle Hooks & Gatekeeper Parity
 echo "--- Checking Lifecycle Hooks & Tool-Guard Parity ---"
 compare_files "hooks/tool-guard.py" "$LOCAL_BASE/.bin/hooks/tool-guard.py" "$DRIVE_BASE/scripts/hooks/tool-guard.py"
+compare_files "hooks/test_tool_guard.py" "$LOCAL_BASE/.bin/hooks/test_tool_guard.py" "$DRIVE_BASE/scripts/hooks/test_tool_guard.py"
 compare_files "hooks.json" "$LOCAL_BASE/.agents/hooks.json" "$DRIVE_BASE/.agents/hooks.json"
 if [ -f "$LOCAL_BASE/zerops-astrobranding/scripts/hooks/tool-guard.py" ]; then
     compare_files "zerops-astrobranding/scripts/hooks/tool-guard.py" "$LOCAL_BASE/zerops-astrobranding/scripts/hooks/tool-guard.py" "$LOCAL_BASE/.bin/hooks/tool-guard.py"
+fi
+if [ -f "$LOCAL_BASE/zerops-astrobranding/scripts/hooks/test_tool_guard.py" ]; then
+    compare_files "zerops-astrobranding/scripts/hooks/test_tool_guard.py" "$LOCAL_BASE/zerops-astrobranding/scripts/hooks/test_tool_guard.py" "$LOCAL_BASE/.bin/hooks/test_tool_guard.py"
 fi
 if [ -f "$LOCAL_BASE/zerops-astrobranding/.agents/hooks.json" ]; then
     compare_files "zerops-astrobranding/.agents/hooks.json" "$LOCAL_BASE/zerops-astrobranding/.agents/hooks.json" "$LOCAL_BASE/.agents/hooks.json"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Gentle AI Custom Skills Suite Validation Runner (Standard v3.2 - Universal Sensor Fallback)
-# SSoT-First Custom Skills Scope & Hermes Upstream Invariant
-# Zero LLM Tokens | Bounded Execution | 100% Deterministic
+# Gentle AI Custom Skills Structural & Behavioral Linter
+# Checks: SKILL.md existence/frontmatter, bash -n syntax, python3 py_compile, file:/// links
+# Also supports real behavioral tests in scripts/*-test.sh / tests/*.sh
 # ==============================================================================
 set -euo pipefail
 
@@ -42,16 +42,7 @@ done
 for skill_name in "${TARGET_SKILLS[@]}"; do
     skill_path="$SKILLS_DIR/$skill_name"
     TOTAL=$((TOTAL + 1))
-    # Rechazo categórico de perros guardianes (Soberanía del Sensor Universal)
-    val_script="$skill_path/scripts/${skill_name}-validate.sh"
-    if [ -f "$val_script" ]; then
-        echo "❌ [$skill_name]: Validador sintético detectado ($(basename "$val_script")). Erradicá el script artesanal; la validación reside exclusivamente en el Sensor Universal."
-        FAILED=$((FAILED + 1))
-        FAILED_SKILLS+=("$skill_name (synthetic validator detected)")
-        continue
-    fi
-
-    # SENSOR UNIVERSAL DETERMINISTA
+    # Structural & Syntax Linter (allows real behavioral scripts & test runners)
     UNI_FAIL=0
     # 1. Validar existencia y contenido de SKILL.md
     if [ ! -f "$skill_path/SKILL.md" ] || [ ! -s "$skill_path/SKILL.md" ]; then

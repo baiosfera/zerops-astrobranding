@@ -1,0 +1,43 @@
+zerops:
+  - setup: freellmapi
+    build:
+      base: ubuntu/nodejs@24
+      prepareCommands:
+        - sudo apt-get update && sudo apt-get install -y build-essential python3
+      buildCommands:
+        - npm ci
+        - mkdir -p client/src/data && cp cli/tools.json client/src/data/agent-tools.json
+        - npm rebuild better-sqlite3
+        - npm run build -w client
+        - npm run build -w server
+        - npm prune --omit=dev && rm -rf .git client/src desktop cli tests
+      deployFiles:
+        - .
+      cache:
+        - node_modules
+    run:
+      base: ubuntu/nodejs@24
+      volume:
+        hostname: localstorage
+        mountPath: /mnt/localstorage
+        readOnly: false
+      ports:
+        - port: 3001
+          httpSupport: true
+      initCommands:
+        - sudo mkdir -p /mnt/localstorage/freellmapi/data && sudo chown -R zerops:zerops /mnt/localstorage/freellmapi && sudo chmod -R 777 /mnt/localstorage/freellmapi
+        - test -f /mnt/localstorage/freellmapi/data/freeapi.db || (test -f /var/www/server/data/freeapi.db && cp /var/www/server/data/freeapi.db /mnt/localstorage/freellmapi/data/freeapi.db) || true
+      envVariables:
+        PORT: "3001"
+        HOST: "0.0.0.0"
+        NODE_ENV: "production"
+        FREEAPI_DB_PATH: "/mnt/localstorage/freellmapi/data/freeapi.db"
+        ENCRYPTION_KEY: "0f038ac3a3279df96fefcbf08b7450585c73fec4b892510ebeafe04f9300dee2"
+        FREEAPI_ADMIN_EMAIL: ${FREEAPI_ADMIN_EMAIL_SECRET}
+        FREEAPI_ADMIN_PASSWORD: ${FREEAPI_ADMIN_PASSWORD_SECRET}
+        FREEAPI_CONFIG_JSON: ${FREEAPI_CONFIG_JSON_SECRET}
+      start: node /var/www/server/dist/index.js
+      healthCheck:
+        httpGet:
+          port: 3001
+          path: /api/ping

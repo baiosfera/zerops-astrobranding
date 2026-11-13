@@ -457,10 +457,14 @@ if [ ! -d "$REPO_DIR" ]; then
     echo "• [1/4] Clonando repositorio de aplicación ($REPO_URL)..."
     GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="" SSH_ASKPASS="" VSCODE_GIT_IPC_HANDLE="" git clone "$REPO_URL" "$REPO_DIR"
 else
-    echo "• [1/4] Repositorio detectado en $REPO_DIR. Sincronizando con origen..."
+    echo "• [1/4] Repositorio detectado en $REPO_DIR. Sincronizando de forma segura con origin/main..."
     PRE_HEAD="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)"
     GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="" SSH_ASKPASS="" VSCODE_GIT_IPC_HANDLE="" git -C "$REPO_DIR" fetch origin main 2>/dev/null || true
-    git -C "$REPO_DIR" reset --hard origin/main 2>/dev/null || GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="" SSH_ASKPASS="" VSCODE_GIT_IPC_HANDLE="" git -C "$REPO_DIR" pull --ff-only 2>/dev/null || true
+    if [ -z "$(git -C "$REPO_DIR" status --porcelain 2>/dev/null || true)" ]; then
+        GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="" SSH_ASKPASS="" VSCODE_GIT_IPC_HANDLE="" git -C "$REPO_DIR" pull --ff-only origin main 2>/dev/null || echo "  ⚠️ Rama local divergente en $REPO_DIR; se preserva el estado local (sin reset --hard)."
+    else
+        echo "  ⚠️ Cambios locales sin commitear en $REPO_DIR; preservados (git status sucio, sin reset --hard)."
+    fi
     POST_HEAD="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || true)"
     if [ -z "${INICIAR_REEXEC:-}" ] && [ -n "$PRE_HEAD" ] && [ -n "$POST_HEAD" ] && [ "$PRE_HEAD" != "$POST_HEAD" ] && [ -f "$REPO_DIR/iniciar.sh" ]; then
         echo "  🔄 iniciar.sh auto-actualizado desde GitHub ($PRE_HEAD -> $POST_HEAD). Re-ejecutando versión canónica..."
@@ -669,36 +673,32 @@ if [ ! -d "$SKILLS_LOCAL_DIR/.git" ]; then
     echo "• [2b/4] Sincronizando catálogo de skills soberanas desde GitHub..."
     git clone --depth 1 "$SKILLS_REPO_URL" "$SKILLS_LOCAL_DIR" 2>/dev/null || true
 else
-    echo "• [2b/4] Actualizando skills soberanas desde GitHub..."
+    echo "• [2b/4] Actualizando skills soberanas desde GitHub (ff-only seguro)..."
     [ -n "${GITHUB_TOKEN_BAIOSFERA:-}" ] && git -C "$SKILLS_LOCAL_DIR" remote set-url origin "$SKILLS_REPO_URL" 2>/dev/null || true
-    git -C "$SKILLS_LOCAL_DIR" fetch origin main 2>/dev/null || true
-    git -C "$SKILLS_LOCAL_DIR" reset --hard origin/main 2>/dev/null || git -C "$SKILLS_LOCAL_DIR" pull --ff-only 2>/dev/null || true
+    GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="" SSH_ASKPASS="" git -C "$SKILLS_LOCAL_DIR" fetch origin main 2>/dev/null || true
+    if [ -z "$(git -C "$SKILLS_LOCAL_DIR" status --porcelain 2>/dev/null || true)" ]; then
+        GIT_TERMINAL_PROMPT=0 GIT_ASKPASS="" SSH_ASKPASS="" git -C "$SKILLS_LOCAL_DIR" pull --ff-only origin main 2>/dev/null || echo "  ⚠️ zerops-astro-skills divergente; cambios locales preservados."
+    else
+        echo "  ⚠️ Cambios locales sin commitear en zerops-astro-skills; preservados."
+    fi
 fi
 
-# Despliegue en vivo y directo de las skills soberanas personalizadas hacia el workspace y localstorage
+# Despliegue en vivo y directo de las skills soberanas (symlinks hacia ~/.gemini para evitar duplicación)
 if [ -d "$SKILLS_LOCAL_DIR" ]; then
-    echo "• [2b/4] Desplegando skills soberanas personalizadas hacia /var/www/.agents/skills y /var/www/localstorage/skills..."
-    mkdir -p "$PROJECT_ROOT/.agents/skills" "/home/zerops/.gemini/antigravity-cli/skills" "$PROJECT_ROOT/localstorage/skills" 2>/dev/null || true
+    echo "• [2b/4] Desplegando skills soberanas hacia /var/www/.agents/skills y enlazando perfil AGY..."
+    mkdir -p "$PROJECT_ROOT/.agents/skills" "/home/zerops/.gemini/antigravity-cli/skills" 2>/dev/null || true
     for sk_dir in "$SKILLS_LOCAL_DIR"/*/; do
         [ -d "$sk_dir" ] || continue
         sk_name=$(basename "$sk_dir")
         [[ "$sk_name" =~ ^(\.git|bak|_shared)$ ]] && continue
         if command -v rsync >/dev/null 2>&1; then
             rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
-            rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
-            if [ -d "$PROJECT_ROOT/localstorage" ]; then
-                mkdir -p "$PROJECT_ROOT/localstorage/skills/$sk_name" 2>/dev/null || true
-                rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$sk_dir/" "$PROJECT_ROOT/localstorage/skills/$sk_name/" 2>/dev/null || true
-            fi
         else
-            mkdir -p "$PROJECT_ROOT/.agents/skills/$sk_name" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
+            mkdir -p "$PROJECT_ROOT/.agents/skills/$sk_name" 2>/dev/null || true
             cp -rf "$sk_dir"* "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
-            cp -rf "$sk_dir"* "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
-            if [ -d "$PROJECT_ROOT/localstorage" ]; then
-                mkdir -p "$PROJECT_ROOT/localstorage/skills/$sk_name" 2>/dev/null || true
-                cp -rf "$sk_dir"* "$PROJECT_ROOT/localstorage/skills/$sk_name/" 2>/dev/null || true
-            fi
         fi
+        rm -rf "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
+        ln -sfn "$PROJECT_ROOT/.agents/skills/$sk_name" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
     done
     # Sincronizar las 4 skills core hacia Drive SSoT (acotado para evitar latencia FUSE)
     if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
@@ -719,14 +719,14 @@ if [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/skills" ]; then
         sk_name=$(basename "$d_sk")
         [[ "$sk_name" =~ ^(\.git|bak|_shared)$ ]] && continue
         if [ ! -d "$PROJECT_ROOT/.agents/skills/$sk_name" ] || [ ! -f "$PROJECT_ROOT/.agents/skills/$sk_name/SKILL.md" ]; then
-            mkdir -p "$PROJECT_ROOT/.agents/skills/$sk_name" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
+            mkdir -p "$PROJECT_ROOT/.agents/skills/$sk_name" 2>/dev/null || true
             if command -v rsync >/dev/null 2>&1; then
                 rsync -a --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$d_sk/" "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
-                rsync -a --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$d_sk/" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
             else
                 cp -rf "$d_sk"* "$PROJECT_ROOT/.agents/skills/$sk_name/" 2>/dev/null || true
-                cp -rf "$d_sk"* "/home/zerops/.gemini/antigravity-cli/skills/$sk_name/" 2>/dev/null || true
             fi
+            rm -rf "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
+            ln -sfn "$PROJECT_ROOT/.agents/skills/$sk_name" "/home/zerops/.gemini/antigravity-cli/skills/$sk_name" 2>/dev/null || true
         fi
     done
 fi
@@ -750,24 +750,10 @@ for i in $(seq 1 10); do
     sleep 1
 done
 
-# 2d. Garantizar paridad activa de scripts de bootstrap entre SSoT y repositorio
-if [ -f "$SSOT_SCRIPTS/iniciar.sh" ] && [ -f "$REPO_DIR/iniciar.sh" ]; then
-    if ! cmp -s "$SSOT_SCRIPTS/iniciar.sh" "$REPO_DIR/iniciar.sh"; then
-        if [ "$REPO_DIR/iniciar.sh" -nt "$SSOT_SCRIPTS/iniciar.sh" ]; then
-            cp -f "$REPO_DIR/iniciar.sh" "$SSOT_SCRIPTS/iniciar.sh" 2>/dev/null || true
-        else
-            cp -f "$SSOT_SCRIPTS/iniciar.sh" "$REPO_DIR/iniciar.sh" 2>/dev/null || true
-        fi
-    fi
-fi
-if [ -f "$SSOT_SCRIPTS/gdrive.sh" ] && [ -f "$REPO_DIR/scripts/gdrive.sh" ]; then
-    if ! cmp -s "$SSOT_SCRIPTS/gdrive.sh" "$REPO_DIR/scripts/gdrive.sh"; then
-        if [ "$REPO_DIR/scripts/gdrive.sh" -nt "$SSOT_SCRIPTS/gdrive.sh" ]; then
-            cp -f "$REPO_DIR/scripts/gdrive.sh" "$SSOT_SCRIPTS/gdrive.sh" 2>/dev/null || true
-        else
-            cp -f "$SSOT_SCRIPTS/gdrive.sh" "$REPO_DIR/scripts/gdrive.sh" 2>/dev/null || true
-        fi
-    fi
+# 2d. Garantizar paridad de scripts de bootstrap (GitHub SSoT -> Drive)
+if [ -d "$SSOT_SCRIPTS" ]; then
+    [ -f "$REPO_DIR/iniciar.sh" ] && cp -f "$REPO_DIR/iniciar.sh" "$SSOT_SCRIPTS/iniciar.sh" 2>/dev/null || true
+    [ -f "$REPO_DIR/scripts/gdrive.sh" ] && cp -f "$REPO_DIR/scripts/gdrive.sh" "$SSOT_SCRIPTS/gdrive.sh" 2>/dev/null || true
 fi
 
 # 2e. Rama de Actualización Ultrarrápida (< 3s) si se invoca con --update / -u / zcp-update
@@ -790,17 +776,21 @@ if [ "$UPDATE_MODE" = true ]; then
             [ -f "$REPO_DIR/$s" ] && cp -f "$REPO_DIR/$s" "$SSOT_SCRIPTS/$s" 2>/dev/null || true
         done
 
-        # Asegurar tool-guard.py en SSoT y local
+        # Asegurar tool-guard.py + test_tool_guard.py en SSoT y local
         mkdir -p "$SSOT_SCRIPTS/hooks" "$PROJECT_ROOT/.bin/hooks" 2>/dev/null || true
-        SRC_TOOL_GUARD=""
+        SRC_HOOK_DIR=""
         if [ -f "$REPO_DIR/scripts/hooks/tool-guard.py" ]; then
-            SRC_TOOL_GUARD="$REPO_DIR/scripts/hooks/tool-guard.py"
+            SRC_HOOK_DIR="$REPO_DIR/scripts/hooks"
         elif [ -f "$SSOT_SCRIPTS/hooks/tool-guard.py" ]; then
-            SRC_TOOL_GUARD="$SSOT_SCRIPTS/hooks/tool-guard.py"
+            SRC_HOOK_DIR="$SSOT_SCRIPTS/hooks"
         fi
-        if [ -n "$SRC_TOOL_GUARD" ]; then
-            cp -f "$SRC_TOOL_GUARD" "$PROJECT_ROOT/.bin/hooks/tool-guard.py" 2>/dev/null || sudo cp -f "$SRC_TOOL_GUARD" "$PROJECT_ROOT/.bin/hooks/tool-guard.py" 2>/dev/null || true
-            cp -f "$SRC_TOOL_GUARD" "$SSOT_SCRIPTS/hooks/tool-guard.py" 2>/dev/null || true
+        if [ -n "$SRC_HOOK_DIR" ]; then
+            for hfile in tool-guard.py test_tool_guard.py; do
+                if [ -f "$SRC_HOOK_DIR/$hfile" ]; then
+                    cp -f "$SRC_HOOK_DIR/$hfile" "$PROJECT_ROOT/.bin/hooks/$hfile" 2>/dev/null || true
+                    cp -f "$SRC_HOOK_DIR/$hfile" "$SSOT_SCRIPTS/hooks/$hfile" 2>/dev/null || true
+                fi
+            done
             chmod +x "$PROJECT_ROOT/.bin/hooks/tool-guard.py" 2>/dev/null || true
         fi
 
@@ -813,39 +803,36 @@ if [ "$UPDATE_MODE" = true ]; then
             SRC_HOOKS="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json"
         fi
         if [ -n "$SRC_HOOKS" ]; then
-            cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || sudo cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || true
+            cp -f "$SRC_HOOKS" "$PROJECT_ROOT/.agents/hooks.json" 2>/dev/null || true
             echo '{}' > "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
             [ -d "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents" ] && cp -f "$SRC_HOOKS" "$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123/.agents/hooks.json" 2>/dev/null || true
         fi
     fi
 
-    # Sincronizar reglas de gobernanza (AGENTS.md y 00-SUPREME-DIRECTIVE.md) con Drive SSoT
+    # Sincronizar reglas de gobernanza (AGENTS.md y 00-SUPREME-DIRECTIVE.md) con prioridad GitHub SSoT -> local & Drive
     DRIVE_SSOT_DIR="$DRIVE_MOUNT/0ZEROPS-AGY/0zcp-123"
     if [ -d "$DRIVE_SSOT_DIR" ]; then
-        echo "• Sincronizando gobernanza (AGENTS.md, 00-SUPREME-DIRECTIVE.md) desde SSoT..."
-        # AGENTS.md: sincronización bidireccional por timestamp
-        if [ -f "$DRIVE_SSOT_DIR/AGENTS.md" ] && [ -f "$PROJECT_ROOT/AGENTS.md" ]; then
-            if [ "$DRIVE_SSOT_DIR/AGENTS.md" -nt "$PROJECT_ROOT/AGENTS.md" ]; then
-                cp -f "$DRIVE_SSOT_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null || true
-            elif [ "$PROJECT_ROOT/AGENTS.md" -nt "$DRIVE_SSOT_DIR/AGENTS.md" ]; then
-                cp -f "$PROJECT_ROOT/AGENTS.md" "$DRIVE_SSOT_DIR/AGENTS.md" 2>/dev/null || true
-            fi
+        echo "• Sincronizando gobernanza (AGENTS.md, 00-SUPREME-DIRECTIVE.md)..."
+        if [ -f "$REPO_DIR/AGENTS.md" ]; then
+            cp -f "$REPO_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null || true
+            cp -f "$REPO_DIR/AGENTS.md" "$DRIVE_SSOT_DIR/AGENTS.md" 2>/dev/null || true
         elif [ -f "$DRIVE_SSOT_DIR/AGENTS.md" ]; then
             cp -f "$DRIVE_SSOT_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null || true
         fi
 
-        # 00-SUPREME-DIRECTIVE.md: sincronización bidireccional por timestamp
-        mkdir -p "$PROJECT_ROOT/.agents/rules" "$HOME/.gemini/antigravity-cli/rules" 2>/dev/null || true
-        if [ -f "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" ] && [ -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
-            if [ "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" -nt "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
-                cp -f "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
-            elif [ "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" -nt "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
-                cp -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
-            fi
+        mkdir -p "$PROJECT_ROOT/.agents/rules" "$HOME/.gemini/antigravity-cli/rules" "$DRIVE_SSOT_DIR/.agents/rules" 2>/dev/null || true
+        if [ -f "$REPO_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
+            cp -f "$REPO_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
+            cp -f "$REPO_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
         elif [ -f "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
             cp -f "$DRIVE_SSOT_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
         fi
         [ -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ] && cp -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$HOME/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
+
+        # Asegurar budget always_on en reglas gentle-ai (sin inflar prompt prefix)
+        for g_rule in gentle-ai-03-orchestrator-part1.md gentle-ai-04-agent-routing-part1.md; do
+            [ -f "$HOME/.gemini/config/rules/$g_rule" ] && sed -i 's/^trigger: always_on$/trigger: model_decision/' "$HOME/.gemini/config/rules/$g_rule" 2>/dev/null || true
+        done
 
         # Referencias y enciclopedias
         if [ -d "$DRIVE_SSOT_DIR/.agents/references" ]; then

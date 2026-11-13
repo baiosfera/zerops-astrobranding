@@ -103,8 +103,12 @@ CORE_SYNC_PAIRS = [
         "/var/www/zerops-astrobranding/scripts/hooks/tool-guard.py"
     ),
     (
-        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/hooks/tool-guard.py",
-        "/var/www/zerops-astrobranding/scripts/tool-guard.py"
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/hooks/test_tool_guard.py",
+        "/var/www/.bin/hooks/test_tool_guard.py"
+    ),
+    (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/hooks/test_tool_guard.py",
+        "/var/www/zerops-astrobranding/scripts/hooks/test_tool_guard.py"
     ),
     (
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/AGENTS.md",
@@ -117,6 +121,10 @@ CORE_SYNC_PAIRS = [
     (
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/rules/00-SUPREME-DIRECTIVE.md",
         "/var/www/.agents/rules/00-SUPREME-DIRECTIVE.md"
+    ),
+    (
+        "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/rules/00-SUPREME-DIRECTIVE.md",
+        "/var/www/zerops-astrobranding/.agents/rules/00-SUPREME-DIRECTIVE.md"
     ),
     (
         "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/hooks.json",
@@ -1123,8 +1131,10 @@ def evaluate_hook(payload: dict) -> dict:
             ]
         }
 
-    # 0.5 Stop Event Handling (Linear-First Chat Delivery Gate)
+    # 0.5 Stop Event Handling (Antigravity Stop Contract: decision='continue' | {})
     if "terminationReason" in payload or payload.get("is_stop_event") or "stopHookArgs" in payload:
+        if payload.get("continuationActive"):
+            return {}
         term_reason = payload.get("terminationReason") or payload.get("stopHookArgs", {}).get("terminationReason") or "NO_TOOL_CALL"
         if term_reason == "NO_TOOL_CALL":
             transcript_path = payload.get("transcriptPath", "") or payload.get("common", {}).get("transcriptPath", "")
@@ -1149,17 +1159,12 @@ def evaluate_hook(payload: dict) -> dict:
 
                 if has_grilling_or_conclusion:
                     return {
-                        "decision": "CONTINUE",
+                        "decision": "continue",
                         "reason": (
                             f"🏛️ MANDATO DE ESPERA EPISTÉMICA F0 (Supreme Directive Invariante 5): "
-                            f"Hay subagentes de 'research' activos en vuelo ({pending_subagents}). Está terminantemente "
-                            "PROHIBIDO apresurarse a redactar conclusiones o formular preguntas de grilling antes de "
-                            "recibir e ingerir los reportes de investigación de todos los subagentes delegados. "
-                            "Informá brevemente al usuario que lanzaste la investigación y aguardá su retorno en silencio."
-                        ),
-                        "stopResult": {
-                            "decision": "CONTINUE"
-                        }
+                            f"Hay subagentes de 'research' activos en vuelo ({pending_subagents}). "
+                            "Esperá a recibir e ingerir los reportes de todos los subagentes antes de concluir."
+                        )
                     }
 
             plans_dir = "/var/www/artifacts/plans"
@@ -1209,16 +1214,12 @@ def evaluate_hook(payload: dict) -> dict:
                         with open(stop_counter_file, "w") as f:
                             f.write(str(count + 1))
                         return {
-                            "decision": "CONTINUE",
+                            "decision": "continue",
                             "reason": (
-                                "🏛️ VIOLACIÓN LINEAR-FIRST GATE (00-SUPREME-DIRECTIVE Invariante 2): "
-                                "Hay un plan activo en /var/www/artifacts/plans/ y realizaste inspecciones/descubrimientos "
-                                "sin haber persistido tus hallazgos en Linear. Es mandatorio ejecutar 'linear-cli comment <ID>' "
-                                "antes de entregar explicaciones o cerrar el turno en el chat."
-                            ),
-                            "stopResult": {
-                                "decision": "CONTINUE"
-                            }
+                                "🏛️ VIOLACIÓN LINEAR-FIRST GATE (Supreme Directive Invariante 2): "
+                                "Hay un plan activo en /var/www/artifacts/plans/ y realizaste inspecciones sin registrar actividad en Linear. "
+                                "Ejecutá 'linear-cli comment <ID>' antes de responder."
+                            )
                         }
                     else:
                         if os.path.exists(stop_counter_file):
@@ -1277,18 +1278,12 @@ def evaluate_hook(payload: dict) -> dict:
                             with open(correction_counter_file, "w") as f:
                                 f.write(str(count + 1))
                             return {
-                                "decision": "CONTINUE",
+                                "decision": "continue",
                                 "reason": (
                                     "🏛️ INVARIANTE DE MUTACIÓN FÍSICA SSoT (Anti-Cháchara): "
-                                    "El usuario señaló correcciones, omisiones o modificaciones requeridas en el plan o la arquitectura, "
-                                    "pero no modificaste físicamente ningún archivo en /var/www/artifacts/plans/ (draft_*.md o plan maestro) "
-                                    "ni ejecutaste comandos de Linear en este turno. Queda prohibido cerrar el turno con meras explicaciones, "
-                                    "disculpas o memoria en Engram: es mandatorio inyectar físicamente las correcciones en el artefacto "
-                                    "físico del plan o en los BAIs de Linear antes de responder."
-                                ),
-                                "stopResult": {
-                                    "decision": "CONTINUE"
-                                }
+                                    "El usuario señaló correcciones o modificaciones en el plan/arquitectura. "
+                                    "Actualizá físicamente el archivo de plan o Linear antes de responder."
+                                )
                             }
                         else:
                             if os.path.exists(correction_counter_file):
@@ -1336,16 +1331,11 @@ def evaluate_hook(payload: dict) -> dict:
                             with open(gov_counter_file, "w") as f:
                                 f.write(str(count + 1))
                             return {
-                                "decision": "CONTINUE",
+                                "decision": "continue",
                                 "reason": (
                                     "🏛️ INVARIANTE SENSOR-FIRST (Anti-Cháchara de Gobernanza): "
-                                    "El usuario solicitó blindar, arreglar o actualizar el arnés/hooks/gobernanza sin cháchara ni checklist-theater, "
-                                    "pero no modificaste físicamente 'tool-guard.py' ni ejecutaste tests en este turno. "
-                                    "Es mandatorio implementar el sensor físico en Python, su test unitario determinista y validarlo antes de responder."
-                                ),
-                                "stopResult": {
-                                    "decision": "CONTINUE"
-                                }
+                                    "Se solicitó arreglar o actualizar el arnés/hooks/gobernanza; aplicá el cambio físico y validá sus tests antes de responder."
+                                )
                             }
                         else:
                             if os.path.exists(gov_counter_file):
@@ -1359,9 +1349,8 @@ def evaluate_hook(payload: dict) -> dict:
             return {"engramSyncTriggered": triggered_stop_sync, "source": "stop"}
         return {}
 
-    # 1. PostToolUse Handling (Hot Compilation Sensors - BAI-423 & Engram Auto-Sync - BAI-425)
+    # 1. PostToolUse Handling (Engram Auto-Sync & Zerops Cache — agy expects {})
     if payload.get("is_post_tool") or ("stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload)):
-        target_path = None
         tool_call = payload.get("toolCall", {})
         tool_args = tool_call.get("args", {})
 
@@ -1386,76 +1375,9 @@ def evaluate_hook(payload: dict) -> dict:
                         pass
             if payload.get("test_inspect_engram_sync"):
                 return {"engramSyncTriggered": False, "source": f"ignored:{mcp_srv}:{mcp_tool}"}
-        for k in ["Path", "path", "file_path", "target_file", "FilePath"]:
-            if k in tool_args and isinstance(tool_args[k], str):
-                target_path = tool_args[k]
-                break
-
-        if target_path and os.path.exists(target_path):
-            # Skip FUSE mounts or oversized files to preserve zero-hang invariant
-            if not target_path.startswith("/var/www/baiosfera") and not target_path.startswith("/mnt/gdrive"):
-                try:
-                    if os.path.getsize(target_path) <= 5 * 1024 * 1024:
-                        if target_path.endswith(".py"):
-                            try:
-                                with open(target_path, "rb") as f:
-                                    py_src = f.read()
-                                compile(py_src, target_path, "exec")
-                            except SyntaxError as se:
-                                return {
-                                    "injectSteps": [
-                                        {
-                                            "ephemeralMessage": (
-                                                f"🚨 [PostToolUse Sensor] SyntaxError en archivo Python modificado ({target_path}:L{se.lineno}): {se.msg}\n"
-                                                f"Línea afectada: {se.text.strip() if se.text else ''}\n"
-                                                "⚠️ Corregí la sintaxis inmediatamente antes de continuar."
-                                            )
-                                        }
-                                    ]
-                                }
-                        elif target_path.endswith(".sh"):
-                            try:
-                                proc = subprocess.run(
-                                    ["bash", "-n", target_path],
-                                    capture_output=True,
-                                    text=True,
-                                    timeout=1.5
-                                )
-                                if proc.returncode != 0:
-                                    return {
-                                        "injectSteps": [
-                                            {
-                                                "ephemeralMessage": (
-                                                    f"🚨 [PostToolUse Sensor] Error de sintaxis en script Bash ({target_path}):\n"
-                                                    f"{proc.stderr.strip()}\n"
-                                                    "⚠️ Corregí la sintaxis del script antes de continuar."
-                                                )
-                                            }
-                                        ]
-                                    }
-                            except Exception:
-                                pass
-                        elif target_path.endswith(".json"):
-                            try:
-                                with open(target_path, "r", encoding="utf-8") as f:
-                                    json.load(f)
-                            except json.JSONDecodeError as je:
-                                return {
-                                    "injectSteps": [
-                                        {
-                                            "ephemeralMessage": (
-                                                f"🚨 [PostToolUse Sensor] JSONDecodeError en ({target_path}:L{je.lineno}:C{je.colno}): {je.msg}\n"
-                                                "⚠️ Corregí el archivo JSON antes de continuar."
-                                            )
-                                        }
-                                    ]
-                                }
-                except Exception:
-                    pass
-
         return {}
 
-    # 2. PreInvocation Handling (Dynamic Epistemic Radar & Gentle-AI Orchestrator)
+    # 2. PreInvocation Handling (Zero-Spam F4 Halt Gate via valid systemMessage)
     if "invocationNum" in payload or "initialNumSteps" in payload:
         inv_num = payload.get("invocationNum", 0)
         now_ts = time.time()
@@ -1470,7 +1392,6 @@ def evaluate_hook(payload: dict) -> dict:
 
         last_inv = last_state.get("invocationNum")
         last_ts = last_state.get("ts", 0)
-        # Multi-Hook De-duplication: Suppress duplicate executions across multi-hook registrations or within 2.5 seconds
         if not payload.get("test_bypass_dedup"):
             if payload.get("test_dedup") or (last_inv is not None and inv_num == last_inv and (now_ts - last_ts) < 3.0) or ((now_ts - last_ts) < 2.0 and inv_num == 0):
                 return {}
@@ -1481,9 +1402,7 @@ def evaluate_hook(payload: dict) -> dict:
         except Exception:
             pass
 
-        # Zero-Hang: auto_sync_governance síncrono purgado de PreInvocation para evitar timeouts y SIGKILL por FUSE
         user_prompt = extract_user_prompt(payload)
-        halt_alert = ""
         plans_dir = "/var/www/artifacts/plans"
         has_active_master_plan = (
             os.path.exists(plans_dir) and any(
@@ -1497,105 +1416,17 @@ def evaluate_hook(payload: dict) -> dict:
             has_question = ("?" in user_prompt or "¿" in user_prompt)
             has_go = bool(re.search(r'\b(go|adelante|procede|ejecuta|ejecutá|aprobado|dale|si|sí)\b', user_prompt, re.IGNORECASE))
             if has_question or not has_go:
-                halt_alert = "\n⏸️ F4 HALT GATE ACTIVO: Plan maestro pendiente de aprobación ('Go'). No inicies implementación hasta confirmación explícita."
-
-        ephemeral_msgs = []
-        if "--test" in sys.argv and not user_prompt:
-            governance_msg = "🏛️ ARNÉS FÍSICO ZCP (v3.1): Contrato Plan-First Gate. Contrato Anti-Redundancia en Chat. F0 Grounding Epistémico (Anti-AMN con Context7/Exa/Jina). Reality Over Checklist Theater."
-            ephemeral_msgs.append(f"{governance_msg}{halt_alert}".strip())
-        else:
-            prompt_lower = user_prompt.lower()
-            matched_skills = [m[0] for m in detect_skills_in_prompt(user_prompt)]
-
-            notice_state_file = "/tmp/.tool_guard_notice_history.json"
-            last_notice_ts = 0
-            if os.path.exists(notice_state_file):
-                try:
-                    with open(notice_state_file, "r") as f:
-                        last_notice_ts = json.load(f).get("ts", 0)
-                except Exception:
-                    pass
-
-            is_infra_query = bool(re.search(r'(?i)\b(storage|almacenamiento|objectstorage|object-storage|localstorage|s3|disco|servicios|zerops|desplegar|despliegue|infraestructura|creditos|recursos)\b', prompt_lower))
-            is_notice_cooling = (now_ts - last_notice_ts) < 20 and not payload.get("test_force_notice") and "--test" not in sys.argv and not is_infra_query
-
-            if not is_notice_cooling:
-                # 0. Active Physical Environment Grounding (CoHaLo Positivo)
-                env_state = get_physical_environment_state()
-                if env_state["has_localstorage"]:
-                    ephemeral_msgs.append(
-                        "🏛️ GROUNDING DE INFRAESTRUCTURA (CoHaLo Positivo):\n"
-                        "• Entorno físico verificado: 'localstorage' disponible en /var/www/localstorage (POSIX NVMe).\n"
-                        "• Service Discovery: Consultá 'zerops_discover' para validar los servicios activos en este proyecto antes de emitir juicios arquitectónicos."
-                    )
-                # 1. Epistemic Grounding Radar (F0 Positive Guidance & Anti-AMN)
-                is_skill_task = any(k in prompt_lower for k in ["skill", "skills", "meta-skill", "docu", "cohalo", "crear skill", "arreglar skill", "auditar skill", "actualizar skill"])
-                is_eval = any(k in prompt_lower for k in ["mejor forma", "investigar", "investiga", "benchmark", "sota", "comparar", "cual es mejor", "api", "version", "breaking change"])
-                if "research" in matched_skills or is_skill_task or is_eval:
-                    ephemeral_msgs.append(
-                        "🏛️ MANDATO EPISTÉMICO F0 (Supreme Directive v8.5): Para arquitectura, diseño de APIs o skills, contrastá fuentes primarias vivas usando 'research' con subagentes dedicados (Context7, Exa, Brave, Jina). Cero especulaciones (AMN)."
-                    )
-
-                # 2. Gentle-AI Subagent Orchestrator Gate
-                is_heavy = any(k in prompt_lower for k in ["flujo", "refactor", "implementa", "arregla", "construye", "despliega", "crea"])
-                if is_heavy and len(prompt_lower) > 40:
-                    ephemeral_msgs.append(
-                        "Gentle-AI Orchestrator: Mantené el hilo padre delgado; delegá tareas pesadas o de múltiples archivos a subagentes acotados y sintetizá resultados."
-                    )
-
-                # 3. Linear-First Epistemic Persistence Gate (Invariante 2)
-                plans_dir = "/var/www/artifacts/plans"
-                has_active_plans_pi = os.path.exists(plans_dir) and any(
-                    f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide", "draft", "grilling"])
-                    and not is_plan_draft(os.path.join(plans_dir, f))
-                    for f in os.listdir(plans_dir)
-                )
-                if has_active_plans_pi:
-                    ephemeral_msgs.append(
-                        "🏛️ INVARIANTE LINEAR-FIRST GATE: Plan activo en plans/. Persistí hallazgos técnicos en Linear ('linear-cli comment') antes de responder."
-                    )
-
-                # 4. Epistemic Inflow Wait for Research Subagents (Anti-Rushing Invariant)
-                if "research" in matched_skills or is_skill_task or is_eval:
-                    ephemeral_msgs.append(
-                        "🏛️ MANDATO DE ESPERA EPISTÉMICA F0: Al despachar subagentes de 'research', aguardá sus reportes antes de redactar planes o tickets."
-                    )
-
-                # 5. Dynamic JIT Context Injection for Meta-Skills (BAI-424)
-                meta_skills_intent = {
-                    "meta-system": ["supreme", "agents.md", "directiva", "gobernanza", "reglas", "system prompt", "context architecture"],
-                    "meta-plan": ["plan", "planificar", "linear", "epic", "bai", "roadmap", "master-plan"],
-                    "meta-research": ["investigar", "research", "benchmark", "estado del arte", "comparar tecnologias", "fuente primaria"],
-                    "meta-skill": ["crear skill", "author skill", "auditar skill", "refactor skill", "dual-rag", "meta-skill"],
-                    "meta-script": ["script", "tool-guard", "harness", "hook", "pre-tool", "post-tool", "meta-script"],
-                    "meta-gitops": ["commit", "gitops", "ssot-parity", "work-unit", "conventional commit", "meta-gitops"]
+                halt_alert = "⏸️ F4 HALT GATE ACTIVO: Plan maestro pendiente de aprobación ('Go'). No inicies implementación hasta confirmación explícita."
+                return {
+                    "injectSteps": [
+                        {
+                            "systemMessage": {
+                                "systemMessage": halt_alert
+                            }
+                        }
+                    ]
                 }
-                active_meta_hints = []
-                for meta_name, keywords in meta_skills_intent.items():
-                    if meta_name in matched_skills or any(kw in prompt_lower for kw in keywords):
-                        active_meta_hints.append(f"• JIT Meta-Skill [{meta_name}]: Activá /var/www/.agents/skills/{meta_name}/SKILL.md para gobernanza de esta tarea.")
 
-                if active_meta_hints:
-                    ephemeral_msgs.append("🧭 RECONOCIMIENTO DE INTENCIÓN JIT (Meta-Orquestación):\n" + "\n".join(active_meta_hints[:3]))
-
-                if ephemeral_msgs and "--test" not in sys.argv:
-                    try:
-                        with open(notice_state_file, "w") as f:
-                            json.dump({"ts": now_ts}, f)
-                    except Exception:
-                        pass
-
-            if halt_alert:
-                ephemeral_msgs.append(halt_alert.strip())
-
-        if ephemeral_msgs:
-            return {
-                "injectSteps": [
-                    {
-                        "ephemeralMessage": "\n\n".join(ephemeral_msgs)
-                    }
-                ]
-            }
         return {}
 
     # 2. PreToolUse Handling
@@ -1780,19 +1611,6 @@ def evaluate_hook(payload: dict) -> dict:
                 "reason": (
                     f"ARNÉS HANDOVER IMMUNITY: El archivo [{os.path.basename(target_file)}] "
                     "es un activo de relevo inter-sesión protegido contra modificación o sobreescritura."
-                )
-            }
-
-        # A2.5 Anti-Perros Guardianes (Eradicates Synthetic Individual Validator Scripts)
-        base_target = os.path.basename(target_file)
-        if base_target.endswith("-validate.sh") and base_target != "skills-suite-validate.sh":
-            return {
-                "decision": "deny",
-                "reason": (
-                    f"Soberanía del Sensor Universal: La validación de capacidades reside exclusivamente "
-                    f"en 'skills-suite-validate'. En vez de crear o editar validadores individuales como [{base_target}], "
-                    "verificá que los scripts compilen con 'bash -n' y que las pruebas residan en la suite física "
-                    "de la aplicación (bun test / pytest) o en el Sensor Universal."
                 )
             }
 
@@ -2046,14 +1864,22 @@ def evaluate_hook(payload: dict) -> dict:
                         }
 
         # A5.2.1 Governance Rules Size Budget Gate (00-SUPREME <= 600 words, AGENTS.md custom <= 800 words - BAI-424)
-        if target_file.endswith("00-SUPREME-DIRECTIVE.md") and tool_name in ["write_to_file", "write_file", "edit_file", "replace_file_content"]:
-            check_text = content_to_check
-            if tool_name in ["edit_file", "replace_file_content"] and os.path.exists(target_file):
+        def _simulate_edit_text(fpath: str, fallback_content: str) -> str:
+            if tool_name in ["edit_file", "replace_file_content"] and os.path.exists(fpath):
                 try:
-                    with open(target_file, "r", encoding="utf-8") as f:
-                        check_text = f.read()
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        cur = f.read()
+                    t_old = args.get("Target", "") or args.get("TargetContent", "")
+                    t_new = args.get("Replacement", "") or args.get("ReplacementContent", "")
+                    if t_old and t_old in cur:
+                        return cur.replace(t_old, t_new)
+                    return cur
                 except Exception:
                     pass
+            return fallback_content
+
+        if target_file.endswith("00-SUPREME-DIRECTIVE.md") and tool_name in ["write_to_file", "write_file", "edit_file", "replace_file_content"]:
+            check_text = _simulate_edit_text(target_file, content_to_check)
             supreme_words = len(check_text.split())
             if supreme_words > 600:
                 return {
@@ -2066,13 +1892,7 @@ def evaluate_hook(payload: dict) -> dict:
                 }
 
         if target_file.endswith("AGENTS.md") and tool_name in ["write_to_file", "write_file", "edit_file", "replace_file_content"]:
-            check_text = content_to_check
-            if tool_name in ["edit_file", "replace_file_content"] and os.path.exists(target_file):
-                try:
-                    with open(target_file, "r", encoding="utf-8") as f:
-                        check_text = f.read()
-                except Exception:
-                    pass
+            check_text = _simulate_edit_text(target_file, content_to_check)
             custom_match = re.search(r'<!-- CUSTOM:BEGIN -->(.*?)<!-- CUSTOM:END -->', check_text, re.DOTALL)
             if custom_match:
                 custom_words = len(custom_match.group(1).split())
@@ -2262,6 +2082,17 @@ def evaluate_hook(payload: dict) -> dict:
                         }
                 except Exception:
                     pass
+            # JSON syntax validation
+            elif target_file.endswith(".json"):
+                try:
+                    json.loads(content_to_check)
+                except Exception as e:
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            f"Contrato de Integridad Sintáctica (JSON SyntaxError): {target_file}: {e}"
+                        )
+                    }
 
     # B. Command Guards on run_command
     if tool_name == "run_command":
@@ -2345,22 +2176,6 @@ def evaluate_hook(payload: dict) -> dict:
                         "en /var/www/artifacts/ sin invocar comandos destructivos masivos."
                     )
                 }
-
-        # B2.6 Anti-Perros Guardianes (Eradicates Synthetic Individual Validator Scripts)
-        val_sh_match = re.search(r'(?:^|[/\s;&|])([a-zA-Z0-9_-]+-validate\.sh)\b', cmd)
-        if val_sh_match:
-            script_name = val_sh_match.group(1)
-            if script_name != "skills-suite-validate.sh":
-                is_delete_or_inspect = bool(executed_cmds.intersection({"rm", "unlink", "ls", "file", "stat"}))
-                if not is_delete_or_inspect:
-                    return {
-                        "decision": "deny",
-                        "reason": (
-                            f"Soberanía del Sensor Universal: La validación de capacidades reside exclusivamente "
-                            f"en 'skills-suite-validate'. En vez de invocar o crear scripts individuales como [{script_name}], "
-                            "ejecutá el Sensor Universal 'skills-suite-validate' o los tests de comportamiento de la aplicación."
-                        )
-                    }
 
         # B3. Dangerous RM
         # AST-Guarded: Only triggers if 'rm' or 'unlink' targets /var/www or / recursively
@@ -2470,1290 +2285,15 @@ def evaluate_hook(payload: dict) -> dict:
     return {"decision": "allow"}
 
 def run_tests():
-    print("Testing tool-guard.py deterministic rules...")
-
-    # Test 1: PreInvocation
-    res = evaluate_hook({"invocationNum": 1, "initialNumSteps": 0})
-    assert "injectSteps" in res, "PreInvocation failed to inject steps"
-    print("✓ Test 1 Passed: PreInvocation injects governance notice")
-
-    # Test 2: Deny write to handover file
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {"TargetFile": "/var/www/artifacts/curriculum_engine_v8_handover.md"}
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on handover, got {res}"
-    print("✓ Test 2 Passed: Handover Immunity blocks write_to_file on handover")
-
-    # Test 3: Deny replace in blueprint file
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "replace_file_content",
-            "args": {"TargetFile": "/var/www/artifacts/proactive_critical_agent_blueprint_v1.md"}
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on blueprint, got {res}"
-    print("✓ Test 3 Passed: Handover Immunity blocks replace_file_content on blueprint")
-
-    # Test 4: Deny sweeping rm of artifacts
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {"CommandLine": "rm -rf /var/www/artifacts/*"}
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on sweeping rm, got {res}"
-    print("✓ Test 4 Passed: Handover Immunity blocks sweeping 'rm -rf /var/www/artifacts/*'")
-
-    # Test 5: Allow safe command
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {"CommandLine": "plan-validate /var/www/artifacts/some_plan_v1.md"}
-        }
-    })
-    assert res.get("decision") == "allow", f"Expected allow on safe command, got {res}"
-    print("✓ Test 5 Passed: Normal commands allowed")
-
-    # Test 6: Force ask on dangerous rm -rf /
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {"CommandLine": "rm -rf /var/www"}
-        }
-    })
-    assert res.get("decision") == "force_ask", f"Expected force_ask on root rm, got {res}"
-    print("✓ Test 6 Passed: High-risk commands trigger force_ask")
-
-    # Test 7: Deny native search_web
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "search_web",
-            "args": {"query": "test"}
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on search_web, got {res}"
-    print("✓ Test 7 Passed: Anti-AMN Gate blocks native search_web")
-
-    # Test 8: Deny command with relative 0zcp-123/ leak
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {"CommandLine": "mkdir -p 0zcp-123/bak"}
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on relative 0zcp-123, got {res}"
-    print("✓ Test 8 Passed: Relative 0zcp-123 leak blocked in run_command")
-
-    # Test 9: Allow command with canonical Drive SSoT path
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {"CommandLine": "mkdir -p /var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak"}
-        }
-    })
-    assert res.get("decision") == "allow", f"Expected allow on canonical Drive path, got {res}"
-    print("✓ Test 9 Passed: Canonical Drive SSoT path allowed")
-
-    # Test 10: Deny write_to_file with relative 0zcp-123 leak
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {"TargetFile": "/var/www/0zcp-123/test.txt"}
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on relative 0zcp-123 TargetFile, got {res}"
-    print("✓ Test 10 Passed: Relative 0zcp-123 leak blocked in TargetFile")
-
-    # Test 11: Deny writing upstream skill into Drive SSoT custom skills folder
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {"TargetFile": "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills/react-19/SKILL.md"}
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on upstream skill pollution, got {res}"
-    print("✓ Test 11 Passed: Upstream skill pollution blocked in TargetFile (react-19)")
-
-    # Test 11b: Deny modifying upstream skill in runtime dir /var/www/.agents/skills/
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "edit_file",
-            "args": {"Path": "/var/www/.agents/skills/skill-creator/SKILL.md"}
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on runtime upstream skill edit, got {res}"
-    print("✓ Test 11b Passed: Local runtime upstream skill mutation blocked (skill-creator)")
-
-    # Test 11c: Allow read-only inspect on runtime upstream skill
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {"CommandLine": "cat /var/www/.agents/skills/skill-creator/SKILL.md"}
-        }
-    })
-    assert res.get("decision") == "allow", f"Expected allow on read-only upstream inspect, got {res}"
-    print("✓ Test 11c Passed: Read-only command allowed on upstream skill")
-
-    # Test 12: Deny copying upstream skill into Drive SSoT via run_command
-    res = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {"CommandLine": "cp -r /var/www/.agents/skills/playwright /var/www/baiosfera/0ZEROPS-AGY/0zcp-123/.agents/skills/playwright"}
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on upstream skill pollution via run_command, got {res}"
-    print("✓ Test 12 Passed: Upstream skill pollution blocked in run_command (playwright)")
-
-    # Test 13: Monotonic backup gate
-    test_target = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh"
-    assert has_recent_backup(test_target) is True, "Expected valid monotonic backup for unisetup.sh"
-    print("✓ Test 13 Passed: Monotonic pre-mutation backup verification active")
-
-    # Test 14: Deny legacy negative prompt dogma
-    res = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/scratch/test.md",
-                "CodeContent": "Queda terminantemente prohibido usar este comando."
-            }
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on legacy dogma, got {res}"
-    print("✓ Test 14 Passed: Legacy negative prompt engineering blocked (Positive Guidance)")
-
-    # Test 15: Deny router bloat on SKILL.md (>480 words)
-    res = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/scratch/SKILL.md",
-                "CodeContent": "word " * 500
-            }
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on router bloat, got {res}"
-    print("✓ Test 15 Passed: Router bloat on SKILL.md blocked (CoHaLo Level 2)")
-
-    # Test 16: Deny drastic skill mutilation without unbundling
-    res = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/.agents/skills/oraculo/SKILL.md",
-                "CodeContent": "tiny stub"
-            }
-        }
-    })
-    assert res.get("decision") == "deny", f"Expected deny on skill mutilation, got {res}"
-    print("✓ Test 16 Passed: Drastic skill mutilation blocked (Skill-Improver Zero Deletion)")
-
-    # Test 17: Deny invalid Python syntax
-    res = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/scratch/broken.py",
-                "CodeContent": "def broken_func(\n    print('missing closing paren'"
-            }
-        }
-    })
-    assert res.get("decision") == "deny" and "SyntaxError" in res.get("reason", ""), f"Expected deny on Python syntax error, got {res}"
-    print("✓ Test 17 Passed: Python SyntaxError blocked before write (Physical Syntax Gate)")
-
-    # Test 18: Deny invalid Bash syntax
-    res = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/scratch/broken.sh",
-                "CodeContent": "#!/usr/bin/env bash\nif [ true ]; then\necho missing fi"
-            }
-        }
-    })
-    assert res.get("decision") == "deny" and "Bash Syntax Error" in res.get("reason", ""), f"Expected deny on Bash syntax error, got {res}"
-    print("✓ Test 18 Passed: Bash Syntax Error blocked before write (Physical Syntax Gate)")
-
-    # Test 19: Deny script function and line mutilation
-    res = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh",
-                "CodeContent": "#!/usr/bin/env bash\necho tiny"
-            }
-        }
-    })
-    assert res.get("decision") == "deny" and ("preservación" in res.get("reason", "").lower() or "seguridad" in res.get("reason", "").lower()), f"Expected deny on script mutilation, got {res}"
-    print("✓ Test 19 Passed: Platform script mutilation & function deletion caught (AST & Line Floor)")
-
-    # Test 20: Deny set -e removal in bash scripts
-    res = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh",
-                "CodeContent": "#!/usr/bin/env bash\n# missing set -euo pipefail\nrun_step() { echo 1; }\n" * 15
-            }
-        }
-    })
-    assert res.get("decision") == "deny" and "set -e" in res.get("reason", ""), f"Expected deny on set -e removal, got {res}"
-    print("✓ Test 20 Passed: Removal of safety flags ('set -e') blocked (Operational Safety Invariant)")
-
-    # Test 21: Deny silencing errors with >/dev/null 2>&1 in validation sensors
-    res = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/scratch/custom-check.sh",
-                "CodeContent": "#!/usr/bin/env bash\nrun_check >/dev/null 2>&1\necho passed"
-            }
-        }
-    })
-    assert res.get("decision") == "deny" and "Anti-Checklist Theater" in res.get("reason", ""), f"Expected deny on silenced validation sensor, got {res}"
-    print("✓ Test 21 Passed: Silencing errors in validation sensors blocked (Anti-Checklist Theater Gate)")
-
-    # Test 22: Autonomous Parity Reactor sync verification
-    auto_sync_governance()
-    assert os.path.exists("/var/www/.bin/hooks/tool-guard.py"), "Expected tool-guard.py in .bin"
-    print("✓ Test 22 Passed: Autonomous Parity Reactor synchronizes core governance files")
-
-    # Test 23: Macro-Visión 360 Dependency Radar on unisetup.sh
-    res = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/scripts/unisetup.sh",
-                "CodeContent": "#!/usr/bin/env bash\nset -euo pipefail\nbash setup-nonexistent-script-xyz.sh\n" * 10
-            }
-        }
-    })
-    assert res.get("decision") == "deny" and "MACRO-VISIÓN 360" in res.get("reason", ""), f"Expected deny on broken dependency in unisetup.sh, got {res}"
-    print("✓ Test 23 Passed: Broken downstream script dependencies in unisetup.sh caught (Macro-Visión 360 Radar)")
-
-    # Test 24: Epistemic Inflow Mandate - Plan-First Gate & Subordinated Execution Closure verified
-    pi_res = evaluate_hook({"invocationNum": 99, "test_bypass_dedup": True})
-    steps = pi_res.get("injectSteps", [])
-    assert len(steps) > 0 and "Plan-First Gate" in steps[0].get("ephemeralMessage", ""), f"Expected Plan-First Gate notice in PreInvocation, got {pi_res}"
-    print("✓ Test 24 Passed: Contrato Plan-First Gate & Subordinated Execution Closure verified (Epistemic Inflow)")
-
-    # Test 25: Universal Physical Sensor Integration (Standard v3.3)
-    skills_val = subprocess.run(["/var/www/.bin/skills-suite-validate"], capture_output=True, text=True)
-    assert skills_val.returncode == 0, f"Expected skills-suite-validate exit 0, got {skills_val.returncode}: {skills_val.stderr}\n{skills_val.stdout}"
-    assert "100% of custom skills passed" in skills_val.stdout, f"Unexpected skills-suite-validate output: {skills_val.stdout}"
-    print("✓ Test 25 Passed: Universal Physical Sensor verified (skills-suite-validate exit 0)")
-
-    # Test 26: Skill Trigger Radar & Contextual Detection verified
-    test_skills = detect_skills_in_prompt("vamos a configurar ghcicd y hacer git push")
-    assert any(s[0] == "ghcicd" for s in test_skills), f"Expected ghcicd match in detect_skills_in_prompt, got {test_skills}"
-    print("✓ Test 26 Passed: Skill Trigger Radar dynamically matches prompt triggers (Epistemic Radar F0)")
-
-    # Test 27: Zero-Bytecode Invariant (00-SUPREME-DIRECTIVE Invariant 6)
-    assert sys.dont_write_bytecode is True, "Expected sys.dont_write_bytecode to be True"
-    assert os.environ.get("PYTHONDONTWRITEBYTECODE") == "1", "Expected PYTHONDONTWRITEBYTECODE=1 in os.environ"
-    assert not os.path.exists("/var/www/.bin/hooks/__pycache__"), "Residual __pycache__ found in /var/www/.bin/hooks/"
-    print("✓ Test 27 Passed: Zero-Bytecode Invariant physically verified (sys.dont_write_bytecode=True & clean hygiene)")
-
-    # Test 28: Token Hygiene & Hook De-duplication (SOTA Prompt Caching Invariant)
-    _ = evaluate_hook({"invocationNum": 999})
-    dup_res = evaluate_hook({"invocationNum": 999, "test_dedup": True})
-    assert dup_res == {}, f"Expected duplicate PreInvocation event within 2.5s to be suppressed, got {dup_res}"
-    print("✓ Test 28 Passed: Multi-Hook De-duplication & SOTA Token Hygiene physically verified (Zero-Token Waste)")
-
-    # Test 29: F4 Halt Gate Centinela & Univoque Go Predicate
-    dummy_plan = "/var/www/artifacts/test_plan_v1.md"
-    try:
-        with open(dummy_plan, "w") as f:
-            f.write("# Dummy Test Plan v1\n")
-        test_pi = evaluate_hook({"invocationNum": 1001, "userPrompt": "¿por qué se paralizó todo?"})
-        pi_steps = test_pi.get("injectSteps", [])
-        assert any("F4 HALT GATE ACTIVO" in s.get("ephemeralMessage", "") for s in pi_steps), f"Expected F4 Halt Gate alert in PreInvocation, got {test_pi}"
-
-        test_pi_go = evaluate_hook({"invocationNum": 1002, "userPrompt": "si"})
-        pi_steps_go = test_pi_go.get("injectSteps", [])
-        assert not any("F4 HALT GATE ACTIVO" in s.get("ephemeralMessage", "") for s in pi_steps_go), f"Expected no F4 Halt Gate alert on affirmative Go, got {test_pi_go}"
-        print("✓ Test 29 Passed: F4 Halt Gate Centinela & Univoque Go Predicate physically verified")
-    finally:
-        if os.path.exists(dummy_plan):
-            os.remove(dummy_plan)
-
-    # Test 30: Positive Guidance & Direct Execution (No artificial linear_active tripwires)
-    res_clean = evaluate_hook({
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/scratch/clean_script.py",
-                "CodeContent": "print('clean')\n"
-            }
-        }
-    })
-    assert res_clean.get("decision") == "allow", f"Expected allow on clean file write, got {res_clean}"
-    print("✓ Test 30 Passed: Clean execution permitted without synthetic tripwires")
-
-    # Test 31: Handover Immunity protects _roadmap
-    res_roadmap = evaluate_hook({
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {"TargetFile": "/var/www/artifacts/zerops_astrobranding_modularization_roadmap.md"}
-        }
-    })
-    assert res_roadmap.get("decision") == "deny", f"Expected deny on roadmap write, got {res_roadmap}"
-    res_roadmap_rm = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {"CommandLine": "rm -f /var/www/artifacts/zerops_astrobranding_modularization_roadmap.md"}
-        }
-    })
-    assert res_roadmap_rm.get("decision") == "deny", f"Expected deny on roadmap rm, got {res_roadmap_rm}"
-    print("✓ Test 31 Passed: Handover Immunity protects _roadmap from writes and deletion")
-
-    # Test 32: Artifacts Lifecycle cleanup purges superseded and session executed files
-    test_archive = "/var/www/artifacts"
-    os.makedirs(test_archive, exist_ok=True)
-    sup_file = os.path.join(test_archive, "test_lifecycle_plan_v1.superseded.md")
-    exec_file = os.path.join(test_archive, "test_lifecycle_plan_v2.executed.md")
-    road_file = os.path.join(test_archive, "test_roadmap_lifecycle.executed.md")
-    try:
-        with open(sup_file, "w") as f:
-            f.write("# Superseded v1\n")
-        with open(exec_file, "w") as f:
-            f.write("# Executed v2\n")
-        with open(road_file, "w") as f:
-            f.write("# Roadmap Handover\n")
-
-        res_clean = cleanup_artifacts_lifecycle(purge_executed=False)
-        assert not os.path.exists(sup_file), "Expected superseded plan to be purged"
-        assert os.path.exists(exec_file), "Expected executed plan to be preserved during active session"
-        assert os.path.exists(road_file), "Expected roadmap to be immune"
-
-        res_session = cleanup_artifacts_lifecycle(purge_executed=True)
-        assert not os.path.exists(exec_file), "Expected executed plan to be purged on session close"
-        assert os.path.exists(road_file), "Expected roadmap to remain immune during session close"
-        print("✓ Test 32 Passed: Artifacts lifecycle cleanup purges superseded and session executed files with Handover Immunity")
-    finally:
-        for p in [sup_file, exec_file, road_file]:
-            if os.path.exists(p):
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
-
-    # Test 33: Anti-Redundancy Chat Contract in PreInvocation
-    pi_res_red = evaluate_hook({"invocationNum": 1})
-    steps_red = pi_res_red.get("injectSteps", [])
-    assert len(steps_red) > 0 and "Contrato Anti-Redundancia en Chat" in steps_red[0].get("ephemeralMessage", ""), f"Expected Anti-Redundancy notice in PreInvocation, got {pi_res_red}"
-    # Test 34: Multi-Tenant Upstream Shield blocks client data leak into 0zcp-123
-    tenant_res = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/elplacerdc.db",
-                "CodeContent": "dummy sqlite content"
-            }
-        }
-    })
-    assert tenant_res.get("decision") == "deny" and "ARNÉS MULTI-TENANT" in tenant_res.get("reason", ""), f"Expected deny on tenant file inside chassis, got {tenant_res}"
-    print("✓ Test 34 Passed: Multi-Tenant Upstream Shield blocks client data leak into 0zcp-123")
-
-    # Test 35: Anti-Perros Guardianes blocks write_to_file on synthetic validator
-    res_val_write = evaluate_hook({
-        "transcriptPath": "/nonexistent",
-        "toolCall": {
-            "name": "write_to_file",
-            "args": {
-                "TargetFile": "/var/www/.agents/skills/cohalo/scripts/cohalo-validate.sh",
-                "CodeContent": "#!/usr/bin/env bash\necho passed"
-            }
-        }
-    })
-    assert res_val_write.get("decision") == "deny" and "Soberanía del Sensor Universal" in res_val_write.get("reason", ""), f"Expected deny on individual validate.sh, got {res_val_write}"
-    print("✓ Test 35 Passed: Anti-Perros Guardianes blocks write_to_file on synthetic *-validate.sh")
-
-    # Test 36: Anti-Perros Guardianes blocks run_command invoking synthetic validator
-    res_val_cmd = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {
-                "CommandLine": "bash /var/www/.agents/skills/cohalo/scripts/cohalo-validate.sh"
-            }
-        }
-    })
-    assert res_val_cmd.get("decision") == "deny" and "Soberanía del Sensor Universal" in res_val_cmd.get("reason", ""), f"Expected deny on running individual validate.sh, got {res_val_cmd}"
-    print("✓ Test 36 Passed: Anti-Perros Guardianes blocks run_command on synthetic *-validate.sh")
-
-    # Test 37: Antigravity write_file with Path blocks handover file modification
-    res_ag_handover = evaluate_hook({
-        "toolCall": {
-            "name": "write_file",
-            "args": {
-                "Path": "/var/www/artifacts/curriculum_engine_v8_handover.md",
-                "Content": "tampered content"
-            }
-        }
-    })
-    assert res_ag_handover.get("decision") == "deny" and "HANDOVER IMMUNITY" in res_ag_handover.get("reason", ""), f"Expected deny on write_file handover, got {res_ag_handover}"
-    print("✓ Test 37 Passed: Antigravity write_file with Path blocks handover modification")
-
-    # Test 38: Antigravity edit_file with Path blocks blueprint modification
-    res_ag_bp = evaluate_hook({
-        "toolCall": {
-            "name": "edit_file",
-            "args": {
-                "Path": "/var/www/artifacts/proactive_critical_agent_blueprint_v1.md",
-                "Target": "old",
-                "Replacement": "new"
-            }
-        }
-    })
-    assert res_ag_bp.get("decision") == "deny" and "HANDOVER IMMUNITY" in res_ag_bp.get("reason", ""), f"Expected deny on edit_file blueprint, got {res_ag_bp}"
-    print("✓ Test 38 Passed: Antigravity edit_file with Path blocks blueprint modification")
-
-    # Test 39: Single-Node ZCP Scale Gate blocks multi-container scaling on zcp
-    res_scale_deny = evaluate_hook({
-        "toolCall": {
-            "name": "call_mcp_tool",
-            "args": {
-                "ServerName": "zerops",
-                "ToolName": "zerops_scale",
-                "Arguments": {
-                    "serviceHostname": "zcp",
-                    "minContainers": 1,
-                    "maxContainers": 2
-                }
-            }
-        }
-    })
-    assert res_scale_deny.get("decision") == "deny" and "SINGLE-NODE ZCP" in res_scale_deny.get("reason", ""), f"Expected deny on zcp multi-container scale, got {res_scale_deny}"
-    print("✓ Test 39 Passed: Single-Node ZCP Scale Gate blocks multi-container scaling on zcp")
-
-    # Test 40: Single-Node ZCP Scale Gate allows 1 container scaling on zcp
-    res_scale_allow = evaluate_hook({
-        "toolCall": {
-            "name": "call_mcp_tool",
-            "args": {
-                "ServerName": "zerops",
-                "ToolName": "zerops_scale",
-                "Arguments": {
-                    "serviceHostname": "zcp",
-                    "minContainers": 1,
-                    "maxContainers": 1
-                }
-            }
-        }
-    })
-    assert res_scale_allow.get("decision") == "allow", f"Expected allow on zcp single-node scale, got {res_scale_allow}"
-    print("✓ Test 40 Passed: Single-Node ZCP Scale Gate allows single container scale on zcp")
-
-    # Test 41: Process Kill Guard blocks kill targeting current process or ancestor
-    my_pid = os.getpid()
-    res_kill_ancestor = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {
-                "CommandLine": f"kill -9 {my_pid}"
-            }
-        }
-    })
-    assert res_kill_ancestor.get("decision") == "deny" and "Guard de Kill" in res_kill_ancestor.get("reason", ""), f"Expected deny on kill ancestor, got {res_kill_ancestor}"
-    print("✓ Test 41 Passed: Process Kill Guard blocks kill targeting caller/ancestor PID")
-
-    # Test 42: Process Kill Guard blocks pkill -f agy
-    res_pkill = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {
-                "CommandLine": "pkill -f agy"
-            }
-        }
-    })
-    assert res_pkill.get("decision") == "deny" and "Guard de Kill" in res_pkill.get("reason", ""), f"Expected deny on pkill -f agy, got {res_pkill}"
-    print("✓ Test 42 Passed: Process Kill Guard blocks pkill -f agy")
-
-    # Test 43: Process Kill Guard blocks killall agy
-    res_killall = evaluate_hook({
-        "toolCall": {
-            "name": "run_command",
-            "args": {
-                "CommandLine": "killall agy"
-            }
-        }
-    })
-    assert res_killall.get("decision") == "deny" and "Guard de Kill" in res_killall.get("reason", ""), f"Expected deny on killall agy, got {res_killall}"
-    print("✓ Test 43 Passed: Process Kill Guard blocks killall agy")
-
-    # Test 44: SessionStart injects mandatory recall notice
-    res_ss = evaluate_hook({"session_start": True})
-    assert "injectSteps" in res_ss, f"Expected injectSteps in SessionStart, got {res_ss}"
-    steps_ss = res_ss["injectSteps"]
-    assert any("RECALL DE SESIÓN OBLIGATORIO" in s.get("systemMessage", {}).get("systemMessage", "") for s in steps_ss), f"Expected recall message in SessionStart, got {res_ss}"
-    print("✓ Test 44 Passed: SessionStart injects mandatory session recall notice")
-
-    # Test 45: PreInvocation fallback to transcriptPath
-    dummy_transcript = "/tmp/test_transcript_pi_fallback.jsonl"
-    with open(dummy_transcript, "w", encoding="utf-8") as tf:
-        tf.write(json.dumps({"type": "USER_INPUT", "source": "USER_EXPLICIT", "content": "<USER_REQUEST>\ninvestigar SOTA de bases de datos vectoriales\n</USER_REQUEST>"}) + "\n")
-    res_pi_fallback = evaluate_hook({
-        "invocationNum": 100,
-        "transcriptPath": dummy_transcript
-    })
-    try:
-        os.remove(dummy_transcript)
-    except Exception:
-        pass
-    assert "injectSteps" in res_pi_fallback, f"Expected injectSteps from transcriptPath fallback, got {res_pi_fallback}"
-    ephem_msg = res_pi_fallback["injectSteps"][0].get("ephemeralMessage", "")
-    assert any(k in ephem_msg for k in ["MANDATO EPISTÉMICO F0", "F0 Epistemic Grounding"]), f"Expected F0 Epistemic Grounding in PreInvocation fallback, got {ephem_msg}"
-    print("✓ Test 45 Passed: PreInvocation falls back to transcriptPath to extract userPrompt")
-
-    # Test 46: Linear-First PreToolUse gate blocks skill mutation when active plan exists and no linear activity recorded
-    state_file = "/tmp/.linear_activity_state.json"
-    alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
-    plans_dir = "/var/www/artifacts/plans"
-    os.makedirs(plans_dir, exist_ok=True)
-    test_plan_path = os.path.join(plans_dir, "test_active_plan.md")
-    with open(test_plan_path, "w") as f:
-        f.write("# Active Test Plan\n")
-
-    res_state_file = "/tmp/.research_grounding_state.json"
-    with open(res_state_file, "w") as f:
-        json.dump({"timestamp": int(time.time() * 1000), "source": "test_research"}, f)
-
-    state_backup = None
-    alt_state_backup = None
-    if os.path.exists(state_file):
-        with open(state_file, "r") as f:
-            state_backup = f.read()
-        os.remove(state_file)
-    if os.path.exists(alt_state_file):
-        with open(alt_state_file, "r") as f:
-            alt_state_backup = f.read()
-        os.remove(alt_state_file)
-
-    bak_dir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills"
-    os.makedirs(bak_dir, exist_ok=True)
-    with open(os.path.join(bak_dir, "test-skill-SKILL.md.bak"), "w") as f:
-        f.write("test backup")
-
-    try:
-        res_lf_blocked = evaluate_hook({
-            "test_allow_new_skill": True,
-            "toolCall": {
-                "name": "write_to_file",
-                "args": {
-                    "TargetFile": "/var/www/zerops-astro-skills/test-skill/SKILL.md",
-                    "CodeContent": "---\nname: test-skill\ndescription: Test\n---\n# Test\n"
-                }
-            }
-        })
-        assert res_lf_blocked.get("decision") == "deny" and "LINEAR-FIRST GATE" in res_lf_blocked.get("reason", ""), f"Expected deny on skill mutation without linear activity, got {res_lf_blocked}"
-        print("✓ Test 46 Passed: Linear-First PreToolUse gate blocks skill mutation without linear activity")
-
-        # Test 47: Linear-First PreToolUse gate allows skill mutation when linear activity is present
-        with open(state_file, "w") as f:
-            json.dump({"timestamp": int(time.time() * 1000), "action": "comment", "issueId": "test-id"}, f)
-
-        res_lf_allowed = evaluate_hook({
-            "test_allow_new_skill": True,
-            "toolCall": {
-                "name": "write_to_file",
-                "args": {
-                    "TargetFile": "/var/www/zerops-astro-skills/test-skill/SKILL.md",
-                    "CodeContent": "---\nname: test-skill\ndescription: Trigger: test\n---\n# Test\n## Section\n"
-                }
-            }
-        })
-        assert res_lf_allowed.get("decision") == "allow", f"Expected allow on skill mutation with linear activity, got {res_lf_allowed}"
-        print("✓ Test 47 Passed: Linear-First PreToolUse gate allows skill mutation with linear activity")
-
-        # Test 48: Linear-First Stop hook forces continue when active plan exists and inspections occurred without linear activity
-        os.remove(state_file)
-        if os.path.exists(alt_state_file):
-            os.remove(alt_state_file)
-        if os.path.exists("/tmp/.linear_stop_force_count"):
-            os.remove("/tmp/.linear_stop_force_count")
-
-        res_stop_blocked = evaluate_hook({
-            "is_stop_event": True,
-            "terminationReason": "NO_TOOL_CALL",
-            "test_has_inspection": True
-        })
-        assert res_stop_blocked.get("decision") in ["continue", "CONTINUE"] and "LINEAR-FIRST GATE" in res_stop_blocked.get("reason", ""), f"Expected continue in Stop hook without linear activity, got {res_stop_blocked}"
-        print("✓ Test 48 Passed: Linear-First Stop hook forces continue without linear activity")
-
-        # Test 49: Linear-First Stop hook allows stop when linear activity is present
-        with open(state_file, "w") as f:
-            json.dump({"timestamp": int(time.time() * 1000), "action": "comment", "issueId": "test-id"}, f)
-
-        res_stop_allowed = evaluate_hook({
-            "is_stop_event": True,
-            "terminationReason": "NO_TOOL_CALL",
-            "test_has_inspection": True
-        })
-        assert res_stop_allowed == {}, f"Expected empty dict (allow stop) when linear activity exists, got {res_stop_allowed}"
-        print("✓ Test 49 Passed: Linear-First Stop hook allows stop when linear activity exists")
-
-        # Test 50: Epistemic Grounding First Gate blocks skill mutation when no research state exists
-        if os.path.exists(res_state_file):
-            os.remove(res_state_file)
-        res_research_blocked = evaluate_hook({
-            "test_bypass_linear": True,
-            "toolCall": {
-                "name": "write_to_file",
-                "args": {
-                    "TargetFile": "/var/www/zerops-astro-skills/test-skill/SKILL.md",
-                    "CodeContent": "---\nname: test-skill\ndescription: Test\n---\n# Test\n"
-                }
-            }
-        })
-        assert res_research_blocked.get("decision") == "deny" and "MANDATO EPISTÉMICO F0" in res_research_blocked.get("reason", ""), f"Expected deny on skill mutation without research, got {res_research_blocked}"
-        print("✓ Test 50 Passed: Epistemic Grounding First Gate blocks skill mutation without research")
-
-        # Test 51: Epistemic Grounding First Gate allows skill mutation when research state is recorded
-        with open(res_state_file, "w") as f:
-            json.dump({"timestamp": int(time.time() * 1000), "source": "test_research"}, f)
-        res_research_allowed = evaluate_hook({
-            "test_bypass_linear": True,
-            "test_allow_new_skill": True,
-            "toolCall": {
-                "name": "write_to_file",
-                "args": {
-                    "TargetFile": "/var/www/zerops-astro-skills/test-skill/SKILL.md",
-                    "CodeContent": "---\nname: test-skill\ndescription: Trigger: test\n---\n# Test\n## Section\n"
-                }
-            }
-        })
-        assert res_research_allowed.get("decision") == "allow", f"Expected allow on skill mutation with research state, got {res_research_allowed}"
-        print("✓ Test 51 Passed: Epistemic Grounding First Gate allows skill mutation with research state")
-
-        # Test 52: Draft plans do NOT trigger Linear-First Gate in Stop hook
-        draft_plan_path = os.path.join(plans_dir, "draft_test_plan.md")
-        with open(draft_plan_path, "w") as f:
-            f.write("# Draft Plan\nstatus: draft\n")
-        if os.path.exists(test_plan_path):
-            os.remove(test_plan_path)
-        if os.path.exists(state_file):
-            os.remove(state_file)
-        if os.path.exists(alt_state_file):
-            os.remove(alt_state_file)
-        res_draft_stop = evaluate_hook({
-            "is_stop_event": True,
-            "terminationReason": "NO_TOOL_CALL",
-            "test_has_inspection": True
-        })
-        assert res_draft_stop == {}, f"Expected empty dict (allow stop for draft plan), got {res_draft_stop}"
-        if os.path.exists(draft_plan_path):
-            os.remove(draft_plan_path)
-        with open(test_plan_path, "w") as f:
-            f.write("# Active Test Plan\n")
-        print("✓ Test 52 Passed: Draft plans do NOT trigger Linear-First Gate in Stop hook")
-
-        # Test 53: Pending research subagents block plan writing (Anti-Rushing Invariant)
-        res_subagent_plan_blocked = evaluate_hook({
-            "toolCall": {
-                "name": "write_file",
-                "args": {
-                    "Path": "/var/www/artifacts/plans/premature_plan.md",
-                    "Content": "# Premature Plan\n"
-                }
-            },
-            "test_has_pending_research": True
-        })
-        assert res_subagent_plan_blocked.get("decision") == "deny" and "MANDATO DE ESPERA EPISTÉMICA F0" in res_subagent_plan_blocked.get("reason", ""), f"Expected deny on premature plan write with pending research, got {res_subagent_plan_blocked}"
-        print("✓ Test 53 Passed: Pending research subagents block plan writing (Anti-Rushing Invariant)")
-
-        # Test 54: Pending research subagents block Linear issue/project creation
-        res_subagent_linear_blocked = evaluate_hook({
-            "toolCall": {
-                "name": "run_command",
-                "args": {
-                    "CommandLine": "linear-cli create 'Premature BAI'"
-                }
-            },
-            "test_has_pending_research": True
-        })
-        assert res_subagent_linear_blocked.get("decision") == "deny" and "MANDATO DE ESPERA EPISTÉMICA F0" in res_subagent_linear_blocked.get("reason", ""), f"Expected deny on premature linear creation with pending research, got {res_subagent_linear_blocked}"
-        print("✓ Test 54 Passed: Pending research subagents block Linear issue/project creation")
-
-        # Test 55: Anti-Cháchara Gate blocks Stop when user prompt demands plan correction and plan was not mutated
-        if os.path.exists("/tmp/.ssot_mutation_stop_force_count"):
-            try:
-                os.remove("/tmp/.ssot_mutation_stop_force_count")
-            except Exception:
-                pass
-        res_chachara_blocked = evaluate_hook({
-            "is_stop_event": True,
-            "terminationReason": "NO_TOOL_CALL",
-            "test_has_plans": True,
-            "test_user_prompt": "Te faltó agregar el worker de video y corregir la base de datos en el plan",
-            "test_has_plan_mutation": False,
-            "test_bypass_linear": True
-        })
-        assert res_chachara_blocked.get("decision") in ["continue", "CONTINUE"] and "Anti-Cháchara" in res_chachara_blocked.get("reason", ""), f"Expected continue (stop blocked) on unmutated plan correction, got {res_chachara_blocked}"
-        print("✓ Test 55 Passed: Anti-Cháchara Gate blocks turn stop when plan correction requested without file mutation")
-
-        # Test 56: Anti-Cháchara Gate allows Stop when plan was mutated
-        res_chachara_allowed = evaluate_hook({
-            "is_stop_event": True,
-            "terminationReason": "NO_TOOL_CALL",
-            "test_has_plans": True,
-            "test_user_prompt": "Te faltó agregar el worker de video",
-            "test_has_plan_mutation": True,
-            "test_bypass_linear": True
-        })
-        assert res_chachara_allowed == {}, f"Expected empty dict (allow stop) when plan was mutated, got {res_chachara_allowed}"
-        print("✓ Test 56 Passed: Anti-Cháchara Gate allows turn stop when plan was physically mutated")
-
-        # Test 57: Secret Leak Prevention Guard blocks writing hardcoded tokens
-        synthetic_token = "ghp_" + ("1" * 36)
-        res_secret_blocked = evaluate_hook({
-            "test_bypass_linear": True,
-            "toolCall": {
-                "name": "write_file",
-                "args": {
-                    "Path": "/var/www/zerops-astrobranding/apps/app_config.ts",
-                    "Content": f"export const token = '{synthetic_token}';"
-                }
-            }
-        })
-        assert res_secret_blocked.get("decision") == "deny" and "SOBERANÍA ZEROPS ENV" in res_secret_blocked.get("reason", "").upper(), f"Expected deny on secret leak, got {res_secret_blocked}"
-        print("✓ Test 57 Passed: Secret Leak Prevention Guard blocks writing hardcoded tokens")
-
-        # Test 58: Anti-Cháchara Governance Gate blocks turn stop on governance fix request without code mutation
-        if os.path.exists("/tmp/.gov_mutation_stop_force_count"):
-            try:
-                os.remove("/tmp/.gov_mutation_stop_force_count")
-            except Exception:
-                pass
-        res_gov_blocked = evaluate_hook({
-            "is_stop_event": True,
-            "terminationReason": "NO_TOOL_CALL",
-            "test_user_prompt": "Arreglá y blindá el hook de tool-guard para que no vuelva a fallar",
-            "test_has_gov_mutation": False,
-            "test_bypass_linear": True
-        })
-        assert res_gov_blocked.get("decision") in ["continue", "CONTINUE"] and "SENSOR-FIRST" in res_gov_blocked.get("reason", "").upper(), f"Expected continue (stop blocked) on unmutated governance fix, got {res_gov_blocked}"
-        print("✓ Test 58 Passed: Anti-Cháchara Governance Gate blocks turn stop on hook/governance fix without code mutation")
-
-        # Test 59: Anti-Cháchara Governance Gate allows turn stop when tool-guard/governance was mutated
-        res_gov_allowed = evaluate_hook({
-            "is_stop_event": True,
-            "terminationReason": "NO_TOOL_CALL",
-            "test_user_prompt": "Arreglá y blindá el hook de tool-guard",
-            "test_has_gov_mutation": True,
-            "test_bypass_linear": True
-        })
-        assert res_gov_allowed == {}, f"Expected allow stop when governance was mutated, got {res_gov_allowed}"
-        print("✓ Test 59 Passed: Anti-Cháchara Governance Gate allows turn stop when governance was mutated")
-
-        # Test 60: Real Antigravity Payload Emulation Test (Zero test_* mock prefixes)
-        if os.path.exists("/tmp/.gov_mutation_stop_force_count"):
-            try:
-                os.remove("/tmp/.gov_mutation_stop_force_count")
-            except Exception:
-                pass
-        res_real_payload = evaluate_hook({
-            "is_stop_event": True,
-            "lastUserInput": "Arreglá y blindá el hook de tool-guard sin cháchara",
-            "stopHookArgs": {
-                "executionNum": 1,
-                "terminationReason": "NO_TOOL_CALL"
-            },
-            "workspacePaths": ["/var/www"],
-            "test_bypass_linear": True
-        })
-        assert res_real_payload.get("decision") in ["continue", "CONTINUE"] and "SENSOR-FIRST" in res_real_payload.get("reason", "").upper(), f"Expected CONTINUE on real Antigravity payload, got {res_real_payload}"
-        print("✓ Test 60 Passed: Real Antigravity payload with lastUserInput triggers Stop Hook without mocks")
-
-        # Test 61: Commercial & Ad Telemetry Skill Trigger Radar (Meta Ads, Google Ads, TikTok, CAPI)
-        telemetry_matches = detect_skills_in_prompt("vamos a configurar meta ads y google ads con consent mode v2 y localbusiness sab")
-        assert any(s[0] == "ad-telemetry" for s in telemetry_matches), f"Expected ad-telemetry match in detect_skills_in_prompt, got {telemetry_matches}"
-        print("✓ Test 61 Passed: Commercial & Ad Telemetry Skill Trigger Radar matches ad-telemetry (Meta/Google/TikTok/CAPI)")
-
-        # Test 62: Bash AST Command Parser eliminates false positives on string literals (BAI-421)
-        res_commit_rm = evaluate_hook({
-            "toolCall": {
-                "name": "run_command",
-                "args": {
-                    "CommandLine": 'git commit -m "rm -rf /var/www/artifacts/* was prevented"'
-                }
-            }
-        })
-        assert res_commit_rm.get("decision") == "allow", f"Expected allow on git commit with rm literal, got {res_commit_rm}"
-
-        res_echo_find = evaluate_hook({
-            "toolCall": {
-                "name": "run_command",
-                "args": {
-                    "CommandLine": 'echo "find /var/www/baiosfera without prune"'
-                }
-            }
-        })
-        assert res_echo_find.get("decision") == "allow", f"Expected allow on echo find, got {res_echo_find}"
-
-        res_commit_kill = evaluate_hook({
-            "toolCall": {
-                "name": "run_command",
-                "args": {
-                    "CommandLine": 'git commit -m "fix: killall agy bug resolved"'
-                }
-            }
-        })
-        assert res_commit_kill.get("decision") == "allow", f"Expected allow on git commit with killall literal, got {res_commit_kill}"
-
-        # Ensure real dangerous commands are STILL blocked
-        res_real_rm = evaluate_hook({
-            "toolCall": {
-                "name": "run_command",
-                "args": {
-                    "CommandLine": 'rm -rf /var/www/artifacts/*'
-                }
-            }
-        })
-        assert res_real_rm.get("decision") == "deny", f"Expected deny on real rm sweeping artifacts, got {res_real_rm}"
-
-        res_real_find = evaluate_hook({
-            "toolCall": {
-                "name": "run_command",
-                "args": {
-                    "CommandLine": 'find /var/www/baiosfera -name "*.md"'
-                }
-            }
-        })
-        assert res_real_find.get("decision") == "deny", f"Expected deny on real find without prune, got {res_real_find}"
-
-        # Test runtime capabilities probing
-        caps = get_runtime_capabilities()
-        assert "agent_binaries" in caps and len(caps["agent_binaries"]) > 0, f"Expected agent_binaries, got {caps}"
-        assert caps.get("is_single_node") is True
-
-        print("✓ Test 62 Passed: Bash AST Command Parser eliminates false positives on string literals (BAI-421)")
-
-        # Test 63: SkillCreationGate in PreToolUse enforces research dossier for new skills (BAI-422)
-        new_skill_path = "/var/www/zerops-astro-skills/test-brand-new-skill/SKILL.md"
-        dossier_path = "/var/www/artifacts/research/test-brand-new-skill_dossier.md"
-        if os.path.exists(dossier_path):
-            os.remove(dossier_path)
-
-        res_new_skill_denied = evaluate_hook({
-            "test_bypass_linear": True,
-            "toolCall": {
-                "name": "write_file",
-                "args": {
-                    "Path": new_skill_path,
-                    "Content": "---\nname: test-brand-new-skill\ndescription: Test\n---\n"
-                }
-            }
-        })
-        assert res_new_skill_denied.get("decision") == "deny" and "SKILL CREATION GATE" in res_new_skill_denied.get("reason", ""), f"Expected deny from SkillCreationGate on new skill, got {res_new_skill_denied}"
-
-        # Create dossier and verify allow
-        os.makedirs(os.path.dirname(dossier_path), exist_ok=True)
-        with open(dossier_path, "w") as f:
-            f.write("# Research Dossier for test-brand-new-skill\n")
-
-        res_new_skill_allowed = evaluate_hook({
-            "test_bypass_linear": True,
-            "test_bypass_subskills": True,
-            "toolCall": {
-                "name": "write_file",
-                "args": {
-                    "Path": new_skill_path,
-                    "Content": "---\nname: test-brand-new-skill\ndescription: Trigger: test\n---\n# Test\n## Section\n"
-                }
-            }
-        })
-        assert res_new_skill_allowed.get("decision") == "allow", f"Expected allow from SkillCreationGate with dossier, got {res_new_skill_allowed}"
-
-        if os.path.exists(dossier_path):
-            os.remove(dossier_path)
-        print("✓ Test 63 Passed: SkillCreationGate in PreToolUse enforces research dossier for new skills (BAI-422)")
-
-        # Test 64: PostToolUse Hot Compilation Sensors catch Python, Bash, and JSON syntax errors (BAI-423)
-        bad_py = "/tmp/test_bad_syntax.py"
-        good_py = "/tmp/test_good_syntax.py"
-        bad_sh = "/tmp/test_bad_syntax.sh"
-        bad_json = "/tmp/test_bad_syntax.json"
-        try:
-            with open(bad_py, "w") as f:
-                f.write("def bad_func(:\n    pass\n")
-            res_bad_py = evaluate_hook({
-                "is_post_tool": True,
-                "stepIdx": 100,
-                "toolCall": {
-                    "name": "write_file",
-                    "args": {"Path": bad_py}
-                }
-            })
-            assert "injectSteps" in res_bad_py and any("SyntaxError" in s.get("ephemeralMessage", "") for s in res_bad_py["injectSteps"]), f"Expected SyntaxError injection, got {res_bad_py}"
-
-            with open(bad_sh, "w") as f:
-                f.write("if [ -z \"$1\" ]; then\necho missing fi\n")
-            res_bad_sh = evaluate_hook({
-                "is_post_tool": True,
-                "stepIdx": 101,
-                "toolCall": {
-                    "name": "write_file",
-                    "args": {"Path": bad_sh}
-                }
-            })
-            assert "injectSteps" in res_bad_sh and any("Error de sintaxis en script Bash" in s.get("ephemeralMessage", "") for s in res_bad_sh["injectSteps"]), f"Expected Bash syntax error injection, got {res_bad_sh}"
-
-            with open(bad_json, "w") as f:
-                f.write("{\"invalid\": json,}\n")
-            res_bad_json = evaluate_hook({
-                "is_post_tool": True,
-                "stepIdx": 102,
-                "toolCall": {
-                    "name": "write_file",
-                    "args": {"Path": bad_json}
-                }
-            })
-            assert "injectSteps" in res_bad_json and any("JSONDecodeError" in s.get("ephemeralMessage", "") for s in res_bad_json["injectSteps"]), f"Expected JSONDecodeError injection, got {res_bad_json}"
-
-            with open(good_py, "w") as f:
-                f.write("def good_func():\n    return 42\n")
-            res_good_py = evaluate_hook({
-                "is_post_tool": True,
-                "stepIdx": 103,
-                "toolCall": {
-                    "name": "write_file",
-                    "args": {"Path": good_py}
-                }
-            })
-            assert res_good_py == {}, f"Expected empty dict on valid file, got {res_good_py}"
-        finally:
-            for p in [bad_py, good_py, bad_sh, bad_json]:
-                if os.path.exists(p):
-                    try:
-                        os.remove(p)
-                    except Exception:
-                        pass
-        print("✓ Test 64 Passed: PostToolUse Hot Compilation Sensors catch Python, Bash, and JSON syntax errors (BAI-423)")
-
-        # Test 65: Governance Rules Size Budget Gate & JIT Meta-Skills Injection (BAI-424)
-        oversized_supreme = "---\nname: 00-supreme-directive\n---\n" + ("palabra " * 650)
-        res_ov_sup = evaluate_hook({
-            "test_bypass_linear": True,
-            "toolCall": {
-                "name": "write_file",
-                "args": {
-                    "Path": "/var/www/.agents/rules/00-SUPREME-DIRECTIVE.md",
-                    "Content": oversized_supreme
-                }
-            }
-        })
-        assert res_ov_sup.get("decision") == "deny" and "Governance Size Budget" in res_ov_sup.get("reason", ""), f"Expected deny on oversized supreme directive, got {res_ov_sup}"
-
-        oversized_agents = "<!-- ZCP:BEGIN -->\nZCP\n<!-- ZCP:END -->\n<!-- CUSTOM:BEGIN -->\n" + ("palabra " * 850) + "\n<!-- CUSTOM:END -->"
-        res_ov_agents = evaluate_hook({
-            "test_bypass_linear": True,
-            "toolCall": {
-                "name": "write_file",
-                "args": {
-                    "Path": "/var/www/AGENTS.md",
-                    "Content": oversized_agents
-                }
-            }
-        })
-        assert res_ov_agents.get("decision") == "deny" and "Governance Size Budget" in res_ov_agents.get("reason", ""), f"Expected deny on oversized AGENTS.md custom section, got {res_ov_agents}"
-
-        # JIT Meta-Skills Intent in PreInvocation
-        res_jit_meta = evaluate_hook({
-            "invocationNum": 200,
-            "test_bypass_dedup": True,
-            "test_force_notice": True,
-            "userPrompt": "vamos a crear una nueva skill y auditarla con dual-rag"
-        })
-        steps_jit = res_jit_meta.get("injectSteps", [])
-        assert len(steps_jit) > 0 and any("JIT Meta-Skill [meta-skill]" in s.get("ephemeralMessage", "") for s in steps_jit), f"Expected JIT Meta-Skill injection, got {res_jit_meta}"
-        print("✓ Test 65 Passed: Governance Rules Size Budget Gate & JIT Meta-Skills Injection (BAI-424)")
-
-        # Test 66: Engram 3-Tier Background Auto-Sync on PostToolUse Write Tools & Stop (BAI-425)
-        res_engram_write = evaluate_hook({
-            "is_post_tool": True,
-            "stepIdx": 210,
-            "test_inspect_engram_sync": True,
-            "toolCall": {
-                "name": "call_mcp_tool",
-                "args": {"ServerName": "engram", "ToolName": "mem_save", "Arguments": {"title": "Test"}}
-            }
-        })
-        assert res_engram_write.get("engramSyncTriggered") is True and res_engram_write.get("source") == "post_tool:mem_save", f"Expected engram sync on mem_save, got {res_engram_write}"
-
-        res_engram_read = evaluate_hook({
-            "is_post_tool": True,
-            "stepIdx": 211,
-            "test_inspect_engram_sync": True,
-            "toolCall": {
-                "name": "call_mcp_tool",
-                "args": {"ServerName": "engram", "ToolName": "mem_context", "Arguments": {}}
-            }
-        })
-        assert res_engram_read.get("engramSyncTriggered") is False, f"Expected no engram sync on read-only mem_context, got {res_engram_read}"
-
-        res_engram_stop = evaluate_hook({
-            "is_stop_event": True,
-            "terminationReason": "NO_TOOL_CALL",
-            "test_bypass_linear": True,
-            "test_bypass_correction_gate": True,
-            "test_bypass_gov_gate": True,
-            "test_inspect_engram_sync": True
-        })
-        assert res_engram_stop.get("engramSyncTriggered") is True and res_engram_stop.get("source") == "stop", f"Expected engram sync on Stop event, got {res_engram_stop}"
-        print("✓ Test 66 Passed: Engram 3-Tier Background Auto-Sync triggers on MCP writes and Stop (BAI-425)")
-
-        # Test 67: Bootstrap Self-Reexec & SSoT Parity Unbound-Var / Shadow Guards (BAI-425)
-        parity_sh = "/var/www/zerops-astrobranding/scripts/ssot-parity-check.sh"
-        iniciar_sh = "/var/www/zerops-astrobranding/iniciar.sh"
-        if os.path.isfile(parity_sh) and os.path.isfile(iniciar_sh):
-            with open(parity_sh, "r", encoding="utf-8") as fp:
-                parity_src = fp.read()
-            assert "AUTO_FIX_MODE=" in parity_src and '"$AUTO_FIX" = true' not in parity_src, "ssot-parity-check.sh must not reference unbound $AUTO_FIX under set -u"
-            assert "Auto-healed stale PATH shadow" in parity_src, "ssot-parity-check.sh must auto-heal ~/.local/bin PATH shadows"
-            with open(iniciar_sh, "r", encoding="utf-8") as fi:
-                iniciar_src = fi.read()
-            assert "INICIAR_REEXEC=1" in iniciar_src and 'exec bash "$REPO_DIR/iniciar.sh"' in iniciar_src, "iniciar.sh must re-exec after git self-update"
-        print("✓ Test 67 Passed: Bootstrap Self-Reexec & SSoT Parity Unbound-Var / Shadow Guards (BAI-425)")
-
-        # Test 68: CoHaLo Positive Infrastructure Grounding Radar
-        res_pi_infra = evaluate_hook({
-            "invocationNum": 10,
-            "test_bypass_dedup": True,
-            "test_user_prompt": "cómo almacenar imágenes para ahorrar recursos y créditos"
-        })
-        assert any("GROUNDING DE INFRAESTRUCTURA" in msg.get("ephemeralMessage", "") for msg in res_pi_infra.get("injectSteps", [])), f"Expected positive infrastructure grounding in PreInvocation, got {res_pi_infra}"
-        print("✓ Test 68 Passed: CoHaLo Positive Infrastructure Grounding Radar")
-
-        # Test 69: Multi-service bootstrap blocked without Linear activity (BAI-430)
-        if os.path.exists(state_file):
-            os.remove(state_file)
-        if os.path.exists(alt_state_file):
-            os.remove(alt_state_file)
-        res_multi_block = evaluate_hook({
-            "toolCall": {
-                "name": "call_mcp_tool",
-                "args": {
-                    "ServerName": "zerops",
-                    "ToolName": "zerops_workflow",
-                    "Arguments": {
-                        "action": "start",
-                        "workflow": "bootstrap",
-                        "intent": "Provision database and valkey"
-                    }
-                }
-            }
-        })
-        assert res_multi_block.get("decision") == "deny" and "LINEAR-FIRST MULTI-SERVICIO" in res_multi_block.get("reason", ""), f"Expected deny on multi-service bootstrap without linear activity, got {res_multi_block}"
-        print("✓ Test 69 Passed: Multi-service bootstrap blocked without Linear activity (BAI-430)")
-
-        # Test 70: Multi-service bootstrap allowed with Linear activity (BAI-430)
-        with open(state_file, "w") as f:
-            json.dump({"timestamp": int(time.time() * 1000), "action": "create-project", "issueId": "BAI-123"}, f)
-        res_multi_allow = evaluate_hook({
-            "toolCall": {
-                "name": "call_mcp_tool",
-                "args": {
-                    "ServerName": "zerops",
-                    "ToolName": "zerops_workflow",
-                    "Arguments": {
-                        "action": "start",
-                        "workflow": "bootstrap",
-                        "intent": "Provision database and valkey"
-                    }
-                }
-            }
-        })
-        assert res_multi_allow.get("decision") != "deny", f"Expected allow on multi-service bootstrap with linear activity, got {res_multi_allow}"
-        print("✓ Test 70 Passed: Multi-service bootstrap allowed with Linear activity (BAI-430)")
-
-        # Test 71: zcli project import command blocked without Linear activity (BAI-430)
-        if os.path.exists(state_file):
-            os.remove(state_file)
-        res_cmd_import_block = evaluate_hook({
-            "toolCall": {
-                "name": "run_command",
-                "args": {
-                    "CommandLine": "zcli project import import.yaml"
-                }
-            }
-        })
-        assert res_cmd_import_block.get("decision") == "deny" and "LINEAR-FIRST MULTI-SERVICIO" in res_cmd_import_block.get("reason", ""), f"Expected deny on zcli project import without linear activity, got {res_cmd_import_block}"
-        print("✓ Test 71 Passed: zcli project import command blocked without Linear activity (BAI-430)")
-
-        # Test 72: Gate 14 blocks linear-cli update-status Done when service has deployed: false (BAI-454)
-        test_cache = "/tmp/.zerops_discover_cache.json"
-        cache_backup = None
-        if os.path.exists(test_cache):
-            with open(test_cache, "r") as f:
-                cache_backup = f.read()
-        try:
-            with open(test_cache, "w") as f:
-                json.dump({
-                    "services": [
-                        {"hostname": "freellmapi", "deployed": False, "isInfrastructure": False},
-                        {"hostname": "bifrost", "deployed": True, "isInfrastructure": False}
-                    ]
-                }, f)
-            res_gate14_block = evaluate_hook({
-                "toolCall": {
-                    "name": "run_command",
-                    "args": {
-                        "CommandLine": 'linear-cli update-status BAI-447 "Done" --evidence "se probaron freellmapi y bifrost"'
-                    }
-                }
-            })
-            assert res_gate14_block.get("decision") == "deny" and "Gate 14" in res_gate14_block.get("reason", ""), f"Expected Gate 14 deny on undeployed freellmapi, got {res_gate14_block}"
-            print("✓ Test 72 Passed: Gate 14 blocks linear-cli Done on undeployed service (BAI-454)")
-
-            # Test 73: Gate 14 allows linear-cli update-status Done when mentioned services are deployed
-            res_gate14_allow = evaluate_hook({
-                "toolCall": {
-                    "name": "run_command",
-                    "args": {
-                        "CommandLine": 'linear-cli update-status BAI-448 "Done" --evidence "se probo bifrost"'
-                    }
-                }
-            })
-            assert res_gate14_allow.get("decision") == "allow", f"Expected Gate 14 allow on deployed bifrost, got {res_gate14_allow}"
-            print("✓ Test 73 Passed: Gate 14 allows linear-cli Done when services are deployed (BAI-454)")
-
-            # Test 74: Paperclip Skill Trigger Radar & Invariant Persistence (BAI-455)
-            pc_matches = detect_skills_in_prompt("vamos a coordinar el organigrama y spend caps en paperclip con hermes_gateway")
-            assert any(s[0] == "paperclip" for s in pc_matches), f"Expected paperclip match in detect_skills_in_prompt, got {pc_matches}"
-            assert os.path.exists("/mnt/localstorage/paperclip/instances/default/config.json") or os.path.exists("/home/zerops/.paperclip"), "Paperclip home persistence invariant missing"
-            print("✓ Test 74 Passed: Paperclip Skill Trigger Radar & Invariant Persistence (BAI-455)")
-
-            # Test 75: Meta-Skill Subskills Physical Enforcement Gate (BAI-458)
-            # 75a: skill-creator frontmatter and trigger validation
-            res_no_frontmatter = evaluate_hook({
-                "test_bypass_linear": True,
-                "toolCall": {
-                    "name": "write_file",
-                    "args": {
-                        "Path": "/var/www/zerops-astro-skills/paperclip/SKILL.md",
-                        "Content": "# Bad Skill\nNo frontmatter here."
-                    }
-                }
-            })
-            assert res_no_frontmatter.get("decision") == "deny" and "skill-creator" in res_no_frontmatter.get("reason", ""), f"Expected deny on missing frontmatter, got {res_no_frontmatter}"
-
-            res_no_trigger = evaluate_hook({
-                "test_bypass_linear": True,
-                "toolCall": {
-                    "name": "write_file",
-                    "args": {
-                        "Path": "/var/www/zerops-astro-skills/paperclip/SKILL.md",
-                        "Content": "---\nname: test-skill\ndescription: A test without trigger keyword.\n---\n# Test\n## Section\n"
-                    }
-                }
-            })
-            assert res_no_trigger.get("decision") == "deny" and "Trigger:" in res_no_trigger.get("reason", ""), f"Expected deny on missing Trigger:, got {res_no_trigger}"
-
-            # 75b: writing-for-agents markdown cognitive seams (unclosed code fences)
-            res_bad_fence = evaluate_hook({
-                "test_bypass_linear": True,
-                "toolCall": {
-                    "name": "write_file",
-                    "args": {
-                        "Path": "/var/www/zerops-astro-skills/paperclip/SKILL.md",
-                        "Content": "---\nname: test-skill\ndescription: Trigger: test\n---\n# Test\n## Section\n```bash\necho hello\n"
-                    }
-                }
-            })
-            assert res_bad_fence.get("decision") == "deny" and "writing-for-agents" in res_bad_fence.get("reason", ""), f"Expected deny on unclosed code fence, got {res_bad_fence}"
-
-            # 75c: docu & skill-improver Dual-RAG structure
-            test_monolith_path = "/var/www/zerops-astro-skills/test-monolith-no-refs/SKILL.md"
-            test_monolith_dossier = "/var/www/artifacts/research/test-monolith-no-refs_dossier.md"
-            os.makedirs(os.path.dirname(test_monolith_path), exist_ok=True)
-            os.makedirs(os.path.dirname(test_monolith_dossier), exist_ok=True)
-            with open(test_monolith_dossier, "w") as f:
-                f.write("# Research Dossier\n")
-            try:
-                res_missing_dual_rag = evaluate_hook({
-                    "test_bypass_linear": True,
-                    "toolCall": {
-                        "name": "write_file",
-                        "args": {
-                            "Path": test_monolith_path,
-                            "Content": "---\nname: test-monolith\ndescription: Trigger: mock\n---\n# Mock\n## Section\n"
-                        }
-                    }
-                })
-                assert res_missing_dual_rag.get("decision") == "deny" and "docu + skill-improver" in res_missing_dual_rag.get("reason", ""), f"Expected deny on missing Dual-RAG references, got {res_missing_dual_rag}"
-            finally:
-                if os.path.exists(test_monolith_dossier):
-                    os.remove(test_monolith_dossier)
-                if os.path.exists("/var/www/zerops-astro-skills/test-monolith-no-refs"):
-                    os.rmdir("/var/www/zerops-astro-skills/test-monolith-no-refs")
-
-            print("✓ Test 75 Passed: Meta-Skill Subskills Physical Enforcement Gate (BAI-458)")
-
-            # Test 76: Anti-Frankenstein Python Tool Guard (BAI-459)
-            res_frank = evaluate_hook({
-                "test_bypass_linear": True,
-                "toolCall": {
-                    "name": "write_file",
-                    "args": {
-                        "Path": "/var/www/hermes/tools.py",
-                        "Content": "def run_orchesbrand(vertical: str):\n    pass\n"
-                    }
-                }
-            })
-            assert res_frank.get("decision") == "deny" and "Anti-Frankenstein Tool Invariant" in res_frank.get("reason", ""), f"Expected deny on frankenstein tool, got {res_frank}"
-
-            res_clean_tool = evaluate_hook({
-                "test_bypass_linear": True,
-                "toolCall": {
-                    "name": "write_file",
-                    "args": {
-                        "Path": "/var/www/hermes/tools.py",
-                        "Content": "def get_system_uptime():\n    return '10 days'\n"
-                    }
-                }
-            })
-            assert res_clean_tool.get("decision") == "allow", f"Expected allow on clean tool, got {res_clean_tool}"
-            print("✓ Test 76 Passed: Anti-Frankenstein Python Tool Guard (Universal Primitives Architecture)")
-        finally:
-            if cache_backup:
-                with open(test_cache, "w") as f:
-                    f.write(cache_backup)
-
-
-    finally:
-        if os.path.exists("/tmp/.gov_mutation_stop_force_count"):
-            try:
-                os.remove("/tmp/.gov_mutation_stop_force_count")
-            except Exception:
-                pass
-        if os.path.exists(test_plan_path):
-            try:
-                os.remove(test_plan_path)
-            except Exception:
-                pass
-        if state_backup:
-            with open(state_file, "w") as f:
-                f.write(state_backup)
-        if alt_state_backup:
-            with open(alt_state_file, "w") as f:
-                f.write(alt_state_backup)
-
-    print("============================================================")
-    print("✅ ALL TOOL-GUARD UNIT TESTS PASSED DETERMINISTICALLY (exit 0)")
-    print("============================================================")
+    import importlib.util
+    test_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_tool_guard.py")
+    spec = importlib.util.spec_from_file_location("test_tool_guard", test_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    for k, v in globals().items():
+        if not k.startswith("__") and k not in mod.__dict__:
+            mod.__dict__[k] = v
+    return mod.run_tests(evaluate_hook, has_recent_backup)
 
 def main():
     if "--test" in sys.argv:
