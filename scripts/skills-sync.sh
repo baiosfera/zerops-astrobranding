@@ -78,6 +78,10 @@ for skill in "${!SOVEREIGN_SET[@]}"; do
         target_dir="$SOVEREIGN_REPO/$skill"
     fi
 
+    if [ "$(readlink -f "$source_dir")" = "$(readlink -f "$target_dir")" ]; then
+        continue
+    fi
+
     DRIFT_OUTPUT=$(rsync -avnc --delete "$source_dir/" "$target_dir/" 2>/dev/null | grep -vE "^building file list|^created directory|^sent|^total size|^$" || true)
 
     if [ -n "$DRIFT_OUTPUT" ]; then
