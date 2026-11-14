@@ -13,6 +13,7 @@ if str(LIB_DIR) not in sys.path:
 from vault_env import (
     build_freellm_declarative_config,
     collect_freellm_pools,
+    is_sensitive_vault_key,
     parse_freellm_markdown,
     parse_kv_file,
 )
@@ -81,6 +82,39 @@ class TestVaultEnv(unittest.TestCase):
             groq_qwen = next(m for m in cfg["models"] if m["platform"] == "groq" and m["modelId"] == "qwen/qwen3.8-27b")
             self.assertEqual(groq_qwen["tpmLimit"], 7000)
             json.dumps(cfg)
+
+    def test_sensitivity_classification_and_upsert(self):
+        from vault_env import ZcpVaultClient
+
+        self.assertTrue(is_sensitive_vault_key("BIFROST_MASTER_VK"))
+        self.assertTrue(is_sensitive_vault_key("EVOLUTION_API_KEY"))
+        self.assertTrue(is_sensitive_vault_key("ASTROLOGY_API_IO"))
+        self.assertFalse(is_sensitive_vault_key("PROJECT_NAME"))
+
+        calls: list[tuple[str, dict]] = []
+
+        class FakeZcp(ZcpVaultClient):
+            def get_project_envs(self):
+                return "Demo", {"EXISTING_PLAIN": False, "EXISTING_SECRET": True}
+
+            def call_tool(self, name: str, arguments: dict):
+                calls.append((name, arguments))
+                return {}
+
+        summary = FakeZcp().upsert_project_envs(
+            {
+                "EXISTING_PLAIN": "v1",
+                "EXISTING_SECRET": "s1",
+                "BIFROST_MASTER_VK": "vk-123",
+                "PROJECT_NAME": "Demo",
+            }
+        )
+        self.assertEqual(summary["new_sensitive"], 1)
+        self.assertEqual(summary["new_plain"], 1)
+        self.assertEqual(summary["new_auto"], 2)
+        sens_calls = [args for _, args in calls if args.get("variables") == ["BIFROST_MASTER_VK=vk-123"]]
+        self.assertEqual(len(sens_calls), 1)
+        self.assertTrue(sens_calls[0]["sensitive"])
 
 
 if __name__ == "__main__":

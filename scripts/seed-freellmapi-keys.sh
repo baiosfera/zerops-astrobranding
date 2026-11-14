@@ -143,6 +143,11 @@ with ZcpVaultClient() as zcp:
     if rotate or "BIFROST_MASTER_VK" not in existing:
         payload["BIFROST_MASTER_VK"] = f"vk-bifrost-{generate_secret(28)}"
 
+    if kv.get("EVOLUTION_API_KEY"):
+        payload["EVOLUTION_API_KEY"] = kv["EVOLUTION_API_KEY"].strip()
+    elif rotate or "EVOLUTION_API_KEY" not in existing:
+        payload["EVOLUTION_API_KEY"] = f"evo-{generate_secret(32)}"
+
     if rotate or "PAPERCLIP_BETTER_AUTH_SECRET" not in existing:
         payload["PAPERCLIP_BETTER_AUTH_SECRET"] = generate_secret(32)
     if rotate or "PAPERCLIP_SIGNING_SECRET" not in existing:

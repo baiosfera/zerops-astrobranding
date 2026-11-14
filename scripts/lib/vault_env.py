@@ -30,6 +30,17 @@ IGNORED_VAULT_KEYS = re.compile(
     r"ZCP_API_KEY|ZEROPS_TOKEN|Z_TOKEN|ZEROPS_API_KEY|INICIAR_REEXEC)$"
 )
 
+# Suffixes and explicit credential names that must always be stored as sensitive when created.
+SENSITIVE_VAULT_KEYS = re.compile(
+    r"(SECRET|TOKEN|KEY|PASSWORD|PASS|DSN|PRIVATE|CREDENTIAL|_VK$|_PAT$|^ASTROLOGY_API_IO$)",
+    re.IGNORECASE,
+)
+
+
+def is_sensitive_vault_key(key: str) -> bool:
+    """Return True when a vault variable name holds a secret or virtual key."""
+    return bool(SENSITIVE_VAULT_KEYS.search(key))
+
 _FREELLM_KEY_PLATFORMS = ("cerebras", "groq", "ollama", "openrouter", "opencode", "huggingface", "mistral", "google", "cohere", "nvidia")
 
 # Curated catalog models aligned with live catalog v2026.11+: throttle Groq qwen3.8-27b to 7,000 TPM
@@ -364,12 +375,13 @@ class ZcpVaultClient:
     def upsert_project_envs(self, kv: dict[str, str], *, skip_restart: bool = True) -> dict[str, int]:
         """Upsert variables into Project Shared Vault respecting existing sensitivity groups."""
         if not kv:
-            return {"existing_sensitive": 0, "existing_plain": 0, "new_auto": 0}
+            return {"existing_sensitive": 0, "existing_plain": 0, "new_auto": 0, "new_sensitive": 0, "new_plain": 0}
         _, existing = self.get_project_envs()
 
         existing_sensitive: list[str] = []
         existing_plain: list[str] = []
-        new_auto: list[str] = []
+        new_sensitive: list[str] = []
+        new_plain: list[str] = []
 
         for k in sorted(kv):
             v = kv[k]
@@ -378,8 +390,10 @@ class ZcpVaultClient:
             pair = f"{k}={v}"
             if k in existing:
                 (existing_sensitive if existing[k] else existing_plain).append(pair)
+            elif is_sensitive_vault_key(k):
+                new_sensitive.append(pair)
             else:
-                new_auto.append(pair)
+                new_plain.append(pair)
 
         if existing_sensitive:
             self.call_tool(
@@ -391,14 +405,21 @@ class ZcpVaultClient:
                 "zerops_env",
                 {"action": "set", "project": True, "sensitive": False, "skipRestart": skip_restart, "variables": existing_plain},
             )
-        if new_auto:
+        if new_sensitive:
             self.call_tool(
                 "zerops_env",
-                {"action": "set", "project": True, "skipRestart": skip_restart, "variables": new_auto},
+                {"action": "set", "project": True, "sensitive": True, "skipRestart": skip_restart, "variables": new_sensitive},
+            )
+        if new_plain:
+            self.call_tool(
+                "zerops_env",
+                {"action": "set", "project": True, "sensitive": False, "skipRestart": skip_restart, "variables": new_plain},
             )
 
         return {
             "existing_sensitive": len(existing_sensitive),
             "existing_plain": len(existing_plain),
-            "new_auto": len(new_auto),
+            "new_auto": len(new_sensitive) + len(new_plain),
+            "new_sensitive": len(new_sensitive),
+            "new_plain": len(new_plain),
         }
