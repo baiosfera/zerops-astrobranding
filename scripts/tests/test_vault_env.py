@@ -86,8 +86,12 @@ class TestVaultEnv(unittest.TestCase):
     def test_sensitivity_classification_and_upsert(self):
         from vault_env import ZcpVaultClient
 
-        self.assertTrue(is_sensitive_vault_key("BIFROST_MASTER_VK"))
-        self.assertTrue(is_sensitive_vault_key("EVOLUTION_API_KEY"))
+        self.assertFalse(is_sensitive_vault_key("BIFROST_MASTER_VK"))
+        self.assertFalse(is_sensitive_vault_key("EVOLUTION_API_KEY"))
+        self.assertFalse(is_sensitive_vault_key("FREEAPI_ADMIN_PASSWORD"))
+        self.assertFalse(is_sensitive_vault_key("PAPERCLIP_ADMIN_PASSWORD"))
+        self.assertFalse(is_sensitive_vault_key("TTYD_PASSWORD"))
+        self.assertTrue(is_sensitive_vault_key("DEEPSEEK_API_KEY"))
         self.assertTrue(is_sensitive_vault_key("ASTROLOGY_API_IO"))
         self.assertFalse(is_sensitive_vault_key("PROJECT_NAME"))
 
@@ -95,7 +99,7 @@ class TestVaultEnv(unittest.TestCase):
 
         class FakeZcp(ZcpVaultClient):
             def get_project_envs(self):
-                return "Demo", {"EXISTING_PLAIN": False, "EXISTING_SECRET": True}
+                return "Demo", {"EXISTING_PLAIN": False, "EXISTING_SECRET": True, "BIFROST_MASTER_VK": True}
 
             def call_tool(self, name: str, arguments: dict):
                 calls.append((name, arguments))
@@ -105,16 +109,23 @@ class TestVaultEnv(unittest.TestCase):
             {
                 "EXISTING_PLAIN": "v1",
                 "EXISTING_SECRET": "s1",
+                "DEEPSEEK_API_KEY": "sk-ds-123",
                 "BIFROST_MASTER_VK": "vk-123",
                 "PROJECT_NAME": "Demo",
             }
         )
         self.assertEqual(summary["new_sensitive"], 1)
-        self.assertEqual(summary["new_plain"], 1)
-        self.assertEqual(summary["new_auto"], 2)
-        sens_calls = [args for _, args in calls if args.get("variables") == ["BIFROST_MASTER_VK=vk-123"]]
+        self.assertEqual(summary["new_plain"], 2)
+        self.assertEqual(summary["new_auto"], 3)
+        sens_calls = [args for _, args in calls if args.get("variables") == ["DEEPSEEK_API_KEY=sk-ds-123"]]
         self.assertEqual(len(sens_calls), 1)
         self.assertTrue(sens_calls[0]["sensitive"])
+        plain_calls = [args for _, args in calls if args.get("action") == "set" and not args.get("sensitive")]
+        plain_vars = [v for c in plain_calls for v in c.get("variables", [])]
+        self.assertIn("BIFROST_MASTER_VK=vk-123", plain_vars)
+        del_calls = [args for _, args in calls if args.get("action") == "delete"]
+        self.assertEqual(len(del_calls), 1)
+        self.assertEqual(del_calls[0]["variables"], ["BIFROST_MASTER_VK"])
 
 
 if __name__ == "__main__":

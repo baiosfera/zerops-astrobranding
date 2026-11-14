@@ -212,8 +212,8 @@ Paperclip AI and Hermes run with zero data loss across container restarts, stop/
         PAPERCLIP_AUTH_PUBLIC_BASE_URL: "https://${zerops_subdomain}"
         BETTER_AUTH_URL: "https://${zerops_subdomain}"
         BETTER_AUTH_TRUSTED_ORIGINS: "https://${zerops_subdomain}"
-        PAPERCLIP_ADMIN_EMAIL: ${PAPERCLIP_ADMIN_EMAIL_SECRET}
-        PAPERCLIP_ADMIN_PASSWORD: ${PAPERCLIP_ADMIN_PASSWORD_SECRET}
+        PAPERCLIP_ADMIN_EMAIL: ${PAPERCLIP_ADMIN_EMAIL}
+        PAPERCLIP_ADMIN_PASSWORD: ${PAPERCLIP_ADMIN_PASSWORD}
         HERMES_GATEWAY_URL: "http://hermes:8000"
       start: bash start.sh
       healthCheck:

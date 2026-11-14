@@ -623,11 +623,12 @@ def get_pending_research_subagents(transcript_path: str) -> list:
                     continue
                 
                 content = step.get("content", "")
-                if "Created the following subagent:" in content:
-                    m = re.search(r"\"conversationId\":\s*\"([^\"]+)\"", content)
-                    if m:
-                        cid = m.group(1)
-                        launched_research[cid] = True
+                if not isinstance(content, str) or "tf.write(" in content or "def get_pending_research_subagents(" in content:
+                    continue
+                m_sub = re.search(r"Created the following subagent:\s*\{\s*\"conversationId\":\s*\"([0-9a-fA-F\-]{36})\"", content)
+                if m_sub:
+                    cid = m_sub.group(1)
+                    launched_research[cid] = True
                 
                 if "sender=" in content:
                     m = re.search(r"sender=([0-9a-fA-F\-]{36})", content)

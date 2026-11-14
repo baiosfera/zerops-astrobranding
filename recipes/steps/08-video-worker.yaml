@@ -6,7 +6,7 @@ services:
     type: ubuntu/nodejs@22
     priority: 5
     startWithoutCode: true
-    enableSubdomainAccess: true
+    enableSubdomainAccess: false
     minContainers: 1
     maxContainers: 1
     verticalAutoscaling:

@@ -1286,6 +1286,7 @@ def run_tests(evaluate_hook):
             # Test 80: Stop hook blocks stop while a research subagent is still pending
             with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as tf:
                 tf.write(json.dumps({"content": 'Created the following subagent: {"conversationId": "22222222-2222-2222-2222-222222222222"}'}) + "\n")
+                tf.write(json.dumps({"content": '1288: tf.write(json.dumps({"content": \'Created the following subagent: {"conversationId": "33333333-3333-3333-3333-333333333333"}\'}))'}) + "\n")
                 pending_tpath = tf.name
             try:
                 res_stop_pending = evaluate_hook({
@@ -1295,11 +1296,13 @@ def run_tests(evaluate_hook):
                     "test_has_grilling_in_stop": True,
                     "test_bypass_dedup": True,
                 })
-                assert res_stop_pending.get("decision") == "continue" and "ESPERA EPISTÉMICA" in res_stop_pending.get("reason", ""), f"Expected Stop continue on pending research subagent, got {res_stop_pending}"
+                reason_pending = res_stop_pending.get("reason", "")
+                assert res_stop_pending.get("decision") == "continue" and "ESPERA EPISTÉMICA" in reason_pending, f"Expected Stop continue on pending research subagent, got {res_stop_pending}"
+                assert "33333333-3333-3333-3333-333333333333" not in reason_pending, f"Source snippet falsely flagged as pending subagent: {reason_pending}"
             finally:
                 if os.path.exists(pending_tpath):
                     os.remove(pending_tpath)
-            print("✓ Test 80 Passed: Stop Gate waits for pending research subagents")
+            print("✓ Test 80 Passed: Stop Gate waits for pending research subagents without source false positives")
 
             # Test 81: PreInvocation Anti-AMN Nudge stays silent after Jina Verbatim grounding
             if os.path.exists(test_plan_path):

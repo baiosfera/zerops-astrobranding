@@ -8,7 +8,7 @@
 # se aprovisiona de forma aditiva e independiente vía recipes/services/04-objectstorage.yaml.
 services:
   # Entorno Producción / Primario (Tráfico en vivo, pasarelas reales, rama main)
-  - hostname: web
+  - hostname: webprod
     type: ubuntu/bun@1.4
     priority: 5
     startWithoutCode: true

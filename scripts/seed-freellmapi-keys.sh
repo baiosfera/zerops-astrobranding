@@ -124,15 +124,15 @@ with ZcpVaultClient() as zcp:
     if "ENGRAM_PROJECT" not in existing:
         payload["ENGRAM_PROJECT"] = os.getenv("ENGRAM_PROJECT") or proj_slug
 
-    admin_email = (kv.get("FREELLMAPI_ADMIN_EMAIL") or kv.get("FREELLMAPI_EMAIL") or f"admin@{domain_slug}.internal").strip()
-    admin_pass = (kv.get("FREELLMAPI_ADMIN_PASSWORD") or kv.get("FREELLMAPI_PASSWORD") or "").strip()
+    admin_email = (kv.get("FREEAPI_ADMIN_EMAIL") or kv.get("FREELLMAPI_ADMIN_EMAIL") or kv.get("FREELLMAPI_EMAIL") or f"admin@{domain_slug}.internal").strip()
+    admin_pass = (kv.get("FREEAPI_ADMIN_PASSWORD") or kv.get("FREELLMAPI_ADMIN_PASSWORD") or kv.get("FREELLMAPI_PASSWORD") or "").strip()
 
-    if rotate or "FREEAPI_ADMIN_EMAIL_SECRET" not in existing:
-        payload["FREEAPI_ADMIN_EMAIL_SECRET"] = admin_email
+    if rotate or "FREEAPI_ADMIN_EMAIL" not in existing:
+        payload["FREEAPI_ADMIN_EMAIL"] = admin_email
     if admin_pass and len(admin_pass) >= 8:
-        payload["FREEAPI_ADMIN_PASSWORD_SECRET"] = admin_pass
-    elif rotate or "FREEAPI_ADMIN_PASSWORD_SECRET" not in existing:
-        payload["FREEAPI_ADMIN_PASSWORD_SECRET"] = generate_secret(24)
+        payload["FREEAPI_ADMIN_PASSWORD"] = admin_pass
+    elif rotate or "FREEAPI_ADMIN_PASSWORD" not in existing:
+        payload["FREEAPI_ADMIN_PASSWORD"] = generate_secret(24)
 
     if rotate or "FREEAPI_ENCRYPTION_KEY" not in existing:
         payload["FREEAPI_ENCRYPTION_KEY"] = generate_secret(32, hex_only=True)
@@ -155,12 +155,21 @@ with ZcpVaultClient() as zcp:
 
     pc_email = (kv.get("PAPERCLIP_ADMIN_EMAIL") or admin_email).strip()
     pc_pass = (kv.get("PAPERCLIP_ADMIN_PASSWORD") or admin_pass or "").strip()
-    if rotate or "PAPERCLIP_ADMIN_EMAIL_SECRET" not in existing:
-        payload["PAPERCLIP_ADMIN_EMAIL_SECRET"] = pc_email
+    if rotate or "PAPERCLIP_ADMIN_EMAIL" not in existing:
+        payload["PAPERCLIP_ADMIN_EMAIL"] = pc_email
     if pc_pass and len(pc_pass) >= 8:
-        payload["PAPERCLIP_ADMIN_PASSWORD_SECRET"] = pc_pass
-    elif rotate or "PAPERCLIP_ADMIN_PASSWORD_SECRET" not in existing:
-        payload["PAPERCLIP_ADMIN_PASSWORD_SECRET"] = generate_secret(24)
+        payload["PAPERCLIP_ADMIN_PASSWORD"] = pc_pass
+    elif rotate or "PAPERCLIP_ADMIN_PASSWORD" not in existing:
+        payload["PAPERCLIP_ADMIN_PASSWORD"] = generate_secret(24)
+
+    ttyd_user = (kv.get("TTYD_USER") or "zerops").strip()
+    ttyd_pass = (kv.get("TTYD_PASSWORD") or "").strip()
+    if rotate or "TTYD_USER" not in existing:
+        payload["TTYD_USER"] = ttyd_user
+    if ttyd_pass and len(ttyd_pass) >= 8:
+        payload["TTYD_PASSWORD"] = ttyd_pass
+    elif rotate or "TTYD_PASSWORD" not in existing:
+        payload["TTYD_PASSWORD"] = f"ttyd-{generate_secret(20)}"
 
     summary = zcp.upsert_project_envs(payload, skip_restart=skip_restart)
     print(f"[INFO] Project '{live_project}' Shared Vault hydrated: upserted {len(payload)} vars (existing_sensitive={summary['existing_sensitive']}, existing_plain={summary['existing_plain']}, new={summary['new_auto']}).")

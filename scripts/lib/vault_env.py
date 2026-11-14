@@ -36,9 +36,31 @@ SENSITIVE_VAULT_KEYS = re.compile(
     re.IGNORECASE,
 )
 
+# Operational admin logins, panel API keys, and TTYD credentials that must remain
+# unmasked (`sensitive: false`) so operators can read and copy them directly in Zerops UI.
+COPYABLE_VAULT_KEYS = frozenset(
+    {
+        "FREEAPI_ADMIN_EMAIL",
+        "FREEAPI_ADMIN_PASSWORD",
+        "FREELLMAPI_ADMIN_EMAIL",
+        "FREELLMAPI_ADMIN_PASSWORD",
+        "FREELLMAPI_PASSWORD",
+        "FREELLMAPI_CLIENT_KEY",
+        "FREELLMAPI_API_KEY",
+        "PAPERCLIP_ADMIN_EMAIL",
+        "PAPERCLIP_ADMIN_PASSWORD",
+        "BIFROST_MASTER_VK",
+        "EVOLUTION_API_KEY",
+        "TTYD_USER",
+        "TTYD_PASSWORD",
+    }
+)
+
 
 def is_sensitive_vault_key(key: str) -> bool:
-    """Return True when a vault variable name holds a secret or virtual key."""
+    """Return True when a vault variable holds an opaque provider/crypto secret."""
+    if key in COPYABLE_VAULT_KEYS:
+        return False
     return bool(SENSITIVE_VAULT_KEYS.search(key))
 
 _FREELLM_KEY_PLATFORMS = ("cerebras", "groq", "ollama", "openrouter", "opencode", "huggingface", "mistral", "google", "cohere", "nvidia")
@@ -380,6 +402,7 @@ class ZcpVaultClient:
 
         existing_sensitive: list[str] = []
         existing_plain: list[str] = []
+        flip_to_plain_keys: list[str] = []
         new_sensitive: list[str] = []
         new_plain: list[str] = []
 
@@ -388,12 +411,22 @@ class ZcpVaultClient:
             if not v or IGNORED_VAULT_KEYS.match(k):
                 continue
             pair = f"{k}={v}"
-            if k in existing:
+            if k in COPYABLE_VAULT_KEYS:
+                if existing.get(k) is True:
+                    flip_to_plain_keys.append(k)
+                new_plain.append(pair)
+            elif k in existing:
                 (existing_sensitive if existing[k] else existing_plain).append(pair)
             elif is_sensitive_vault_key(k):
                 new_sensitive.append(pair)
             else:
                 new_plain.append(pair)
+
+        if flip_to_plain_keys:
+            self.call_tool(
+                "zerops_env",
+                {"action": "delete", "project": True, "skipRestart": skip_restart, "variables": flip_to_plain_keys},
+            )
 
         if existing_sensitive:
             self.call_tool(

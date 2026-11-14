@@ -1,13 +1,12 @@
-# Hito 6b (Opcional): Entorno de Staging para Astro-Web (Bun 1.4 Ubuntu)
-# Activación: Solo si el cliente o equipo requiere QA formal previo a main
+# Hito 6b: Entorno de Desarrollo / Preview para Astro-Web (Bun 1.4 Ubuntu, rama dev)
 services:
-  - hostname: webstage
+  - hostname: webdev
     type: ubuntu/bun@1.4
     priority: 5
     startWithoutCode: true
     enableSubdomainAccess: true
     minContainers: 1
-    maxContainers: 2
+    maxContainers: 1
     verticalAutoscaling:
       cpuMode: SHARED
       minFreeRamGB: 0.25
