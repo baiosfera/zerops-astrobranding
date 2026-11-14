@@ -188,12 +188,112 @@ function runCatalogSuites() {
     execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(zc, "scripts/anti_slop_linter.py")} --test`, { stdio: "inherit", timeout: 30000 });
     ran++;
   }
-  if (fs.existsSync(path.join(zc, "scripts/tests/test_apotelos.py"))) {
-    console.log("🧪 [F5 Reality Gate] Ejecutando test_apotelos.py...");
-    execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(zc, "scripts/tests/test_apotelos.py")}`, { stdio: "inherit", timeout: 30000 });
-    ran++;
+  const testsDir = path.join(zc, "scripts/tests");
+  if (fs.existsSync(testsDir)) {
+    const testFiles = fs.readdirSync(testsDir).filter((f) => /^test_.*\.py$/.test(f)).sort();
+    for (const tf of testFiles) {
+      console.log(`🧪 [F5 Reality Gate] Ejecutando ${tf}...`);
+      execSync(`PYTHONDONTWRITEBYTECODE=1 python3 -B ${path.join(testsDir, tf)}`, { stdio: "inherit", timeout: 30000 });
+      ran++;
+    }
   }
   return ran;
+}
+
+/**
+ * Extracts httpGet healthCheck or readinessCheck port + path from zerops.yaml.
+ */
+function extractZeropsHttpProbe(svcPath) {
+  const zPath = path.join(svcPath, "zerops.yaml");
+  if (!fs.existsSync(zPath)) return null;
+  try {
+    const lines = fs.readFileSync(zPath, "utf-8").split(/\r?\n/);
+    let inCheck = false;
+    let checkIndent = -1;
+    let inHttpGet = false;
+    let httpIndent = -1;
+    let port = null;
+    let reqPath = null;
+    for (const raw of lines) {
+      if (!raw.trim() || raw.trim().startsWith("#")) continue;
+      const indent = raw.search(/\S/);
+      const trimmed = raw.trim();
+      if (/^(healthCheck|readinessCheck):\s*$/.test(trimmed)) {
+        inCheck = true;
+        checkIndent = indent;
+        inHttpGet = false;
+        port = null;
+        reqPath = null;
+        continue;
+      }
+      if (!inCheck) continue;
+      if (indent <= checkIndent) {
+        if (port && reqPath) return { port, path: reqPath };
+        inCheck = false;
+        inHttpGet = false;
+        continue;
+      }
+      if (/^httpGet:\s*$/.test(trimmed)) {
+        inHttpGet = true;
+        httpIndent = indent;
+        continue;
+      }
+      if (inHttpGet) {
+        if (indent <= httpIndent) {
+          if (port && reqPath) return { port, path: reqPath };
+          inHttpGet = false;
+          continue;
+        }
+        const mPort = trimmed.match(/^port:\s*(\d+)/);
+        if (mPort) port = mPort[1];
+        const mPath = trimmed.match(/^path:\s*['"]?([^'"\s]+)['"]?/);
+        if (mPath) reqPath = mPath[1];
+      }
+    }
+    if (port && reqPath) return { port, path: reqPath };
+  } catch (e) {}
+  return null;
+}
+
+/**
+ * Detects compiled/pruned production Node runtime containers whose devDependencies
+ * or monorepo workspace directories referenced by package.json scripts.test were stripped in zerops.yaml.
+ */
+function isPrunedProdNodeRuntime(svcPath, pkg) {
+  if (!pkg || !pkg.scripts || !pkg.scripts.test) return false;
+  const visited = new Set();
+  const stack = [String(pkg.scripts.test)];
+  const allCmds = [];
+  while (stack.length > 0) {
+    const cmd = stack.pop();
+    allCmds.push(cmd);
+    const subMatches = cmd.matchAll(/(?:npm|pnpm|yarn|bun)\s+run\s+([A-Za-z0-9:_-]+)/g);
+    for (const m of subMatches) {
+      const subName = m[1];
+      if (!visited.has(subName) && pkg.scripts[subName]) {
+        visited.add(subName);
+        stack.push(String(pkg.scripts[subName]));
+      }
+    }
+  }
+  const combined = allCmds.join(" && ");
+  for (const m of combined.matchAll(/(?:^|\s)(?:-w\s+|--workspace(?:=|\s+))([A-Za-z0-9_./-]+)/g)) {
+    const ws = m[1];
+    if (!fs.existsSync(path.join(svcPath, ws))) {
+      return true;
+    }
+  }
+  const hasTestsDir = fs.existsSync(path.join(svcPath, "tests")) || fs.existsSync(path.join(svcPath, "test"));
+  const usesDevRunner = /\b(vitest|jest|mocha|playwright|cypress|run-vitest)\b/.test(combined);
+  if (usesDevRunner && !hasTestsDir) {
+    const runner = combined.match(/\b(vitest|jest|mocha|playwright|cypress)\b/)?.[1];
+    const hasRunnerBin = runner ? fs.existsSync(path.join(svcPath, "node_modules", ".bin", runner)) : false;
+    const hasServerSrc = fs.existsSync(path.join(svcPath, "server", "src"));
+    if (!hasRunnerBin || !hasServerSrc) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -222,30 +322,60 @@ function validateApplicationTests(resolvedIssue = null) {
     const isPython = fs.existsSync(path.join(svcPath, "requirements.txt")) || fs.existsSync(path.join(svcPath, "pyproject.toml")) || fs.existsSync(path.join(svcPath, "pytest.ini"));
     const hasPytestIni = fs.existsSync(path.join(svcPath, "pytest.ini"));
     const hasTestsDir = fs.existsSync(path.join(svcPath, "tests")) || fs.existsSync(path.join(svcPath, "test"));
+    const probe = extractZeropsHttpProbe(svcPath);
+    let pkg = null;
     let hasPkgTest = false;
     try {
       if (fs.existsSync(pkgPath)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+        pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
         hasPkgTest = Boolean(pkg.scripts && pkg.scripts.test && !String(pkg.scripts.test).includes("no test specified"));
       }
     } catch (e) {}
 
-    if (hasPkgTest || (isPython && (hasPytestIni || hasTestsDir)) || hasTestsDir) {
-      let testCmd = "bun test";
-      if (hasPkgTest) {
-        testCmd = "npm test";
-      } else if (isPython) {
-        testCmd = hasPytestIni ? "pytest" : "python3 -m unittest discover tests";
-      }
-      console.log(`🧪 [F5 Reality Gate] Ejecutando suite en "${svc}" (${testCmd})...`);
+    let ranSvcCheck = false;
+    if (hasPkgTest && !isPrunedProdNodeRuntime(svcPath, pkg)) {
+      console.log(`🧪 [F5 Reality Gate] Ejecutando suite en "${svc}" (npm test)...`);
       try {
-        execSync(`ssh ${svc} "cd /var/www && ${testCmd}"`, { stdio: "inherit", timeout: 60000 });
+        execSync(`ssh ${svc} "cd /var/www && npm test"`, { stdio: "inherit", timeout: 60000 });
         executedCount++;
+        ranSvcCheck = true;
         console.log(`✅ [F5 Reality Gate] Tests en "${svc}" exit code 0.`);
       } catch (testErr) {
         console.error(`❌ F5 REALITY GATE RECHAZADO: Fallaron los tests en "${svc}".`);
         process.exit(1);
       }
+    } else if ((isPython && (hasPytestIni || hasTestsDir)) || hasTestsDir) {
+      const testCmd = isPython ? (hasPytestIni ? "pytest" : "python3 -m unittest discover tests") : "bun test";
+      console.log(`🧪 [F5 Reality Gate] Ejecutando suite en "${svc}" (${testCmd})...`);
+      try {
+        execSync(`ssh ${svc} "cd /var/www && ${testCmd}"`, { stdio: "inherit", timeout: 60000 });
+        executedCount++;
+        ranSvcCheck = true;
+        console.log(`✅ [F5 Reality Gate] Tests en "${svc}" exit code 0.`);
+      } catch (testErr) {
+        console.error(`❌ F5 REALITY GATE RECHAZADO: Fallaron los tests en "${svc}".`);
+        process.exit(1);
+      }
+    } else if (hasPkgTest) {
+      if (!probe) {
+        console.error(`❌ F5 REALITY GATE RECHAZADO: "${svc}" podó devDependencies/workspaces en build pero carece de healthCheck.httpGet en zerops.yaml.`);
+        process.exit(1);
+      }
+      console.log(`ℹ️ [F5 Reality Gate] "${svc}" corre artefacto productivo podado; validando endpoint vivo :${probe.port}${probe.path}...`);
+    }
+
+    if (probe) {
+      try {
+        execSync(`curl -fsS --max-time 8 http://${svc}:${probe.port}${probe.path} >/dev/null`, { stdio: "inherit", timeout: 10000 });
+        executedCount++;
+        ranSvcCheck = true;
+        console.log(`✅ [F5 Reality Gate] Health probe vivo en "${svc}" (:${probe.port}${probe.path}) exit code 0.`);
+      } catch (probeErr) {
+        console.error(`❌ F5 REALITY GATE RECHAZADO: Falló health probe vivo en "${svc}" (http://${svc}:${probe.port}${probe.path}).`);
+        process.exit(1);
+      }
+    } else if (!ranSvcCheck) {
+      console.warn(`⚠️ [F5 Reality Gate] "${svc}" sin suite local ni healthCheck HTTP en zerops.yaml.`);
     }
   }
 

@@ -837,6 +837,39 @@ def _extract_zerops_discover_obj(tool_res):
                         candidates.append(item)
     return None
 
+def _read_zerops_discover_from_transcript(transcript_path, step_idx=None):
+    """Extract zerops_discover JSON from transcript.jsonl (or transcript_full.jsonl on truncation)."""
+    if not transcript_path or not os.path.exists(transcript_path):
+        return None
+    full_path = os.path.join(os.path.dirname(transcript_path), "transcript_full.jsonl")
+    target_path = full_path if os.path.exists(full_path) else transcript_path
+    try:
+        with open(target_path, "r", encoding="utf-8", errors="ignore") as f:
+            recent = f.readlines()[-200:]
+        for idx_pass in (True, False):
+            if idx_pass and step_idx is None:
+                continue
+            for raw_line in reversed(recent):
+                raw_line = raw_line.strip()
+                if not raw_line:
+                    continue
+                try:
+                    entry = json.loads(raw_line)
+                except Exception:
+                    continue
+                if idx_pass and entry.get("step_index") != step_idx:
+                    continue
+                if entry.get("type") != "GENERIC":
+                    continue
+                content = entry.get("content", "")
+                if '"services"' in str(content) and '"serviceId"' in str(content):
+                    obj = _extract_zerops_discover_obj(content)
+                    if obj:
+                        return obj
+    except Exception:
+        pass
+    return None
+
 def evaluate_hook(payload: dict) -> dict:
     # 0. SessionStart Handling (Mandatory Anti-AMN Recall with Multi-Hook Deduplication)
     if payload.get("session_start") or payload.get("event") == "SessionStart" or payload.get("hookType") == "SessionStart":
@@ -932,14 +965,15 @@ def evaluate_hook(payload: dict) -> dict:
                 return {}
             if mcp_srv == "zerops" and mcp_tool == "zerops_discover":
                 tool_res = payload.get("toolResult") or payload.get("result") or ""
-                if tool_res:
-                    try:
-                        res_obj = _extract_zerops_discover_obj(tool_res)
-                        if res_obj:
-                            with open("/tmp/.zerops_discover_cache.json", "w") as f:
-                                json.dump(res_obj, f, indent=2)
-                    except Exception:
-                        pass
+                try:
+                    res_obj = _extract_zerops_discover_obj(tool_res) if tool_res else _read_zerops_discover_from_transcript(
+                        payload.get("transcriptPath"), payload.get("stepIdx")
+                    )
+                    if res_obj:
+                        with open("/tmp/.zerops_discover_cache.json", "w") as f:
+                            json.dump(res_obj, f, indent=2)
+                except Exception:
+                    pass
             if payload.get("test_inspect_engram_sync"):
                 return {"engramSyncTriggered": False, "source": f"ignored:{mcp_srv}:{mcp_tool}"}
         return {}
@@ -1858,6 +1892,14 @@ def evaluate_hook(payload: dict) -> dict:
         # B6. Gate 14: Anti-False-Completion & Zerops Deployment Verification Gate (BAI-454)
         if "linear-cli" in cmd and any(st in cmd for st in ['"Done"', "'Done'", "Done"]):
             cache_file = "/tmp/.zerops_discover_cache.json"
+            if not payload.get("test_bypass_linear") and payload.get("transcriptPath"):
+                tx_discover = _read_zerops_discover_from_transcript(payload.get("transcriptPath"))
+                if tx_discover:
+                    try:
+                        with open(cache_file, "w") as f:
+                            json.dump(tx_discover, f, indent=2)
+                    except Exception:
+                        pass
             if os.path.exists(cache_file) and not payload.get("test_bypass_linear"):
                 try:
                     with open(cache_file, "r") as f:

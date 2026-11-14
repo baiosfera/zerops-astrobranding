@@ -1352,6 +1352,35 @@ def run_tests(evaluate_hook):
                 refreshed_cache = json.load(f)
             assert any(s.get("hostname") == "freellmapi" and s.get("deployed") is True for s in refreshed_cache.get("services", [])), f"Expected refreshed cache from MCP content wrapper, got {refreshed_cache}"
             print("✓ Test 82 Passed: PostToolUse zerops_discover unwraps MCP wrapper cleanly")
+
+            # Test 83: PostToolUse zerops_discover extracts JSON from agy transcriptPath when toolResult omitted
+            if os.path.exists(test_cache):
+                os.remove(test_cache)
+            with tempfile.TemporaryDirectory() as td:
+                tx_file = os.path.join(td, "transcript.jsonl")
+                tx_payload = {
+                    "step_index": 77,
+                    "type": "GENERIC",
+                    "content": "Created At: 2026-11-14T01:00:00Z\n" + json.dumps({
+                        "project": {"id": "p1"},
+                        "services": [{"hostname": "hermes", "serviceId": "s1", "deployed": True, "isInfrastructure": False}],
+                    }),
+                }
+                with open(tx_file, "w") as tf:
+                    tf.write(json.dumps(tx_payload) + "\n")
+                evaluate_hook({
+                    "is_post_tool": True,
+                    "stepIdx": 77,
+                    "transcriptPath": tx_file,
+                    "toolCall": {
+                        "name": "call_mcp_tool",
+                        "args": {"ServerName": "zerops", "ToolName": "zerops_discover"},
+                    },
+                })
+            with open(test_cache, "r") as f:
+                tx_cache = json.load(f)
+            assert any(s.get("hostname") == "hermes" and s.get("deployed") is True for s in tx_cache.get("services", [])), f"Expected transcript cache population, got {tx_cache}"
+            print("✓ Test 83 Passed: PostToolUse zerops_discover reads agy transcriptPath cleanly")
         finally:
             if cache_backup is not None:
                 with open(test_cache, "w") as f:
