@@ -127,6 +127,18 @@ sync_governance() {
     cp -f "$CATALOG_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$HOME/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md"
   fi
   [ -f "$CATALOG_DIR/.agents/hooks.json" ] && cp -f "$CATALOG_DIR/.agents/hooks.json" "$BASE_DIR/.agents/hooks.json"
+  mkdir -p "$BASE_DIR/artifacts"
+  for dir_name in templates blueprints; do
+    if [ -d "$CATALOG_DIR/$dir_name" ]; then
+      if command -v rsync >/dev/null 2>&1; then
+        mkdir -p "$BASE_DIR/artifacts/$dir_name"
+        rsync -a --delete "$CATALOG_DIR/$dir_name/" "$BASE_DIR/artifacts/$dir_name/"
+      else
+        rm -rf "$BASE_DIR/artifacts/$dir_name"
+        cp -a "$CATALOG_DIR/$dir_name" "$BASE_DIR/artifacts/$dir_name"
+      fi
+    fi
+  done
 }
 
 ensure_path() {
