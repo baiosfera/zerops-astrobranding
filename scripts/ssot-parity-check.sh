@@ -69,8 +69,33 @@ compare_files() {
     fi
 }
 
+compare_agents_md() {
+    local src_file="$1"
+    local dst_file="$2"
+    if [ ! -f "$src_file" ] || [ ! -f "$dst_file" ]; then
+        compare_files "AGENTS.md" "$src_file" "$dst_file"
+        return
+    fi
+    # ZCP appends a project-scoped <!-- ZEROPS:REFLOG --> block to /var/www/AGENTS.md on bootstrap;
+    # strip it so project telemetry never triggers false SSoT drift against the brand-agnostic upstream.
+    local src_norm dst_norm
+    src_norm=$(python3 -c 'import re,sys; s=open(sys.argv[1]).read(); print(re.sub(r"\n*<!-- ZEROPS:REFLOG -->.*?<!-- /ZEROPS:REFLOG -->\s*", "", s, flags=re.S).rstrip())' "$src_file")
+    dst_norm=$(python3 -c 'import re,sys; s=open(sys.argv[1]).read(); print(re.sub(r"\n*<!-- ZEROPS:REFLOG -->.*?<!-- /ZEROPS:REFLOG -->\s*", "", s, flags=re.S).rstrip())' "$dst_file")
+    if [ "$src_norm" = "$dst_norm" ]; then
+        echo "✓ Parity verified: AGENTS.md (ignoring local ZEROPS:REFLOG)"
+    elif [ "$AUTO_FIX_MODE" = true ]; then
+        cp -f "$src_file" "$dst_file"
+        echo "⚡ Synced (--fix): AGENTS.md ($src_file -> $dst_file)"
+    else
+        echo "❌ DRIFT detected in AGENTS.md:"
+        echo "   SSoT:   $src_file"
+        echo "   Target: $dst_file"
+        ERRORS=$((ERRORS + 1))
+    fi
+}
+
 echo "--- [1/5] Governance & Harness SSoT Parity ---"
-compare_files "AGENTS.md" "$CATALOG_REPO/AGENTS.md" "$LOCAL_BASE/AGENTS.md"
+compare_agents_md "$CATALOG_REPO/AGENTS.md" "$LOCAL_BASE/AGENTS.md"
 compare_files "00-SUPREME-DIRECTIVE.md (.agents)" "$CATALOG_REPO/.agents/rules/00-SUPREME-DIRECTIVE.md" "$LOCAL_BASE/.agents/rules/00-SUPREME-DIRECTIVE.md"
 compare_files "00-SUPREME-DIRECTIVE.md (~/.gemini)" "$CATALOG_REPO/.agents/rules/00-SUPREME-DIRECTIVE.md" "${HOME:-/home/zerops}/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md"
 compare_files "hooks.json" "$CATALOG_REPO/.agents/hooks.json" "$LOCAL_BASE/.agents/hooks.json"
