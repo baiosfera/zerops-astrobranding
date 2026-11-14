@@ -10,6 +10,42 @@ echo "  🐙 Configuración Soberana de GitHub CLI & CI/CD (setup-gh.sh v1.2)"
 echo "============================================================"
 
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
+EXPLICIT_DIR=""
+EXPLICIT_REPO=""
+DRY_RUN=false
+
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --dir|-d)
+            EXPLICIT_DIR="${2:-}"
+            shift 2 ;;
+        --repo|-R)
+            EXPLICIT_REPO="${2:-}"
+            shift 2 ;;
+        --dry-run)
+            DRY_RUN=true
+            shift ;;
+        -h|--help)
+            echo "Usage: setup-gh.sh [--dir <repo_dir>] [--repo <owner/repo>] [--dry-run]"
+            exit 0 ;;
+        *)
+            shift ;;
+    esac
+done
+
+is_blocked_upstream_repo() {
+    case "${1,,}" in
+        baiosfera/zerops-*|baiosfera/runtime-*|baiosfera/template-*)
+            return 0 ;;
+        *)
+            return 1 ;;
+    esac
+}
+
+if [ -n "$EXPLICIT_REPO" ] && is_blocked_upstream_repo "$EXPLICIT_REPO"; then
+    echo "❌ [BLOCKED] Refusing to upload project secrets to upstream repository '$EXPLICIT_REPO'. Target a client repository via --dir or --repo." >&2
+    exit 1
+fi
 
 if ! command -v gh >/dev/null 2>&1; then
     echo "⚠️ GitHub CLI ('gh') no está instalado en el sistema. Omitiendo."
@@ -56,20 +92,27 @@ git config --global user.email "$GH_EMAIL"
 gh auth setup-git 2>/dev/null || true
 echo "  ✓ Identidad Git global establecida: $GH_NAME <$GH_EMAIL>"
 
-# 5. Detección agnóstica de repositorio remoto
+# 5. Detección agnóstica de repositorio remoto (nunca zerops-astrobranding)
 REPO_TARGET_DIR=""
-if [ -d "$PROJECT_ROOT/zerops-astrobranding/.git" ]; then
-    REPO_TARGET_DIR="$PROJECT_ROOT/zerops-astrobranding"
-elif [ -d "$PROJECT_ROOT/.git" ]; then
+if [ -n "$EXPLICIT_DIR" ] && [ -d "$EXPLICIT_DIR/.git" ]; then
+    REPO_TARGET_DIR="$EXPLICIT_DIR"
+elif [ -z "$EXPLICIT_REPO" ] && [ -d "$PROJECT_ROOT/webdev/.git" ]; then
+    REPO_TARGET_DIR="$PROJECT_ROOT/webdev"
+elif [ -z "$EXPLICIT_REPO" ] && [ -d "$PROJECT_ROOT/.git" ]; then
     REPO_TARGET_DIR="$PROJECT_ROOT"
 fi
 
-REPO_SLUG=""
-if [ -n "$REPO_TARGET_DIR" ]; then
+REPO_SLUG="$EXPLICIT_REPO"
+if [ -z "$REPO_SLUG" ] && [ -n "$REPO_TARGET_DIR" ]; then
     REMOTE_URL=$(git -C "$REPO_TARGET_DIR" config --get remote.origin.url 2>/dev/null || true)
     if [ -n "$REMOTE_URL" ]; then
         REPO_SLUG=$(echo "$REMOTE_URL" | sed 's|.*github.com[:/]||' | sed 's|\.git$||')
     fi
+fi
+
+if [ -n "$REPO_SLUG" ] && is_blocked_upstream_repo "$REPO_SLUG"; then
+    echo "❌ [BLOCKED] Refusing to upload project secrets to upstream repository '$REPO_SLUG'. Target a client repository via --dir or --repo." >&2
+    exit 1
 fi
 
 # 6. Sincronización dinámica de secretos de GitHub Actions (si el repo es accesible)
@@ -90,7 +133,9 @@ if [ -z "$RESOLVED_SERVICE_ID" ] && command -v zcli >/dev/null 2>&1 && [ -n "${Z
 fi
 
 if [ -n "$REPO_SLUG" ] && [ -n "$RESOLVED_Z_TOKEN" ]; then
-    if gh repo view "$REPO_SLUG" >/dev/null 2>&1; then
+    if [ "$DRY_RUN" = "true" ]; then
+        echo "• [DRY-RUN] Target repository '$REPO_SLUG' allowed (ZEROPS_SERVICE_ID=${RESOLVED_SERVICE_ID:-pending})."
+    elif gh repo view "$REPO_SLUG" >/dev/null 2>&1; then
         echo "• Sincronizando secretos de CI/CD hacia $REPO_SLUG..."
         gh secret set ZEROPS_TOKEN -b "$RESOLVED_Z_TOKEN" -R "$REPO_SLUG" 2>/dev/null || true
         if [ -n "$RESOLVED_SERVICE_ID" ]; then

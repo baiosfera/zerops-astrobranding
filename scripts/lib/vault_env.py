@@ -1,8 +1,8 @@
 """Shared Zerops Project Vault and FreeLLMAPI configuration utilities.
 
-Provides idempotent key-file parsing (`.env` / `.md`), multi-account FreeLLMAPI
-pool compilation (`baiosfera_freellm.md` + `damaren_freellm.md`), and masked
-JSON-RPC synchronization with Zerops Shared Vault (`zerops_env project=true`).
+Provides idempotent key-file parsing (`.env` / `.md`), agnostic FreeLLMAPI pool
+discovery & compilation, independent per-service credential generation, and
+masked JSON-RPC synchronization with Zerops Shared Vault (`zerops_env project=true`).
 Never prints secret values to stdout/stderr.
 """
 
@@ -18,10 +18,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 DEFAULT_ZCP_BIN = "/usr/local/bin/zcp"
-DEFAULT_FREELLM_POOLS = (
-    "/var/www/baiosfera/0ZEROPS-AGY/users-apis/Baiosfera/baiosfera_freellm.md",
-    "/var/www/baiosfera/0ZEROPS-AGY/users-apis/Damaren/damaren_freellm.md",
-)
 
 # Host-local or platform-private keys that must never be pushed to Project Shared Vault.
 IGNORED_VAULT_KEYS = re.compile(
@@ -40,17 +36,13 @@ SENSITIVE_VAULT_KEYS = re.compile(
 # unmasked (`sensitive: false`) so operators can read and copy them directly in Zerops UI.
 COPYABLE_VAULT_KEYS = frozenset(
     {
-        "FREEAPI_ADMIN_EMAIL",
-        "FREEAPI_ADMIN_PASSWORD",
-        "FREELLMAPI_ADMIN_EMAIL",
-        "FREELLMAPI_ADMIN_PASSWORD",
-        "FREELLMAPI_PASSWORD",
         "FREELLMAPI_CLIENT_KEY",
         "FREELLMAPI_API_KEY",
         "PAPERCLIP_ADMIN_EMAIL",
         "PAPERCLIP_ADMIN_PASSWORD",
         "BIFROST_MASTER_VK",
         "EVOLUTION_API_KEY",
+        "EVOLUTION_OPERATOR_EMAIL",
         "TTYD_USER",
         "TTYD_PASSWORD",
     }
@@ -225,8 +217,44 @@ def parse_freellm_markdown(filepath: str | Path) -> list[tuple[str, str, str]]:
     return entries
 
 
+def discover_freellm_pools(
+    keys_file: str | Path | None = None,
+    extra_pools: list[str] | tuple[str, ...] | None = None,
+) -> list[str]:
+    """Discover FreeLLM markdown pools agnostically from args, env, or keys_file siblings."""
+    pools: list[str] = []
+    seen: set[str] = set()
+
+    def _add(p: str | Path) -> None:
+        s = str(Path(p))
+        if s not in seen and Path(s).is_file():
+            seen.add(s)
+            pools.append(s)
+
+    for raw in extra_pools or ():
+        if raw:
+            _add(raw)
+
+    env_pools = os.getenv("FREELLM_POOL_FILES", "").strip()
+    if env_pools:
+        for item in re.split(r"[,:]", env_pools):
+            if item.strip():
+                _add(item.strip())
+
+    if keys_file:
+        kf = Path(keys_file)
+        if kf.is_file():
+            for cand in sorted(kf.parent.glob("*_freellm.md")):
+                _add(cand)
+            if not pools and kf.parent.parent.is_dir():
+                for cand in sorted(kf.parent.parent.glob("*/*_freellm.md")):
+                    _add(cand)
+
+    return pools
+
+
 def collect_freellm_pools(
-    pool_paths: list[str] | tuple[str, ...] = DEFAULT_FREELLM_POOLS,
+    pool_paths: list[str] | tuple[str, ...] = (),
     extra_kv: Optional[dict[str, str]] = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Aggregate multiple primary FreeLLM accounts without duplicating `(platform, key)` pairs."""
@@ -313,6 +341,62 @@ def generate_secret(length: int = 32, *, hex_only: bool = False) -> str:
         return secrets.token_hex(length)
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def resolve_project_vault_payload(
+    kv: dict[str, str],
+    proj_slug: str,
+    *,
+    existing: Optional[dict[str, bool]] = None,
+    rotate: bool = False,
+) -> dict[str, str]:
+    """Build agnostic per-project Shared Vault credentials without cross-service fallbacks."""
+    existing = existing or {}
+    clean_slug = re.sub(r"[^a-z0-9-]+", "-", proj_slug.strip().lower()).strip("-") or "zerops"
+    payload: dict[str, str] = dict(kv)
+    payload["PROJECT_NAME"] = proj_slug.strip() or clean_slug
+    if "ENGRAM_PROJECT" not in existing and not payload.get("ENGRAM_PROJECT"):
+        payload["ENGRAM_PROJECT"] = payload["PROJECT_NAME"]
+
+    # Never inject bogus FREEAPI_ADMIN_* env vars; FreeLLMAPI reads admin only from FREEAPI_CONFIG_JSON.
+    for stale_key in ("FREEAPI_ADMIN_EMAIL", "FREEAPI_ADMIN_PASSWORD", "FREELLMAPI_ADMIN_EMAIL", "FREELLMAPI_ADMIN_PASSWORD"):
+        payload.pop(stale_key, None)
+
+    if rotate or "BIFROST_MASTER_VK" not in existing:
+        payload["BIFROST_MASTER_VK"] = kv.get("BIFROST_MASTER_VK") or f"vk-bifrost-{generate_secret(28)}"
+
+    if kv.get("EVOLUTION_API_KEY"):
+        payload["EVOLUTION_API_KEY"] = kv["EVOLUTION_API_KEY"].strip()
+    elif rotate or "EVOLUTION_API_KEY" not in existing:
+        payload["EVOLUTION_API_KEY"] = f"evo-{generate_secret(32)}"
+
+    if kv.get("EVOLUTION_OPERATOR_EMAIL"):
+        payload["EVOLUTION_OPERATOR_EMAIL"] = kv["EVOLUTION_OPERATOR_EMAIL"].strip()
+
+    if rotate or "PAPERCLIP_BETTER_AUTH_SECRET" not in existing:
+        payload["PAPERCLIP_BETTER_AUTH_SECRET"] = kv.get("PAPERCLIP_BETTER_AUTH_SECRET") or generate_secret(32)
+    if rotate or "PAPERCLIP_SIGNING_SECRET" not in existing:
+        payload["PAPERCLIP_SIGNING_SECRET"] = kv.get("PAPERCLIP_SIGNING_SECRET") or generate_secret(32)
+
+    pc_email = (kv.get("PAPERCLIP_ADMIN_EMAIL") or f"paperclip@{clean_slug}.internal").strip()
+    pc_pass = (kv.get("PAPERCLIP_ADMIN_PASSWORD") or "").strip()
+    if rotate or "PAPERCLIP_ADMIN_EMAIL" not in existing:
+        payload["PAPERCLIP_ADMIN_EMAIL"] = pc_email
+    if pc_pass and len(pc_pass) >= 8:
+        payload["PAPERCLIP_ADMIN_PASSWORD"] = pc_pass
+    elif rotate or "PAPERCLIP_ADMIN_PASSWORD" not in existing:
+        payload["PAPERCLIP_ADMIN_PASSWORD"] = generate_secret(24)
+
+    ttyd_user = (kv.get("TTYD_USER") or "zerops").strip()
+    ttyd_pass = (kv.get("TTYD_PASSWORD") or "").strip()
+    if rotate or "TTYD_USER" not in existing:
+        payload["TTYD_USER"] = ttyd_user
+    if ttyd_pass and len(ttyd_pass) >= 8:
+        payload["TTYD_PASSWORD"] = ttyd_pass
+    elif rotate or "TTYD_PASSWORD" not in existing:
+        payload["TTYD_PASSWORD"] = f"ttyd-{generate_secret(20)}"
+
+    return payload
 
 
 class ZcpVaultClient:

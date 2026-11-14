@@ -86,10 +86,12 @@ link_skills() {
 
 link_bin() {
   mkdir -p "$LOCAL_BIN" "$LOCAL_BIN/hooks" "$HOME/.local/bin"
-  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli apotelos brand-play engram-sync engram-mcp zeropsenv seed-freellmapi-keys.sh; do
+  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli apotelos brand-play engram-sync engram-mcp zeropsenv seed-project-vault.sh seed-freellmapi-keys.sh setup-gh.sh harden-postgres-quotas.sh zcp-mount zcp-mail zcp-preflight-gate; do
     if [ -f "$CATALOG_DIR/scripts/$s" ]; then
       chmod +x "$CATALOG_DIR/scripts/$s"
       local bin_name="${s%.sh}"
+      [ -e "$LOCAL_BIN/$bin_name" ] && [ ! -L "$LOCAL_BIN/$bin_name" ] && rm -f "$LOCAL_BIN/$bin_name"
+      [ -e "$HOME/.local/bin/$bin_name" ] && [ ! -L "$HOME/.local/bin/$bin_name" ] && rm -f "$HOME/.local/bin/$bin_name"
       ln -sfn "$CATALOG_DIR/scripts/$s" "$LOCAL_BIN/$bin_name"
       ln -sfn "$CATALOG_DIR/scripts/$s" "$HOME/.local/bin/$bin_name"
     fi
@@ -180,6 +182,9 @@ hydrate_project_vault() {
 
   if [ -x "/usr/local/bin/zcp" ]; then
     "$LOCAL_BIN/zeropsenv" sync "${proj_args[@]}" "$keys_file"
+    if [ -x "$LOCAL_BIN/seed-project-vault" ]; then
+      "$LOCAL_BIN/seed-project-vault" --keys "$keys_file" "${proj_args[@]}"
+    fi
     if [ -x "$LOCAL_BIN/seed-freellmapi-keys" ]; then
       "$LOCAL_BIN/seed-freellmapi-keys" --keys "$keys_file" "${proj_args[@]}"
     fi

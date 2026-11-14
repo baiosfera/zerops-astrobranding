@@ -13,9 +13,11 @@ if str(LIB_DIR) not in sys.path:
 from vault_env import (
     build_freellm_declarative_config,
     collect_freellm_pools,
+    discover_freellm_pools,
     is_sensitive_vault_key,
     parse_freellm_markdown,
     parse_kv_file,
+    resolve_project_vault_payload,
 )
 
 
@@ -88,7 +90,7 @@ class TestVaultEnv(unittest.TestCase):
 
         self.assertFalse(is_sensitive_vault_key("BIFROST_MASTER_VK"))
         self.assertFalse(is_sensitive_vault_key("EVOLUTION_API_KEY"))
-        self.assertFalse(is_sensitive_vault_key("FREEAPI_ADMIN_PASSWORD"))
+        self.assertFalse(is_sensitive_vault_key("EVOLUTION_OPERATOR_EMAIL"))
         self.assertFalse(is_sensitive_vault_key("PAPERCLIP_ADMIN_PASSWORD"))
         self.assertFalse(is_sensitive_vault_key("TTYD_PASSWORD"))
         self.assertTrue(is_sensitive_vault_key("DEEPSEEK_API_KEY"))
@@ -126,6 +128,59 @@ class TestVaultEnv(unittest.TestCase):
         del_calls = [args for _, args in calls if args.get("action") == "delete"]
         self.assertEqual(len(del_calls), 1)
         self.assertEqual(del_calls[0]["variables"], ["BIFROST_MASTER_VK"])
+
+    def test_discover_freellm_pools_from_keys_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            brand_dir = root / "MarcaX"
+            brand_dir.mkdir()
+            keys_file = brand_dir / "marcax.md"
+            keys_file.write_text("PROJECT_NAME=MarcaX\n", encoding="utf-8")
+            sibling_pool = brand_dir / "marcax_freellm.md"
+            sibling_pool.write_text("GROQ_API_KEY=gsk_test12345678901234567890\n", encoding="utf-8")
+            extra_pool = root / "extra_freellm.md"
+            extra_pool.write_text("CEREBRAS_API_KEY=csk_test12345678901234567890\n", encoding="utf-8")
+
+            discovered = discover_freellm_pools(keys_file, [str(extra_pool), str(sibling_pool)])
+            self.assertEqual(discovered, [str(extra_pool), str(sibling_pool)])
+            self.assertEqual(len(discovered), len(set(discovered)))
+
+    def test_resolve_project_vault_payload_is_independent(self):
+        payload = resolve_project_vault_payload(
+            {
+                "DEEPSEEK_API_KEY": "sk-ds-demo",
+                "EVOLUTION_OPERATOR_EMAIL": "ops@marcax.com",
+                "FREEAPI_ADMIN_EMAIL": "legacy-free@marcax.com",
+                "FREEAPI_ADMIN_PASSWORD": "legacy-free-password",
+            },
+            "Marca X",
+            existing={},
+            rotate=False,
+        )
+        self.assertEqual(payload["PROJECT_NAME"], "Marca X")
+        self.assertEqual(payload["ENGRAM_PROJECT"], "Marca X")
+        self.assertEqual(payload["PAPERCLIP_ADMIN_EMAIL"], "paperclip@marca-x.internal")
+        self.assertNotIn("FREEAPI_ADMIN_EMAIL", payload)
+        self.assertNotIn("FREEAPI_ADMIN_PASSWORD", payload)
+        self.assertNotEqual(payload["PAPERCLIP_ADMIN_PASSWORD"], "legacy-free-password")
+        self.assertEqual(payload["EVOLUTION_OPERATOR_EMAIL"], "ops@marcax.com")
+        self.assertEqual(payload["DEEPSEEK_API_KEY"], "sk-ds-demo")
+        self.assertTrue(payload["BIFROST_MASTER_VK"].startswith("vk-bifrost-"))
+        self.assertTrue(payload["EVOLUTION_API_KEY"].startswith("evo-"))
+
+    def test_build_freellm_declarative_config_admin_and_unified_key(self):
+        cfg = build_freellm_declarative_config(
+            [{"provider": "groq", "label": "acct-1", "key": "gsk_12345678901234567890"}],
+            [],
+            admin_email="freellmapi@marca-x.internal",
+            admin_password="super-secret-password",
+            unified_api_key="sk-freellmapi-testkey",
+        )
+        self.assertEqual(
+            cfg["admin"],
+            {"email": "freellmapi@marca-x.internal", "password": "super-secret-password"},
+        )
+        self.assertEqual(cfg["unifiedApiKey"], "sk-freellmapi-testkey")
 
 
 if __name__ == "__main__":

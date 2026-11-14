@@ -466,10 +466,6 @@ if [ -n "$DISCOVERED_TARGET" ] && [ -d "/mnt/$DISCOVERED_TARGET" ]; then
     echo "[ZCP-BOOT] GDrive integrated at $STORAGE_TYPE path: /mnt/$DISCOVERED_TARGET/baiosfera"
 fi
 
-# 8.5 BACKBROUND SYNC LOCALSTORAGE
-echo "[ZCP-BOOT] Lanzando sincronización asíncrona a localstorage..."
-nohup bash /var/www/zerops-astrobranding/scripts/sync-localstorage.sh > /tmp/sync-localstorage.log 2>&1 &
-
 # 8.5 BACKGROUND SYNC LOCALSTORAGE
 echo "[ZCP-BOOT] Lanzando sincronizacion asincrona a localstorage..."
 nohup bash /var/www/zerops-astrobranding/scripts/sync-localstorage.sh > /tmp/sync-localstorage.log 2>&1 &

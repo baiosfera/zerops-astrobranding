@@ -20,10 +20,13 @@ fi
 
 if [ -n "$DB_HOST" ] && [ -n "$SUPER_PASS" ]; then
     echo "🛡️ [PostgreSQL Quota Hardener] Enforcing connection quotas & timeouts via superuser (${SUPER_USER})..."
-    if PGPASSWORD="$SUPER_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$SUPER_USER" -d "$DB_NAME" -X -q << 'EOF'
+    if PGPASSWORD="$SUPER_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$SUPER_USER" -d "$DB_NAME" -v app_user="$APP_USER" -X -q << 'EOF'
+SELECT set_config('app.target_user', :'app_user', false);
 DO $$
 DECLARE
     main_db text := current_database();
+    target_user text := current_setting('app.target_user', true);
+    sat RECORD;
 BEGIN
     -- 1. Hard cap primary application database connection limit to 60 slots
     EXECUTE format('ALTER DATABASE %I WITH CONNECTION LIMIT 60', main_db);
@@ -33,15 +36,15 @@ BEGIN
     -- 2. Dynamically cap all non-system satellite databases to 15 slots
     FOR sat IN SELECT datname FROM pg_database WHERE datname NOT IN ('postgres', 'template0', 'template1', main_db)
     LOOP
-        EXECUTE format('ALTER DATABASE %I WITH CONNECTION LIMIT 15', sat);
-        EXECUTE format('ALTER DATABASE %I SET idle_session_timeout = ''2min''', sat);
-        EXECUTE format('ALTER DATABASE %I SET idle_in_transaction_session_timeout = ''30s''', sat);
+        EXECUTE format('ALTER DATABASE %I WITH CONNECTION LIMIT 15', sat.datname);
+        EXECUTE format('ALTER DATABASE %I SET idle_session_timeout = ''2min''', sat.datname);
+        EXECUTE format('ALTER DATABASE %I SET idle_in_transaction_session_timeout = ''30s''', sat.datname);
     END LOOP;
 
     -- 3. Apply role-level idle timeouts for the application user
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'db') THEN
-        EXECUTE 'ALTER ROLE db SET idle_session_timeout = ''2min''';
-        EXECUTE 'ALTER ROLE db SET idle_in_transaction_session_timeout = ''30s''';
+    IF target_user IS NOT NULL AND target_user <> '' AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = target_user) THEN
+        EXECUTE format('ALTER ROLE %I SET idle_session_timeout = ''2min''', target_user);
+        EXECUTE format('ALTER ROLE %I SET idle_in_transaction_session_timeout = ''30s''', target_user);
     END IF;
 END
 $$;

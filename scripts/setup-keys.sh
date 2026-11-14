@@ -8,6 +8,7 @@ set -euo pipefail
 INTERACTIVE=false
 NON_INTERACTIVE=false
 FILE_ARG=""
+WRITE_ETC_ENV=false
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
 
 while [[ "$#" -gt 0 ]]; do
@@ -17,6 +18,9 @@ while [[ "$#" -gt 0 ]]; do
             shift ;;
         --non-interactive|--no-interactive)
             NON_INTERACTIVE=true
+            shift ;;
+        --write-etc-env)
+            WRITE_ETC_ENV=true
             shift ;;
         --file|-f)
             FILE_ARG="${2:-}"
@@ -304,9 +308,13 @@ done
 # 3. Persistir de forma universal y sanitizada en el entorno local
 if [ -n "$COLLECTED_EXPORTS" ]; then
     echo ""
-    echo "• Persistiendo variables de entorno en /etc/environment y ~/.env..."
-    sudo touch /etc/environment 2>/dev/null || true
-    printf '%s' "$COLLECTED_EXPORTS" | python3 - "$HOME/.env" "/home/zerops/.env" << 'EOF_PERSIST'
+    if [ "$WRITE_ETC_ENV" = "true" ]; then
+        echo "• Persistiendo variables de entorno en /etc/environment y ~/.env..."
+        sudo touch /etc/environment 2>/dev/null || true
+    else
+        echo "• Persistiendo variables de entorno en ~/.env (0600; usa --write-etc-env para /etc/environment)..."
+    fi
+    printf '%s' "$COLLECTED_EXPORTS" | python3 - "$WRITE_ETC_ENV" "$HOME/.env" "/home/zerops/.env" << 'EOF_PERSIST'
 import os, subprocess, sys
 
 pairs: dict[str, str] = {}
@@ -342,16 +350,20 @@ def update_env_file(path: str, quoted: bool, use_sudo: bool = False) -> None:
             f.write(content)
         os.chmod(path, 0o600)
 
-update_env_file("/etc/environment", quoted=True, use_sudo=True)
-for target in dict.fromkeys(sys.argv[1:]):
+write_etc_env = sys.argv[1] == "true"
+if write_etc_env:
+    update_env_file("/etc/environment", quoted=True, use_sudo=True)
+for target in dict.fromkeys(sys.argv[2:]):
     update_env_file(target, quoted=True, use_sudo=False)
 EOF_PERSIST
 
-    sudo bash -c "cat << 'PROFILE_EOF' > /etc/profile.d/zerops_env.sh
+    if [ "$WRITE_ETC_ENV" = "true" ]; then
+        sudo bash -c "cat << 'PROFILE_EOF' > /etc/profile.d/zerops_env.sh
 set -a
 [ -f /etc/environment ] && . /etc/environment
 set +a
 PROFILE_EOF" 2>/dev/null || true
+    fi
 
     sudo chown -R zerops:zerops /home/zerops/.env 2>/dev/null || true
     rm -f /var/www/.env /var/www/gdrive.env 2>/dev/null || true
@@ -370,11 +382,12 @@ fi
 if [ -n "$ZEROPSENV_SRC" ]; then
     echo "• Desplegando CLI zeropsenv (v2.0) en el PATH..."
     mkdir -p "$PERSISTENT_BIN" "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
-    cp "$ZEROPSENV_SRC" "$PERSISTENT_BIN/zeropsenv" 2>/dev/null || true
-    chmod +x "$PERSISTENT_BIN/zeropsenv" 2>/dev/null || true
-    sudo ln -sf "$PERSISTENT_BIN/zeropsenv" /usr/local/bin/zeropsenv 2>/dev/null || true
-    ln -sf "$PERSISTENT_BIN/zeropsenv" "$HOME/.local/bin/zeropsenv" 2>/dev/null || true
-    ln -sf "$PERSISTENT_BIN/zeropsenv" "/home/zerops/.local/bin/zeropsenv" 2>/dev/null || true
+    chmod +x "$ZEROPSENV_SRC" 2>/dev/null || true
+    [ -e "$PERSISTENT_BIN/zeropsenv" ] && [ ! -L "$PERSISTENT_BIN/zeropsenv" ] && rm -f "$PERSISTENT_BIN/zeropsenv" 2>/dev/null || true
+    ln -sfn "$ZEROPSENV_SRC" "$PERSISTENT_BIN/zeropsenv" 2>/dev/null || true
+    sudo ln -sfn "$PERSISTENT_BIN/zeropsenv" /usr/local/bin/zeropsenv 2>/dev/null || true
+    ln -sfn "$PERSISTENT_BIN/zeropsenv" "$HOME/.local/bin/zeropsenv" 2>/dev/null || true
+    ln -sfn "$PERSISTENT_BIN/zeropsenv" "/home/zerops/.local/bin/zeropsenv" 2>/dev/null || true
     echo "  ✅ CLI zeropsenv disponible en el PATH"
 fi
 
