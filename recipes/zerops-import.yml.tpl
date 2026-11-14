@@ -15,6 +15,11 @@ project:
     BIFROST_MASTER_VK:
       value: <@generateRandomString(<32>)>
       sensitive: true
+    BIFROST_ADMIN_USERNAME:
+      value: admin
+    BIFROST_ADMIN_PASSWORD:
+      value: <@generateRandomString(<20>)>Aa1!
+      sensitive: true
     DEEPSEEK_API_KEY:
       value: ${DEEPSEEK_API_KEY}
       sensitive: true
