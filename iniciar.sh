@@ -99,11 +99,15 @@ link_bin() {
     ln -sfn "$CATALOG_DIR/bin/orchesbrand" "$LOCAL_BIN/orchesbrand"
     ln -sfn "$CATALOG_DIR/bin/orchesbrand" "$HOME/.local/bin/orchesbrand"
   fi
-  if [ -f "$CATALOG_DIR/scripts/anti_slop_linter.py" ]; then
-    chmod +x "$CATALOG_DIR/scripts/anti_slop_linter.py"
-    ln -sfn "$CATALOG_DIR/scripts/anti_slop_linter.py" "$LOCAL_BIN/anti-slop-linter"
-    ln -sfn "$CATALOG_DIR/scripts/anti_slop_linter.py" "$HOME/.local/bin/anti-slop-linter"
-  fi
+  for pair in "anti-slop-linter:anti_slop_linter.py" "mega-downloader:mega_downloader.py"; do
+    local bin_name="${pair%%:*}"
+    local script_name="${pair#*:}"
+    if [ -f "$CATALOG_DIR/scripts/$script_name" ]; then
+      chmod +x "$CATALOG_DIR/scripts/$script_name"
+      ln -sfn "$CATALOG_DIR/scripts/$script_name" "$LOCAL_BIN/$bin_name"
+      ln -sfn "$CATALOG_DIR/scripts/$script_name" "$HOME/.local/bin/$bin_name"
+    fi
+  done
   for h in tool-guard.py test_tool_guard.py; do
     if [ -f "$CATALOG_DIR/scripts/hooks/$h" ]; then
       chmod +x "$CATALOG_DIR/scripts/hooks/$h"

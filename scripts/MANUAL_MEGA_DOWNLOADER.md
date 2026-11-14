@@ -1,4 +1,4 @@
-# 🚀 MANUAL OFICIAL: MEGA-DOWNLOADER (v1.0.0)
+# 🚀 MANUAL OFICIAL: MEGA-DOWNLOADER (v1.2.0)
 
 > **Motor Soberano Universal de Descarga, Conversión de Audio Speech y Extracción de Medios para Google NotebookLM Pro bajo Gobernanza Supreme Directive v8.5, meta-script & CoHaLo Engineering.**
 
@@ -47,10 +47,11 @@ mega-downloader status
 Descarga un curso individual desde Mega.nz, Sync.com o HTTP directo, procesa los medios y los entrega listos en Google Drive:
 
 ```bash
-# Ejemplo Mega:
+# Ejemplo Mega (carpeta grande con reanudación ítem por ítem ante cuota 403):
 mega-downloader url "https://mega.nz/folder/A1kAzaBA#6TdBL7LFSme2n5pRYmk2FA" \
   --dest "/var/www/baiosfera/CURSOS/CA/3. CUA/372_Exponential_Marketing_Jurgen_Klaric" \
-  --title "Exponential Marketing - Jürgen Klarić"
+  --title "Exponential Marketing - Jürgen Klarić" \
+  --sequential
 
 # Ejemplo Enlace HTTP directo:
 mega-downloader url "https://example.com/recursos/masterclass.mp4" \
@@ -137,8 +138,7 @@ nlm-tutor ingest "/var/www/baiosfera/CURSOS/CENOF/MiCurso" --setup
 * **Zero Bytecode Residue**: Todo script se invoca con `python3 -B` y contiene `sys.dont_write_bytecode = True`. Prohibida la existencia de `__pycache__` en repositorios y Google Drive.
 * **Compilación AST**: Cualquier cambio en `mega_downloader.py` debe ser verificado con:
   ```bash
-  python3 -m py_compile /var/www/zerops-astrobranding/scripts/mega_downloader.py
-  bash -n /var/www/.bin/mega-downloader
+  python3 -B -m py_compile /var/www/zerops-astrobranding/scripts/mega_downloader.py
   mega-downloader --test
   ```
 * **Git SSoT**: La versión canónica reside en `/var/www/zerops-astrobranding/scripts/mega_downloader.py`.

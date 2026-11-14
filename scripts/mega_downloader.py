@@ -42,7 +42,7 @@ from typing import Dict, List, Optional, Tuple, Any
 # Gobernanza CoHaLo: Cero generación de bytecode en filesystem o Google Drive
 sys.dont_write_bytecode = True
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 # Rutas Canónicas del Ecosistema
 DEFAULT_STAGING_BASE = "/var/www/localstorage/mega_downloads"
@@ -473,6 +473,249 @@ class ProviderDriver:
             return False
 
 
+class MegaSequentialDriver:
+    """Descarga quirúrgica ítem por ítem vía megatools --choose-files con corte limpio ante cuota 403."""
+
+    _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+    _TREE_DIR_RE = re.compile(r"^([|+\s`-]*)(?:\d+\.\s+)?([^/]+)/$")
+    _TREE_FILE_RE = re.compile(r"^([|+\s`-]*?)(\d+)\.\s+(.*?)\s+\(([^)]+)\)$")
+
+    @staticmethod
+    def is_quota_exceeded_line(line: str) -> bool:
+        """Detecta errores de cuota agotada (403 / Over Quota) en salida de megatools."""
+        low = line.lower()
+        return "403" in low or "over quota" in low
+
+    @classmethod
+    def parse_choose_files_tree(cls, raw_output: str) -> List[Dict[str, Any]]:
+        """Parsea el árbol numerado de megatools --choose-files en una lista ordenada de ítems."""
+        items: List[Dict[str, Any]] = []
+        folder_stack: List[Tuple[int, str]] = []
+        class_counters: Dict[str, int] = {}
+
+        for raw_line in raw_output.splitlines():
+            clean = cls._ANSI_RE.sub("", raw_line).rstrip()
+            if not clean:
+                continue
+
+            m_dir = cls._TREE_DIR_RE.match(clean)
+            if m_dir:
+                depth = len(m_dir.group(1))
+                dir_name = m_dir.group(2).strip()
+                while folder_stack and folder_stack[-1][0] >= depth:
+                    folder_stack.pop()
+                folder_stack.append((depth, dir_name))
+                continue
+
+            m_file = cls._TREE_FILE_RE.match(clean)
+            if not m_file:
+                continue
+
+            depth = len(m_file.group(1))
+            idx = int(m_file.group(2))
+            filename = m_file.group(3).strip()
+            size_label = m_file.group(4).strip()
+
+            while folder_stack and folder_stack[-1][0] >= depth:
+                folder_stack.pop()
+
+            parent_folder = folder_stack[-1][1] if folder_stack else "Modulo 01"
+            if Sanitizer.is_garbage_transcript(filename):
+                continue
+
+            ext = os.path.splitext(filename)[1].lower()
+            if ext in MEDIA_EXTENSIONS:
+                kind = "media"
+                class_counters[parent_folder] = class_counters.get(parent_folder, 0) + 1
+                cls_num = class_counters[parent_folder]
+            elif ext in ARCHIVE_EXTENSIONS:
+                kind = "archive"
+                cls_num = 0
+            elif ext in DOC_EXTENSIONS:
+                kind = "doc"
+                cls_num = 0
+            else:
+                continue
+
+            items.append({
+                "idx": idx,
+                "filename": filename,
+                "size": size_label,
+                "parent_folder": parent_folder,
+                "kind": kind,
+                "cls_num": cls_num,
+                "ext": ext,
+            })
+
+        return items
+
+    @classmethod
+    def list_choose_files_tree(cls, url: str, timeout_sec: int = 120) -> str:
+        """Obtiene el árbol numerado de una carpeta Mega sin descargar archivos."""
+        if "#P!" in url:
+            log("Enlace de Mega protegido con contraseña (#P!).", "ERROR")
+            return ""
+
+        cmd = ["megatools", "dl", "--choose-files", "--no-ask-password", url]
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        lines: List[str] = []
+        deadline = time.monotonic() + timeout_sec
+        assert proc.stdout is not None and proc.stdin is not None
+
+        for line in iter(proc.stdout.readline, ""):
+            lines.append(line)
+            if "Enter numbers" in line:
+                try:
+                    proc.stdin.write("\n")
+                    proc.stdin.flush()
+                except Exception:
+                    pass
+                break
+            if time.monotonic() > deadline:
+                proc.kill()
+                break
+
+        try:
+            proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+        return "".join(lines)
+
+    @classmethod
+    def download_single_item(cls, url: str, item_idx: int, target_dir: str) -> str:
+        """Descarga exactamente un índice vía megatools --choose-files."""
+        shutil.rmtree(target_dir, ignore_errors=True)
+        os.makedirs(target_dir, exist_ok=True)
+
+        cmd = ["megatools", "dl", "--choose-files", "--no-ask-password", "--path", target_dir, url]
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        assert proc.stdout is not None and proc.stdin is not None
+
+        prompted = False
+        quota_exceeded = False
+
+        for line in iter(proc.stdout.readline, ""):
+            if not prompted and "Enter numbers" in line:
+                proc.stdin.write(f"{item_idx}\n")
+                proc.stdin.flush()
+                prompted = True
+                continue
+            if cls.is_quota_exceeded_line(line):
+                log(f"Cuota de MEGA agotada (403 Over Quota) en índice {item_idx}.", "WARN")
+                quota_exceeded = True
+                proc.kill()
+                break
+
+        proc.wait()
+        if quota_exceeded:
+            return "QUOTA_EXCEEDED"
+
+        has_files = any(files for _, _, files in os.walk(target_dir))
+        return "OK" if proc.returncode == 0 and has_files else "ERROR"
+
+    @classmethod
+    def process_sequential(cls, url: str, gdrive_dest: str, title: str, flat: bool = False) -> int:
+        """Descarga, transcodifica y promueve ítem por ítem con skip idempotente y purga inmediata."""
+        log(f"Listando árbol remoto de '{title}' para descarga secuencial...", "ACTION")
+        raw_tree = cls.list_choose_files_tree(url)
+        items = cls.parse_choose_files_tree(raw_tree)
+        if not items:
+            log("No se detectaron ítems descargables en la carpeta Mega.", "ERROR")
+            return 1
+
+        audios_dest = gdrive_dest if flat else os.path.join(gdrive_dest, "NOTEBOOKLM_AUDIOS")
+        docs_dest = gdrive_dest if flat else os.path.join(gdrive_dest, "DOCS")
+        os.makedirs(audios_dest, exist_ok=True)
+        os.makedirs(docs_dest, exist_ok=True)
+
+        staging_root = os.path.join(DEFAULT_STAGING_BASE, ".staging", f"seq_{Normalizer.sanitize_slug(title)}")
+        converted_audios = 0
+        preserved_docs = 0
+
+        for pos, item in enumerate(items, start=1):
+            kind = item["kind"]
+            filename = item["filename"]
+            ext = item["ext"]
+
+            if kind == "doc":
+                out_name = f"DOC_{Normalizer.clean_title(filename)}{ext}"
+                out_path = os.path.join(docs_dest, out_name)
+                if os.path.exists(out_path) and os.path.getsize(out_path) > 1024:
+                    preserved_docs += 1
+                    continue
+            elif kind == "media":
+                out_name = Normalizer.format_audio_name(item["parent_folder"], filename, item["cls_num"])
+                out_path = os.path.join(audios_dest, out_name)
+                if os.path.exists(out_path) and os.path.getsize(out_path) > 1024:
+                    converted_audios += 1
+                    continue
+            else:
+                out_name = filename
+                out_path = ""
+
+            log(f"[{pos}/{len(items)}] Descargando índice {item['idx']}: {filename} ({item['size']})", "ACTION")
+            item_staging = os.path.join(staging_root, f"item_{item['idx']}")
+            status = cls.download_single_item(url, item["idx"], item_staging)
+
+            if status == "QUOTA_EXCEEDED":
+                shutil.rmtree(staging_root, ignore_errors=True)
+                log(f"Corte preventivo por cuota 403 en [{pos}/{len(items)}]. Re-ejecutá el mismo comando para reanudar.", "WARN")
+                return 42
+            if status != "OK":
+                shutil.rmtree(item_staging, ignore_errors=True)
+                log(f"Error descargando índice {item['idx']} ({filename}).", "ERROR")
+                continue
+
+            if kind == "archive":
+                res = CourseProcessor(title, item_staging, gdrive_dest, flat=flat).process()
+                converted_audios += res.get("audios", 0)
+                preserved_docs += res.get("docs", 0)
+                continue
+
+            downloaded = [os.path.join(r, f) for r, _, fs in os.walk(item_staging) for f in fs]
+            if downloaded:
+                src_file = downloaded[0]
+                if kind == "doc":
+                    shutil.copy2(src_file, out_path)
+                    preserved_docs += 1
+                    log(f"Documento promovido: {out_name}", "INFO")
+                elif kind == "media":
+                    ok = Transcoder.remux_aac_to_m4a(src_file, out_path) if ext == ".aac" else Transcoder.extract_m4a_speech(src_file, out_path)
+                    if ok:
+                        converted_audios += 1
+                        log(f"Audio promovido: {out_name}", "AUDIO")
+
+            shutil.rmtree(item_staging, ignore_errors=True)
+
+        shutil.rmtree(staging_root, ignore_errors=True)
+        report_path = os.path.join(gdrive_dest, "README_REPORTE.txt")
+        with open(report_path, "w", encoding="utf-8") as rf:
+            rf.write(f"REPORTE DE PROCESAMIENTO - MEGA-DOWNLOADER v{VERSION}\n")
+            rf.write(f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            rf.write(f"Curso: {title}\n")
+            rf.write(f"Total Audios M4A Generados: {converted_audios}\n")
+            rf.write(f"Total Documentos Preservados: {preserved_docs}\n")
+            rf.write("Estándar: M4A 24k mono AAC + faststart\n")
+
+        log(f"✅ Descarga secuencial de '{title}' completada: {converted_audios} audios, {preserved_docs} docs.", "INFO")
+        return 0
+
+
 # =============================================================================
 # 5. SOVEREIGN MEDIA PROCESSOR (Orquestador de Curso)
 # =============================================================================
@@ -869,7 +1112,24 @@ def run_tests() -> int:
     assert cleaned == "Hola mundo"
     print(f"  {GREEN}✓{RESET} Sanitizer: Limpieza higiénica de WebVTT y deduplicación verificada.")
 
-    # Test 7: Verify ffprobe and ffmpeg availability
+    # Test 7: Sequential Mega choose-files parser & 403 quota detector
+    sample_tree = (
+        "\x1b[1m|--1. 01. Modulo Uno/\x1b[0m\n"
+        "|  |--2. 01. Introduccion.mp4 (42.1 MiB)\n"
+        "|  |--3. 01. Introduccion.mp4-subtítulos.txt (12.0 KiB)\n"
+        "|  |--4. Guia_Modulo_1.pdf (1.2 MiB)\n"
+        "|--5. Bonus_Raiz.mp4 (18.0 MiB)\n"
+    )
+    parsed = MegaSequentialDriver.parse_choose_files_tree(sample_tree)
+    assert len(parsed) == 3, f"Expected 3 items, got {len(parsed)}"
+    assert parsed[0]["idx"] == 2 and parsed[0]["parent_folder"] == "01. Modulo Uno" and parsed[0]["kind"] == "media"
+    assert parsed[1]["idx"] == 4 and parsed[1]["kind"] == "doc"
+    assert parsed[2]["idx"] == 5 and parsed[2]["parent_folder"] == "Modulo 01" and parsed[2]["kind"] == "media"
+    assert MegaSequentialDriver.is_quota_exceeded_line("ERROR: Download failed: 403 Over Quota") is True
+    assert MegaSequentialDriver.is_quota_exceeded_line("F video.mp4 (10.0 MiB)") is False
+    print(f"  {GREEN}✓{RESET} MegaSequentialDriver: Parser de árbol --choose-files y detector 403 verificados.")
+
+    # Test 8: Verify ffprobe and ffmpeg availability
     try:
         subprocess.run(["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         subprocess.run(["ffprobe", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -898,6 +1158,7 @@ def main():
     p_url.add_argument("--dest", "-d", required=True, help="Ruta de destino final en Google Drive (ej: /var/www/baiosfera/CURSOS/CENOF/CursoX).")
     p_url.add_argument("--title", "-t", help="Título explícito del curso.")
     p_url.add_argument("--flat", action="store_true", help="Deposita los audios y documentos directamente en la raíz de destino sin subcarpetas.")
+    p_url.add_argument("--sequential", "--choose-files", action="store_true", dest="sequential", help="Descarga e ingesta ítem por ítem (--choose-files) con reanudación idempotente ante cuota 403.")
 
     # Comando 2: scan
     p_scan = subparsers.add_parser("scan", help="Escanea recibos de compra (.txt, .docx) y genera un manifiesto JSON.")
@@ -938,6 +1199,16 @@ def main():
     if args.command == "url":
         provider = ProviderDriver.detect_provider(args.link)
         title = args.title or os.path.basename(args.dest.rstrip("/"))
+
+        if provider == "mega" and getattr(args, "sequential", False):
+            rc = MegaSequentialDriver.process_sequential(
+                args.link,
+                args.dest,
+                title,
+                flat=getattr(args, "flat", False),
+            )
+            sys.exit(rc)
+
         staging_dir = os.path.join(DEFAULT_STAGING_BASE, ".staging", f"direct_{Normalizer.sanitize_slug(title)}")
 
         if provider == "mega":

@@ -111,6 +111,7 @@ LINK_PAIRS=(
     "brand-play:$CATALOG_REPO/scripts/brand-play"
     "orchesbrand:$CATALOG_REPO/bin/orchesbrand"
     "anti-slop-linter:$CATALOG_REPO/scripts/anti_slop_linter.py"
+    "mega-downloader:$CATALOG_REPO/scripts/mega_downloader.py"
     "engram-sync:$CATALOG_REPO/scripts/engram-sync"
     "engram-mcp:$CATALOG_REPO/scripts/engram-mcp"
     "zcp-sync:$CATALOG_REPO/scripts/zcp-sync"
@@ -163,6 +164,15 @@ if command -v brand-play >/dev/null; then
         echo "✓ brand-play test PASSED"
     else
         echo "❌ brand-play test FAILED:"
+        echo "$out"
+        ERRORS=$((ERRORS + 1))
+    fi
+fi
+if command -v mega-downloader >/dev/null; then
+    if out=$(PYTHONDONTWRITEBYTECODE=1 mega-downloader --test 2>&1); then
+        echo "✓ mega-downloader --test PASSED"
+    else
+        echo "❌ mega-downloader --test FAILED:"
         echo "$out"
         ERRORS=$((ERRORS + 1))
     fi
