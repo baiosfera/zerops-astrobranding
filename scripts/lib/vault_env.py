@@ -41,6 +41,8 @@ COPYABLE_VAULT_KEYS = frozenset(
         "PAPERCLIP_ADMIN_EMAIL",
         "PAPERCLIP_ADMIN_PASSWORD",
         "BIFROST_MASTER_VK",
+        "BIFROST_ADMIN_USER_SECRET",
+        "BIFROST_ADMIN_PASS_SECRET",
         "EVOLUTION_API_KEY",
         "EVOLUTION_OPERATOR_EMAIL",
         "TTYD_USER",
@@ -364,6 +366,12 @@ def resolve_project_vault_payload(
 
     if rotate or "BIFROST_MASTER_VK" not in existing:
         payload["BIFROST_MASTER_VK"] = kv.get("BIFROST_MASTER_VK") or f"vk-bifrost-{generate_secret(28)}"
+    if rotate or "BIFROST_ADMIN_USER_SECRET" not in existing:
+        payload["BIFROST_ADMIN_USER_SECRET"] = (kv.get("BIFROST_ADMIN_USERNAME") or "admin").strip()
+    if rotate or "BIFROST_ADMIN_PASS_SECRET" not in existing:
+        payload["BIFROST_ADMIN_PASS_SECRET"] = (kv.get("BIFROST_ADMIN_PASSWORD") or f"{generate_secret(20)}Aa1!").strip()
+    if rotate or "BIFROST_ENC_KEY_SECRET" not in existing:
+        payload["BIFROST_ENC_KEY_SECRET"] = (kv.get("BIFROST_ENCRYPTION_KEY") or generate_secret(32)).strip()
 
     if kv.get("EVOLUTION_API_KEY"):
         payload["EVOLUTION_API_KEY"] = kv["EVOLUTION_API_KEY"].strip()
