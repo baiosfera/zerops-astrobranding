@@ -18,19 +18,23 @@ try:
 except ImportError:
     yaml = None
 
-# SSoT Search Paths
+# SSoT Search Paths (Knowledge Hub SSoT first, zero legacy MentorIA paths)
 PLAYBOOK_SEARCH_DIRS = [
-    Path("/var/www/baiosfera/PLAYBOOKS"),
-    Path("/mnt/localstorage/playbooks"),
-    Path("/var/www/localstorage/playbooks"),
+    Path("/var/www/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
+    Path("/mnt/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
+    Path("/var/www/localstorage/knowledge_hub/04_BANCOS_TACTICOS"),
+    Path("/mnt/localstorage/knowledge_hub/04_BANCOS_TACTICOS"),
+    Path("/var/www/localstorage/knowledge_service/playbooks"),
+    Path("/mnt/localstorage/knowledge_service/playbooks"),
     Path("/var/www/zerops-astrobranding/templates/playbooks"),
-    Path("/mnt/localstorage/MentorIA/playbooks")
 ]
 
 WORKSPACE_SEARCH_DIRS = [
-    Path("/mnt/localstorage/MentorIA/dev/workspaces"),
-    Path("/var/www/localstorage/MentorIA/dev/workspaces"),
-    Path("/var/www/localstorage")
+    Path("/var/www/localstorage/workspaces"),
+    Path("/mnt/localstorage/workspaces"),
+    Path("/var/www/localstorage"),
+    Path("/mnt/localstorage"),
+    Path("/var/www/baiosfera/PROYECTOS"),
 ]
 
 # Prohibited commercial marketing slop
@@ -87,10 +91,10 @@ def load_brandbook_bundle(brand_slug: str) -> Tuple[Dict[str, Any], Path]:
             break
 
     if not workspace_dir:
-        # Fallback to creating or checking directly in primary base
         workspace_dir = WORKSPACE_SEARCH_DIRS[0] / brand_slug
 
-    brand_dir = workspace_dir / "brand"
+    brand_dir_candidates = [workspace_dir / "brand", workspace_dir / "dev", workspace_dir]
+    brand_dir = next((d for d in brand_dir_candidates if (d / "brandbook.json").exists()), workspace_dir / "brand")
     bundle: Dict[str, Any] = {
         "brand": {
             "name": brand_slug.replace("-", " ").title(),
@@ -167,15 +171,16 @@ def load_brandbook_bundle(brand_slug: str) -> Tuple[Dict[str, Any], Path]:
             pass
 
     # 5. Extract strategy context if available
-    strat_dir = workspace_dir / "strategy"
-    if strat_dir.exists():
-        fase0 = strat_dir / "fase0_author_psychology.md"
-        if fase0.exists():
-            try:
-                with open(fase0, "r", encoding="utf-8") as f:
-                    bundle["brand"]["fase0_excerpt"] = f.read(500)
-            except Exception:
-                pass
+    for strat_dir in (workspace_dir / "strategy", workspace_dir / "dev" / "strategy"):
+        if strat_dir.exists():
+            fase0 = strat_dir / "fase0_author_psychology.md"
+            if fase0.exists():
+                try:
+                    with open(fase0, "r", encoding="utf-8") as f:
+                        bundle["brand"]["fase0_excerpt"] = f.read(500)
+                except Exception:
+                    pass
+                break
 
     return bundle, workspace_dir
 
@@ -230,24 +235,32 @@ def parse_playbook_file(playbook_path: Path) -> Dict[str, Any]:
         if len(parts) >= 3:
             raw_fm = parts[1]
             body = parts[2].strip()
-            if yaml:
+    else:
+        fenced_match = re.search(r"```yaml\s*\n---\s*\n(.*?)\n---\s*\n```", content, re.DOTALL)
+        if fenced_match:
+            raw_fm = fenced_match.group(1)
+            body = content.replace(fenced_match.group(0), "", 1).strip()
+        else:
+            raw_fm = ""
+
+    if raw_fm:
+        if yaml:
+            try:
+                parsed = yaml.safe_load(raw_fm)
+                if isinstance(parsed, dict):
+                    frontmatter = parsed
+            except Exception:
+                sanitized_lines = []
+                for line in raw_fm.splitlines():
+                    if re.match(r"^\s+([A-Za-z0-9_\s]+)$", line) and not line.strip().startswith("-"):
+                        continue
+                    sanitized_lines.append(line)
                 try:
-                    parsed = yaml.safe_load(raw_fm)
+                    parsed = yaml.safe_load("\n".join(sanitized_lines))
                     if isinstance(parsed, dict):
                         frontmatter = parsed
                 except Exception:
-                    # Fallback line-by-line simple YAML parser for multi-line title issues
-                    sanitized_lines = []
-                    for line in raw_fm.splitlines():
-                        if re.match(r"^\s+([A-Za-z0-9_\s]+)$", line) and not line.strip().startswith("-"):
-                            continue
-                        sanitized_lines.append(line)
-                    try:
-                        parsed = yaml.safe_load("\n".join(sanitized_lines))
-                        if isinstance(parsed, dict):
-                            frontmatter = parsed
-                    except Exception:
-                        frontmatter = {}
+                    frontmatter = {}
 
     # Extract slots contract
     slots_contract = frontmatter.get("slots_contract", {})
@@ -292,6 +305,38 @@ def hydrate_slot_value(slot_key: str, slot_def: Dict[str, Any], brandbook: Dict[
             "SLOT_VALUE_EQUATION_PROMISE": "/brand/value_equation/promise",
             "SLOT_EPOCH_PRIMARY_MOAT": "/brand/epoch_moat/primary",
             "SLOT_CTA_URL": "/metadata/cta_url",
+            "SLOT_MARCA": "/brand/name",
+            "SLOT_PERFIL_EXPERTO": "/brand/entity_name",
+            "SLOT_NICHO": "/brand/category_name",
+            "SLOT_CATEGORIA_PROPIA": "/brand/category_name",
+            "SLOT_MECANISMO": "/brand/signature_mechanism",
+            "SLOT_MECANISMO_UNICO": "/brand/signature_mechanism",
+            "SLOT_OFERTA_INSIGNIA": "/brand/insignia_offer/title",
+            "SLOT_PRODUCTO_ENTRADA": "/brand/paid_discovery/title",
+            "SLOT_PRECIO_ENTRADA": "/brand/paid_discovery/price",
+            "SLOT_PROMESA": "/brand/value_equation/promise",
+            "SLOT_RESULTADO_DESEADO": "/brand/value_equation/promise",
+            "SLOT_BENEFICIO": "/brand/value_equation/promise",
+            "SLOT_CTA": "/metadata/cta_url",
+            "SLOT_AVATAR": "/target_audience/primary_persona/archetype",
+            "SLOT_CLIENTE": "/target_audience/primary_persona/archetype",
+            "SLOT_BRAND_NAME": "/brand/name",
+            "SLOT_OFERTA_CORE": "/brand/insignia_offer/title",
+            "SLOT_OFERTA": "/brand/insignia_offer/title",
+            "SLOT_OFFER_CORE": "/brand/insignia_offer/title",
+            "SLOT_PRECIO_TICKET": "/brand/paid_discovery/price",
+            "SLOT_TICKET_ENTRADA": "/brand/paid_discovery/price",
+            "SLOT_TARGET_AVATAR": "/target_audience/primary_persona/archetype",
+            "SLOT_TARGET_AUDIENCE": "/target_audience/primary_persona/archetype",
+            "SLOT_TRANSFORMATION_PROMISE": "/brand/value_equation/promise",
+            "SLOT_VALUE_PROP": "/brand/value_equation/promise",
+            "SLOT_BENEFIT_GOAL": "/brand/value_equation/promise",
+            "SLOT_RESULTADO": "/brand/value_equation/promise",
+            "SLOT_PROMETE": "/brand/value_equation/promise",
+            "SLOT_FRAMEWORK_NOMBRADO": "/brand/signature_mechanism",
+            "SLOT_CANAL_PRINCIPAL": "Canal Digital Directo",
+            "SLOT_GARANTIA": "Garantía incondicional de satisfacción 30 días",
+            "SLOT_DECISOR_ICP": "Decisor Principal",
             "niche": "/brand/category_name",
             "avatar": "/target_audience/primary_persona/archetype",
             "core_transformation": "/brand/value_equation/promise",
@@ -301,7 +346,10 @@ def hydrate_slot_value(slot_key: str, slot_def: Dict[str, Any], brandbook: Dict[
         }
         cand_pointer = alias_map.get(slot_key)
         if cand_pointer:
-            val = resolve_json_pointer(brandbook, cand_pointer)
+            if cand_pointer.startswith("/"):
+                val = resolve_json_pointer(brandbook, cand_pointer)
+            else:
+                val = cand_pointer
 
     if val is not None and val != "":
         if isinstance(val, list):
@@ -337,6 +385,17 @@ def hydrate_playbook(parsed_playbook: Dict[str, Any], brandbook: Dict[str, Any])
         key = s.get("key", "")
         if key:
             slot_map[key] = s
+
+    # Discover any remaining Section 0 / body {{SLOT_*}} tags automatically so curated hub playbooks hydrate completely
+    body_tags = set(re.findall(r"\{\{([A-Za-z0-9_]+)\}\}", parsed_playbook.get("body", "")))
+    for tag in sorted(body_tags):
+        if tag.startswith("SLOT_") and tag not in slot_map:
+            slot_map[tag] = {
+                "key": tag,
+                "json_pointer": f"/brand/{tag.lower()}",
+                "required": False,
+                "fallback_value": "",
+            }
 
     resolved_slots: Dict[str, str] = {}
     fallback_slots: List[str] = []
@@ -528,11 +587,13 @@ def run_transmute(args: argparse.Namespace) -> int:
 
     # 2. Discover Playbooks
     playbook_paths: List[Path] = []
+    seen_names: set[str] = set()
     if args.all:
         for p_dir in PLAYBOOK_SEARCH_DIRS:
             if p_dir.exists():
                 for p in sorted(p_dir.glob("*.md")):
-                    if p not in playbook_paths:
+                    if p.name not in seen_names:
+                        seen_names.add(p.name)
                         playbook_paths.append(p)
         print(f"✓ Mode --all: Discovered {len(playbook_paths)} universal playbooks")
     else:
@@ -622,14 +683,14 @@ def run_test() -> int:
     # 1. Test JSON pointer resolution
     test_obj = {
         "brand": {
-            "name": {"$value": "Juan Damaren", "$type": "string"},
+            "name": {"$value": "Aura Studio Demo", "$type": "string"},
             "category": "Lujo Silencioso"
         },
         "color": {
             "primary": {"$value": "#0f172a"}
         }
     }
-    assert resolve_json_pointer(test_obj, "/brand/name") == "Juan Damaren", "Pointer $value unwrapping failed"
+    assert resolve_json_pointer(test_obj, "/brand/name") == "Aura Studio Demo", "Pointer $value unwrapping failed"
     assert resolve_json_pointer(test_obj, "/brand/category") == "Lujo Silencioso", "Plain pointer resolution failed"
     assert resolve_json_pointer(test_obj, "/color/primary") == "#0f172a", "Color pointer failed"
     print("✓ Test 1 Passed: RFC 6901 pointer & DTCG $value resolution")
@@ -664,7 +725,7 @@ def run_test() -> int:
         "modular_blocks": []
     }
     hydrated = hydrate_playbook(dummy_playbook, test_obj)
-    assert "Juan Damaren" in hydrated["hydrated_body"], "Slot 1 failed hydration"
+    assert "Aura Studio Demo" in hydrated["hydrated_body"], "Slot 1 failed hydration"
     assert "Lujo Silencioso" in hydrated["hydrated_body"], "Slot 2 failed hydration"
     assert "Método Causal" in hydrated["hydrated_body"], "Fallback slot failed hydration"
     assert len(hydrated["remaining_tags"]) == 0, "Expected 0 remaining tags"
