@@ -1426,6 +1426,98 @@ def run_tests(evaluate_hook):
             with open(alt_state_file, "w") as f:
                 f.write(alt_state_backup)
 
+    # Tests 84-86: Cross-project plan & Linear state isolation (Multi-Project Zerops SSoT)
+    iso_other_dir = os.path.join(plans_dir, "beta_proj_test")
+    iso_alpha_dir = os.path.join(plans_dir, "alpha_proj_test")
+    iso_other_plan = os.path.join(iso_other_dir, "plan_other_v1.md")
+    iso_flat_other_plan = os.path.join(plans_dir, "test_flat_other_proj_v1.md")
+    iso_alpha_plan = os.path.join(iso_alpha_dir, "plan_alpha_v1.md")
+    iso_state_alpha_dir = "/var/www/artifacts/.linear_state/alpha_proj_test"
+    iso_state_alpha = os.path.join(iso_state_alpha_dir, ".linear_activity_state.json")
+    iso_tmp_state_backup = None
+    if os.path.exists(state_file):
+        with open(state_file, "r") as f:
+            iso_tmp_state_backup = f.read()
+        os.remove(state_file)
+    try:
+        os.makedirs(iso_other_dir, exist_ok=True)
+        os.makedirs(iso_alpha_dir, exist_ok=True)
+        with open(iso_other_plan, "w") as f:
+            f.write("---\nproject: beta_proj_test\nstatus: F4\n---\n# Plan Other\n")
+        with open(iso_flat_other_plan, "w") as f:
+            f.write("---\nproject: beta_proj_test\nstatus: F4\n---\n# Flat Plan Other\n")
+
+        # Test 84: Plans belonging to another project must not trigger F4 halt or Linear-First block in alpha_proj_test
+        res_iso_pi = evaluate_hook({
+            "invocationNum": 1,
+            "initialNumSteps": 0,
+            "test_bypass_dedup": True,
+            "test_project_name": "alpha_proj_test",
+            "lastUserInput": "update main header logo"
+        })
+        assert "F4 HALT GATE" not in str(res_iso_pi), f"Expected no F4 halt from other project plan, got {res_iso_pi}"
+
+        res_iso_edit = evaluate_hook({
+            "test_project_name": "alpha_proj_test",
+            "toolCall": {
+                "name": "edit_file",
+                "args": {"Path": "/var/www/webdev/src/components/Header.astro", "Target": "a", "Replacement": "b"}
+            }
+        })
+        assert res_iso_edit.get("decision") == "allow", f"Expected allow for alpha_proj_test when only other project has F4 plan, got {res_iso_edit}"
+        print("✓ Test 84 Passed: Cross-project plans (subdir + frontmatter) do not block unrelated projects")
+
+        # Test 85: Scoped plan in plans/alpha_proj_test/ blocks alpha_proj_test until Linear activity exists
+        with open(iso_alpha_plan, "w") as f:
+            f.write("---\nproject: alpha_proj_test\nstatus: F4\n---\n# Plan Alpha\n")
+        res_alpha_blocked = evaluate_hook({
+            "test_project_name": "alpha_proj_test",
+            "toolCall": {
+                "name": "edit_file",
+                "args": {"Path": "/var/www/webdev/src/components/Header.astro", "Target": "a", "Replacement": "b"}
+            }
+        })
+        assert res_alpha_blocked.get("decision") == "deny" and "LINEAR-FIRST GATE" in res_alpha_blocked.get("reason", ""), f"Expected deny for matching project F4 plan, got {res_alpha_blocked}"
+        print("✓ Test 85 Passed: Project-scoped plan enforces Linear-First Gate for its own project")
+
+        # Test 86: Project-scoped .linear_state/<proj>/.linear_activity_state.json unlocks only its own project
+        os.makedirs(iso_state_alpha_dir, exist_ok=True)
+        with open(iso_state_alpha, "w") as f:
+            json.dump({"timestamp": int(time.time() * 1000), "action": "comment", "issueId": "BAI-999"}, f)
+        res_alpha_unlocked = evaluate_hook({
+            "test_project_name": "alpha_proj_test",
+            "toolCall": {
+                "name": "edit_file",
+                "args": {"Path": "/var/www/webdev/src/components/Header.astro", "Target": "a", "Replacement": "b"}
+            }
+        })
+        assert res_alpha_unlocked.get("decision") == "allow", f"Expected allow when project-scoped Linear state is fresh, got {res_alpha_unlocked}"
+        res_other_still_blocked = evaluate_hook({
+            "test_project_name": "beta_proj_test",
+            "toolCall": {
+                "name": "edit_file",
+                "args": {"Path": "/var/www/webdev/src/components/Header.astro", "Target": "a", "Replacement": "b"}
+            }
+        })
+        assert res_other_still_blocked.get("decision") == "deny" and "LINEAR-FIRST GATE" in res_other_still_blocked.get("reason", ""), f"Expected beta_proj_test to stay blocked without its own Linear state, got {res_other_still_blocked}"
+        print("✓ Test 86 Passed: Project-scoped .linear_state/<proj> isolates Linear activity across projects")
+    finally:
+        for p in [iso_other_plan, iso_flat_other_plan, iso_alpha_plan, iso_state_alpha]:
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+        for d in [iso_other_dir, iso_alpha_dir, iso_state_alpha_dir]:
+            if os.path.isdir(d):
+                try:
+                    os.rmdir(d)
+                except Exception:
+                    pass
+        if iso_tmp_state_backup is not None:
+            with open(state_file, "w") as f:
+                f.write(iso_tmp_state_backup)
+
     print("============================================================")
     print("✅ ALL TOOL-GUARD UNIT TESTS PASSED DETERMINISTICALLY (exit 0)")
     print("============================================================")

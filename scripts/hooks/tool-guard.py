@@ -80,6 +80,8 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
     artifacts_dir = "/var/www/artifacts"
     archive_dir = "/var/www/artifacts/archive"
     plans_dir = "/var/www/artifacts/plans"
+    current_project = get_active_project_slug()
+    scoped_plans_dir = os.path.join(plans_dir, current_project) if current_project else ""
     purged_superseded = []
     purged_executed = []
 
@@ -91,12 +93,19 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
     for d in [archive_dir, plans_dir]:
         if os.path.exists(d):
             scan_dirs.append(d)
+    if scoped_plans_dir and os.path.isdir(scoped_plans_dir):
+        scan_dirs.append(scoped_plans_dir)
 
     for sdir in scan_dirs:
         try:
             for fname in os.listdir(sdir):
-                if HANDOVER_PATTERN.search(fname):
+                fpath = os.path.join(sdir, fname)
+                if not os.path.isfile(fpath) or HANDOVER_PATTERN.search(fname):
                     continue
+                if sdir == plans_dir and current_project:
+                    pproj = extract_plan_project(fpath)
+                    if pproj and pproj != current_project:
+                        continue
                 if ".executed." in fname:
                     stem = re.sub(r'_v\d+.*$', '', fname)
                     executed_stems.add(stem)
@@ -106,12 +115,16 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
     for sdir in scan_dirs:
         try:
             for fname in os.listdir(sdir):
-                if HANDOVER_PATTERN.search(fname):
+                fpath = os.path.join(sdir, fname)
+                if not os.path.isfile(fpath) or HANDOVER_PATTERN.search(fname):
                     continue
+                if sdir == plans_dir and current_project:
+                    pproj = extract_plan_project(fpath)
+                    if pproj and pproj != current_project:
+                        continue
                 if ".superseded." in fname:
-                    fpath = os.path.join(sdir, fname)
                     stem = re.sub(r'_v\d+.*$', '', fname)
-                    if sdir in [artifacts_dir, plans_dir] or stem in executed_stems:
+                    if sdir in [artifacts_dir, plans_dir, scoped_plans_dir] or stem in executed_stems:
                         try:
                             os.remove(fpath)
                             purged_superseded.append(fpath)
@@ -124,10 +137,14 @@ def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
         for sdir in scan_dirs:
             try:
                 for fname in os.listdir(sdir):
-                    if HANDOVER_PATTERN.search(fname):
+                    fpath = os.path.join(sdir, fname)
+                    if not os.path.isfile(fpath) or HANDOVER_PATTERN.search(fname):
                         continue
+                    if sdir == plans_dir and current_project:
+                        pproj = extract_plan_project(fpath)
+                        if pproj and pproj != current_project:
+                            continue
                     if ".executed." in fname:
-                        fpath = os.path.join(sdir, fname)
                         try:
                             os.remove(fpath)
                             purged_executed.append(fpath)
@@ -607,6 +624,100 @@ def is_plan_approved(filepath: str) -> bool:
         pass
     return False
 
+def normalize_project_slug(name: str) -> str:
+    """Normalizes a Zerops project identifier into a filesystem-safe lowercase slug."""
+    return re.sub(r'[^a-z0-9_-]+', '-', (name or '').strip().lower()).strip('-')
+
+def get_active_project_slug(payload: dict = None) -> str:
+    """Returns the normalized active Zerops project slug from test override or env."""
+    if payload and "test_project_name" in payload:
+        return normalize_project_slug(str(payload.get("test_project_name") or ""))
+    raw = os.environ.get("ZEROPS_PROJECT_NAME") or os.environ.get("PROJECT_NAME") or ""
+    return normalize_project_slug(raw)
+
+def extract_plan_project(filepath: str) -> str:
+    """Extracts an optional project slug from plan frontmatter or metadata header."""
+    try:
+        if not filepath or not os.path.isfile(filepath):
+            return ""
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            head = f.read(2048)
+        m = re.search(r'(?im)^(?:project|zerops_project|proyecto)\s*:\s*["\']?([a-zA-Z0-9_.-]+)["\']?', head)
+        if m:
+            return normalize_project_slug(m.group(1))
+        m2 = re.search(r'(?im)^\s*-\s*\*\*Proyecto(?:\s+Zerops)?\*\*\s*:\s*`?([a-zA-Z0-9_.-]+)`?', head)
+        if m2:
+            return normalize_project_slug(m2.group(1))
+    except Exception:
+        pass
+    return ""
+
+def list_active_plans_for_project(
+    plans_dir: str,
+    current_project: str = "",
+    include_drafts: bool = False,
+    include_approved: bool = True,
+) -> list:
+    """Lists .md plan files in plans_dir belonging to current_project (or unscoped flat plans)."""
+    if not plans_dir or not os.path.exists(plans_dir):
+        return []
+    excluded_tokens = [".executed.", ".superseded.", "report", ".test_hide"]
+    if not include_drafts:
+        excluded_tokens.extend(["draft", "grilling"])
+
+    def _scan_dir(scan_dir: str, enforce_frontmatter_match: bool) -> list:
+        found = []
+        try:
+            for fname in os.listdir(scan_dir):
+                fpath = os.path.join(scan_dir, fname)
+                if not os.path.isfile(fpath) or not fname.endswith(".md"):
+                    continue
+                low = fname.lower()
+                if any(tok in low for tok in excluded_tokens):
+                    continue
+                if not include_drafts and is_plan_draft(fpath):
+                    continue
+                if not include_approved and is_plan_approved(fpath):
+                    continue
+                if enforce_frontmatter_match and current_project:
+                    plan_proj = extract_plan_project(fpath)
+                    if plan_proj and plan_proj != current_project:
+                        continue
+                found.append(fpath)
+        except Exception:
+            pass
+        return found
+
+    candidates = _scan_dir(plans_dir, enforce_frontmatter_match=True)
+    if current_project:
+        scoped_dir = os.path.join(plans_dir, current_project)
+        if os.path.isdir(scoped_dir):
+            candidates.extend(_scan_dir(scoped_dir, enforce_frontmatter_match=False))
+    return candidates
+
+def get_linear_activity_state_files(current_project: str = "") -> list:
+    """Returns project-isolated Linear activity state files (container /tmp + project-scoped Drive)."""
+    files = ["/tmp/.linear_activity_state.json"]
+    if current_project:
+        files.append(f"/var/www/artifacts/.linear_state/{current_project}/.linear_activity_state.json")
+    else:
+        files.append("/var/www/artifacts/.linear_activity_state.json")
+    return files
+
+def has_recent_linear_activity(current_project: str = "", max_age_seconds: int = 7200) -> bool:
+    """Checks whether recent Linear CLI activity exists for the active container/project."""
+    now = time.time()
+    for sf in get_linear_activity_state_files(current_project):
+        if os.path.exists(sf):
+            try:
+                with open(sf, "r") as f:
+                    act_data = json.load(f)
+                    if now - (act_data.get("timestamp", 0) / 1000.0) < max_age_seconds:
+                        return True
+            except Exception:
+                pass
+    return False
+
 def get_pending_research_subagents(transcript_path: str) -> list:
     if not transcript_path or not os.path.exists(transcript_path):
         return []
@@ -1006,13 +1117,9 @@ def evaluate_hook(payload: dict) -> dict:
 
         user_prompt = extract_user_prompt(payload)
         plans_dir = "/var/www/artifacts/plans"
-        has_pending_master_plan = (
-            os.path.exists(plans_dir) and any(
-                f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide", "draft", "grilling"])
-                and not is_plan_draft(os.path.join(plans_dir, f))
-                and not is_plan_approved(os.path.join(plans_dir, f))
-                for f in os.listdir(plans_dir)
-            )
+        current_project = get_active_project_slug(payload)
+        has_pending_master_plan = bool(
+            list_active_plans_for_project(plans_dir, current_project, include_drafts=False, include_approved=False)
         ) or os.path.exists("/var/www/artifacts/test_plan_v1.md")
 
         if has_pending_master_plan and user_prompt:
@@ -1158,20 +1265,8 @@ def evaluate_hook(payload: dict) -> dict:
             wf_name = wf_args.get("workflow")
             is_bootstrap = (args.get("ToolName") == "zerops_import") or (wf_action == "start" and wf_name in ["bootstrap", "launch-production"])
             if is_bootstrap and not payload.get("test_bypass_linear"):
-                state_file = "/tmp/.linear_activity_state.json"
-                alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
-                has_linear_recent = False
-                for sf in [state_file, alt_state_file]:
-                    if os.path.exists(sf):
-                        try:
-                            with open(sf, "r") as f:
-                                l_data = json.load(f)
-                                l_ts = l_data.get("timestamp", 0)
-                                if time.time() * 1000 - l_ts < 24 * 3600 * 1000:
-                                    has_linear_recent = True
-                                    break
-                        except Exception:
-                            pass
+                current_project = get_active_project_slug(payload)
+                has_linear_recent = has_recent_linear_activity(current_project, max_age_seconds=24 * 3600)
                 if not has_linear_recent:
                     return {
                         "decision": "deny",
@@ -1358,11 +1453,8 @@ def evaluate_hook(payload: dict) -> dict:
 
         # A4. Linear-First Epistemic Persistence Gate (Invariante 2 Soberano)
         plans_dir = "/var/www/artifacts/plans"
-        has_active_plan = os.path.exists(plans_dir) and any(
-            f.endswith(".md") and not any(x in f.lower() for x in [".executed.", ".superseded.", "report", ".test_hide", "draft", "grilling"])
-            and not is_plan_draft(os.path.join(plans_dir, f))
-            for f in os.listdir(plans_dir)
-        )
+        current_project = get_active_project_slug(payload)
+        has_active_plan = bool(list_active_plans_for_project(plans_dir, current_project, include_drafts=False, include_approved=True))
         is_target_code_or_skill = (
             "/zerops-astro-skills/" in target_file or
             "/.agents/skills/" in target_file or
@@ -1372,19 +1464,7 @@ def evaluate_hook(payload: dict) -> dict:
             ]))
         )
         if has_active_plan and is_target_code_or_skill and not payload.get("test_bypass_linear"):
-            state_file = "/tmp/.linear_activity_state.json"
-            alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
-            has_linear_recent = False
-            for sf in [state_file, alt_state_file]:
-                if os.path.exists(sf):
-                    try:
-                        with open(sf, "r") as f:
-                            act_data = json.load(f)
-                            if time.time() - (act_data.get("timestamp", 0) / 1000.0) < 7200:
-                                has_linear_recent = True
-                                break
-                    except Exception:
-                        pass
+            has_linear_recent = has_recent_linear_activity(current_project, max_age_seconds=7200)
             if not has_linear_recent:
                 return {
                     "decision": "deny",
@@ -1754,20 +1834,8 @@ def evaluate_hook(payload: dict) -> dict:
         # B-0. Linear-First Multi-Servicio & Platform Infra Command Gate (BAI-430)
         if any(k in cmd for k in ["zcli project import", "zcli service import"]):
             if not payload.get("test_bypass_linear"):
-                state_file = "/tmp/.linear_activity_state.json"
-                alt_state_file = "/var/www/artifacts/.linear_activity_state.json"
-                has_linear_recent = False
-                for sf in [state_file, alt_state_file]:
-                    if os.path.exists(sf):
-                        try:
-                            with open(sf, "r") as f:
-                                l_data = json.load(f)
-                                l_ts = l_data.get("timestamp", 0)
-                                if time.time() * 1000 - l_ts < 24 * 3600 * 1000:
-                                    has_linear_recent = True
-                                    break
-                        except Exception:
-                            pass
+                current_project = get_active_project_slug(payload)
+                has_linear_recent = has_recent_linear_activity(current_project, max_age_seconds=24 * 3600)
                 if not has_linear_recent:
                     return {
                         "decision": "deny",

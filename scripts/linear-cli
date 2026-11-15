@@ -30,6 +30,23 @@ if (!LINEAR_API_KEY) {
 let cachedDefaultTeamId = process.env.LINEAR_TEAM_ID || null;
 const DEFAULT_PROJECT_ID = process.env.LINEAR_PROJECT_ID || null;
 
+function getProjectSlug() {
+  const raw = process.env.ZEROPS_PROJECT_NAME || process.env.PROJECT_NAME || "";
+  return raw.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function getLinearStateDir() {
+  const slug = getProjectSlug();
+  if (slug) {
+    return path.join("/var/www/artifacts/.linear_state", slug);
+  }
+  return "/var/www/artifacts";
+}
+
+function getLinearStateFile(filename) {
+  return path.join(getLinearStateDir(), filename);
+}
+
 function queryGraphQL(query, variables = {}) {
   return new Promise((resolve, reject) => {
     const postData = JSON.stringify({ query, variables });
@@ -81,7 +98,9 @@ function recordLinearActivity(action, issueId) {
     };
     fs.writeFileSync("/tmp/.linear_activity_state.json", JSON.stringify(payload, null, 2));
     if (fs.existsSync("/var/www/artifacts")) {
-      fs.writeFileSync("/var/www/artifacts/.linear_activity_state.json", JSON.stringify(payload, null, 2));
+      const driveStateFile = getLinearStateFile(".linear_activity_state.json");
+      fs.mkdirSync(path.dirname(driveStateFile), { recursive: true });
+      fs.writeFileSync(driveStateFile, JSON.stringify(payload, null, 2));
     }
   } catch (e) {}
 }
@@ -646,7 +665,7 @@ async function main() {
     if (!projectId && DEFAULT_PROJECT_ID) {
       projectId = await resolveProjectId(DEFAULT_PROJECT_ID);
     }
-    const activeProjFile = "/var/www/artifacts/linear_active_project.json";
+    const activeProjFile = getLinearStateFile("linear_active_project.json");
     if (!projectId && fs.existsSync(activeProjFile)) {
       try {
         const cached = JSON.parse(fs.readFileSync(activeProjFile, "utf8"));
@@ -716,7 +735,7 @@ async function main() {
     const data = await queryGraphQL(q, { input });
     const created = data?.issueCreate?.issue;
     if (data?.issueCreate?.success && created) {
-      const activeFile = "/var/www/artifacts/linear_active.json";
+      const activeFile = getLinearStateFile("linear_active.json");
       fs.mkdirSync(path.dirname(activeFile), { recursive: true });
       
       let activeLocks = [];
@@ -784,7 +803,7 @@ async function main() {
     const data = await queryGraphQL(q, { input });
     const created = data?.projectCreate?.project;
     if (data?.projectCreate?.success && created) {
-      const activeProjFile = "/var/www/artifacts/linear_active_project.json";
+      const activeProjFile = getLinearStateFile("linear_active_project.json");
       try {
         fs.mkdirSync(path.dirname(activeProjFile), { recursive: true });
         fs.writeFileSync(activeProjFile, JSON.stringify({ id: created.id, name: created.name, timestamp: Date.now() }, null, 2));
@@ -810,7 +829,7 @@ async function main() {
     const q = `query GetProject($id: String!) { project(id: $id) { id name url state } }`;
     const data = await queryGraphQL(q, { id: resolvedId });
     const p = data?.project;
-    const activeProjFile = "/var/www/artifacts/linear_active_project.json";
+    const activeProjFile = getLinearStateFile("linear_active_project.json");
     fs.mkdirSync(path.dirname(activeProjFile), { recursive: true });
     fs.writeFileSync(activeProjFile, JSON.stringify({ id: resolvedId, name: p?.name || projQuery, timestamp: Date.now() }, null, 2));
     console.log(`✅ Proyecto activo fijado: [${p?.name || projQuery}] (${resolvedId})`);
@@ -914,9 +933,9 @@ async function main() {
     if (updateRes?.issueUpdate?.success && updated) {
     if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
       const jsonFiles = [
-        "/var/www/artifacts/linear_active.json",
-        "/var/www/artifacts/linear_active_project.json",
-        "/var/www/artifacts/.linear_activity_state.json"
+        getLinearStateFile("linear_active.json"),
+        getLinearStateFile("linear_active_project.json"),
+        getLinearStateFile(".linear_activity_state.json")
       ];
       for (const f of jsonFiles) {
         if (fs.existsSync(f)) {
@@ -1050,9 +1069,9 @@ async function main() {
 
     if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
       const jsonFiles = [
-        "/var/www/artifacts/linear_active.json",
-        "/var/www/artifacts/linear_active_project.json",
-        "/var/www/artifacts/.linear_activity_state.json"
+        getLinearStateFile("linear_active.json"),
+        getLinearStateFile("linear_active_project.json"),
+        getLinearStateFile(".linear_activity_state.json")
       ];
       for (const f of jsonFiles) {
         if (fs.existsSync(f)) {

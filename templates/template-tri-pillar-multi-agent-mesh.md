@@ -160,7 +160,7 @@ Paperclip AI and Hermes run with zero data loss across container restarts, stop/
         HERMES_MODEL_ENDPOINT: "http://bifrost:8080/v1"
         HERMES_MODEL_NAME: "auto"
         BIFROST_VIRTUAL_KEY: "vk-hermes-agent"
-        NATS_URL: ${nats_connectionString}
+        # Optional: set NATS_URL in Project Shared Vault only if `nats` service is provisioned
       start: python3 apps/hermes/main.py
 
   # Paperclip AI Platform (Ubuntu 26 / Node.js 26 pnpm monorepo)
