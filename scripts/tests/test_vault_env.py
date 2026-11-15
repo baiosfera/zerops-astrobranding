@@ -17,6 +17,7 @@ from vault_env import (
     is_sensitive_vault_key,
     parse_freellm_markdown,
     parse_kv_file,
+    resolve_freellmapi_vault_payload,
     resolve_project_vault_payload,
 )
 
@@ -181,6 +182,69 @@ class TestVaultEnv(unittest.TestCase):
             {"email": "freellmapi@marca-x.internal", "password": "super-secret-password"},
         )
         self.assertEqual(cfg["unifiedApiKey"], "sk-freellmapi-testkey")
+
+    def test_resolve_freellmapi_vault_payload_fresh_and_idempotent_update(self):
+        self.assertFalse(is_sensitive_vault_key("FREEAPI_ADMIN_EMAIL"))
+        self.assertFalse(is_sensitive_vault_key("FREEAPI_ADMIN_PASSWORD"))
+
+        keys_list = [{"platform": "groq", "key": "dummy_groq_key_1234567890", "label": "groq-test", "enabled": True}]
+
+        # 1. Fresh project seeds copyable admin credentials matching FREEAPI_CONFIG_JSON_SECRET.
+        fresh_cfg, fresh_payload = resolve_freellmapi_vault_payload({}, "Marca Nueva", keys_list, [], existing={})
+        self.assertEqual(fresh_payload["FREEAPI_ADMIN_EMAIL"], "freellmapi@marca-nueva.internal")
+        self.assertGreaterEqual(len(fresh_payload["FREEAPI_ADMIN_PASSWORD"]), 24)
+        self.assertEqual(fresh_cfg["admin"]["email"], fresh_payload["FREEAPI_ADMIN_EMAIL"])
+        self.assertEqual(fresh_cfg["admin"]["password"], fresh_payload["FREEAPI_ADMIN_PASSWORD"])
+        self.assertEqual(fresh_cfg["unifiedApiKey"], fresh_payload["FREELLMAPI_CLIENT_KEY"])
+        self.assertIn("FREEAPI_ENCRYPTION_KEY", fresh_payload)
+
+        # 2. Update on existing project never overwrites existing Vault credentials and reuses plain values.
+        existing = {
+            "FREEAPI_CONFIG_JSON_SECRET": True,
+            "FREEAPI_ENCRYPTION_KEY": True,
+            "FREELLMAPI_CLIENT_KEY": False,
+            "FREEAPI_ADMIN_EMAIL": False,
+            "FREEAPI_ADMIN_PASSWORD": False,
+        }
+        plain_values = {
+            "FREELLMAPI_CLIENT_KEY": "client-key-existing-demo",
+            "FREEAPI_ADMIN_EMAIL": "freellmapi@marca-nueva.internal",
+            "FREEAPI_ADMIN_PASSWORD": "existing-stable-password",
+        }
+        upd_cfg, upd_payload = resolve_freellmapi_vault_payload(
+            {}, "Marca Nueva", keys_list, [], existing=existing, plain_values=plain_values, rotate=False
+        )
+        self.assertEqual(set(upd_payload.keys()), {"FREEAPI_CONFIG_JSON_SECRET"})
+        self.assertEqual(upd_cfg["unifiedApiKey"], "client-key-existing-demo")
+        self.assertEqual(upd_cfg["admin"]["password"], "existing-stable-password")
+
+        # 3. Legacy vault with FREEAPI_CONFIG_JSON_SECRET but without FREEAPI_ADMIN_PASSWORD does not invent a fake password.
+        legacy_existing = {
+            "FREEAPI_CONFIG_JSON_SECRET": True,
+            "FREEAPI_ENCRYPTION_KEY": True,
+            "FREELLMAPI_CLIENT_KEY": False,
+        }
+        legacy_cfg, legacy_payload = resolve_freellmapi_vault_payload(
+            {},
+            "Legacy",
+            keys_list,
+            [],
+            existing=legacy_existing,
+            plain_values={"FREELLMAPI_CLIENT_KEY": "client-key-legacy-demo"},
+            rotate=False,
+        )
+        self.assertNotIn("FREEAPI_ADMIN_PASSWORD", legacy_payload)
+        self.assertNotIn("admin", legacy_cfg)
+        self.assertEqual(legacy_cfg["unifiedApiKey"], "client-key-legacy-demo")
+
+        # 4. Explicit --rotate regenerates secrets consistently across Vault and JSON config.
+        rot_cfg, rot_payload = resolve_freellmapi_vault_payload(
+            {}, "Marca Nueva", keys_list, [], existing=existing, plain_values=plain_values, rotate=True
+        )
+        self.assertIn("FREEAPI_ADMIN_PASSWORD", rot_payload)
+        self.assertNotEqual(rot_payload["FREEAPI_ADMIN_PASSWORD"], "existing-stable-password")
+        self.assertEqual(rot_cfg["admin"]["password"], rot_payload["FREEAPI_ADMIN_PASSWORD"])
+        self.assertEqual(rot_cfg["unifiedApiKey"], rot_payload["FREELLMAPI_CLIENT_KEY"])
 
 
 if __name__ == "__main__":

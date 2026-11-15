@@ -36,6 +36,8 @@ SENSITIVE_VAULT_KEYS = re.compile(
 # unmasked (`sensitive: false`) so operators can read and copy them directly in Zerops UI.
 COPYABLE_VAULT_KEYS = frozenset(
     {
+        "FREEAPI_ADMIN_EMAIL",
+        "FREEAPI_ADMIN_PASSWORD",
         "FREELLMAPI_CLIENT_KEY",
         "FREELLMAPI_API_KEY",
         "PAPERCLIP_ADMIN_EMAIL",
@@ -337,6 +339,80 @@ def build_freellm_declarative_config(
     return cfg
 
 
+def resolve_freellmapi_vault_payload(
+    kv: dict[str, str],
+    proj_slug: str,
+    keys_list: list[dict[str, Any]],
+    custom_providers: list[dict[str, Any]],
+    *,
+    existing: Optional[dict[str, bool]] = None,
+    plain_values: Optional[dict[str, str]] = None,
+    rotate: bool = False,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Build FreeLLMAPI declarative config and idempotent Shared Vault payload without overwriting existing credentials."""
+    existing = existing or {}
+    plain_values = plain_values or {}
+    clean_slug = re.sub(r"[^a-z0-9-]+", "-", proj_slug.strip().lower()).strip("-") or "zerops"
+
+    kv_client_key = (kv.get("FREELLMAPI_CLIENT_KEY") or "").strip()
+    existing_client_key = (plain_values.get("FREELLMAPI_CLIENT_KEY") or "").strip()
+    if rotate:
+        client_key = kv_client_key or f"sk-freellmapi-{generate_secret(32)}"
+    else:
+        client_key = existing_client_key or kv_client_key or f"sk-freellmapi-{generate_secret(32)}"
+
+    kv_email = (
+        kv.get("FREEAPI_ADMIN_EMAIL")
+        or kv.get("FREELLMAPI_ADMIN_EMAIL")
+        or kv.get("FREELLMAPI_EMAIL")
+        or ""
+    ).strip()
+    kv_pass = (
+        kv.get("FREEAPI_ADMIN_PASSWORD")
+        or kv.get("FREELLMAPI_ADMIN_PASSWORD")
+        or kv.get("FREELLMAPI_PASSWORD")
+        or ""
+    ).strip()
+    existing_email = (plain_values.get("FREEAPI_ADMIN_EMAIL") or "").strip()
+    existing_pass = (plain_values.get("FREEAPI_ADMIN_PASSWORD") or "").strip()
+
+    if rotate:
+        admin_email = kv_email or existing_email or f"freellmapi@{clean_slug}.internal"
+        admin_pass = kv_pass if len(kv_pass) >= 8 else generate_secret(24)
+    else:
+        admin_email = existing_email or kv_email or f"freellmapi@{clean_slug}.internal"
+        if len(existing_pass) >= 8:
+            admin_pass = existing_pass
+        elif len(kv_pass) >= 8:
+            admin_pass = kv_pass
+        elif "FREEAPI_CONFIG_JSON_SECRET" not in existing:
+            admin_pass = generate_secret(24)
+        else:
+            # Avoid fabricating a random password when an existing vault already holds FREEAPI_CONFIG_JSON_SECRET.
+            admin_pass = ""
+
+    cfg = build_freellm_declarative_config(
+        keys_list,
+        custom_providers,
+        admin_email=admin_email or None,
+        admin_password=admin_pass or None,
+        unified_api_key=client_key,
+    )
+    payload: dict[str, str] = {
+        "FREEAPI_CONFIG_JSON_SECRET": json.dumps(cfg, separators=(",", ":")),
+    }
+    if rotate or "FREEAPI_ENCRYPTION_KEY" not in existing:
+        payload["FREEAPI_ENCRYPTION_KEY"] = generate_secret(32, hex_only=True)
+    if rotate or "FREELLMAPI_CLIENT_KEY" not in existing:
+        payload["FREELLMAPI_CLIENT_KEY"] = client_key
+    if admin_email and (rotate or "FREEAPI_ADMIN_EMAIL" not in existing):
+        payload["FREEAPI_ADMIN_EMAIL"] = admin_email
+    if admin_pass and len(admin_pass) >= 8 and (rotate or "FREEAPI_ADMIN_PASSWORD" not in existing):
+        payload["FREEAPI_ADMIN_PASSWORD"] = admin_pass
+
+    return cfg, payload
+
+
 def generate_secret(length: int = 32, *, hex_only: bool = False) -> str:
     """Generate a cryptographically secure random secret or 64-char hex encryption key."""
     if hex_only:
@@ -485,6 +561,22 @@ class ZcpVaultClient:
             if entry.get("key")
         }
         return project_name, existing
+
+    def get_project_plain_env_values(self) -> dict[str, str]:
+        """Return `{key: value}` for non-sensitive Project Shared Vault variables."""
+        data = self.call_tool("zerops_discover", {"includeEnvs": True, "includeEnvValues": True})
+        plain: dict[str, str] = {}
+        for entry in data.get("project", {}).get("envs", []):
+            key = str(entry.get("key") or "").strip()
+            val = entry.get("value")
+            if (
+                key
+                and isinstance(val, str)
+                and not entry.get("isSensitive")
+                and not entry.get("isCredentialRedacted")
+            ):
+                plain[key] = val
+        return plain
 
     def upsert_project_envs(self, kv: dict[str, str], *, skip_restart: bool = True) -> dict[str, int]:
         """Upsert variables into Project Shared Vault respecting existing sensitivity groups."""

@@ -71,11 +71,10 @@ import re
 import sys
 from vault_env import (
     ZcpVaultClient,
-    build_freellm_declarative_config,
     collect_freellm_pools,
     discover_freellm_pools,
-    generate_secret,
     parse_kv_file,
+    resolve_freellmapi_vault_payload,
 )
 
 keys_file = sys.argv[1].strip()
@@ -93,37 +92,12 @@ if not keys_list and not custom_providers:
     print("[ERROR] No FreeLLM provider keys found in discovered pools or keys file.", file=sys.stderr)
     sys.exit(1)
 
-def _clean_domain(slug: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9-]+", "-", slug.lower()).strip("-")
-    return cleaned or "zerops"
-
-def _build_runtime_cfg(proj_slug: str, client_key: str) -> tuple[dict, str]:
-    domain_slug = _clean_domain(proj_slug)
-    admin_email = (
-        kv.get("FREEAPI_ADMIN_EMAIL")
-        or kv.get("FREELLMAPI_ADMIN_EMAIL")
-        or kv.get("FREELLMAPI_EMAIL")
-        or f"freellmapi@{domain_slug}.internal"
-    ).strip()
-    raw_pass = (
-        kv.get("FREEAPI_ADMIN_PASSWORD")
-        or kv.get("FREELLMAPI_ADMIN_PASSWORD")
-        or kv.get("FREELLMAPI_PASSWORD")
-        or ""
-    ).strip()
-    admin_pass = raw_pass if len(raw_pass) >= 8 else generate_secret(24)
-    cfg_obj = build_freellm_declarative_config(
-        keys_list,
-        custom_providers,
-        admin_email=admin_email,
-        admin_password=admin_pass,
-        unified_api_key=client_key,
-    )
-    return cfg_obj, json.dumps(cfg_obj, separators=(",", ":"))
-
 if dry_run:
     preview_slug = (project_override or kv.get("PROJECT_NAME") or os.getenv("PROJECT_NAME") or "zerops").strip()
-    preview_cfg, preview_json = _build_runtime_cfg(preview_slug, f"sk-freellmapi-{generate_secret(32)}")
+    preview_cfg, preview_payload = resolve_freellmapi_vault_payload(
+        kv, preview_slug, keys_list, custom_providers, existing={}, plain_values={}, rotate=rotate
+    )
+    preview_json = preview_payload["FREEAPI_CONFIG_JSON_SECRET"]
     print(f"[INFO] Compiled {len(keys_list)} FreeLLM keys from {len(loaded_sources)} pool file(s), {len(preview_cfg['models'])} curated models, {len(preview_cfg['fallback'])} fallback priorities.")
     print(json.dumps({
         "dry_run": True,
@@ -136,27 +110,24 @@ if dry_run:
         "admin_email": preview_cfg.get("admin", {}).get("email", ""),
         "has_unified_api_key": bool(preview_cfg.get("unifiedApiKey")),
         "config_json_bytes": len(preview_json),
-        "vault_keys": ["FREEAPI_CONFIG_JSON_SECRET", "FREEAPI_ENCRYPTION_KEY", "FREELLMAPI_CLIENT_KEY"],
+        "vault_keys": sorted(preview_payload.keys()),
     }, indent=2))
     sys.exit(0)
 
 with ZcpVaultClient() as zcp:
     live_project, existing = zcp.get_project_envs()
+    plain_values = zcp.get_project_plain_env_values()
     proj_slug = (project_override or kv.get("PROJECT_NAME") or os.getenv("PROJECT_NAME") or live_project or "zerops").strip()
-    client_key = (kv.get("FREELLMAPI_CLIENT_KEY") or "").strip()
-    if not client_key:
-        client_key = f"sk-freellmapi-{generate_secret(32)}"
-
-    cfg, cfg_json = _build_runtime_cfg(proj_slug, client_key)
+    cfg, payload = resolve_freellmapi_vault_payload(
+        kv,
+        proj_slug,
+        keys_list,
+        custom_providers,
+        existing=existing,
+        plain_values=plain_values,
+        rotate=rotate,
+    )
     print(f"[INFO] Compiled {len(keys_list)} FreeLLM keys from {len(loaded_sources)} pool file(s), {len(cfg['models'])} curated models, {len(cfg['fallback'])} fallback priorities.")
-
-    payload: dict[str, str] = {
-        "FREEAPI_CONFIG_JSON_SECRET": cfg_json,
-    }
-    if rotate or "FREEAPI_ENCRYPTION_KEY" not in existing:
-        payload["FREEAPI_ENCRYPTION_KEY"] = generate_secret(32, hex_only=True)
-    if rotate or "FREELLMAPI_CLIENT_KEY" not in existing:
-        payload["FREELLMAPI_CLIENT_KEY"] = client_key
 
     summary = zcp.upsert_project_envs(payload, skip_restart=skip_restart)
     print(f"[INFO] Project '{live_project}' FreeLLMAPI vault hydrated: upserted {len(payload)} vars (existing_sensitive={summary['existing_sensitive']}, existing_plain={summary['existing_plain']}, new={summary['new_auto']}).")
