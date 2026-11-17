@@ -85,7 +85,7 @@ Para que ningún agente (AGY, Hermes o Pidev) en un ZCP limpio opere a ciegas, l
   2. Inyección de variables a nivel de proyecto (`zerops_env`):
      - `LINEAR_API_KEY` inyectada a nivel de proyecto para que todos los contenedores la hereden automáticamente en `os.getenv("LINEAR_API_KEY")`.
      - Respaldo en `/mnt/localstorage/hermes/runtime.env` (permisos 600) para redundancia.
-     - Registro de Virtual Keys en Bifrost (`vk-hermes-agent`, `vk-crewai`, `vk-pidev`).
+     - Configuración de Master Virtual Key en Bifrost (`vk-production-main` desde `${BIFROST_MASTER_VK}`).
 - **Sensor Físico de Atestación:**
   - `zerops_verify` exit code 0.
   - Sondas HTTP activas en puertos `:8080`, `:3001`, `:8000`, `:8085`.

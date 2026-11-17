@@ -157,8 +157,27 @@ setup_localstorage() {
   if [ -d "$mnt" ] && mountpoint -q "$mnt" 2>/dev/null; then
     ln -sfn "$mnt" "$BASE_DIR/localstorage"
     log "LocalStorage mounted at $mnt"
+    sync_playbooks "$mnt"
   else
     log "INFO: $mnt not mounted yet; skipping symlink to avoid split-brain."
+  fi
+}
+
+sync_playbooks() {
+  local storage_root="${1:-/mnt/localstorage}"
+  local drive_hub="/var/www/baiosfera/KNOWLEDGE_HUB"
+  local dst_pb="$storage_root/knowledge_hub/03_PLAYBOOKS_MAESTROS"
+  local dst_tb="$storage_root/knowledge_hub/04_BANCOS_TACTICOS"
+  if [ -d "$drive_hub/03_PLAYBOOKS_MAESTROS" ]; then
+    mkdir -p "$dst_pb" "$dst_tb"
+    cp -u "$drive_hub/03_PLAYBOOKS_MAESTROS"/*.md "$dst_pb/" 2>/dev/null || true
+    [ -f "$drive_hub/03_PLAYBOOKS_MAESTROS/INDEX.json" ] && cp -u "$drive_hub/03_PLAYBOOKS_MAESTROS/INDEX.json" "$dst_pb/" 2>/dev/null || true
+    [ -d "$drive_hub/04_BANCOS_TACTICOS" ] && cp -u "$drive_hub/04_BANCOS_TACTICOS"/*.md "$dst_tb/" 2>/dev/null || true
+    log "Universal Playbooks & Tactical Banks synced to $dst_pb"
+  fi
+  if [ -d "$dst_pb" ]; then
+    [ -d "$storage_root/playbooks" ] && [ ! -L "$storage_root/playbooks" ] && rm -rf "$storage_root/playbooks"
+    ln -sfn "$dst_pb" "$storage_root/playbooks"
   fi
 }
 

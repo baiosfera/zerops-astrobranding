@@ -82,8 +82,16 @@ class TestVaultEnv(unittest.TestCase):
             # Only schema-allowed top-level keys may appear (.strict() on Zod schema).
             self.assertEqual(set(cfg.keys()), {"keys", "models", "fallback", "routing", "customProviders"})
             self.assertEqual(cfg["routing"], {"strategy": "smartest", "keySelectionStrategy": "least-remaining"})
+            key_platforms = {k["platform"] for k in cfg["keys"]}
+            self.assertIn("kilo", key_platforms)
+            self.assertIn("ovh", key_platforms)
             groq_qwen = next(m for m in cfg["models"] if m["platform"] == "groq" and m["modelId"] == "qwen/qwen3.8-27b")
-            self.assertEqual(groq_qwen["tpmLimit"], 7000)
+            self.assertFalse(groq_qwen["enabled"])
+            groq_safeguard = next(m for m in cfg["models"] if m["platform"] == "groq" and m["modelId"] == "openai/gpt-oss-safeguard-20b")
+            self.assertFalse(groq_safeguard["enabled"])
+            groq_120b = next(m for m in cfg["models"] if m["platform"] == "groq" and m["modelId"] == "openai/gpt-oss-120b")
+            self.assertEqual(groq_120b["tpmLimit"], 8000)
+            self.assertGreaterEqual(groq_120b["contextWindow"], 64000)
             json.dumps(cfg)
 
     def test_sensitivity_classification_and_upsert(self):

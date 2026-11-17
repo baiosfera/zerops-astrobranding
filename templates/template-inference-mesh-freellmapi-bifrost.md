@@ -63,20 +63,16 @@ INSERT INTO models (id, name, platform_id, type, source, is_active, is_free)
 VALUES ('qwen-3.8-27b', 'Qwen 2.5 Coder 27B', 'cerebras', 'chat', 'user', 1, 1);
 ```
 
-### Invariante 2: Bifrost Model Aliases (Anti-404 Shield)
-Bifrost únicamente activa su circuit breaker en errores 429 (`retry-after` o `x-ratelimit-remaining: 0`). Si un agente pide `auto` y FreeLLMAPI no tiene exactamente ese ID de modelo, devuelve HTTP 404 (`model_not_found`). Bifrost interpreta 404 como error de cliente y NO hace fallback.
-**Regla Soberana:** En `/var/www/bifrost/config.json`, mapear todas las variantes solicitadas por Hermes hacia `auto`:
-```json
-"aliases": {
-  "auto": "auto",
-  
-}
-```
+### Invariante 2: Routing `$0` Estricto en Bifrost + `freellmapi/auto`
+Bifrost OSS reintenta o hace fallback según `routing_rules` y códigos upstream (`429` con backoff entero en ms, `5xx`). `circuit_breaker_config` es **exclusivo Enterprise** (no colocarlo dentro de `governance`).
+**Regla Soberana:** En `/mnt/localstorage/bifrost/config.json`, los callers envían `model: "freellmapi/auto"` o `"auto"` y las reglas CEL garantizan:
+1. Prioridad 0: `deepseek` solo con `x-force-deepseek: true`, `x-routing-tier: pro`, `x-tier in ['pro','production']` o `model.startsWith('deepseek')`.
+2. Prioridad 1: `freellmapi` con fallback a `deepseek` únicamente si `headers['x-allow-paid-fallback'] == 'true'`.
+3. Prioridad 2: `true` hacia `freellmapi` con `"fallbacks": []`.
 
-### Invariante 3: Purga Permanente de Proveedores con Cobro Obligatorio / Desktop Lock
-- **OpenCode Zen**: Bloquea llamadas directas a su API pública con `HTTP 429 FreeUsageLimitError` salvo que se use su cliente de escritorio propietario. Purgado de configuraciones y scripts de inicialización.
-- **HuggingFace Serverless**: Requiere compra previa de créditos prepagos (`HTTP 402 Payment Required`). Purgado.
-- **Aisa One**: Exige recarga prepaga de saldo (`HTTP 402 recharge_required`). Purgado.
+### Invariante 3: Keyless Integrados y Purga de Modelos Guard
+- **Keyless integrados (`keyless: true`)**: Registrar `kilo` y `ovh` (`{ "platform": "kilo" }`, `{ "platform": "ovh" }`) sin llave en `FREEAPI_CONFIG_JSON_SECRET` (`vault_env.py`).
+- **Modelos Guard / Rotos deshabilitados**: Mantener deshabilitados clasificadores y modelos rotos (`openai/gpt-oss-safeguard-20b`, `allam-2-7b`, `meta-llama/llama-prompt-guard-*`, `ovh/Qwen3Guard-Gen-*`, `nvidia/*guard*`).
 
 ### Invariante 4: Permisos de Escritura y Modo Desamordazado de PiDev
 - En `pidev/zerops.yaml`:
@@ -88,21 +84,14 @@ Bifrost únicamente activa su circuit breaker en errores 429 (`retry-after` o `x
 - Propiedad de `/home/zerops/.local` debe ser `zerops:zerops` para permitir a npm instalar módulos de usuario.
 - Carpeta `/var/www/webdev` debe tener permisos `chmod -R 775` y ownership `zerops:zerops`.
 
-### Invariante 5: Bifrost Governance PostgreSQL SSoT (Anti-Ghost Keys)
-Cuando Bifrost tiene `config_store.enabled: true` con PostgreSQL (`config_store.type: "postgres"`), la tabla `governance_virtual_keys` es la única fuente de verdad:
-- Las claves virtuales estáticas en `config.json` son ignoradas por el motor de inferencia y la UI web tras el arranque inicial.
-- Toda clave virtual (`vk-production-main`, `vk-hermes-agent`, `vk-crewai`, `vk-pidev`, `vk-pydanticai`) debe insertarse o sincronizarse directamente contra la tabla PostgreSQL o vía `POST /api/governance/virtual-keys`.
-- Las claves fantasma o de otros proyectos (como `vk-agy-operator`, `vk-evolution-wa`, `vk-astrobranding-prod`) deben purgarse físicamente de dicha tabla para evitar fugas de contexto y confusión en la interfaz de gobernanza.
+### Invariante 5: Bifrost Governance PostgreSQL SSoT & Single Master VK
+Cuando Bifrost tiene `config_store.enabled: true` con PostgreSQL (`config_store.type: "postgres"`):
+- Las tablas `governance_virtual_keys`, `config_keys` y `routing_rules` persisten tras el arranque inicial; si modificas `config.json` luego de inicializar la DB, reconcilia `routing_rules` y mantén `aliases_json = NULL` (no `'{}'`) bajo cifrado.
+- Usar **una sola Virtual Key respaldada por entorno** (`vk-production-main` con `"value": "env.BIFROST_VIRTUAL_KEY"` desde `${BIFROST_MASTER_VK}`), nunca claves plaintext estáticas (`vk-hermes-agent`, `vk-crewai`, etc.).
 
-### Invariante 6: Estimación de Tokens Consciente de Herramientas (Tool-Aware Input Estimation)
-En `freellmapi/server/src/routes/proxy.ts`, `estimatedInputTokens` debe sumar incondicionalmente el tamaño serializado del array `tools` (`estimatedToolsTokens`):
-- Omitir `tools` subestima drásticamente la carga real recibida por el proveedor upstream (de ~8,500 tokens reales a ~2,000 estimados).
-- Esto causa que FreeLLMAPI despache payloads gigantescos a modelos con límites de tokens por minuto ajustados (como Groq con 7,000 ITPM), desatando rechazos HTTP 413 y degradando artificialmente la confiabilidad del modelo en el Multi-Armed Bandit (MAB).
-
-### Invariante 7: Límite ITPM Real de Groq On-Demand (7,000 ITPM Guard)
-En la capa on-demand gratuita de Groq Cloud, el límite de tokens de entrada por minuto es de **7,000 ITPM** (no 70,000 ni 80,000):
-- En la tabla `models` de `freeapi.db`, el registro de `groq / qwen/qwen3.8-27b` debe tener estrictamente `tpm_limit = 7000`.
-- Valores inflados impiden que el router prefiltre la petición antes del despacho, forzando un error upstream 413 y penalización injustificada en Thompson Sampling.
+### Invariante 6: Aprendizaje Automático de Límites y Límites Groq (`declarative-config.ts`)
+- FreeLLMAPI ejecuta `learnLimitFromError()` automáticamente cuando un proveedor upstream reporta límites menores en errores HTTP.
+- No inventar límites arbitrarios (ej. `7000`); para `groq/openai/gpt-oss-120b` y `20b` configurar explícitamente `tpmLimit: 8000` y `contextWindow >= 65536` / `sizeLabel` válidos en `FREEAPI_CONFIG_JSON_SECRET`.
 
 ### Invariante 8: Progressive Tool Disclosure & Intent Routing en Agentes (Hermes)
 Los agentes conversacionales (Hermes Agent) no deben inyectar schemas de 40+ herramientas en turnos de chitchat o consultas conceptuales:

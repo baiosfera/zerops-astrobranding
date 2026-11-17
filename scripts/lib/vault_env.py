@@ -61,39 +61,70 @@ def is_sensitive_vault_key(key: str) -> bool:
 
 _FREELLM_KEY_PLATFORMS = ("cerebras", "groq", "ollama", "openrouter", "opencode", "huggingface", "mistral", "google", "cohere", "nvidia")
 
-# Curated catalog models aligned with live catalog v2026.11+: throttle Groq qwen3.8-27b to 7,000 TPM
-# and disable small guard models from chat/code routing while prioritizing strong reasoning/coding models.
+# Keyless platforms officially registered in FreeLLMAPI (keyless: true in providers/index.ts).
+_FREELLM_KEYLESS_PLATFORMS = ("kilo", "ovh")
+
+# Curated models grounded against live upstream limits and Hermes (>=64K context) requirements:
+# - Disable safety/guard classifiers and low-OTPM models (groq/qwen3.8-27b 1000 OTPM, safeguard-20b 2000 TPM)
+#   so they never poison shared provider_quota_state pools.
+# - Annotate sizeLabel, ranks, and >=128K contextWindow on non-catalog entries so MAB scoring and Hermes pass.
 _CURATED_MODELS: list[dict[str, Any]] = [
-    {"platform": "groq", "modelId": "qwen/qwen3.8-27b", "tpmLimit": 7000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "groq", "modelId": "openai/gpt-oss-safeguard-20b", "enabled": False, "fallbackEnabled": False},
+    {"platform": "groq", "modelId": "qwen/qwen3.8-27b", "enabled": False, "fallbackEnabled": False},
     {"platform": "groq", "modelId": "allam-2-7b", "enabled": False, "fallbackEnabled": False},
     {"platform": "groq", "modelId": "meta-llama/llama-prompt-guard-2-22m", "enabled": False, "fallbackEnabled": False},
     {"platform": "groq", "modelId": "meta-llama/llama-prompt-guard-2-86m", "enabled": False, "fallbackEnabled": False},
-    {"platform": "cerebras", "modelId": "qwen-3.8-27b", "enabled": True, "fallbackEnabled": True},
-    {"platform": "openrouter", "modelId": "nvidia/nemotron-3.5-lightning:free", "enabled": True, "fallbackEnabled": True},
-    {"platform": "openrouter", "modelId": "nvidia/nemotron-3.5-super-vl:free", "enabled": True, "fallbackEnabled": True},
-    {"platform": "openrouter", "modelId": "dots-studio/dots-3-note-preview:free", "enabled": True, "fallbackEnabled": True},
-    {"platform": "openrouter", "modelId": "openrouter/free", "enabled": True, "fallbackEnabled": True},
-    {"platform": "openrouter", "modelId": "google/gemma-4-31b-it:free", "enabled": True, "fallbackEnabled": True},
-    {"platform": "openrouter", "modelId": "cohere/north-mini-code:free", "enabled": True, "fallbackEnabled": True},
-    {"platform": "ollama", "modelId": "nemotron-3-super", "enabled": True, "fallbackEnabled": True},
-    {"platform": "ollama", "modelId": "gemma4:31b", "enabled": True, "fallbackEnabled": True},
-    {"platform": "ollama", "modelId": "nemotron-3-ultra", "enabled": True, "fallbackEnabled": True},
-    {"platform": "ollama", "modelId": "beam", "enabled": True, "fallbackEnabled": True},
+    {"platform": "ovh", "modelId": "Qwen3Guard-Gen-8B", "enabled": False, "fallbackEnabled": False},
+    {"platform": "ovh", "modelId": "Qwen3Guard-Gen-0.6B", "enabled": False, "fallbackEnabled": False},
+    {"platform": "nvidia", "modelId": "nvidia/llama-3.1-nemoguard-8b-content-safety", "enabled": False, "fallbackEnabled": False},
+    {"platform": "nvidia", "modelId": "nvidia/llama-3.1-nemoguard-8b-topic-control", "enabled": False, "fallbackEnabled": False},
+    {"platform": "nvidia", "modelId": "nvidia/llama-3.1-nemotron-safety-guard-8b-v3", "enabled": False, "fallbackEnabled": False},
+    {"platform": "nvidia", "modelId": "nvidia/nemotron-3.5-content-safety", "enabled": False, "fallbackEnabled": False},
+    {"platform": "groq", "modelId": "openai/gpt-oss-120b", "sizeLabel": "Medium", "tpmLimit": 8000, "rpdLimit": 1000, "contextWindow": 131072, "enabled": True, "fallbackEnabled": True},
+    {"platform": "groq", "modelId": "openai/gpt-oss-20b", "sizeLabel": "Medium", "tpmLimit": 8000, "rpdLimit": 1000, "contextWindow": 131072, "enabled": True, "fallbackEnabled": True},
+    {"platform": "cerebras", "modelId": "qwen-3.8-27b", "sizeLabel": "Frontier", "intelligenceRank": 39, "speedRank": 1, "contextWindow": 262144, "enabled": True, "fallbackEnabled": True},
+    {"platform": "kilo", "modelId": "dots-studio/dots-3-note-preview:free", "sizeLabel": "Frontier", "intelligenceRank": 35, "speedRank": 7, "contextWindow": 512000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "kilo", "modelId": "nvidia/nemotron-3.5-super-vl:free", "sizeLabel": "Large", "intelligenceRank": 50, "speedRank": 9, "contextWindow": 1000000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "kilo", "modelId": "nvidia/nemotron-3-ultra-550b-a55b:free", "sizeLabel": "Large", "intelligenceRank": 61, "speedRank": 9, "contextWindow": 1000000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "kilo", "modelId": "nvidia/nemotron-3.5-lightning:free", "sizeLabel": "Medium", "intelligenceRank": 81, "speedRank": 2, "contextWindow": 1048576, "enabled": True, "fallbackEnabled": True},
+    {"platform": "kilo", "modelId": "kilo-auto/free", "sizeLabel": "Medium", "intelligenceRank": 79, "speedRank": 10, "contextWindow": 256000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "ovh", "modelId": "Qwen3.8-27B", "sizeLabel": "Frontier", "intelligenceRank": 39, "speedRank": 9, "contextWindow": 262144, "enabled": True, "fallbackEnabled": True},
+    {"platform": "ovh", "modelId": "Qwen3.6-27B", "sizeLabel": "Large", "intelligenceRank": 65, "speedRank": 9, "contextWindow": 131072, "enabled": True, "fallbackEnabled": True},
+    {"platform": "ovh", "modelId": "Qwen3.5-397B-A17B", "sizeLabel": "Large", "intelligenceRank": 71, "speedRank": 9, "contextWindow": 262144, "enabled": True, "fallbackEnabled": True},
+    {"platform": "ovh", "modelId": "gpt-oss-120b", "sizeLabel": "Medium", "intelligenceRank": 83, "speedRank": 9, "contextWindow": 131072, "enabled": True, "fallbackEnabled": True},
+    {"platform": "ovh", "modelId": "Meta-Llama-3_3-70B-Instruct", "sizeLabel": "Medium", "intelligenceRank": 91, "speedRank": 9, "contextWindow": 131072, "enabled": True, "fallbackEnabled": True},
+    {"platform": "openrouter", "modelId": "nvidia/nemotron-3-ultra-550b-a55b:free", "sizeLabel": "Large", "intelligenceRank": 61, "speedRank": 11, "rpdLimit": 50, "contextWindow": 1000000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "openrouter", "modelId": "google/gemma-4-31b-it:free", "sizeLabel": "Large", "intelligenceRank": 69, "speedRank": 9, "rpdLimit": 50, "contextWindow": 262144, "enabled": True, "fallbackEnabled": True},
+    {"platform": "openrouter", "modelId": "google/gemma-4-26b-a4b-it:free", "sizeLabel": "Large", "intelligenceRank": 73, "speedRank": 9, "rpdLimit": 50, "contextWindow": 262144, "enabled": True, "fallbackEnabled": True},
+    {"platform": "openrouter", "modelId": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "sizeLabel": "Medium", "intelligenceRank": 89, "speedRank": 6, "rpdLimit": 50, "contextWindow": 262144, "enabled": True, "fallbackEnabled": True},
+    {"platform": "openrouter", "modelId": "dots-studio/dots-3-note-preview:free", "sizeLabel": "Frontier", "intelligenceRank": 35, "speedRank": 7, "contextWindow": 512000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "openrouter", "modelId": "nvidia/nemotron-3.5-super-vl:free", "sizeLabel": "Large", "intelligenceRank": 50, "speedRank": 9, "contextWindow": 1000000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "openrouter", "modelId": "nvidia/nemotron-3.5-lightning:free", "sizeLabel": "Medium", "intelligenceRank": 75, "speedRank": 4, "contextWindow": 1048576, "enabled": True, "fallbackEnabled": True},
+    {"platform": "openrouter", "modelId": "openrouter/free", "sizeLabel": "Medium", "intelligenceRank": 81, "speedRank": 10, "contextWindow": 200000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "openrouter", "modelId": "cohere/north-mini-code:free", "sizeLabel": "Medium", "intelligenceRank": 85, "speedRank": 8, "contextWindow": 256000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "ollama", "modelId": "nemotron-3-ultra", "sizeLabel": "Frontier", "intelligenceRank": 55, "speedRank": 10, "contextWindow": 1000000, "enabled": True, "fallbackEnabled": True},
+    {"platform": "ollama", "modelId": "nemotron-3-super", "sizeLabel": "Large", "intelligenceRank": 65, "speedRank": 8, "contextWindow": 262144, "enabled": True, "fallbackEnabled": True},
+    {"platform": "ollama", "modelId": "gemma4:31b", "sizeLabel": "Large", "intelligenceRank": 69, "speedRank": 9, "contextWindow": 262144, "enabled": True, "fallbackEnabled": True},
+    {"platform": "ollama", "modelId": "beam", "sizeLabel": "Medium", "intelligenceRank": 80, "speedRank": 7, "contextWindow": 131072, "enabled": True, "fallbackEnabled": True},
 ]
 
 _CURATED_FALLBACK: list[dict[str, Any]] = [
     {"platform": "cerebras", "modelId": "qwen-3.8-27b", "priority": 1, "enabled": True},
-    {"platform": "groq", "modelId": "qwen/qwen3.8-27b", "priority": 2, "enabled": True},
-    {"platform": "openrouter", "modelId": "nvidia/nemotron-3.5-lightning:free", "priority": 3, "enabled": True},
-    {"platform": "openrouter", "modelId": "nvidia/nemotron-3.5-super-vl:free", "priority": 4, "enabled": True},
-    {"platform": "openrouter", "modelId": "dots-studio/dots-3-note-preview:free", "priority": 5, "enabled": True},
-    {"platform": "openrouter", "modelId": "openrouter/free", "priority": 6, "enabled": True},
-    {"platform": "openrouter", "modelId": "google/gemma-4-31b-it:free", "priority": 7, "enabled": True},
-    {"platform": "openrouter", "modelId": "cohere/north-mini-code:free", "priority": 8, "enabled": True},
-    {"platform": "ollama", "modelId": "nemotron-3-super", "priority": 9, "enabled": True},
-    {"platform": "ollama", "modelId": "gemma4:31b", "priority": 10, "enabled": True},
-    {"platform": "ollama", "modelId": "nemotron-3-ultra", "priority": 11, "enabled": True},
-    {"platform": "ollama", "modelId": "beam", "priority": 12, "enabled": True},
+    {"platform": "ovh", "modelId": "Qwen3.8-27B", "priority": 2, "enabled": True},
+    {"platform": "kilo", "modelId": "dots-studio/dots-3-note-preview:free", "priority": 3, "enabled": True},
+    {"platform": "kilo", "modelId": "kilo-auto/free", "priority": 4, "enabled": True},
+    {"platform": "groq", "modelId": "openai/gpt-oss-120b", "priority": 5, "enabled": True},
+    {"platform": "ovh", "modelId": "Qwen3.6-27B", "priority": 6, "enabled": True},
+    {"platform": "ovh", "modelId": "Qwen3.5-397B-A17B", "priority": 7, "enabled": True},
+    {"platform": "kilo", "modelId": "nvidia/nemotron-3.5-super-vl:free", "priority": 8, "enabled": True},
+    {"platform": "kilo", "modelId": "nvidia/nemotron-3-ultra-550b-a55b:free", "priority": 9, "enabled": True},
+    {"platform": "openrouter", "modelId": "google/gemma-4-31b-it:free", "priority": 10, "enabled": True},
+    {"platform": "openrouter", "modelId": "nvidia/nemotron-3-ultra-550b-a55b:free", "priority": 11, "enabled": True},
+    {"platform": "groq", "modelId": "openai/gpt-oss-20b", "priority": 12, "enabled": True},
+    {"platform": "ovh", "modelId": "gpt-oss-120b", "priority": 13, "enabled": True},
+    {"platform": "ollama", "modelId": "nemotron-3-ultra", "priority": 14, "enabled": True},
+    {"platform": "ollama", "modelId": "nemotron-3-super", "priority": 15, "enabled": True},
+    {"platform": "ollama", "modelId": "gemma4:31b", "priority": 16, "enabled": True},
 ]
 
 
@@ -324,8 +355,13 @@ def build_freellm_declarative_config(
     unified_api_key: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build strict schema-compliant JSON for FreeLLMAPI `FREEAPI_CONFIG_JSON`."""
+    merged_keys = list(keys_list)
+    existing_platforms = {str(k.get("platform", "")).strip().lower() for k in merged_keys}
+    for keyless_plat in _FREELLM_KEYLESS_PLATFORMS:
+        if keyless_plat not in existing_platforms:
+            merged_keys.append({"platform": keyless_plat, "label": f"{keyless_plat}-keyless", "enabled": True})
     cfg: dict[str, Any] = {
-        "keys": keys_list,
+        "keys": merged_keys,
         "models": _CURATED_MODELS,
         "fallback": _CURATED_FALLBACK,
         "routing": {"strategy": "smartest", "keySelectionStrategy": "least-remaining"},

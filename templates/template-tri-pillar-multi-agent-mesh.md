@@ -62,8 +62,8 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
 3. **Decoupled Runtimes**: Every service runs in dedicated Incus LXC containers with non-blocking threading.
 4. **Ephemeral On-Demand Workers**: Compute-heavy workloads (video rendering, large-scale scrapers) use ephemeral containers spawned via recipe steps, executed, and deleted to maintain zero idle cost.
 5. **Dynamic Domain Agnosticism & DB Introspection**: Hermes operates business-agnostically. It strictly forbids hardcoding catalogs, dummy stores, or static products (e.g. no hardcoded clothes, makeup, or services) and equally forbids rigid anti-commerce prohibitions. Instead, it introspects live PostgreSQL 18 tables (`information_schema.tables`, `mentorships`, `products`, `orders`, `bookings`) via `execute_query` to adapt dynamically to any business model (e-commerce, 1:1 mentorships, digital consulting).
-6. **CrewAI 1.15.30+ Pydantic Output Bridge**: Dynamic swarms can enforce strict Pydantic schemas at runtime via `output_pydantic` on terminal tasks by supplying `output_schema` to `run_crew_ai`.
-7. **Bifrost Governance SSoT Invariant**: When `config_store: postgres` is enabled, PostgreSQL table `governance_virtual_keys` is the exclusive source of truth for Virtual Keys (`vk-production-main`, `vk-hermes-agent`, `vk-crewai`, `vk-pidev`, `vk-pydanticai`). The local `config.json` is not dynamically watched or re-read by the runtime.
+6. **CrewAI 1.15.30+ In-Memory Pydantic & ONNX Embedder**: Dynamic swarms use prompt-injected schemas (`InMemoryPydanticParser`) rather than `output_pydantic` double-HTTP overhead, and default to CrewAI's `$0` local `{"provider": "onnx"}` embedder under `CREWAI_STORAGE_DIR`.
+7. **Bifrost Governance SSoT Invariant**: When `config_store: postgres` is enabled, PostgreSQL tables (`governance_virtual_keys`, `routing_rules`) persist state after initial bootstrap. Use a single env-backed Virtual Key (`vk-production-main` from `${BIFROST_MASTER_VK}`) rather than hardcoded plaintext VKs (`vk-hermes-agent`, `vk-crewai`, `vk-pidev`, `vk-pydanticai`).
 8. **Telegram Multi-Media Gateway**: Handles both photos and documents (`filters.Document.ALL`) persisted to `/mnt/localstorage/uploads/` with single-instance polling conflict protection.
 9. **Paperclip <-> Hermes Bidirectional Telemetry Bridge**:
    - **Outbound (Paperclip ➔ Hermes)**: Paperclip dispatches heartbeat runs to `http://hermes:8000/v1/runs` and streams execution deltas via SSE (`/v1/runs/:id/events`).
@@ -93,7 +93,7 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
     - Preserves `SOUL.md` minimal ($\le 4\text{ KB}$): tool schemas are dynamically registered in the inference API `tools` array, never duplicated as plaintext markdown.
 14. **PiDev Codecraft Doctrine & Bifrost Headless Bridge Invariant**:
     - `pidev` runs under sovereign `AGENTS.md` bound to the 5-skill core: `codecraft` (TDD, Karpathy guidelines, deep modules, verification before completion), `impeccable`, `design-taste-frontend` (`taste-skill`), `astro-web`, and `ghcicd`.
-    - Headless agentic execution is routed to Bifrost (`http://bifrost:8080/v1`) using Virtual Key `vk-pidev` via `/mnt/localstorage/pidev/pi/models.json` and `auth.json` (`type: "api_key"`).
+    - Headless agentic execution is routed to Bifrost (`http://bifrost:8080/v1`) using `${BIFROST_MASTER_VK}` via `/mnt/localstorage/pidev/pi/models.json` and `auth.json` (`type: "api_key"`).
     - Unattended execution uses `pi --approve --provider bifrost --model bifrost/deepseek-chat -p '<prompt>' < /dev/null`, ensuring automatic project trust, zero stdin blocking, and sub-2s execution latency.
 
 ---
@@ -159,7 +159,10 @@ Paperclip AI and Hermes run with zero data loss across container restarts, stop/
         DATABASE_URL: ${database_connectionString}
         HERMES_MODEL_ENDPOINT: "http://bifrost:8080/v1"
         HERMES_MODEL_NAME: "auto"
-        BIFROST_VIRTUAL_KEY: "vk-hermes-agent"
+        BIFROST_VIRTUAL_KEY: ${BIFROST_MASTER_VK}
+        ALLOW_PAID_FALLBACK: "false"
+        HERMES_HOME: "/mnt/localstorage/hermes/.hermes"
+        CREWAI_STORAGE_DIR: "/mnt/localstorage/hermes/crewai"
         # Optional: set NATS_URL in Project Shared Vault only if `nats` service is provisioned
       start: python3 apps/hermes/main.py
 

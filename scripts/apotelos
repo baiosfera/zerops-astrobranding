@@ -1040,9 +1040,12 @@ def get_local_storage_path() -> Path:
 def resolve_playbooks_dir() -> Optional[Path]:
     """Resolve playbooks directory in priority order (NVMe POSIX first, FUSE SSoT second)."""
     candidates = [
+        Path("/mnt/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
+        Path("/var/www/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
         Path("/mnt/localstorage/playbooks"),
         Path("/var/www/localstorage/playbooks"),
         get_local_storage_path() / "playbooks",
+        Path("/var/www/baiosfera/KNOWLEDGE_HUB/03_PLAYBOOKS_MAESTROS"),
         Path("/var/www/baiosfera/PLAYBOOKS"),
         Path("/var/www/zerops-astrobranding/templates/playbooks")
     ]
@@ -1053,13 +1056,20 @@ def resolve_playbooks_dir() -> Optional[Path]:
 
 
 def resolve_playbook_path(playbook_name: str) -> Optional[Path]:
-    """Resolve a specific playbook file (e.g. 00_category_of_one_playbook.md)."""
+    """Resolve a specific playbook file (e.g. 00_category_of_one.md)."""
     p_dir = resolve_playbooks_dir()
     if p_dir:
         target = p_dir / playbook_name
         if target.exists() and target.is_file():
             return target
-    for base in [Path("/mnt/localstorage/playbooks"), Path("/var/www/localstorage/playbooks"), Path("/var/www/baiosfera/PLAYBOOKS")]:
+    for base in [
+        Path("/mnt/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
+        Path("/var/www/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
+        Path("/mnt/localstorage/playbooks"),
+        Path("/var/www/localstorage/playbooks"),
+        Path("/var/www/baiosfera/KNOWLEDGE_HUB/03_PLAYBOOKS_MAESTROS"),
+        Path("/var/www/baiosfera/PLAYBOOKS"),
+    ]:
         cand = base / playbook_name
         if cand.exists() and cand.is_file():
             return cand
@@ -1601,7 +1611,7 @@ def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerti
     }
 
     # Domino 0 (τε-0): Mecanismo Único Monopolístico
-    coo_path = resolve_playbook_path("00_category_of_one_playbook.md")
+    coo_path = resolve_playbook_path("00_category_of_one.md") or resolve_playbook_path("00_category_of_one_playbook.md")
     p_dir = resolve_playbooks_dir()
     grounding = {
         "brand_slug": eco.brand_slug,
