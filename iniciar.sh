@@ -80,8 +80,27 @@ link_skills() {
       rm -rf "$AGENTS_SKILLS_DIR/$name"
     fi
     ln -sfn "$SKILLS_DIR/$name" "$AGENTS_SKILLS_DIR/$name"
+    # Purge stale frozen copies in secondary agent dirs that shadow .agents/skills symlinks
+    rm -rf "$HOME/.gemini/antigravity-cli/skills/$name" "$HOME/.gemini/config/skills/$name" "$BASE_DIR/.claude/skills/$name" 2>/dev/null || true
   done
-  log "Skills symlinked cleanly: $SKILLS_DIR -> $AGENTS_SKILLS_DIR"
+
+  # Purge Group E third-party noise & empty broken dirs across all discovery paths
+  for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+    rm -rf "$AGENTS_SKILLS_DIR/$noise_sk" "$HOME/.gemini/antigravity-cli/skills/$noise_sk" "$HOME/.gemini/config/skills/$noise_sk" "$BASE_DIR/.claude/skills/$noise_sk" "$BASE_DIR/localstorage/skills/$noise_sk" 2>/dev/null || true
+  done
+
+  # Dereference-sync consolidated skills into localstorage for Hermes runtime (when mounted)
+  if [ -d "$BASE_DIR/localstorage" ] && command -v rsync >/dev/null 2>&1; then
+    mkdir -p "$BASE_DIR/localstorage/skills"
+    rsync -aL --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" --exclude=".git" --exclude="AGENTS.md" "$AGENTS_SKILLS_DIR/" "$BASE_DIR/localstorage/skills/" 2>/dev/null || true
+  fi
+
+  # Refresh skill registry index cleanly
+  if command -v gentle-ai >/dev/null 2>&1; then
+    gentle-ai skill-registry refresh --cwd "$BASE_DIR" --force --no-gitignore >/dev/null 2>&1 || true
+  fi
+
+  log "Skills symlinked & deduplicated cleanly: $SKILLS_DIR -> $AGENTS_SKILLS_DIR"
 }
 
 link_bin() {
@@ -120,12 +139,79 @@ link_bin() {
 }
 
 sync_governance() {
-  mkdir -p "$BASE_DIR/.agents/rules" "$HOME/.gemini/antigravity-cli/rules"
-  [ -f "$CATALOG_DIR/AGENTS.md" ] && cp -f "$CATALOG_DIR/AGENTS.md" "$BASE_DIR/AGENTS.md"
+  mkdir -p "$BASE_DIR/.agents/rules" "$HOME/.gemini/config/rules"
+  if [ -f "$CATALOG_DIR/AGENTS.md" ]; then
+    if [ ! -f "$BASE_DIR/AGENTS.md" ]; then
+      cp -f "$CATALOG_DIR/AGENTS.md" "$BASE_DIR/AGENTS.md"
+    else
+      # Preserve platform ZCP:BEGIN..ZCP:END and ZEROPS:REFLOG; sync only CUSTOM:BEGIN..CUSTOM:END
+      python3 - "$CATALOG_DIR/AGENTS.md" "$BASE_DIR/AGENTS.md" << 'EOF_SYNC_CUSTOM'
+import re, sys
+src_p, dst_p = sys.argv[1], sys.argv[2]
+src = open(src_p, "r", encoding="utf-8").read()
+dst = open(dst_p, "r", encoding="utf-8").read()
+m_src = re.search(r'<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->', src, flags=re.S)
+if m_src:
+    block = m_src.group(0)
+    if re.search(r'<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->', dst, flags=re.S):
+        out = re.sub(r'<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->', lambda _: block, dst, count=1, flags=re.S)
+    else:
+        out = dst.rstrip() + "\n\n" + block + "\n"
+    if out != dst:
+        with open(dst_p, "w", encoding="utf-8") as wf:
+            wf.write(out)
+EOF_SYNC_CUSTOM
+    fi
+  fi
+
   if [ -f "$CATALOG_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
     cp -f "$CATALOG_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$BASE_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md"
-    cp -f "$CATALOG_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$HOME/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md"
+    ln -sfn "$BASE_DIR/.agents/rules/00-SUPREME-DIRECTIVE.md" "$HOME/.gemini/config/rules/00-SUPREME-DIRECTIVE.md"
+    rm -f "$HOME/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
   fi
+
+  # Purge conflicting ODD/budget-overflow rules so always_on stays under 20K agy token cap
+  for obsolete_rule in \
+    gentle-ai-03-orchestrator-part1.md \
+    gentle-ai-03-orchestrator-part2.md \
+    gentle-ai-04-agent-routing-part1.md \
+    gentle-ai-04-agent-routing-part2.md; do
+    rm -f "$HOME/.gemini/config/rules/$obsolete_rule" 2>/dev/null || true
+  done
+
+  # Ensure single Engram MCP server (--tools=agent, cwd=/var/www) and disable duplicate plugin
+  if command -v agy >/dev/null 2>&1; then
+    agy plugin disable gentle-ai-engram >/dev/null 2>&1 || true
+  fi
+  python3 - << 'EOF_ENGRAM_SINGLETON'
+import json, os
+cfg_path = os.path.expanduser("~/.gemini/config/config.json")
+os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
+try:
+    cfg = json.load(open(cfg_path, "r", encoding="utf-8")) if os.path.isfile(cfg_path) else {}
+except Exception:
+    cfg = {}
+cfg.setdefault("plugins", {}).setdefault("gentle-ai-engram", {})["enabled"] = False
+with open(cfg_path, "w", encoding="utf-8") as wf:
+    json.dump(cfg, wf, indent=2)
+    wf.write("\n")
+
+mcp_path = os.path.expanduser("~/.gemini/config/mcp_config.json")
+if os.path.isfile(mcp_path):
+    try:
+        mcp = json.load(open(mcp_path, "r", encoding="utf-8"))
+        srv = mcp.setdefault("mcpServers", {}).setdefault("engram", {})
+        if os.path.isfile("/var/www/.bin/engram-mcp") or os.path.isfile("/var/www/zerops-astrobranding/scripts/engram-mcp"):
+            srv["command"] = "/var/www/.bin/engram-mcp"
+            srv["args"] = []
+        srv["cwd"] = "/var/www"
+        with open(mcp_path, "w", encoding="utf-8") as wf:
+            json.dump(mcp, wf, indent=2)
+            wf.write("\n")
+    except Exception:
+        pass
+EOF_ENGRAM_SINGLETON
+
   [ -f "$CATALOG_DIR/.agents/hooks.json" ] && cp -f "$CATALOG_DIR/.agents/hooks.json" "$BASE_DIR/.agents/hooks.json"
   mkdir -p "$BASE_DIR/artifacts"
   for dir_name in templates blueprints; do
@@ -241,11 +327,11 @@ main() {
     exec bash "$REPO_DIR/iniciar.sh" "$@"
   fi
   sync_repo "$SKILLS_REPO" "$SKILLS_DIR"
+  setup_localstorage
   link_skills
   link_bin
   sync_governance
   ensure_path
-  setup_localstorage
   hydrate_project_vault
   setup_pre_bifrost_deepseek
   log "Bootstrap complete."

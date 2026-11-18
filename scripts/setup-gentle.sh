@@ -197,11 +197,17 @@ rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/pipeline/synthesis.py" 2>/dev/null 
 
 rm -rf "$TMP_SKILLS_DIR" 2>/dev/null || true
 
-# Replicación Universal de Skills hacia el perfil global de Antigravity CLI
-echo "• Sincronizando catálogo completo de skills hacia perfil de Antigravity..."
-mkdir -p "/home/zerops/.gemini/antigravity-cli/skills" 2>/dev/null || true
-if [ -d "$PROJECT_ROOT/.agents/skills" ]; then
-    cp -rn "$PROJECT_ROOT/.agents/skills/"* "/home/zerops/.gemini/antigravity-cli/skills/" 2>/dev/null || true
+# Purgar ruido Grupo E y copias congeladas en perfiles secundarios que sombreen .agents/skills
+echo "• Limpiando ruido Grupo E y copias congeladas en perfiles secundarios..."
+for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+    rm -rf "$PROJECT_ROOT/.agents/skills/$noise_sk" "/home/zerops/.gemini/antigravity-cli/skills/$noise_sk" "/home/zerops/.gemini/config/skills/$noise_sk" "/var/www/.claude/skills/$noise_sk" 2>/dev/null || true
+done
+if [ -d "/var/www/zerops-astro-skills" ]; then
+    for sov_dir in /var/www/zerops-astro-skills/*/; do
+        [ -d "$sov_dir" ] || continue
+        sov_name=$(basename "$sov_dir")
+        rm -rf "/home/zerops/.gemini/antigravity-cli/skills/$sov_name" "/home/zerops/.gemini/config/skills/$sov_name" "/var/www/.claude/skills/$sov_name" 2>/dev/null || true
+    done
 fi
 
 # 3. Inicializar Hooks de GGA, Configurar Agente y Compilar Skill Registry
@@ -233,41 +239,51 @@ fi
 if command -v gentle-ai >/dev/null 2>&1; then
     echo "• Configurando stack de Gentle AI para el agente: $TARGET_AGENT..."
     CI=true GENTLE_NO_UPDATE_PROMPT=1 gentle-ai install --agents "$TARGET_AGENT" --scope=global 2>/dev/null || true
-    # Garantizar cwd=/var/www para Engram MCP independientemente del cwd del launcher de plugins
+    # Garantizar cwd=/var/www y --tools=agent para Engram MCP único (sin plugin duplicado)
     if [ -f "$SCRIPT_DIR/engram-mcp" ]; then
         chmod +x "$SCRIPT_DIR/engram-mcp"
         ln -sfn "$SCRIPT_DIR/engram-mcp" "$PROJECT_ROOT/.bin/engram-mcp"
         ln -sfn "$SCRIPT_DIR/engram-mcp" "/home/zerops/.local/bin/engram-mcp" 2>/dev/null || true
     fi
+    if command -v agy >/dev/null 2>&1; then
+        agy plugin disable gentle-ai-engram 2>/dev/null || true
+    fi
     python3 - << 'EOF_ENGRAM_MCP'
 import json, os
-for cfg in {
-    os.path.expanduser("~/.gemini/config/plugins/gentle-ai-engram/mcp_config.json"),
-    "/home/zerops/.gemini/config/plugins/gentle-ai-engram/mcp_config.json",
-}:
-    if not os.path.isfile(cfg):
-        continue
+
+cfg_json = "/home/zerops/.gemini/config/config.json"
+os.makedirs(os.path.dirname(cfg_json), exist_ok=True)
+try:
+    cfg_data = json.load(open(cfg_json, "r", encoding="utf-8")) if os.path.isfile(cfg_json) else {}
+except Exception:
+    cfg_data = {}
+cfg_data.setdefault("plugins", {}).setdefault("gentle-ai-engram", {})["enabled"] = False
+with open(cfg_json, "w", encoding="utf-8") as f:
+    json.dump(cfg_data, f, indent=2)
+    f.write("\n")
+
+global_mcp = "/home/zerops/.gemini/config/mcp_config.json"
+if os.path.isfile(global_mcp):
     try:
-        with open(cfg, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = json.load(open(global_mcp, "r", encoding="utf-8"))
         srv = data.setdefault("mcpServers", {}).setdefault("engram", {})
         if os.path.isfile("/var/www/.bin/engram-mcp"):
             srv["command"] = "/var/www/.bin/engram-mcp"
             srv["args"] = []
         srv["cwd"] = "/var/www"
-        with open(cfg, "w", encoding="utf-8") as f:
+        with open(global_mcp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
-        print(f"  ✓ Engram MCP cwd=/var/www blindado en {cfg}")
+        print(f"  ✓ Engram MCP único (--tools=agent, cwd=/var/www) en {global_mcp}")
     except Exception as e:
-        print(f"  ⚠️ No se pudo actualizar {cfg}: {e}")
+        print(f"  ⚠️ No se pudo actualizar {global_mcp}: {e}")
 EOF_ENGRAM_MCP
     echo "• Compilando registro de skills (.atl/skill-registry.md)..."
-    gentle-ai skill-registry refresh --force 2>/dev/null || true
+    gentle-ai skill-registry refresh --cwd "$PROJECT_ROOT" --force --no-gitignore 2>/dev/null || gentle-ai skill-registry refresh --force 2>/dev/null || true
     echo "• Verificando salud del ecosistema Gentle AI..."
     gentle-ai doctor || true
 
-    # 3b. Optimización idempotente de GEMINI.md + Rules Budget Guard (Dual-RAG JIT Mode)
+    # 3b. Optimización idempotente de GEMINI.md + Purga de reglas redundantes gentle-ai-03/04 (<20K budget)
     python3 - << 'EOF_OPT'
 import os, re
 
@@ -279,7 +295,6 @@ if os.path.isfile(gemini_path):
     with open(gemini_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Capture full payload if any large block (>1000 chars) exists before compacting
     blocks = re.findall(r'<!-- gentle-ai:orchestrator -->.*?<!-- /gentle-ai:agent-routing -->', content, flags=re.DOTALL)
     for b in blocks:
         if len(b) > 1000:
@@ -310,50 +325,68 @@ if os.path.isfile(gemini_path):
         f.write(new_content)
     print("  ✓ GEMINI.md deduplicado y compactado a 1 bloque Dual-RAG JIT.")
 
-# Keep heavy gentle-ai orchestrator rules on-demand (model_decision) so always_on stays under agy budget
-for rule_name in ("gentle-ai-03-orchestrator-part1.md", "gentle-ai-04-agent-routing-part1.md"):
+# Eliminar gentle-ai-03* y gentle-ai-04* (conflictivas con F0-F5 y causantes de overflow >20K tokens)
+for rule_name in (
+    "gentle-ai-03-orchestrator-part1.md",
+    "gentle-ai-03-orchestrator-part2.md",
+    "gentle-ai-04-agent-routing-part1.md",
+    "gentle-ai-04-agent-routing-part2.md",
+):
     rpath = os.path.join("/home/zerops/.gemini/config/rules", rule_name)
-    if os.path.isfile(rpath):
-        with open(rpath, "r", encoding="utf-8") as rf:
-            rtxt = rf.read()
-        if "trigger: always_on" in rtxt:
-            rtxt = rtxt.replace("trigger: always_on", "trigger: model_decision", 1)
-            with open(rpath, "w", encoding="utf-8") as wf:
-                wf.write(rtxt)
-            print(f"  ✓ {rule_name} ajustada a trigger: model_decision (agy budget hygiene).")
+    if os.path.lexists(rpath):
+        os.remove(rpath)
+        print(f"  ✓ Eliminada regla conflictiva/excedente: {rule_name}")
 EOF_OPT
 fi
 
 INJECT_CMD="inject-agent-rule"
 
-# 4. Inyectar Protocolos de Gobernanza en AGENTS.md
+# 4. Inyectar Protocolos de Gobernanza en AGENTS.md (preservando ZCP:BEGIN y ZEROPS:REFLOG)
 echo "• Inyectando protocolos de gobernanza en AGENTS.md (Lean Mode)..."
-    
+
     mkdir -p "$PROJECT_ROOT/.agents/references"
     if [ -f "$ZCP_ROOT/.agents/references/gentle_governance_encyclopedia.md" ]; then
         cp -f "$ZCP_ROOT/.agents/references/gentle_governance_encyclopedia.md" "$PROJECT_ROOT/.agents/references/gentle_governance_encyclopedia.md"
     fi
 
-    # Sincronización atómica de AGENTS.md desde Google Drive SSoT (o fallback canónico)
     if [ -f "$ZCP_ROOT/AGENTS.md" ]; then
-        cp -f "$ZCP_ROOT/AGENTS.md" "$PROJECT_ROOT/AGENTS.md"
+        if [ ! -f "$PROJECT_ROOT/AGENTS.md" ]; then
+            cp -f "$ZCP_ROOT/AGENTS.md" "$PROJECT_ROOT/AGENTS.md"
+        else
+            python3 - "$ZCP_ROOT/AGENTS.md" "$PROJECT_ROOT/AGENTS.md" << 'EOF_SYNC_CUSTOM' || true
+import re, sys
+src = open(sys.argv[1], "r", encoding="utf-8").read()
+dst = open(sys.argv[2], "r", encoding="utf-8").read()
+m = re.search(r'<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->', src, flags=re.S)
+if m:
+    block = m.group(0)
+    if re.search(r'<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->', dst, flags=re.S):
+        out = re.sub(r'<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->', lambda _: block, dst, count=1, flags=re.S)
+    else:
+        out = dst.rstrip() + "\n\n" + block + "\n"
+    if out != dst:
+        open(sys.argv[2], "w", encoding="utf-8").write(out)
+EOF_SYNC_CUSTOM
+        fi
     fi
 
-# 5. Sincronizar Supreme Directive y Referencias desde Google Drive SSoT
+# 5. Sincronizar Supreme Directive (.agents/rules + symlink a ~/.gemini/config/rules) y Referencias
 echo "• Sincronizando Supreme Directive y Referencias desde SSoT..."
-mkdir -p "$PROJECT_ROOT/.agents/rules" "$PROJECT_ROOT/.agents/references" "$ZCP_ROOT/.agents/references" 2>/dev/null || true
+mkdir -p "$PROJECT_ROOT/.agents/rules" "$PROJECT_ROOT/.agents/references" "$ZCP_ROOT/.agents/references" "$HOME/.gemini/config/rules" 2>/dev/null || true
 
-if [ -f "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
+if [ -f "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ] && [ "$(readlink -f "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md")" != "$(readlink -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true)" ]; then
     cp -f "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md"
 fi
-if [ -d "$ZCP_ROOT/.agents/references" ]; then
+if [ -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
+    ln -sfn "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$HOME/.gemini/config/rules/00-SUPREME-DIRECTIVE.md"
+fi
+rm -f "$HOME/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
+if [ -d "$ZCP_ROOT/.agents/references" ] && [ "$(readlink -f "$ZCP_ROOT/.agents/references")" != "$(readlink -f "$PROJECT_ROOT/.agents/references" 2>/dev/null || true)" ]; then
     cp -f "$ZCP_ROOT/.agents/references/"*.md "$PROJECT_ROOT/.agents/references/" 2>/dev/null || true
 fi
 
-# Sincronizar con perfil global Antigravity
 if [ -d "$HOME/.gemini/antigravity-cli" ]; then
-    mkdir -p "$HOME/.gemini/antigravity-cli/rules" "$HOME/.gemini/antigravity-cli/references" 2>/dev/null || true
-    cp -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$HOME/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
+    mkdir -p "$HOME/.gemini/antigravity-cli/references" 2>/dev/null || true
     cp -f "$PROJECT_ROOT/.agents/references/"*_encyclopedia.md "$HOME/.gemini/antigravity-cli/references/" 2>/dev/null || true
 fi
 mkdir -p "$HOME/.gemini/config" 2>/dev/null || true

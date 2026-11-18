@@ -385,10 +385,13 @@ except Exception: pass
             echo "• Sincronizando catálogo consolidado de skills a LocalStorage NVMe (/var/www/localstorage/skills)..."
             mkdir -p "$skills_dst" 2>/dev/null || true
             if command -v rsync >/dev/null 2>&1; then
-                rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" --exclude=".git" --exclude="AGENTS.md" "$skills_src/" "$skills_dst/" 2>/dev/null || true
+                rsync -aL --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" --exclude=".git" --exclude="AGENTS.md" "$skills_src/" "$skills_dst/" 2>/dev/null || true
             else
-                cp -rf "$skills_src"/* "$skills_dst/" 2>/dev/null || true
+                cp -rfL "$skills_src"/* "$skills_dst/" 2>/dev/null || true
             fi
+            for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+                rm -rf "$skills_dst/$noise_sk" 2>/dev/null || true
+            done
             echo "  ✓ LocalStorage skills sincronizadas ($(ls -1d "$skills_dst"/*/ 2>/dev/null | wc -l) skills activas)."
         fi
     }
@@ -398,11 +401,10 @@ except Exception: pass
 
     if command -v gentle-ai >/dev/null 2>&1; then
         echo "• Refrescando registro de skills..."
-        gentle-ai skill-registry refresh --force 2>/dev/null || true
+        gentle-ai skill-registry refresh --cwd "$PROJECT_ROOT" --force --no-gitignore 2>/dev/null || gentle-ai skill-registry refresh --force 2>/dev/null || true
         if [ -f "$PROJECT_ROOT/.atl/skill-registry.md" ]; then
-            mkdir -p "$ZCP_ROOT/.atl" "$PROJECT_ROOT/zerops-astrobranding/.atl" 2>/dev/null || true
+            mkdir -p "$ZCP_ROOT/.atl" 2>/dev/null || true
             cp -f "$PROJECT_ROOT/.atl/skill-registry.md" "$ZCP_ROOT/.atl/skill-registry.md" 2>/dev/null || true
-            cp -f "$PROJECT_ROOT/.atl/skill-registry.md" "$PROJECT_ROOT/zerops-astrobranding/.atl/skill-registry.md" 2>/dev/null || true
         fi
     fi
     mkdir -p "$PROJECT_ROOT/.bin" 2>/dev/null || true

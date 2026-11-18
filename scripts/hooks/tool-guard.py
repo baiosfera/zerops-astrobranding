@@ -68,6 +68,37 @@ def is_upstream_skill_pollution(path_or_cmd: str, is_write: bool = True) -> str:
                 return token_clean
     return ""
 
+def _get_conversation_id(payload: dict = None) -> str:
+    """Extracts a filesystem-safe conversationId from Antigravity hook payload or transcriptPath."""
+    if not isinstance(payload, dict):
+        return ""
+    raw = (
+        payload.get("conversationId")
+        or payload.get("conversation_id")
+        or payload.get("common", {}).get("conversationId")
+        or ""
+    )
+    if not raw:
+        tpath = payload.get("transcriptPath", "") or payload.get("common", {}).get("transcriptPath", "")
+        if tpath:
+            m = re.search(r'/brain/([a-zA-Z0-9_-]{8,})/', tpath)
+            if m:
+                raw = m.group(1)
+    safe = re.sub(r'[^a-zA-Z0-9_.-]+', '_', str(raw).strip())
+    return safe[:64] if safe else ""
+
+def _session_state_path(filename: str, conv_id: str = "") -> str:
+    """Returns per-conversation /tmp state path when conv_id is present, else legacy /tmp path."""
+    clean_name = filename.lstrip("/")
+    if conv_id:
+        sdir = os.path.join("/tmp/tool_guard", conv_id)
+        try:
+            os.makedirs(sdir, exist_ok=True)
+        except Exception:
+            pass
+        return os.path.join(sdir, clean_name)
+    return os.path.join("/tmp", clean_name)
+
 def cleanup_artifacts_lifecycle(purge_executed: bool = False) -> dict:
     """
     Lifecycle Purge Protocol (Supreme Directive v8.3 & Planner v8.6):
@@ -652,13 +683,28 @@ def extract_plan_project(filepath: str) -> str:
         pass
     return ""
 
+def extract_plan_conversation(filepath: str) -> str:
+    """Extracts an optional conversation_id / conversationId scope from plan frontmatter."""
+    try:
+        if not filepath or not os.path.isfile(filepath):
+            return ""
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            head = f.read(2048)
+        m = re.search(r'(?im)^(?:conversation_id|conversationId)\s*:\s*["\']?([a-zA-Z0-9_.-]+)["\']?', head)
+        if m:
+            return re.sub(r'[^a-zA-Z0-9_.-]+', '_', m.group(1).strip())[:64]
+    except Exception:
+        pass
+    return ""
+
 def list_active_plans_for_project(
     plans_dir: str,
     current_project: str = "",
     include_drafts: bool = False,
     include_approved: bool = True,
+    current_conversation_id: str = "",
 ) -> list:
-    """Lists .md plan files in plans_dir belonging to current_project (or unscoped flat plans)."""
+    """Lists .md plan files in plans_dir belonging to current_project (and matching conversationId if scoped)."""
     if not plans_dir or not os.path.exists(plans_dir):
         return []
     excluded_tokens = [".executed.", ".superseded.", "report", ".test_hide"]
@@ -682,6 +728,10 @@ def list_active_plans_for_project(
                 if enforce_frontmatter_match and current_project:
                     plan_proj = extract_plan_project(fpath)
                     if plan_proj and plan_proj != current_project:
+                        continue
+                if current_conversation_id:
+                    plan_conv = extract_plan_conversation(fpath)
+                    if plan_conv and plan_conv != current_conversation_id:
                         continue
                 found.append(fpath)
         except Exception:
@@ -862,13 +912,14 @@ RESEARCH_TRANSCRIPT_VERBATIM_TOKENS = (
     "firecrawl_research_read_paper", '"TypeName": "research"', '"TypeName":"research"', '"typeName": "research"'
 )
 
-def _record_research_state(source: str, detail: str, phase: str) -> None:
-    """Persist live epistemic activity (discovery vs verbatim) with 2h merge window."""
+def _record_research_state(source: str, detail: str, phase: str, conv_id: str = "") -> None:
+    """Persist live epistemic activity (discovery vs verbatim) with 2h merge window, isolated per conversationId."""
     now_ms = int(time.time() * 1000)
+    state_path = _session_state_path(".research_grounding_state.json", conv_id) if conv_id else RESEARCH_STATE_FILE
     prev = {}
-    if os.path.exists(RESEARCH_STATE_FILE):
+    if os.path.exists(state_path):
         try:
-            with open(RESEARCH_STATE_FILE, "r", encoding="utf-8") as f:
+            with open(state_path, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
                 if time.time() - (loaded.get("timestamp", 0) / 1000.0) < 7200:
                     prev = loaded
@@ -883,7 +934,7 @@ def _record_research_state(source: str, detail: str, phase: str) -> None:
         "has_verbatim": bool(prev.get("has_verbatim") or phase in ("verbatim", "subagent")),
     }
     try:
-        with open(RESEARCH_STATE_FILE, "w", encoding="utf-8") as f:
+        with open(state_path, "w", encoding="utf-8") as f:
             json.dump(data, f)
     except Exception:
         pass
@@ -983,9 +1034,12 @@ def _read_zerops_discover_from_transcript(transcript_path, step_idx=None):
     return None
 
 def evaluate_hook(payload: dict) -> dict:
-    # 0. SessionStart Handling (Mandatory Anti-AMN Recall with Multi-Hook Deduplication)
+    conv_id = _get_conversation_id(payload)
+    res_state_file = _session_state_path(".research_grounding_state.json", conv_id) if conv_id else RESEARCH_STATE_FILE
+
+    # 0. SessionStart Handling (Mandatory Anti-AMN Recall with Per-Session Deduplication)
     if payload.get("session_start") or payload.get("event") == "SessionStart" or payload.get("hookType") == "SessionStart":
-        ss_lock = "/tmp/.tool_guard_session_start.lock"
+        ss_lock = _session_state_path(".tool_guard_session_start.lock", conv_id)
         now_ts = time.time()
         is_dedup = False
         if os.path.exists(ss_lock) and not payload.get("test_force_session_start") and "--test" not in sys.argv:
@@ -1005,10 +1059,10 @@ def evaluate_hook(payload: dict) -> dict:
             pass
 
         recall_msg = (
-            "🏛️ RECALL DE SESIÓN OBLIGATORIO (Anti-AMN v3.2): Al inicio de CADA sesión es mandatorio ejecutar "
-            "'mem_context' o 'mem_search' y 'zerops_discover' antes de emitir juicios o modificar el proyecto. "
-            "Para investigación externa, estado del arte o benchmarks, invocá la skill 'research' con subagentes "
-            "('invoke_subagent' con typeName 'research'). Prohibido arrancar ciego o desde memoria pre-entrenada."
+            "🏛️ RECALL DE SESIÓN OBLIGATORIO (Anti-AMN v3.3): Al inicio de CADA sesión es mandatorio ejecutar "
+            "'mem_current_project' / 'mem_context' y 'zerops_discover' antes de emitir juicios o modificar el proyecto. "
+            "Para investigación externa web usá MCP ('context7', 'exa', 'tavily', 'firecrawl'); reservá el subagente "
+            "'research' para auditoría interna del codebase."
         )
         return {
             "injectSteps": [
@@ -1082,7 +1136,8 @@ def evaluate_hook(payload: dict) -> dict:
                         payload.get("transcriptPath"), payload.get("stepIdx")
                     )
                     if res_obj:
-                        with open("/tmp/.zerops_discover_cache.json", "w") as f:
+                        z_cache = _session_state_path(".zerops_discover_cache.json", conv_id)
+                        with open(z_cache, "w") as f:
                             json.dump(res_obj, f, indent=2)
                 except Exception:
                     pass
@@ -1090,11 +1145,11 @@ def evaluate_hook(payload: dict) -> dict:
                 return {"engramSyncTriggered": False, "source": f"ignored:{mcp_srv}:{mcp_tool}"}
         return {}
 
-    # 2. PreInvocation Handling (Zero-Spam F4 Halt Gate via valid systemMessage)
+    # 2. PreInvocation Handling (Per-Session Isolated F4 Halt Gate via valid systemMessage)
     if "invocationNum" in payload or "initialNumSteps" in payload:
         inv_num = payload.get("invocationNum", 0)
         now_ts = time.time()
-        state_file = "/tmp/.tool_guard_pi_state.json"
+        state_file = _session_state_path(".tool_guard_pi_state.json", conv_id)
         last_state = {}
         if os.path.exists(state_file):
             try:
@@ -1119,7 +1174,13 @@ def evaluate_hook(payload: dict) -> dict:
         plans_dir = "/var/www/artifacts/plans"
         current_project = get_active_project_slug(payload)
         has_pending_master_plan = bool(
-            list_active_plans_for_project(plans_dir, current_project, include_drafts=False, include_approved=False)
+            list_active_plans_for_project(
+                plans_dir,
+                current_project,
+                include_drafts=False,
+                include_approved=False,
+                current_conversation_id=conv_id,
+            )
         ) or os.path.exists("/var/www/artifacts/test_plan_v1.md")
 
         if has_pending_master_plan and user_prompt:
@@ -1139,9 +1200,9 @@ def evaluate_hook(payload: dict) -> dict:
 
         if user_prompt and RESEARCH_MANDATE_PATTERNS.search(user_prompt) and not payload.get("test_bypass_research_nudge"):
             res_fresh = False
-            if os.path.exists(RESEARCH_STATE_FILE):
+            if os.path.exists(res_state_file):
                 try:
-                    with open(RESEARCH_STATE_FILE, "r", encoding="utf-8") as rf:
+                    with open(res_state_file, "r", encoding="utf-8") as rf:
                         r_data = json.load(rf)
                         if (time.time() - (r_data.get("timestamp", 0) / 1000.0)) < 1800 and r_data.get("has_verbatim", True):
                             res_fresh = True
@@ -1153,8 +1214,9 @@ def evaluate_hook(payload: dict) -> dict:
                         {
                             "systemMessage": {
                                 "systemMessage": (
-                                    "🏛️ ANTI-AMN ACTIVO (research F0–F3): Groundeá con 'context7' / 'exa' / 'tavily' + "
-                                    "'jina:read_url' (fallbacks F2: 'brave' -> 'duckduckgo') o subagente 'research' antes de emitir afirmaciones técnicas."
+                                    "🏛️ ANTI-AMN ACTIVO (research F0–F3): Groundeá externamente con 'context7' / 'exa' / 'tavily' / "
+                                    "'firecrawl_scrape' (fallbacks: 'brave' -> 'duckduckgo') o con subagente 'research' para "
+                                    "auditoría interna del repo antes de emitir afirmaciones técnicas."
                                 )
                             }
                         }
@@ -1173,29 +1235,28 @@ def evaluate_hook(payload: dict) -> dict:
         type_name = str(args.get("TypeName", "")).lower()
         prompt_txt = str(args.get("Prompt", "")).lower()
         if type_name in ("research", "meta-research") or any(k in prompt_txt for k in ["research", "investig", "benchmark", "sota", "api", "docs"]):
-            _record_research_state("invoke_subagent", type_name or "research", "subagent")
+            _record_research_state("invoke_subagent", type_name or "research", "subagent", conv_id=conv_id)
     elif tool_name == "call_mcp_tool":
         server = str(args.get("ServerName", "")).lower()
         mcp_tool = str(args.get("ToolName", "")).lower()
         if server in RESEARCH_DISCOVERY_SERVERS or any(k in mcp_tool for k in ["search", "docs", "scrape", "crawl", "fetch", "read_url", "extract_pdf"]):
             phase = "verbatim" if mcp_tool in RESEARCH_VERBATIM_TOOLS else "discovery"
-            _record_research_state("call_mcp_tool", f"{server}:{mcp_tool}", phase)
+            _record_research_state("call_mcp_tool", f"{server}:{mcp_tool}", phase, conv_id=conv_id)
     elif tool_name == "run_command":
         cmd_raw = str(args.get("CommandLine", ""))
         if "r.jina.ai/" in cmd_raw:
-            _record_research_state("run_command", "curl:r.jina.ai", "verbatim")
+            _record_research_state("run_command", "curl:r.jina.ai", "verbatim", conv_id=conv_id)
         elif "s.jina.ai/" in cmd_raw:
-            _record_research_state("run_command", "curl:s.jina.ai", "discovery")
+            _record_research_state("run_command", "curl:s.jina.ai", "discovery", conv_id=conv_id)
 
     # 0. Anti-AMN & F0 Epistemic Inflow: Enrutamiento afirmativo hacia skill research
     if tool_name == "search_web":
         return {
             "decision": "deny",
             "reason": (
-                "Contrato Epistémico F0 (Anti-AMN): Para investigación y grounding en vivo, ejecutá "
-                "exclusivamente la skill 'research' mediante 'call_mcp_tool' "
-                "(primarios: context7, exa, tavily, jina, firecrawl; fallbacks: brave, duckduckgo) "
-                "o mediante subagente 'invoke_subagent' (TypeName: 'research')."
+                "Contrato Epistémico F0 (Anti-AMN): Para investigación web ejecutá MCPs activos "
+                "('context7', 'exa', 'tavily', 'firecrawl'; fallbacks: 'brave', 'duckduckgo'). "
+                "El subagente 'research' (sin red) usalo para auditoría interna del codebase."
             )
         }
 
@@ -1365,7 +1426,6 @@ def evaluate_hook(payload: dict) -> dict:
             skill_dir_zas = f"/var/www/zerops-astro-skills/{skill_name}"
             is_new_skill = not os.path.exists(os.path.join(skill_dir_local, "SKILL.md")) and not os.path.exists(os.path.join(skill_dir_zas, "SKILL.md"))
 
-            res_state_file = "/tmp/.research_grounding_state.json"
             has_research_recent = has_dossier
             if not has_research_recent and os.path.exists(res_state_file):
                 try:
@@ -1422,9 +1482,9 @@ def evaluate_hook(payload: dict) -> dict:
         )
         if is_target_final_plan and not payload.get("test_bypass_research"):
             has_plan_research = False
-            if os.path.exists(RESEARCH_STATE_FILE):
+            if os.path.exists(res_state_file):
                 try:
-                    with open(RESEARCH_STATE_FILE, "r", encoding="utf-8") as rf:
+                    with open(res_state_file, "r", encoding="utf-8") as rf:
                         r_data = json.load(rf)
                         if (time.time() - (r_data.get("timestamp", 0) / 1000.0)) < 7200:
                             has_plan_research = True
@@ -1446,7 +1506,7 @@ def evaluate_hook(payload: dict) -> dict:
                     "decision": "deny",
                     "reason": (
                         f"🏛️ MANDATO EPISTÉMICO F0->F4 (research Anti-AMN): Para formalizar el plan maestro [{os.path.basename(target_file)}], "
-                        "contrastá previamente la arquitectura con 'research' (context7 / exa / tavily + jina:read_url o subagente 'research'). "
+                        "contrastá previamente la arquitectura con 'research' (context7 / exa / tavily + firecrawl_scrape / web_fetch_exa o subagente 'research' interno). "
                         "Los borradores tempranos usan prefijo 'draft_' o 'status: draft'."
                     )
                 }
@@ -1454,7 +1514,15 @@ def evaluate_hook(payload: dict) -> dict:
         # A4. Linear-First Epistemic Persistence Gate (Invariante 2 Soberano)
         plans_dir = "/var/www/artifacts/plans"
         current_project = get_active_project_slug(payload)
-        has_active_plan = bool(list_active_plans_for_project(plans_dir, current_project, include_drafts=False, include_approved=True))
+        has_active_plan = bool(
+            list_active_plans_for_project(
+                plans_dir,
+                current_project,
+                include_drafts=False,
+                include_approved=True,
+                current_conversation_id=conv_id,
+            )
+        )
         is_target_code_or_skill = (
             "/zerops-astro-skills/" in target_file or
             "/.agents/skills/" in target_file or
@@ -1848,9 +1916,22 @@ def evaluate_hook(payload: dict) -> dict:
                     }
 
         # B0. SSoT Sovereign Custom Skills Anti-Pollution Shield
-        # Only check mutating commands if an actual mutating command was invoked
-        is_mutating_cmd = bool(executed_cmds.intersection({"cp", "mv", "rm", "sed", "tee"})) or any(">" in n.raw for n in parsed_nodes)
-        polluted_skill = is_upstream_skill_pollution(cmd, is_write=is_mutating_cmd)
+        # Only check copy/move/tee/sed-in-place/unquoted-redirect commands writing to protected prefixes.
+        # Allows 'rm' cleanup and quoted text inside CLI calls (e.g., linear-cli containing '->').
+        polluted_skill = ""
+        cmd_no_quotes = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", " ", cmd)
+        has_unquoted_redirect = bool(re.search(r'(?:^|[\s;|&])[12]?>>?(?!\s*&)', cmd_no_quotes))
+        for n in parsed_nodes:
+            node_writes = (
+                n.command in {"cp", "mv", "tee", "ln", "rsync"}
+                or (n.command == "sed" and any(a.startswith("-i") for a in n.args))
+            )
+            if node_writes:
+                polluted_skill = is_upstream_skill_pollution(" ".join([n.command] + n.args), is_write=True)
+                if polluted_skill:
+                    break
+        if not polluted_skill and has_unquoted_redirect:
+            polluted_skill = is_upstream_skill_pollution(cmd_no_quotes, is_write=True)
         if polluted_skill:
             return {
                 "decision": "deny",
@@ -1960,15 +2041,17 @@ def evaluate_hook(payload: dict) -> dict:
 
         # B6. Gate 14: Anti-False-Completion & Zerops Deployment Verification Gate (BAI-454)
         if "linear-cli" in cmd and any(st in cmd for st in ['"Done"', "'Done'", "Done"]):
-            cache_file = "/tmp/.zerops_discover_cache.json"
+            session_cache_file = _session_state_path(".zerops_discover_cache.json", conv_id)
+            legacy_cache_file = "/tmp/.zerops_discover_cache.json"
             if not payload.get("test_bypass_linear") and payload.get("transcriptPath"):
                 tx_discover = _read_zerops_discover_from_transcript(payload.get("transcriptPath"))
                 if tx_discover:
                     try:
-                        with open(cache_file, "w") as f:
+                        with open(session_cache_file, "w") as f:
                             json.dump(tx_discover, f, indent=2)
                     except Exception:
                         pass
+            cache_file = session_cache_file if os.path.exists(session_cache_file) else legacy_cache_file
             if os.path.exists(cache_file) and not payload.get("test_bypass_linear"):
                 try:
                     with open(cache_file, "r") as f:
@@ -1988,6 +2071,26 @@ def evaluate_hook(payload: dict) -> dict:
                 except Exception:
                     pass
 
+        # B7. Anti-Burn LLM Batch Pilot Guard (mandatory pilot <= 10 items before full batch)
+        batch_script_re = re.compile(
+            r'(?:^|/)(?:compile_playbooks?|batch_llm|categorize_transcripts?|mass_inference|transcribe_batch)[a-zA-Z0-9_.-]*\.(?:py|ts|js|mjs)$'
+        )
+        pilot_flag_re = re.compile(r'(?:^|\s)(?:--pilot|--limit(?:=|\s+)\d+|--max-items(?:=|\s+)\d+|--sample(?:=|\s+)\d+|--dry-run)(?:\s|$)')
+        for n in parsed_nodes:
+            if n.command in {"python", "python3", "uv", "bun", "node"}:
+                joined_args = " ".join(n.args)
+                if any(t in joined_args for t in ("pytest", "unittest", "test_")):
+                    continue
+                if any(batch_script_re.search(a) for a in n.args) and not pilot_flag_re.search(cmd):
+                    return {
+                        "decision": "deny",
+                        "reason": (
+                            "🛡️ ANTI-QUEMA PILOTO LLM OBLIGATORIO: Script de lote LLM detectado sin límite de piloto. "
+                            "Ejecutá primero un piloto acotado ('--pilot', '--limit 5', '--sample 10' o '--dry-run', <= 10 ítems) "
+                            "y verificá clasificación/salida antes de correr el lote completo."
+                        )
+                    }
+
     return {"decision": "allow"}
 
 def run_tests():
@@ -2004,24 +2107,6 @@ def run_tests():
 def main():
     if "--test" in sys.argv:
         run_tests()
-        sys.exit(0)
-
-    if "--session-start" in sys.argv:
-        recall_msg = (
-            "🏛️ RECALL DE SESIÓN OBLIGATORIO (Anti-AMN v3.2): Al inicio de CADA sesión es mandatorio ejecutar "
-            "'mem_context' o 'mem_search' y 'zerops_discover' antes de emitir juicios o modificar el proyecto. "
-            "Para investigación externa, estado del arte o benchmarks, invocá la skill 'research' con subagentes "
-            "('invoke_subagent' con typeName 'research'). Prohibido arrancar ciego o desde memoria pre-entrenada."
-        )
-        print(json.dumps({
-            "injectSteps": [
-                {
-                    "systemMessage": {
-                        "systemMessage": recall_msg
-                    }
-                }
-            ]
-        }))
         sys.exit(0)
 
     if "--cleanup-archive" in sys.argv:
@@ -2044,6 +2129,12 @@ def main():
                 f.write(raw_input)
     except Exception:
         pass
+
+    if "--session-start" in sys.argv:
+        payload["session_start"] = True
+        result = evaluate_hook(payload)
+        print(json.dumps(result))
+        sys.exit(0)
 
     is_post_tool = "--post-tool" in sys.argv or ("stepIdx" in payload and "invocationNum" not in payload and ("error" in payload or "toolResult" in payload or "status" in payload))
     if is_post_tool:

@@ -54,14 +54,23 @@ def main():
     with open(agents_file, "w", encoding="utf-8") as f:
         f.write(final_output)
 
-    # Dual-Target SSoT Mirroring (zerops-astrobranding catalog)
+    # Dual-Target SSoT Mirroring: sync ONLY CUSTOM:BEGIN..CUSTOM:END into zerops-astrobranding/AGENTS.md
+    # Preserves catalog ZCP:BEGIN template and avoids leaking project ZEROPS:REFLOG upstream.
     catalog_agents = "/var/www/zerops-astrobranding/AGENTS.md"
-    if agents_file == "/var/www/AGENTS.md" and os.path.isdir(os.path.dirname(catalog_agents)):
+    if agents_file == "/var/www/AGENTS.md" and os.path.isfile(catalog_agents):
         try:
-            with open(catalog_agents, "w", encoding="utf-8") as f:
-                f.write(final_output)
+            with open(catalog_agents, "r", encoding="utf-8") as cf:
+                cat_content = cf.read()
+            c_idx = cat_content.find(custom_begin)
+            e_idx = cat_content.find(custom_end)
+            new_custom_block = f"{custom_begin}\n\n{custom_body}\n\n{custom_end}"
+            if c_idx != -1 and e_idx != -1 and e_idx > c_idx:
+                cat_updated = cat_content[:c_idx] + new_custom_block + cat_content[e_idx + len(custom_end):]
+                cat_updated = re.sub(r'\n{3,}', '\n\n', cat_updated).rstrip() + "\n"
+                with open(catalog_agents, "w", encoding="utf-8") as f:
+                    f.write(cat_updated)
         except Exception as e:
-            print(f"Aviso SSoT Mirror: No se pudo replicar en {catalog_agents}: {e}", file=sys.stderr)
+            print(f"Aviso SSoT Mirror: No se pudo actualizar CUSTOM en {catalog_agents}: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

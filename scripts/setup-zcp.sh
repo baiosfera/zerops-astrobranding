@@ -228,9 +228,18 @@ if command -v zcp >/dev/null 2>&1; then
         rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" "$ZCP_ROOT/.agents/skills/research/" "/var/www/.agents/skills/research/" 2>/dev/null || true
     fi
 
-    # Replicación simétrica hacia Antigravity CLI
-    mkdir -p "/home/zerops/.gemini/antigravity-cli/skills" 2>/dev/null || true
-    cp -rn /var/www/.agents/skills/* /home/zerops/.gemini/antigravity-cli/skills/ 2>/dev/null || true
+    # Purgar ruido Grupo E y copias congeladas en Antigravity/Claude que sombreen .agents/skills
+    for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+        rm -rf "/var/www/.agents/skills/$noise_sk" "/home/zerops/.gemini/antigravity-cli/skills/$noise_sk" "/home/zerops/.gemini/config/skills/$noise_sk" "/var/www/.claude/skills/$noise_sk" 2>/dev/null || true
+    done
+    if [ -d "/var/www/zerops-astro-skills" ]; then
+        for sov_dir in /var/www/zerops-astro-skills/*/; do
+            [ -d "$sov_dir" ] || continue
+            sov_name=$(basename "$sov_dir")
+            [ -d "/home/zerops/.gemini/antigravity-cli/skills/$sov_name" ] && rm -rf "/home/zerops/.gemini/antigravity-cli/skills/$sov_name" 2>/dev/null || true
+            [ -d "/home/zerops/.gemini/config/skills/$sov_name" ] && rm -rf "/home/zerops/.gemini/config/skills/$sov_name" 2>/dev/null || true
+        done
+    fi
 fi
 
 # 6. Autenticación Soberana Determinista de zcli CLI

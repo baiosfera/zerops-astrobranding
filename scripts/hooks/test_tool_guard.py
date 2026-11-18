@@ -567,6 +567,7 @@ def run_tests(evaluate_hook):
     res_pi_fallback = evaluate_hook({
         "invocationNum": 100,
         "transcriptPath": dummy_transcript,
+        "test_project_name": "__isolated_test_45__",
         "test_bypass_research_nudge": True
     })
     try:
@@ -604,7 +605,7 @@ def run_tests(evaluate_hook):
             alt_state_backup = f.read()
         os.remove(alt_state_file)
 
-    bak_dir = "/var/www/baiosfera/0ZEROPS-AGY/0zcp-123/bak/skills"
+    bak_dir = "/tmp/test_tool_guard_bak/skills"
     os.makedirs(bak_dir, exist_ok=True)
     with open(os.path.join(bak_dir, "test-skill-SKILL.md.bak"), "w") as f:
         f.write("test backup")
@@ -612,6 +613,7 @@ def run_tests(evaluate_hook):
     try:
         res_lf_blocked = evaluate_hook({
             "test_allow_new_skill": True,
+            "test_project_name": "__isolated_test_46__",
             "toolCall": {
                 "name": "write_to_file",
                 "args": {
@@ -629,6 +631,7 @@ def run_tests(evaluate_hook):
 
         res_lf_allowed = evaluate_hook({
             "test_allow_new_skill": True,
+            "test_project_name": "__isolated_test_46__",
             "toolCall": {
                 "name": "write_to_file",
                 "args": {
@@ -1031,6 +1034,7 @@ def run_tests(evaluate_hook):
         if os.path.exists(alt_state_file):
             os.remove(alt_state_file)
         res_multi_block = evaluate_hook({
+            "test_project_name": "__isolated_test_69__",
             "toolCall": {
                 "name": "call_mcp_tool",
                 "args": {
@@ -1051,6 +1055,7 @@ def run_tests(evaluate_hook):
         with open(state_file, "w") as f:
             json.dump({"timestamp": int(time.time() * 1000), "action": "create-project", "issueId": "BAI-123"}, f)
         res_multi_allow = evaluate_hook({
+            "test_project_name": "__isolated_test_69__",
             "toolCall": {
                 "name": "call_mcp_tool",
                 "args": {
@@ -1071,6 +1076,7 @@ def run_tests(evaluate_hook):
         if os.path.exists(state_file):
             os.remove(state_file)
         res_cmd_import_block = evaluate_hook({
+            "test_project_name": "__isolated_test_69__",
             "toolCall": {
                 "name": "run_command",
                 "args": {
@@ -1241,10 +1247,10 @@ def run_tests(evaluate_hook):
             assert st_jina.get("has_discovery") is True and st_jina.get("has_verbatim") is True, f"Expected verbatim merged with discovery for Jina, got {st_jina}"
             print("✓ Test 77 Passed: Epistemic Recorder tracks Discovery vs Jina Verbatim tiers")
 
-            # Test 78: search_web deny message routes cleanly to Jina + Primaries + Brave/DuckDuckGo Fallbacks
+            # Test 78: search_web deny message routes cleanly to active MCP Primaries (context7/exa/tavily/firecrawl) + Brave/DuckDuckGo Fallbacks
             res_sw = evaluate_hook({"toolCall": {"name": "search_web", "args": {"query": "test"}}})
-            assert res_sw.get("decision") == "deny" and "jina" in res_sw.get("reason", "") and "duckduckgo" in res_sw.get("reason", ""), f"Expected Jina & fallback routing in search_web deny, got {res_sw}"
-            print("✓ Test 78 Passed: search_web Anti-AMN routing includes Jina and fallbacks")
+            assert res_sw.get("decision") == "deny" and "firecrawl" in res_sw.get("reason", "") and "duckduckgo" in res_sw.get("reason", ""), f"Expected Firecrawl & fallback routing in search_web deny, got {res_sw}"
+            print("✓ Test 78 Passed: search_web Anti-AMN routing includes active MCPs and fallbacks")
 
             # Test 79: F4 Master Plan Anti-AMN Gate (A3.6) blocks ungrounded F4 plans, allows drafts & grounded plans
             if os.path.exists(res_state_p):
@@ -1517,6 +1523,78 @@ def run_tests(evaluate_hook):
         if iso_tmp_state_backup is not None:
             with open(state_file, "w") as f:
                 f.write(iso_tmp_state_backup)
+
+    # Test 87: Parallel conversationId isolation prevents cross-session F4/research/discover collisions
+    conv_a = "test-conv-alpha-1111"
+    conv_b = "test-conv-beta-2222"
+    conv_plans_dir = "/var/www/artifacts/plans/__conv_iso_proj"
+    os.makedirs(conv_plans_dir, exist_ok=True)
+    conv_plan_a = os.path.join(conv_plans_dir, "plan_alpha.md")
+    with open(conv_plan_a, "w") as f:
+        f.write("---\nstatus: pending\nconversation_id: test-conv-alpha-1111\n---\n# Alpha Plan\n")
+    try:
+        res_conv_a = evaluate_hook({
+            "invocationNum": 1,
+            "conversationId": conv_a,
+            "userPrompt": "analiza esto primero",
+            "test_project_name": "__conv_iso_proj",
+            "test_bypass_research_nudge": True,
+        })
+        assert "injectSteps" in res_conv_a, f"Expected F4 block for owner conv_a, got {res_conv_a}"
+        res_conv_b = evaluate_hook({
+            "invocationNum": 1,
+            "conversationId": conv_b,
+            "userPrompt": "analiza esto primero",
+            "test_project_name": "__conv_iso_proj",
+            "test_bypass_research_nudge": True,
+        })
+        assert res_conv_b == {}, f"Expected zero cross-session interference for conv_b, got {res_conv_b}"
+        print("✓ Test 87 Passed: Parallel conversationId isolation isolates active F4 plans cleanly")
+    finally:
+        for d_path in [conv_plan_a]:
+            if os.path.exists(d_path):
+                os.remove(d_path)
+        if os.path.isdir(conv_plans_dir):
+            try:
+                os.rmdir(conv_plans_dir)
+            except Exception:
+                pass
+
+    # Test 88: B0 upstream skill pollution guard allows linear-cli strings with '->' and cleanup rm commands
+    res_linear_arrow = evaluate_hook({
+        "toolCall": {
+            "name": "run_command",
+            "args": {
+                "CommandLine": 'linear-cli create "Clean react-19 -> .agents/skills note" --description "Check /var/www/.agents/skills"'
+            }
+        }
+    })
+    assert res_linear_arrow.get("decision") == "allow", f"Expected allow on linear-cli create with '->', got {res_linear_arrow}"
+    res_rm_cleanup = evaluate_hook({
+        "toolCall": {
+            "name": "run_command",
+            "args": {"CommandLine": "rm -rf /var/www/.claude/skills/jira-epic"}
+        }
+    })
+    assert res_rm_cleanup.get("decision") == "allow", f"Expected allow on rm cleanup of upstream skill, got {res_rm_cleanup}"
+    print("✓ Test 88 Passed: B0 allows linear-cli strings with '->' and upstream noise cleanup via rm")
+
+    # Test 89: Anti-Burn LLM batch pilot guard blocks unflagged mass scripts and allows --pilot
+    res_batch_deny = evaluate_hook({
+        "toolCall": {
+            "name": "run_command",
+            "args": {"CommandLine": "python3 /tmp/compile_playbooks.py"}
+        }
+    })
+    assert res_batch_deny.get("decision") == "deny" and "PILOTO LLM OBLIGATORIO" in res_batch_deny.get("reason", ""), f"Expected deny without pilot flag, got {res_batch_deny}"
+    res_batch_allow = evaluate_hook({
+        "toolCall": {
+            "name": "run_command",
+            "args": {"CommandLine": "python3 /tmp/compile_playbooks.py --pilot --limit 5"}
+        }
+    })
+    assert res_batch_allow.get("decision") == "allow", f"Expected allow with --pilot/--limit flags, got {res_batch_allow}"
+    print("✓ Test 89 Passed: Anti-Burn LLM batch pilot guard enforces bounded pilot runs")
 
     print("============================================================")
     print("✅ ALL TOOL-GUARD UNIT TESTS PASSED DETERMINISTICALLY (exit 0)")

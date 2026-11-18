@@ -70,23 +70,8 @@ if [ -d "$SKILLS_SRC" ]; then
                 cp -rf "$skill_dir"/* "$TARGET_AGENTS/$skill_name/" 2>/dev/null || true
             fi
 
-            # Replicar en el directorio de Gemini/Antigravity
-            if [ -d "$GEMINI_SKILLS" ]; then
-                mkdir -p "$GEMINI_SKILLS/$skill_name"
-                if command -v rsync >/dev/null 2>&1; then
-                    rsync -a --exclude="__pycache__" --exclude="*.pyc" "$skill_dir/" "$GEMINI_SKILLS/$skill_name/" 2>/dev/null || true
-                else
-                    cp -rf "$skill_dir"/* "$GEMINI_SKILLS/$skill_name/" 2>/dev/null || true
-                fi
-            fi
-            if [ -d "/home/zerops/.gemini/antigravity-cli/skills" ] && [ "$HOME" != "/home/zerops" ]; then
-                mkdir -p "/home/zerops/.gemini/antigravity-cli/skills/$skill_name"
-                if command -v rsync >/dev/null 2>&1; then
-                    rsync -a --exclude="__pycache__" --exclude="*.pyc" "$skill_dir/" "/home/zerops/.gemini/antigravity-cli/skills/$skill_name/" 2>/dev/null || true
-                else
-                    cp -rf "$skill_dir"/* "/home/zerops/.gemini/antigravity-cli/skills/$skill_name/" 2>/dev/null || true
-                fi
-            fi
+            # Remover posibles copias congeladas de skills soberanas en perfiles secundarios
+            rm -rf "$GEMINI_SKILLS/$skill_name" "/home/zerops/.gemini/config/skills/$skill_name" "/var/www/.claude/skills/$skill_name" 2>/dev/null || true
 
             # Clasificar si es una extensión dinámica que no pertenece a las suites estándar
             case "$skill_name" in
@@ -101,12 +86,11 @@ if [ -d "$SKILLS_SRC" ]; then
         fi
     done
 
-    # Blindaje Soberano Anti-Deriva: Re-sincronizar y purgar core skills estrictamente desde GitHub
+    # Blindaje Soberano Anti-Deriva: Re-sincronizar core skills hacia .agents y limpiar copias congeladas
     for core_sk in oraculo planner docu research; do
         if [ -d "$SKILLS_LOCAL_CACHE/$core_sk" ]; then
             rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$SKILLS_LOCAL_CACHE/$core_sk/" "$TARGET_AGENTS/$core_sk/"
-            [ -d "$GEMINI_SKILLS" ] && rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$SKILLS_LOCAL_CACHE/$core_sk/" "$GEMINI_SKILLS/$core_sk/" 2>/dev/null || true
-            [ -d "/home/zerops/.gemini/antigravity-cli/skills" ] && rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$SKILLS_LOCAL_CACHE/$core_sk/" "/home/zerops/.gemini/antigravity-cli/skills/$core_sk/" 2>/dev/null || true
+            rm -rf "$GEMINI_SKILLS/$core_sk" "/home/zerops/.gemini/antigravity-cli/skills/$core_sk" "/home/zerops/.gemini/config/skills/$core_sk" 2>/dev/null || true
         fi
     done
 
@@ -160,15 +144,36 @@ if [ -d "$SKILLS_SRC" ]; then
         fi
     fi
 
-    # Sincronizar AGENTS.md y reglas de gobernanza desde SSoT
+    # Sincronizar bloque CUSTOM de AGENTS.md (preservando ZCP:BEGIN y ZEROPS:REFLOG) y reglas canónicas
     if [ -f "$SSOT_ROOT/AGENTS.md" ]; then
-        echo "• Sincronizando AGENTS.md desde Drive SSoT..."
-        cp -f "$SSOT_ROOT/AGENTS.md" "/var/www/AGENTS.md" 2>/dev/null || true
+        echo "• Sincronizando sección CUSTOM de AGENTS.md desde SSoT..."
+        if [ ! -f "/var/www/AGENTS.md" ]; then
+            cp -f "$SSOT_ROOT/AGENTS.md" "/var/www/AGENTS.md" 2>/dev/null || true
+        else
+            python3 - "$SSOT_ROOT/AGENTS.md" "/var/www/AGENTS.md" << 'EOF_MERGE_AGENTS' || true
+import re, sys
+src_p, dst_p = sys.argv[1], sys.argv[2]
+src = open(src_p, "r", encoding="utf-8").read()
+dst = open(dst_p, "r", encoding="utf-8").read()
+m_src = re.search(r'<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->', src, flags=re.S)
+if not m_src:
+    sys.exit(0)
+block = m_src.group(0)
+if re.search(r'<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->', dst, flags=re.S):
+    updated = re.sub(r'<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->', lambda _: block, dst, count=1, flags=re.S)
+else:
+    updated = dst.rstrip() + "\n\n" + block + "\n"
+if updated != dst:
+    with open(dst_p, "w", encoding="utf-8") as wf:
+        wf.write(updated)
+EOF_MERGE_AGENTS
+        fi
     fi
     if [ -d "$SSOT_ROOT/.agents/rules" ]; then
-        echo "• Sincronizando reglas de gobernanza (.agents/rules)..."
-        mkdir -p "/var/www/.agents/rules" "/home/zerops/.gemini/antigravity-cli/rules" 2>/dev/null || true
+        echo "• Sincronizando reglas de gobernanza (.agents/rules -> ~/.gemini/config/rules)..."
+        mkdir -p "/var/www/.agents/rules" "/home/zerops/.gemini/config/rules" 2>/dev/null || true
         cp -rn "$SSOT_ROOT/.agents/rules"/* "/var/www/.agents/rules/" 2>/dev/null || true
+        [ -f "/var/www/.agents/rules/00-SUPREME-DIRECTIVE.md" ] && ln -sfn "/var/www/.agents/rules/00-SUPREME-DIRECTIVE.md" "/home/zerops/.gemini/config/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
     fi
     sudo chown -R zerops:zerops /var/www/.agents /home/zerops/.gemini 2>/dev/null || true
     echo "  ✅ Sincronización de Drive finalizada."
@@ -176,12 +181,10 @@ else
     echo "  ℹ️ No se detectó directorio de Google Drive en $SKILLS_SRC (Omitiendo)."
 fi
 
-# Garantizar paridad de catálogo entre workspace (.agents/skills) y perfil Antigravity
-if [ -d "$TARGET_AGENTS" ]; then
-    mkdir -p "$GEMINI_SKILLS" "/home/zerops/.gemini/antigravity-cli/skills" 2>/dev/null || true
-    cp -rn "$TARGET_AGENTS/"* "$GEMINI_SKILLS/" 2>/dev/null || true
-    [ "$HOME" != "/home/zerops" ] && cp -rn "$TARGET_AGENTS/"* "/home/zerops/.gemini/antigravity-cli/skills/" 2>/dev/null || true
-fi
+# Purgar Grupo E y evitar copias congeladas que sombreen .agents/skills
+for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+    rm -rf "$TARGET_AGENTS/$noise_sk" "$GEMINI_SKILLS/$noise_sk" "/home/zerops/.gemini/antigravity-cli/skills/$noise_sk" "/home/zerops/.gemini/config/skills/$noise_sk" "/var/www/.claude/skills/$noise_sk" 2>/dev/null || true
+done
 
 # Las extensiones descubiertas residen canónicamente en .atl/skill-registry.md para no inflar el prompt de sistema
 echo "• Extensiones de proyecto indexadas en .atl/skill-registry.md (Lean AGENTS.md)"
@@ -189,7 +192,7 @@ echo "• Extensiones de proyecto indexadas en .atl/skill-registry.md (Lean AGEN
 # Compilación del Registro de Gentle AI
 if command -v gentle-ai >/dev/null 2>&1; then
     echo "• Refrescando registro nativo de skills (.atl/skill-registry.md)..."
-    gentle-ai skill-registry refresh --force 2>/dev/null || true
+    gentle-ai skill-registry refresh --cwd /var/www --force --no-gitignore 2>/dev/null || gentle-ai skill-registry refresh --force 2>/dev/null || true
     echo "  ✅ Skill registry refrescado con éxito."
 fi
 

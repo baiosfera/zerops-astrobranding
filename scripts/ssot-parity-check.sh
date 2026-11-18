@@ -76,18 +76,30 @@ compare_agents_md() {
         compare_files "AGENTS.md" "$src_file" "$dst_file"
         return
     fi
-    # ZCP appends a project-scoped <!-- ZEROPS:REFLOG --> block to /var/www/AGENTS.md on bootstrap;
-    # strip it so project telemetry never triggers false SSoT drift against the brand-agnostic upstream.
-    local src_norm dst_norm
-    src_norm=$(python3 -c 'import re,sys; s=open(sys.argv[1]).read(); print(re.sub(r"\n*<!-- ZEROPS:REFLOG -->.*?<!-- /ZEROPS:REFLOG -->\s*", "", s, flags=re.S).rstrip())' "$src_file")
-    dst_norm=$(python3 -c 'import re,sys; s=open(sys.argv[1]).read(); print(re.sub(r"\n*<!-- ZEROPS:REFLOG -->.*?<!-- /ZEROPS:REFLOG -->\s*", "", s, flags=re.S).rstrip())' "$dst_file")
-    if [ "$src_norm" = "$dst_norm" ]; then
-        echo "✓ Parity verified: AGENTS.md (ignoring local ZEROPS:REFLOG)"
-    elif [ "$AUTO_FIX_MODE" = true ]; then
-        cp -f "$src_file" "$dst_file"
-        echo "⚡ Synced (--fix): AGENTS.md ($src_file -> $dst_file)"
+    # Compare strictly the CUSTOM:BEGIN..CUSTOM:END sovereign block so Zerops platform
+    # ZCP:BEGIN..ZCP:END updates and project ZEROPS:REFLOG stay intact without false drift.
+    local src_custom dst_custom
+    src_custom=$(python3 -c 'import re,sys; s=open(sys.argv[1]).read(); m=re.search(r"<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->", s, flags=re.S); print(m.group(0).strip() if m else "")' "$src_file")
+    dst_custom=$(python3 -c 'import re,sys; s=open(sys.argv[1]).read(); m=re.search(r"<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->", s, flags=re.S); print(m.group(0).strip() if m else "")' "$dst_file")
+    if [ -n "$src_custom" ] && [ "$src_custom" = "$dst_custom" ]; then
+        echo "✓ Parity verified: AGENTS.md (CUSTOM block exact; ZCP:BEGIN & ZEROPS:REFLOG preserved)"
+    elif [ "$AUTO_FIX_MODE" = true ] && [ -n "$src_custom" ]; then
+        python3 - "$src_file" "$dst_file" << 'EOF_FIX_AGENTS'
+import re, sys
+src = open(sys.argv[1], "r", encoding="utf-8").read()
+dst = open(sys.argv[2], "r", encoding="utf-8").read()
+m = re.search(r"<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->", src, flags=re.S)
+if m:
+    block = m.group(0)
+    if re.search(r"<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->", dst, flags=re.S):
+        out = re.sub(r"<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->", lambda _: block, dst, count=1, flags=re.S)
+    else:
+        out = dst.rstrip() + "\n\n" + block + "\n"
+    open(sys.argv[2], "w", encoding="utf-8").write(out)
+EOF_FIX_AGENTS
+        echo "⚡ Synced (--fix): AGENTS.md CUSTOM block ($src_file -> $dst_file)"
     else
-        echo "❌ DRIFT detected in AGENTS.md:"
+        echo "❌ DRIFT detected in AGENTS.md CUSTOM block:"
         echo "   SSoT:   $src_file"
         echo "   Target: $dst_file"
         ERRORS=$((ERRORS + 1))
@@ -97,7 +109,70 @@ compare_agents_md() {
 echo "--- [1/5] Governance & Harness SSoT Parity ---"
 compare_agents_md "$CATALOG_REPO/AGENTS.md" "$LOCAL_BASE/AGENTS.md"
 compare_files "00-SUPREME-DIRECTIVE.md (.agents)" "$CATALOG_REPO/.agents/rules/00-SUPREME-DIRECTIVE.md" "$LOCAL_BASE/.agents/rules/00-SUPREME-DIRECTIVE.md"
-compare_files "00-SUPREME-DIRECTIVE.md (~/.gemini)" "$CATALOG_REPO/.agents/rules/00-SUPREME-DIRECTIVE.md" "${HOME:-/home/zerops}/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md"
+compare_files "00-SUPREME-DIRECTIVE.md (~/.gemini/config/rules)" "$CATALOG_REPO/.agents/rules/00-SUPREME-DIRECTIVE.md" "${HOME:-/home/zerops}/.gemini/config/rules/00-SUPREME-DIRECTIVE.md"
+if [ -e "${HOME:-/home/zerops}/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md" ]; then
+    if [ "$AUTO_FIX_MODE" = true ]; then
+        rm -f "${HOME:-/home/zerops}/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md"
+        echo "⚡ Removed obsolete rule copy (~/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md)"
+    else
+        echo "❌ Stale rule file exists in dead path: ~/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md"
+        ERRORS=$((ERRORS + 1))
+    fi
+else
+    echo "✓ Dead rule path clean (~/.gemini/antigravity-cli/rules)"
+fi
+
+# Verify rules budget (<55KB combined active rules + AGENTS.md) and zero obsolete ODD rules
+rules_check_out=$(python3 - << 'EOF_RULES_CHECK'
+import json, os, sys
+home = os.path.expanduser("~")
+rules_dir = os.path.join(home, ".gemini", "config", "rules")
+obsolete = [
+    "gentle-ai-03-orchestrator-part1.md",
+    "gentle-ai-03-orchestrator-part2.md",
+    "gentle-ai-04-agent-routing-part1.md",
+    "gentle-ai-04-agent-routing-part2.md",
+]
+found_obs = [f for f in obsolete if os.path.lexists(os.path.join(rules_dir, f))]
+total_bytes = os.path.getsize("/var/www/AGENTS.md") if os.path.exists("/var/www/AGENTS.md") else 0
+if os.path.isdir(rules_dir):
+    for f in os.listdir(rules_dir):
+        fp = os.path.join(rules_dir, f)
+        if f.endswith(".md") and os.path.exists(fp):
+            total_bytes += os.path.getsize(fp)
+errors = []
+if found_obs:
+    errors.append(f"Obsolete ODD rules present in {rules_dir}: {found_obs}")
+if total_bytes > 55000:
+    errors.append(f"Rules budget overflow: {total_bytes} bytes > 55000 bytes cap")
+
+# Engram singleton verification
+cfg_path = os.path.join(home, ".gemini", "config", "config.json")
+if os.path.isfile(cfg_path):
+    cfg = json.load(open(cfg_path, "r", encoding="utf-8"))
+    engram_plugin_enabled = cfg.get("plugins", {}).get("gentle-ai-engram", {}).get("enabled", True)
+    if engram_plugin_enabled is not False:
+        errors.append("Duplicate plugin gentle-ai-engram still enabled in ~/.gemini/config/config.json")
+mcp_path = os.path.join(home, ".gemini", "config", "mcp_config.json")
+if os.path.isfile(mcp_path):
+    mcp = json.load(open(mcp_path, "r", encoding="utf-8"))
+    engram_srv = mcp.get("mcpServers", {}).get("engram", {})
+    if engram_srv.get("command") != "/var/www/.bin/engram-mcp" or engram_srv.get("cwd") != "/var/www":
+        errors.append(f"Engram MCP misconfigured in mcp_config.json: command={engram_srv.get('command')} cwd={engram_srv.get('cwd')}")
+
+if errors:
+    for e in errors:
+        print("ERR:" + e)
+    sys.exit(1)
+print(f"OK:rules_bytes={total_bytes}")
+EOF_RULES_CHECK
+) && {
+    echo "✓ Rules budget & Engram singleton verified (${rules_check_out#OK:})"
+} || {
+    echo "$rules_check_out" | sed 's/^ERR:/❌ /'
+    ERRORS=$((ERRORS + 1))
+}
+
 compare_files "hooks.json" "$CATALOG_REPO/.agents/hooks.json" "$LOCAL_BASE/.agents/hooks.json"
 compare_files "hooks/tool-guard.py" "$CATALOG_REPO/scripts/hooks/tool-guard.py" "$LOCAL_BASE/.bin/hooks/tool-guard.py"
 compare_files "hooks/test_tool_guard.py" "$CATALOG_REPO/scripts/hooks/test_tool_guard.py" "$LOCAL_BASE/.bin/hooks/test_tool_guard.py"
@@ -178,9 +253,10 @@ if command -v mega-downloader >/dev/null; then
     fi
 fi
 
-echo "--- [4/5] Custom Skills Symlink Isolation ---"
+echo "--- [4/5] Custom Skills Symlink Isolation, Anti-Shadow & Registry ---"
 if [ -d "$SKILLS_REPO" ]; then
     dangling=0
+    shadow_errs=0
     for sk in "$LOCAL_BASE/.agents/skills"/*; do
         [ -e "$sk" ] || [ -L "$sk" ] || continue
         if [ -L "$sk" ] && [ ! -e "$sk" ]; then
@@ -190,6 +266,56 @@ if [ -d "$SKILLS_REPO" ]; then
         fi
     done
     [ "$dangling" -eq 0 ] && echo "✓ Zero broken symlinks in $LOCAL_BASE/.agents/skills"
+
+    for sov in "$SKILLS_REPO"/*/; do
+        [ -f "${sov}SKILL.md" ] || continue
+        sov_name="$(basename "$sov")"
+        if [ ! -L "$LOCAL_BASE/.agents/skills/$sov_name" ]; then
+            echo "❌ Missing sovereign symlink in .agents/skills: $sov_name"
+            ERRORS=$((ERRORS + 1))
+            shadow_errs=$((shadow_errs + 1))
+        fi
+        for sec_dir in "${HOME:-/home/zerops}/.gemini/antigravity-cli/skills" "${HOME:-/home/zerops}/.gemini/config/skills" "$LOCAL_BASE/.claude/skills"; do
+            if [ -e "$sec_dir/$sov_name" ]; then
+                echo "❌ Frozen shadow copy of sovereign skill in $sec_dir/$sov_name"
+                ERRORS=$((ERRORS + 1))
+                shadow_errs=$((shadow_errs + 1))
+            fi
+        done
+    done
+    for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+        for check_dir in "$LOCAL_BASE/.agents/skills" "${HOME:-/home/zerops}/.gemini/antigravity-cli/skills" "${HOME:-/home/zerops}/.gemini/config/skills" "$LOCAL_BASE/.claude/skills" "$LOCAL_BASE/localstorage/skills"; do
+            if [ -e "$check_dir/$noise_sk" ]; then
+                echo "❌ Purged Group E/broken skill still present: $check_dir/$noise_sk"
+                ERRORS=$((ERRORS + 1))
+                shadow_errs=$((shadow_errs + 1))
+            fi
+        done
+    done
+    [ "$shadow_errs" -eq 0 ] && echo "✓ Zero shadowed sovereign skills & zero Group E noise across all skill paths"
+
+    if [ -d "$LOCAL_BASE/localstorage/skills" ]; then
+        if [ -L "$LOCAL_BASE/localstorage/skills/oraculo" ]; then
+            echo "❌ /var/www/localstorage/skills/oraculo is an unresolved symlink (Hermes requires rsync -aL)"
+            ERRORS=$((ERRORS + 1))
+        elif [ ! -f "$LOCAL_BASE/localstorage/skills/oraculo/SKILL.md" ]; then
+            echo "❌ /var/www/localstorage/skills missing live sovereign skills"
+            ERRORS=$((ERRORS + 1))
+        else
+            echo "✓ /var/www/localstorage/skills dereferenced & live for Hermes"
+        fi
+    fi
+
+    REG_FILE="$LOCAL_BASE/.atl/skill-registry.md"
+    if [ ! -s "$REG_FILE" ]; then
+        echo "❌ Missing or empty skill registry: $REG_FILE"
+        ERRORS=$((ERRORS + 1))
+    elif grep -qE '^\- `(jira-epic|jira-task|gentle-ai-bench|gentle-ai-collab-perfect|rdd-advisory-transport|rdd-defect-workflow|migrate-to-shoehorn|scaffold-exercises|django-drf)`' "$REG_FILE"; then
+        echo "❌ Stale Group E entries found in $REG_FILE (run zcp-update / gentle-ai skill-registry refresh)"
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "✓ Skill registry clean and up to date ($REG_FILE)"
+    fi
 fi
 
 echo "--- [5/5] Git Cleanliness & Remote Parity ---"

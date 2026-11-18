@@ -35,7 +35,7 @@ SYNCED=0
 DRIFT_COUNT=0
 
 # Anti-Pollution Shield: Upstream / framework skills remain purely in runtime/git, not in SSoT custom skills
-EXCLUDED_REGEX="^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*)$"
+EXCLUDED_REGEX="^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*|karpathy.*|using-superpowers|brainstorming|dispatching-parallel-agents|executing-plans|finishing-a-development-branch|receiving-code-review|requesting-code-review|subagent-driven-development|systematic-debugging|test-driven-development|using-git-worktrees|verification-before-completion|writing-plans|writing-skills|ask-matt|chief-of-staff|claude-handoff|code-review|codebase-design|diagnosing-bugs|domain-modeling|git-guardrails-claude-code|grill-me|grill-with-docs|grilling|handoff|implement|implement-spec|improve-codebase-architecture|loop-me|migrate-to-shoehorn|pr|prototype|retro|scaffold-exercises|setup-matt-pocock-skills|setup-pre-commit|setup-ts-deep-modules|software-factory|tdd|teach|to-questionnaire|to-spec|to-tickets|triage|wait-what|wayfinder|wizard|writing-beats|writing-for-agents|writing-fragments|writing-shape)$"
 
 # Determinar universo canónico de skills soberanas desde zerops-astro-skills y Drive SSoT
 declare -A SOVEREIGN_SET
@@ -111,6 +111,21 @@ if [ "$CHECK_ONLY" = true ]; then
         echo "❌ Se detectaron $DRIFT_COUNT skill(s) con drift. Ejecutá 'skills-sync' para resolver."
         exit 1
     fi
+fi
+
+# Clean secondary shadow copies of sovereign skills, purge Group E, sync localstorage & refresh index
+for sov_sk in "${!SOVEREIGN_SET[@]}"; do
+    rm -rf "$HOME/.gemini/antigravity-cli/skills/$sov_sk" "$HOME/.gemini/config/skills/$sov_sk" "/var/www/.claude/skills/$sov_sk" 2>/dev/null || true
+done
+for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+    rm -rf "$LOCAL_SKILLS/$noise_sk" "$HOME/.gemini/antigravity-cli/skills/$noise_sk" "$HOME/.gemini/config/skills/$noise_sk" "/var/www/.claude/skills/$noise_sk" "/var/www/localstorage/skills/$noise_sk" 2>/dev/null || true
+done
+if [ -d "/var/www/localstorage" ]; then
+    mkdir -p "/var/www/localstorage/skills"
+    rsync -aL --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" --exclude=".git" --exclude="AGENTS.md" "$LOCAL_SKILLS/" "/var/www/localstorage/skills/" 2>/dev/null || true
+fi
+if command -v gentle-ai >/dev/null 2>&1; then
+    gentle-ai skill-registry refresh --cwd /var/www --force --no-gitignore >/dev/null 2>&1 || true
 fi
 
 echo "------------------------------------------------------------"
