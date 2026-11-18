@@ -154,6 +154,20 @@ class TestVaultEnv(unittest.TestCase):
             self.assertEqual(discovered, [str(extra_pool), str(sibling_pool)])
             self.assertEqual(len(discovered), len(set(discovered)))
 
+    def test_discover_freellm_pools_from_parent_keys_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            users_apis = Path(tmpdir) / "users-apis"
+            users_apis.mkdir()
+            global_keys = users_apis / "api_keys_global"
+            global_keys.write_text("DEEPSEEK_API_KEY=sk-test\n", encoding="utf-8")
+            pool_dir = users_apis / "PoolA"
+            pool_dir.mkdir()
+            nested_pool = pool_dir / "pool_a_freellm.md"
+            nested_pool.write_text("- **Plataforma:** `groq`\n- **API Key:** `gsk_test123`\n", encoding="utf-8")
+
+            discovered = discover_freellm_pools(global_keys)
+            self.assertEqual(discovered, [str(nested_pool)])
+
     def test_resolve_project_vault_payload_is_independent(self):
         payload = resolve_project_vault_payload(
             {

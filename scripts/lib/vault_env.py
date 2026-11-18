@@ -281,6 +281,9 @@ def discover_freellm_pools(
         if kf.is_file():
             for cand in sorted(kf.parent.glob("*_freellm.md")):
                 _add(cand)
+            if not pools and kf.parent.is_dir():
+                for cand in sorted(kf.parent.glob("*/*_freellm.md")):
+                    _add(cand)
             if not pools and kf.parent.parent.is_dir():
                 for cand in sorted(kf.parent.parent.glob("*/*_freellm.md")):
                     _add(cand)

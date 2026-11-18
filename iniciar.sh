@@ -23,12 +23,18 @@ EXPLICIT_KEYS_FILE=""
 PROJECT_OVERRIDE=""
 
 parse_args() {
+  if [ "$(basename "$0")" = "zcp-update" ]; then
+    UPDATE_ONLY=true
+  fi
   local args=("$@")
   local i=0
   while [ "$i" -lt "${#args[@]}" ]; do
     case "${args[$i]}" in
       --update)
         UPDATE_ONLY=true
+        ;;
+      --full)
+        UPDATE_ONLY=false
         ;;
       --skip-vault)
         SKIP_VAULT=true
@@ -42,7 +48,7 @@ parse_args() {
         PROJECT_OVERRIDE="${args[$i]:-}"
         ;;
       -h|--help)
-        echo "Uso: iniciar.sh [--update] [--keys /path/to/keys.md] [--project <slug>] [--skip-vault]"
+        echo "Uso: iniciar.sh [--update|--full] [--keys /path/to/keys.md] [--project <slug>] [--skip-vault]"
         exit 0
         ;;
     esac
@@ -105,7 +111,7 @@ link_skills() {
 
 link_bin() {
   mkdir -p "$LOCAL_BIN" "$LOCAL_BIN/hooks" "$HOME/.local/bin"
-  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli apotelos brand-play engram-sync engram-mcp zeropsenv seed-project-vault.sh seed-freellmapi-keys.sh setup-gh.sh harden-postgres-quotas.sh zcp-mount zcp-mail zcp-preflight-gate; do
+  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli apotelos brand-play engram-sync engram-mcp zeropsenv seed-project-vault.sh seed-freellmapi-keys.sh setup-gh.sh harden-postgres-quotas.sh zcp-mount zcp-mail.sh zcp-preflight-gate.sh zcp-wa.sh; do
     if [ -f "$CATALOG_DIR/scripts/$s" ]; then
       chmod +x "$CATALOG_DIR/scripts/$s"
       local bin_name="${s%.sh}"
@@ -208,6 +214,7 @@ if os.path.isfile(mcp_path):
         with open(mcp_path, "w", encoding="utf-8") as wf:
             json.dump(mcp, wf, indent=2)
             wf.write("\n")
+        os.chmod(mcp_path, 0o600)
     except Exception:
         pass
 EOF_ENGRAM_SINGLETON
@@ -298,9 +305,10 @@ hydrate_project_vault() {
   fi
 
   if [ -x "/usr/local/bin/zcp" ]; then
-    "$LOCAL_BIN/zeropsenv" sync "${proj_args[@]}" "$keys_file"
     if [ -x "$LOCAL_BIN/seed-project-vault" ]; then
       "$LOCAL_BIN/seed-project-vault" --keys "$keys_file" "${proj_args[@]}"
+    else
+      "$LOCAL_BIN/zeropsenv" sync "${proj_args[@]}" "$keys_file"
     fi
     if [ -x "$LOCAL_BIN/seed-freellmapi-keys" ]; then
       "$LOCAL_BIN/seed-freellmapi-keys" --keys "$keys_file" "${proj_args[@]}"
@@ -324,6 +332,9 @@ main() {
   sync_repo "$CATALOG_REPO" "$CATALOG_DIR"
   if [ "${INICIAR_REEXEC:-0}" != "1" ] && [ -f "$REPO_DIR/iniciar.sh" ]; then
     export INICIAR_REEXEC=1
+    if [ "$UPDATE_ONLY" = true ]; then
+      exec bash "$REPO_DIR/iniciar.sh" --update "$@"
+    fi
     exec bash "$REPO_DIR/iniciar.sh" "$@"
   fi
   sync_repo "$SKILLS_REPO" "$SKILLS_DIR"
