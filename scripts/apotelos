@@ -1038,16 +1038,11 @@ def get_local_storage_path() -> Path:
 
 
 def resolve_playbooks_dir() -> Optional[Path]:
-    """Resolve playbooks directory in priority order (NVMe POSIX first, FUSE SSoT second)."""
+    """Resolve playbooks directory from the single canonical SSoT."""
     candidates = [
-        Path("/mnt/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
-        Path("/var/www/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
-        Path("/mnt/localstorage/playbooks"),
-        Path("/var/www/localstorage/playbooks"),
-        get_local_storage_path() / "playbooks",
-        Path("/var/www/baiosfera/KNOWLEDGE_HUB/03_PLAYBOOKS_MAESTROS"),
-        Path("/var/www/baiosfera/PLAYBOOKS"),
-        Path("/var/www/zerops-astrobranding/templates/playbooks")
+        Path("/mnt/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"),
+        Path("/var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"),
+        Path("/var/www/baiosfera/KNOWLEDGE_HUB/02_PLAYBOOKS_MAESTROS"),
     ]
     for c in candidates:
         if c.exists() and c.is_dir():
@@ -1056,19 +1051,16 @@ def resolve_playbooks_dir() -> Optional[Path]:
 
 
 def resolve_playbook_path(playbook_name: str) -> Optional[Path]:
-    """Resolve a specific playbook file (e.g. 00_category_of_one.md)."""
+    """Resolve a specific playbook file from the single canonical SSoT."""
     p_dir = resolve_playbooks_dir()
     if p_dir:
         target = p_dir / playbook_name
         if target.exists() and target.is_file():
             return target
     for base in [
-        Path("/mnt/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
-        Path("/var/www/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
-        Path("/mnt/localstorage/playbooks"),
-        Path("/var/www/localstorage/playbooks"),
-        Path("/var/www/baiosfera/KNOWLEDGE_HUB/03_PLAYBOOKS_MAESTROS"),
-        Path("/var/www/baiosfera/PLAYBOOKS"),
+        Path("/mnt/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"),
+        Path("/var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"),
+        Path("/var/www/baiosfera/KNOWLEDGE_HUB/02_PLAYBOOKS_MAESTROS"),
     ]:
         cand = base / playbook_name
         if cand.exists() and cand.is_file():
@@ -1611,7 +1603,7 @@ def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerti
     }
 
     # Domino 0 (τε-0): Mecanismo Único Monopolístico
-    coo_path = resolve_playbook_path("00_category_of_one.md") or resolve_playbook_path("00_category_of_one_playbook.md")
+    coo_path = resolve_playbook_path("00_category_of_one.md")
     p_dir = resolve_playbooks_dir()
     grounding = {
         "brand_slug": eco.brand_slug,
@@ -1733,7 +1725,7 @@ def generate_markdown_dossier(eco: UniversalBrandEcosystem, output_path: Optiona
         "    D4[\"Dominó 4 (τε-Final): Conversión & Cobro<br>Checkout, pasarelas o booking calendar\"] --> D3[\"Dominó 3 (τε-1): Telemetría & Atribución<br>CAPI SHA-256 + 1st-party cookie 90d\"]",
         "    D3 --> D2[\"Dominó 2 (τε-2): Descubrimiento AI/SEO<br>/llms.txt + Schema.org @graph\"]",
         "    D2 --> D1[\"Dominó 1 (τε-3): Copywriting & Oferta<br>Hook 3s + Hormozi Equation\"]",
-        "    D1 --> D0[\"Dominó 0 (τε-0): Mecanismo Único<br>00_category_of_one_playbook.md\"]",
+        "    D1 --> D0[\"Dominó 0 (τε-0): Mecanismo Único<br>00_category_of_one.md\"]",
         "```",
         "",
         "- **Dominó 0 (τε-0)**: Mecanismo Único Monopolístico y Category of One (`grounding`).",

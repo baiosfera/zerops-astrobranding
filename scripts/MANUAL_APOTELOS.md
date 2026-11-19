@@ -53,7 +53,7 @@ flowchart RL
 
 ### Dominó 0 ($\tau\epsilon$-0): El Primer Dominó (Mecanismo Único Monopolístico)
 - **Propósito**: La raíz doctrinal inmutable que hace que la oferta sea incomparable frente a commodities.
-- **Invariantes**: Extraído de [`00_category_of_one_playbook.md`](file:///var/www/baiosfera/PLAYBOOKS/00_category_of_one_playbook.md) y [`brandbook.json`](file:///var/www/zerops-astrobranding/brandbook.json). Define el monopolio personal del cliente o marca.
+- **Invariantes**: Extraído de [`00_category_of_one.md`](file:///var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS/00_category_of_one.md) y [`brandbook.json`](file:///var/www/zerops-astrobranding/brandbook.json). Define el monopolio personal del cliente o marca.
 - **Contrato de Salida**: `unique_mechanism` con nombre propietario, vehículo y contraste de alternativas.
 
 ---

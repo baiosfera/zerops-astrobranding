@@ -16,8 +16,8 @@ Opera bajo una frontera técnica infranqueable:
 |---|---|---|
 | **`knowledge-sync`** (`knowledge_sync.py`) | **Software Determinista (Python puro, cero LLM, cero tokens)** | **Obrera de datos e infraestructura:** Escanea cursos, perfila la densidad de texto real para clasificar en las 18 especialidades, extrae subtítulos y audio de videos huérfanos, genera compendios limpios de Markdown (`compact`), gestiona la bitácora append-only (`.knowledge_manifest/`) y sube fuentes vía API a NotebookLM. **Python NO razona ni extrae playbooks.** |
 | **`knowledge-engine`** | **Cognitiva / LLM (Skill de AGY)** | **Estratega cognitivo:** Ejecutado por un **subagente AGY** que consulta NotebookLM (`nlm chat` / Gemini 1.5 Pro) para interrogar las fuentes indexadas y redactar los playbooks. |
-| **Playbooks Universales** (`/var/www/baiosfera/PLAYBOOKS/`) | **Base de Conocimiento SSoT (100% Genérica y Agnóstica)** | **Marcos y heurísticas puras:** Playbooks de Customer Value Journey, Hormozi, StoryBrand, etc. **PROHIBIDO incluir nombres de clientes, marcas o tokens específicos.** Son 100% universales. |
-| **Agentes de Proyecto (Downstream)** | **Aplicación a Marcas** | Agentes en workspaces específicos (ej. `ElPlacerDC`, `Catalina Glamur`) que leen los playbooks genéricos de `/var/www/baiosfera/PLAYBOOKS/` y los aplican al contexto particular de su cliente. |
+| **Playbooks Universales** (`/var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS/`) | **Base de Conocimiento SSoT (100% Genérica y Agnóstica)** | **Marcos y heurísticas puras:** Playbooks de Customer Value Journey, Hormozi, StoryBrand, etc. **PROHIBIDO incluir nombres de clientes, marcas o tokens específicos.** Son 100% universales. |
+| **Agentes de Proyecto (Downstream)** | **Aplicación a Marcas** | Agentes en workspaces específicos (ej. `ElPlacerDC`, `Catalina Glamur`) que leen los playbooks genéricos de `/var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS/` y los aplican al contexto particular de su cliente. |
 
 ---
 

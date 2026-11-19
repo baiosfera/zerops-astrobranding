@@ -35,24 +35,16 @@ sync_ecosystem_core() {
     echo "  🌐 Sincronizando Núcleo Universal (Playbooks, Templates, Binarios)"
     echo "============================================================"
     
-    # 1. Playbooks Universales & Bancos Tácticos (Drive KNOWLEDGE_HUB -> Storage)
+    # 1. Playbooks Universales SSoT (Drive KNOWLEDGE_HUB/02_PLAYBOOKS_MAESTROS -> Storage)
     local hub_drive="/var/www/baiosfera/KNOWLEDGE_HUB"
-    local dst_pb="$STORAGE_BASE/knowledge_hub/03_PLAYBOOKS_MAESTROS"
-    local dst_tb="$STORAGE_BASE/knowledge_hub/04_BANCOS_TACTICOS"
-    if [ -d "$hub_drive/03_PLAYBOOKS_MAESTROS" ]; then
+    local dst_pb="$STORAGE_BASE/knowledge_hub/02_PLAYBOOKS_MAESTROS"
+    if [ -d "$hub_drive/02_PLAYBOOKS_MAESTROS" ]; then
         echo "• [Core 1/3] Sincronizando Playbooks Universales desde Drive KNOWLEDGE_HUB..."
-        mkdir -p "$dst_pb" "$dst_tb"
-        cp -u "$hub_drive/03_PLAYBOOKS_MAESTROS"/*.md "$dst_pb/" 2>/dev/null || true
-        [ -f "$hub_drive/03_PLAYBOOKS_MAESTROS/INDEX.json" ] && cp -u "$hub_drive/03_PLAYBOOKS_MAESTROS/INDEX.json" "$dst_pb/" 2>/dev/null || true
-        [ -d "$hub_drive/04_BANCOS_TACTICOS" ] && cp -u "$hub_drive/04_BANCOS_TACTICOS"/*.md "$dst_tb/" 2>/dev/null || true
+        mkdir -p "$dst_pb"
+        rsync -au --delete "$hub_drive/02_PLAYBOOKS_MAESTROS/" "$dst_pb/" 2>/dev/null || cp -u "$hub_drive/02_PLAYBOOKS_MAESTROS"/* "$dst_pb/" 2>/dev/null || true
         [ -d "$STORAGE_BASE/playbooks" ] && [ ! -L "$STORAGE_BASE/playbooks" ] && rm -rf "$STORAGE_BASE/playbooks"
         ln -sfn "$dst_pb" "$STORAGE_BASE/playbooks"
         echo "  ✓ Playbooks universales asegurados en $dst_pb (alias $STORAGE_BASE/playbooks)"
-    elif [ -d "/var/www/baiosfera/PLAYBOOKS" ]; then
-        echo "• [Core 1/3] Sincronizando Playbooks Universales desde Drive PLAYBOOKS..."
-        mkdir -p "$STORAGE_BASE/playbooks"
-        cp -u /var/www/baiosfera/PLAYBOOKS/*.md "$STORAGE_BASE/playbooks/" 2>/dev/null || true
-        echo "  ✓ Playbooks universales asegurados en $STORAGE_BASE/playbooks"
     fi
 
     # 2. Plantillas Operacionales y Componentes Lego Astro (Repo -> Storage)

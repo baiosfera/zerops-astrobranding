@@ -12,7 +12,7 @@ Subir lecciones individuales fragmentadas desborda de inmediato los límites de 
 - **NotebookLM Pro**: Límite estricto de **300 fuentes por cuaderno**, con ventana masiva de **500.000 palabras por fuente**.
 - **Compactación Canónica**: Convierte 20 a 50 lecciones dispersas de un curso en **1 solo compendio maestro** estructurado en Markdown, reduciendo el consumo de fuentes en **>85%**.
 - **Cuadernos 100% Temáticos**: No existen cuadernos por proveedor ("Cuaderno Platzi"). Existen **11 Cuadernos por Especialidad** (`FUNNELS`, `COPYWRITING`, `OFERTAS`, etc.) donde convive y se cruza el conocimiento de todas las academias.
-- **Playbooks 100% Agnósticos**: Los artefactos generados en `/var/www/baiosfera/PLAYBOOKS/` son frameworks algorítmicos puros, sin menciones a marcas de academias ni autores, listos para transmutarse por las marcas activas de Zerops.
+- **Playbooks 100% Agnósticos**: Los artefactos generados en `/var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS/` (y Drive `KNOWLEDGE_HUB/02_PLAYBOOKS_MAESTROS/`) son frameworks algorítmicos puros, sin menciones a marcas de academias ni autores, listos para transmutarse por las marcas activas de Zerops.
 
 ---
 
@@ -122,7 +122,7 @@ Los cuadernos en Google NotebookLM Pro están indexados con títulos canónicos:
                  │
                  ▼ 4. Síntesis Agéntica (knowledge-engine)
 ┌─────────────────────────────────┐
-│  /var/www/baiosfera/PLAYBOOKS/  │  <- Playbooks 100% Agnósticos (Zero-Brand Slop)
+│  /var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS/  │  <- Playbooks 100% Agnósticos (Zero-Brand Slop)
 └────────────────┬────────────────┘
                  │
                  ▼ 5. Infusión de Marca Local (Brandbook Tokens)

@@ -18,15 +18,10 @@ try:
 except ImportError:
     yaml = None
 
-# SSoT Search Paths (Knowledge Hub SSoT first, zero legacy MentorIA paths)
+# SSoT Search Paths (Single canonical 02_PLAYBOOKS_MAESTROS SSoT)
 PLAYBOOK_SEARCH_DIRS = [
-    Path("/var/www/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
-    Path("/mnt/localstorage/knowledge_hub/03_PLAYBOOKS_MAESTROS"),
-    Path("/var/www/localstorage/knowledge_hub/04_BANCOS_TACTICOS"),
-    Path("/mnt/localstorage/knowledge_hub/04_BANCOS_TACTICOS"),
-    Path("/var/www/localstorage/knowledge_service/playbooks"),
-    Path("/mnt/localstorage/knowledge_service/playbooks"),
-    Path("/var/www/zerops-astrobranding/templates/playbooks"),
+    Path("/mnt/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"),
+    Path("/var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"),
 ]
 
 WORKSPACE_SEARCH_DIRS = [
@@ -202,7 +197,7 @@ def resolve_playbook_path(playbook_name: str) -> Optional[Path]:
         candidates.append(f"{cleaned}.md")
         candidates.append(f"{cleaned}_playbook.md")
     if not cleaned.startswith("00_") and "category" in cleaned:
-        candidates.append("00_category_of_one_playbook.md")
+        candidates.append("00_category_of_one.md")
 
     for p_dir in PLAYBOOK_SEARCH_DIRS:
         if not p_dir.exists():
@@ -427,6 +422,9 @@ def hydrate_playbook(parsed_playbook: Dict[str, Any], brandbook: Dict[str, Any])
 
     hydrated_blocks = []
     for block in parsed_playbook.get("modular_blocks", []):
+        if isinstance(block, str):
+            hydrated_blocks.append({"block_id": block, "title": block, "hydrated_content": ""})
+            continue
         raw_tmpl = block.get("unhydrated_template", "")
         hyd_tmpl = slot_pattern.sub(replace_slot_match, raw_tmpl)
         block_copy = dict(block)

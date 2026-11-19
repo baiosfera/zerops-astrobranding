@@ -96,7 +96,7 @@ Para que ningún agente (AGY, Hermes o Pidev) en un ZCP limpio opere a ciegas, l
 - **Ejecutor:** Daemon de Hermes dentro del contenedor LXC `hermes` (Ubuntu Python 3.12).
 - **Harness Soberano:** Gentle-AI Adapter (`gentle-ai install --agents hermes`), `SOUL.md`, Engram MCP (`/mnt/localstorage/engram`) y PydanticAI Schema Governor con `ModelRetry`.
 - **Skills Canónicas:** `hermes-agent`, `growth-engine`, `sales-enablement`, `seo-aeo-geo`, `cohalo`.
-- **Playbooks de Referencia:** `/var/www/localstorage/playbooks/` (los 19 playbooks, incluyendo `00_category_of_one_playbook.md`, `copywriting_vanguard_playbook.md`, `lead_conversion_playbook.md`).
+- **Playbooks de Referencia:** `/var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS/` (alias `/var/www/localstorage/playbooks/`, incluyendo `00_category_of_one.md` y los playbooks maestros por categoría).
 - **Alcance:**
   1. Inicialización de Gentle-AI en Hermes (`gentle-ai install --agents hermes`) con conexión a Engram y Context7.
   2. Carga de los 19 Playbooks Universales desde `/mnt/localstorage/playbooks/`.
@@ -134,7 +134,7 @@ Para que ningún agente (AGY, Hermes o Pidev) en un ZCP limpio opere a ciegas, l
      - *Etapa 3 (Curaduría en `dev/verticals/`)*: Tras la aprobación humana, materializar únicamente los contratos JSON curados (`ecosystem.json`, `<slug>.json`). **Prohibición física**: Nunca copiar `.docx` o `.pdf` crudos a `dev/verticals/`.
   2. Aplicación de la ontología de Reversa Causal ($\tau\epsilon$-Final $\to \tau\epsilon$-0) sobre la marca y sus verticales (`.apotelos/ecosystem.yaml` o `brandbook.json`).
   3. Evaluación estricta de Category of One:
-     - **Marcas Personales / Firmas Monopolísticas:** Extracción obligatoria del Mecanismo Único de [`00_category_of_one_playbook.md`](file:///var/www/localstorage/playbooks/00_category_of_one_playbook.md).
+     - **Marcas Personales / Firmas Monopolísticas:** Extracción obligatoria del Mecanismo Único de [`00_category_of_one.md`](file:///var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS/00_category_of_one.md).
      - **E-Commerce / Retail Genérico:** Opcional (deriva a un mecanismo de producto o garantía sin forzar monopolio conceptual).
   4. Compilación de los Blackboard manifests en `/.apotelos/manifests/{brand}_{vertical}.json`.
   5. Mapeo agnóstico de canales de mensajería (TOFU/MOFU/BOFU) según el modelo de negocio (sin presunciones de e-commerce retail).
