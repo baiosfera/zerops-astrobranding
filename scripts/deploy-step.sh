@@ -25,7 +25,7 @@ Comandos:
   3             Aprovisionar Hito 3: nats + hermes
   4             Aprovisionar Hito 4: evolution
   5             Aprovisionar Hito 5: listmonk
-  6             Aprovisionar Hito 6: objectstorage + astrobranding
+  6             Aprovisionar Hito 6: astrobranding (astro-web; objectstorage opcional en recipes/services/04-objectstorage.yaml)
   8             Aprovisionar Hito 8: videoworker (Motor Efímero de Video / Costo Cero)
   9 [pi|qwen|goose] Aprovisionar Hito 9: Motor de código (pidev, qwendev o goosedev)
   10            Aprovisionar Hito 10: paperclip (Paperclip Governance & Spend Caps Watchdog)
@@ -124,7 +124,7 @@ case "$STEP" in
         ;;
     6)
         RECIPE="$RECIPES_DIR/06-astro-web.yaml"
-        log_info "==> Hito 6: Aprovisionando 'objectstorage' y 'astrobranding'..."
+        log_info "==> Hito 6: Aprovisionando 'astrobranding' (webprod; para S3 ver recipes/services/04-objectstorage.yaml)..."
         if command -v zcli >/dev/null 2>&1; then
             zcli service import "$RECIPE" || log_warn "Importación manual requerida o ya importada."
         else
