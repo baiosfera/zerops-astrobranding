@@ -494,11 +494,12 @@ export async function collectZeropsInfra(keys: Record<string, string>): Promise<
 
   // Dynamic Candidate Services Discovery via DNS & Probes
   const candidateRuntimes = [
-    { hostname: "astrobranding", type: "ubuntu/bun@1.3.9", port: 3000 },
+    { hostname: "webdev", type: "ubuntu/bun@1.3.9", port: 4321 },
+    { hostname: "webprod", type: "ubuntu/bun@1.3.9", port: 4321 },
     { hostname: "bifrost", type: "alpine/go@1.22", port: 8080 },
     { hostname: "freellmapi", type: "ubuntu/nodejs@24", port: 3001 },
     { hostname: "hermes", type: "ubuntu/python@3.12", port: 8000 },
-    { hostname: "evolution", type: "alpine/go@1.22", port: 8080 },
+    { hostname: "evolution", type: "alpine/go@1.22", port: 8085 },
   ];
 
   for (const svc of candidateRuntimes) {

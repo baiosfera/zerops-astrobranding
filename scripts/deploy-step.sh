@@ -224,7 +224,7 @@ case "$STEP" in
                 ;;
             6)
                 log_info "Probando sensor de Astro-Web..."
-                URL="${ASTRO_URL:-http://astrobranding:3000}"
+                URL="${ASTRO_URL:-http://webdev:4321}"
                 curl -fsS --max-time 10 "$URL/health" && log_ok "Astro-Web responde OK" || log_err "Fallo al conectar con $URL/health"
                 ;;
             8)

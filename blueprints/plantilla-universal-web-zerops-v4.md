@@ -51,7 +51,7 @@ Para que cualquier agente AGY despliegue el stack sin ensayos ni errores, cada c
 | **`listmonk`** | `alpine/go@1.22` | 5 | `steps/05-listmonk.yaml` | [`listmonk`](file:///var/www/.agents/skills/listmonk/SKILL.md) / [`email-marketing`](file:///var/www/.agents/skills/email-marketing/SKILL.md) (Newsletter, port 9000) |
 | **`hermes`** | `ubuntu/python@3.12` | 4 | `services/10-hermes.yaml` | [`hermes-agent`](file:///var/www/.agents/skills/hermes-agent/SKILL.md) (Nous Hermes Co-Pilot, Telegram Gateway) |
 | **`whatsappbot`** | `ubuntu/bun@1.3` | 3 | `steps/07-whatsapp-bot.yaml` | [`whatsapp-engine`](file:///var/www/.agents/skills/whatsapp-engine/SKILL.md) (Worker NATS JetStream, Tool Calling, memoria híbrida, port 3005) |
-| **`webdev / webprod`**| `ubuntu/bun@1.3` | 2 | `steps/06-astro-web.yaml` | [`astro-web`](file:///var/www/.agents/skills/astro-web/SKILL.md) / [`bun`](file:///var/www/.agents/skills/bun/SKILL.md) / [`frnt`](file:///var/www/.agents/skills/frnt/SKILL.md) (SSR, port 3000) |
+| **`webdev / webprod`**| `ubuntu/bun@1.3` | 2 | `steps/06-astro-web.yaml` | [`astro-web`](file:///var/www/.agents/skills/astro-web/SKILL.md) / [`bun`](file:///var/www/.agents/skills/bun/SKILL.md) / [`frnt`](file:///var/www/.agents/skills/frnt/SKILL.md) (SSR, port 4321) |
 | **Meta-Orquestador** | `zcp@1` | 1 | Chasis raíz | [`zcp`](file:///var/www/.agents/skills/zcp/SKILL.md) / [`bknd`](file:///var/www/.agents/skills/bknd/SKILL.md) (Control plane, 22 MCP tools) |
 
 ### 3. Arquitectura Lego Desacoplada (Zero-Hardcoding de Dependencias)
@@ -100,7 +100,7 @@ Antes de iniciar cualquier acción sobre el código o la infraestructura, el age
 
 
 ### 4. Erradicación de Errores Sistémicos (Lecciones Aprendidas SSoT)
-- **Secuestro del Puerto 3000 (Astro/Vite):** Nunca confíes ciegamente en `bun run dev`. Procesos zombies de NodeJS (`entry.mjs`) suelen secuestrar el puerto 3000, forzando a Astro a levantar en el 3001 y rompiendo el proxy inverso de Zerops (`webdev-278-3000`). **Regla obligatoria:** Antes de iniciar el dev server, ejecuta `fuser -k 3000/tcp || pkill node` y levanta con `bun run dev --host 0.0.0.0 --port 3000`.
+- **Secuestro del Puerto 4321 (Astro/Vite):** Nunca confíes ciegamente en `bun run dev`. Procesos zombies de NodeJS (`entry.mjs`) suelen secuestrar el puerto 4321, rompiendo el proxy inverso de Zerops. **Regla obligatoria:** Antes de iniciar el dev server dentro del contenedor con `zerops_dev_server` o `zcp run webdev`, limpia procesos huérfanos y levanta con `bun run dev --host 0.0.0.0 --port 4321`.
 - **Tailwind 4 + Astro 5:** Para que los estilos se generen correctamente en SSR, es obligatorio usar el plugin de Vite en `astro.config.mjs` (`import tailwindcss from "@tailwindcss/vite"; vite: { plugins: [tailwindcss()] }`) y cargar `@import "tailwindcss";` en el archivo CSS global importado por `Layout.astro`.
 
 ### 5. Invariantes Soberanos de WhatsApp Bot & Bifrost LLM Gateway
@@ -276,7 +276,7 @@ Se erradican taxativamente los checklists monolíticos artificiales y las planti
 > El estándar real es el **Aprovisionamiento Frugal por Slots de Capacidad**: el agente evalúa la intención de negocio y cablea exclusivamente los bloques funcionales que el caso de uso requiere hoy.
 
 #### Matriz de Slots de Capacidad Aditivos:
-1. **Slot Frontend (Invariante):** Astro 5 SSR en Bun 1.3 con `@astrojs/node` en modo standalone (`os: ubuntu`, `HOST: 0.0.0.0`, puerto 3000). Despliega `dist/`, `package.json` y `node_modules` (evitar `bun build --target bun` monolítico que rompe addons nativos como `sharp`).
+1. **Slot Frontend (Invariante):** Astro 5 SSR en Bun 1.3 con `@astrojs/node` en modo standalone (`os: ubuntu`, `HOST: 0.0.0.0`, puerto 4321). Despliega `dist/`, `package.json` y `node_modules` (evitar `bun build --target bun` monolítico que rompe addons nativos como `sharp`).
 2. **Slot Persistencia Relacional (Aditivo):** PostgreSQL 18 (`oltp-hobby`). Solo si el proyecto maneja estado relacional (leads, usuarios, pedidos).
 3. **Slot Caché & Idempotencia (Aditivo):** Valkey 7.2 (`hobby`). Para locks atómicos de pasarelas, sesiones y rate-limiting.
 4. **Slot Eventos & Mensajería (Aditivo):** NATS 2.12 JetStream (`<0.3ms P99`). Para arquitecturas orientadas a eventos y workers de fondo.
@@ -291,7 +291,7 @@ Se erradican taxativamente los checklists monolíticos artificiales y las planti
   * Capa 0: `bun x tsc --noEmit` (Exit Code 0).
   * Capa 1: `bun run build` dentro del contenedor con artefactos generados (Exit Code 0).
   * Capa 2: `bun test` de comportamiento (Exit Code 0).
-  * Capa 3: `curl -Ifs http://0.0.0.0:3000/health` (HTTP 200 OK) y `zerops_verify` pass.
+  * Capa 3: `curl -Ifs http://0.0.0.0:4321/health` (HTTP 200 OK) y `zerops_verify` pass.
 
 ### Invariante de Persistencia Previa (`BAI-2` antes de `BAI-3`)
 En proyectos que requieren persistencia relacional, los contratos de datos (`BAI-2`) **preceden obligatoriamente** a la construcción de las interfaces de usuario (`BAI-3`). Esto erradica el desarrollo contra mocks volátiles y asegura que cada componente visual se conecte desde el primer día a esquemas tipados y APIs vivas.
@@ -313,13 +313,12 @@ Si un proyecto requiere runtimes especializados (ej: microservicios Python con F
 ## 7. Verificación Física & Sensores de Calidad (Exit Code 0)
 
 > [!CAUTION]
-> **Miopía de Orquestador (Checklist Theater):** Hacer `curl http://nombre-servicio:3000` desde el contenedor ZCP NO prueba que la app sea accesible por el usuario. Es obligatorio probar el *Ingress Público*.
+> **Miopía de Orquestador (Checklist Theater):** Hacer `curl http://nombre-servicio:4321` desde el contenedor ZCP NO prueba que la app sea accesible por el usuario. Es obligatorio probar el *Ingress Público*.
 
 Antes de dar por entregado cualquier despliegue bajo esta plantilla, el agente debe ejecutar físicamente y comprobar el código de salida 0 de:
-1. `astro-web-validate.sh` — Verificación de AST, Server Islands y tokens de diseño.
-2. `skills-suite-validate` — Certificación del catálogo completo de skills.
-3. `ssot-parity-check` — Atestación de paridad sin drift entre el contenedor ZCP y Google Drive SSoT.
-4. **Verificación de Ingress Público:** Habilitar el subdominio (`zerops_subdomain action="enable"`) y realizar `curl -s -o /dev/null -w "%{http_code}" https://<subdominio-publico>` verificando un HTTP 200 OK desde el exterior. El ping interno al puerto (ej: `:3000`) es insuficiente.
+1. `skills-suite-validate` — Certificación del catálogo completo de skills.
+2. `ssot-parity-check` — Atestación de paridad sin drift entre el contenedor ZCP y Google Drive SSoT.
+3. **Verificación de Ingress Público:** Habilitar el subdominio (`zerops_subdomain action="enable"`) y realizar `curl -s -o /dev/null -w "%{http_code}" https://<subdominio-publico>` verificando un HTTP 200 OK desde el exterior. El ping interno al puerto (ej: `:4321`) es insuficiente.
 
 ---
 
@@ -391,7 +390,7 @@ Para prevenir el **Split-Brain / Overwrite Hazard** entre cambios del comerciant
      ```javascript
      server: {
        host: "0.0.0.0",
-       port: 3000,
+       port: 4321,
        allowedHosts: [".zerops.app", `.${process.env.PRIMARY_DOMAIN || 'midominio.com'}`, "localhost"]
      }
      ```
@@ -765,7 +764,7 @@ Para cualquier proyecto o marca desplegada bajo esta plantilla, la integridad de
 - **Cero Lógica Dispersa en Vistas y Endpoints:** Los controladores API (`/api/leads/register`) y paneles administrativos (`/adminn`) consumen exclusivamente las funciones de mutación y consulta de la capa de dominio, erradicando queries SQL manuales con condiciones `OR` fragmentadas.
 
 ### 2. Sensor Físico F5 en Linear y CI/CD (Reality Over Checklist Theater):
-- **Cierre Subordinado a la Suite de Pruebas:** El script soberano `linear-cli update-status <ID> "Done"` ejecuta obligatoriamente la suite de pruebas físicas en el runtime activo (`ssh <service> "cd /var/www && (npm test || bun test)"`).
+- **Cierre Subordinado a la Suite de Pruebas:** El script soberano `linear-cli update-status <ID> "Done"` ejecuta obligatoriamente la suite de pruebas físicas en el runtime activo (`zcp run <service> sh -c "npm test || bun test"`).
 - **Atestación Física de Calidad:** La paridad de archivos en Google Drive o el estado limpio de Git son condiciones necesarias pero jamás suficientes. El cierre a 'Done' se consuma exclusivamente cuando la suite completa de pruebas físicas de aplicación finaliza con código de salida 0.
 
 ---

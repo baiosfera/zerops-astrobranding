@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 // ==============================================================================
 // Architecture Guardian: Deterministic Static Boundary Sensor
-// Adapted from di-sukharev/vibe for AstroBranding Zerops Sovereign Monorepo
 // Zero LLM Tokens | Bounded Execution < 100ms | 100% Deterministic
 // ==============================================================================
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
+const targetRoot = path.resolve(process.argv[2] || ".");
 let violations = 0;
 
 function report(rule, file, message) {
@@ -32,8 +33,9 @@ async function getFiles(dir) {
   return files.flat();
 }
 
-async function checkContractsPurity() {
-  const contractFiles = await getFiles("./packages/contracts/src");
+async function checkContractsPurity(contractsDir) {
+  if (!existsSync(contractsDir)) return false;
+  const contractFiles = await getFiles(contractsDir);
   const forbiddenFrameworks = ["hono", "drizzle-orm", "postgres", "react", "react-dom", "@astrojs", "bullmq"];
 
   for (const file of contractFiles) {
@@ -43,36 +45,44 @@ async function checkContractsPurity() {
       if (content.includes(`from "${fw}`) || content.includes(`from '${fw}`)) {
         report(
           "contracts-framework-purity",
-          path.relative(".", file),
+          path.relative(targetRoot, file),
           `@astrobranding/contracts must be 100% pure TypeScript/Zod. Found forbidden dependency '${fw}'.`
         );
       }
     }
   }
+  return true;
 }
 
-async function checkDatabaseBoundaries() {
-  const dbFiles = await getFiles("./packages/database/src");
+async function checkDatabaseBoundaries(databaseDir) {
+  if (!existsSync(databaseDir)) return false;
+  const dbFiles = await getFiles(databaseDir);
   for (const file of dbFiles) {
     if (!file.endsWith(".ts")) continue;
     const content = await readFile(file, "utf-8");
     if (content.includes("from 'react'") || content.includes('from "react"')) {
       report(
         "database-no-ui",
-        path.relative(".", file),
-        `Database package must never import UI libraries.`
+        path.relative(targetRoot, file),
+        "Database package must never import UI libraries."
       );
     }
   }
+  return true;
 }
 
 async function run() {
   console.log("============================================================");
-  console.log("  🔍 Running Architecture Guardian (scripts/architecture-check.mjs)");
+  console.log(`  🔍 Running Architecture Guardian (${targetRoot})`);
   console.log("============================================================");
 
-  await checkContractsPurity();
-  await checkDatabaseBoundaries();
+  const checkedContracts = await checkContractsPurity(path.join(targetRoot, "packages/contracts/src"));
+  const checkedDatabase = await checkDatabaseBoundaries(path.join(targetRoot, "packages/database/src"));
+
+  if (!checkedContracts && !checkedDatabase) {
+    console.log("ℹ️  Catalog repository (no packages/contracts/src or packages/database/src). Skipping monorepo package boundary check.");
+    process.exit(0);
+  }
 
   if (violations === 0) {
     console.log("✅ Architecture Guardian: All layer boundaries verified (exit code 0).");

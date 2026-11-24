@@ -95,7 +95,7 @@ G4_WHATSAPP_KEYS=(
     "META_WA_ACCESS_TOKEN:Permanent System User Access Token de Meta (EAA...)"
     "META_WEBHOOK_VERIFY_TOKEN:Verify Token para webhook de Meta WhatsApp"
     "META_APP_SECRET:Clave secreta de la App Meta para validar HMAC-SHA256"
-    "EVOLUTION_API_URL:URL base de Evolution API v2 (ej: http://evolution:8080)"
+    "EVOLUTION_API_URL:URL base de Evolution API v2 (ej: http://evolution:8085)"
     "EVOLUTION_API_KEY:API Key global de Evolution API v2"
     "EVOLUTION_INSTANCE:Nombre de la instancia de WhatsApp en Evolution API"
 )
