@@ -33,6 +33,8 @@ class TestVaultEnv(unittest.TestCase):
                     [
                         "# Brand Secrets",
                         "GITHUB_TOKEN_BAIOSFERA=ghp_exampletokenvalue123456",
+                        "LINEAR_API_KEY=lin_api_examplevalue123456",
+                        "EXA_API_KEY=exa_examplevalue123456",
                         "AWS_FROM_EMAIL=Brand Team <mailer@example.com>",
                         "DLOCAL_GO_ENV=sandbox # comment outside quotes",
                         "EMPTY_KEY=",
@@ -44,7 +46,10 @@ class TestVaultEnv(unittest.TestCase):
                 encoding="utf-8",
             )
             parsed = parse_kv_file(kv_file)
-            self.assertEqual(parsed["GITHUB_TOKEN"], "ghp_exampletokenvalue123456")
+            self.assertNotIn("GITHUB_TOKEN", parsed)
+            self.assertNotIn("GITHUB_TOKEN_BAIOSFERA", parsed)
+            self.assertNotIn("LINEAR_API_KEY", parsed)
+            self.assertNotIn("EXA_API_KEY", parsed)
             self.assertEqual(parsed["AWS_FROM_EMAIL"], "Brand Team <mailer@example.com>")
             self.assertEqual(parsed["DLOCAL_GO_ENV"], "sandbox")
             self.assertNotIn("EMPTY_KEY", parsed)
@@ -52,10 +57,16 @@ class TestVaultEnv(unittest.TestCase):
             self.assertEqual(parsed["SMTP_HOST"], "email-smtp.us-east-1.amazonaws.com")
             self.assertEqual(parsed["SMTP_USER"], "AKIAEXAMPLEKEY")
 
+            parsed_op = parse_kv_file(kv_file, include_operator_keys=True)
+            self.assertEqual(parsed_op["GITHUB_TOKEN"], "ghp_exampletokenvalue123456")
+            self.assertEqual(parsed_op["LINEAR_API_KEY"], "lin_api_examplevalue123456")
+            self.assertEqual(parsed_op["EXA_API_KEY"], "exa_examplevalue123456")
+            self.assertNotIn("ZCP_API_KEY", parsed_op)
+
     def test_collect_multi_pool_freellm_and_strict_config(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            p1 = Path(tmpdir) / "baiosfera_freellm.md"
-            p2 = Path(tmpdir) / "damaren_freellm.md"
+            p1 = Path(tmpdir) / "brand_a_freellm.md"
+            p2 = Path(tmpdir) / "brand_b_freellm.md"
             p1.write_text(
                 "- **Plataforma:** `cerebras`\n- **API Key:** `csk-acc1`\n"
                 "- **Plataforma:** `groq`\n- **API Key:** `gsk_acc1`\n",
@@ -71,10 +82,10 @@ class TestVaultEnv(unittest.TestCase):
             keys_list, custom_providers, sources = collect_freellm_pools([str(p1), str(p2)])
             self.assertEqual(len(sources), 2)
             self.assertEqual([k["label"] for k in keys_list], [
-                "cerebras-baiosfera",
-                "groq-baiosfera",
-                "openrouter-damaren",
-                "groq-damaren",
+                "cerebras-brand_a",
+                "groq-brand_a",
+                "openrouter-brand_b",
+                "groq-brand_b",
             ])
             self.assertEqual(len(custom_providers), 1)
 
@@ -97,14 +108,28 @@ class TestVaultEnv(unittest.TestCase):
     def test_sensitivity_classification_and_upsert(self):
         from vault_env import ZcpVaultClient
 
-        self.assertFalse(is_sensitive_vault_key("BIFROST_MASTER_VK"))
-        self.assertFalse(is_sensitive_vault_key("EVOLUTION_API_KEY"))
-        self.assertFalse(is_sensitive_vault_key("EVOLUTION_OPERATOR_EMAIL"))
-        self.assertFalse(is_sensitive_vault_key("PAPERCLIP_ADMIN_PASSWORD"))
-        self.assertFalse(is_sensitive_vault_key("TTYD_PASSWORD"))
+        # Operational credentials are sensitive by default.
+        self.assertTrue(is_sensitive_vault_key("BIFROST_MASTER_VK"))
+        self.assertTrue(is_sensitive_vault_key("EVOLUTION_API_KEY"))
+        self.assertTrue(is_sensitive_vault_key("PAPERCLIP_ADMIN_PASSWORD"))
+        self.assertTrue(is_sensitive_vault_key("TTYD_PASSWORD"))
+        self.assertTrue(is_sensitive_vault_key("FREEAPI_ADMIN_PASSWORD"))
+        self.assertTrue(is_sensitive_vault_key("FREELLMAPI_CLIENT_KEY"))
         self.assertTrue(is_sensitive_vault_key("DEEPSEEK_API_KEY"))
         self.assertTrue(is_sensitive_vault_key("ASTROLOGY_API_IO"))
+
+        # Usernames/emails and non-secret values stay plain.
+        self.assertFalse(is_sensitive_vault_key("EVOLUTION_OPERATOR_EMAIL"))
+        self.assertFalse(is_sensitive_vault_key("PAPERCLIP_ADMIN_EMAIL"))
+        self.assertFalse(is_sensitive_vault_key("FREEAPI_ADMIN_EMAIL"))
+        self.assertFalse(is_sensitive_vault_key("TTYD_USER"))
+        self.assertFalse(is_sensitive_vault_key("BIFROST_ADMIN_USER_SECRET"))
         self.assertFalse(is_sensitive_vault_key("PROJECT_NAME"))
+
+        # Opt-in copyable_creds=True exposes only designated operational creds.
+        self.assertFalse(is_sensitive_vault_key("BIFROST_MASTER_VK", copyable_creds=True))
+        self.assertFalse(is_sensitive_vault_key("TTYD_PASSWORD", copyable_creds=True))
+        self.assertTrue(is_sensitive_vault_key("DEEPSEEK_API_KEY", copyable_creds=True))
 
         calls: list[tuple[str, dict]] = []
 
@@ -116,27 +141,42 @@ class TestVaultEnv(unittest.TestCase):
                 calls.append((name, arguments))
                 return {}
 
+        # 1. Default mode: keeps BIFROST_MASTER_VK sensitive, creates new creds as sensitive, filters operator keys.
         summary = FakeZcp().upsert_project_envs(
             {
                 "EXISTING_PLAIN": "v1",
                 "EXISTING_SECRET": "s1",
                 "DEEPSEEK_API_KEY": "sk-ds-123",
                 "BIFROST_MASTER_VK": "vk-123",
+                "TTYD_PASSWORD": "ttyd-secret-pass",
+                "GITHUB_TOKEN": "ghp_should_be_skipped",
+                "LINEAR_API_KEY": "lin_should_be_skipped",
                 "PROJECT_NAME": "Demo",
             }
         )
-        self.assertEqual(summary["new_sensitive"], 1)
-        self.assertEqual(summary["new_plain"], 2)
+        self.assertEqual(summary["existing_sensitive"], 2)
+        self.assertEqual(summary["new_sensitive"], 2)
+        self.assertEqual(summary["new_plain"], 1)
         self.assertEqual(summary["new_auto"], 3)
-        sens_calls = [args for _, args in calls if args.get("variables") == ["DEEPSEEK_API_KEY=sk-ds-123"]]
-        self.assertEqual(len(sens_calls), 1)
-        self.assertTrue(sens_calls[0]["sensitive"])
-        plain_calls = [args for _, args in calls if args.get("action") == "set" and not args.get("sensitive")]
-        plain_vars = [v for c in plain_calls for v in c.get("variables", [])]
-        self.assertIn("BIFROST_MASTER_VK=vk-123", plain_vars)
         del_calls = [args for _, args in calls if args.get("action") == "delete"]
-        self.assertEqual(len(del_calls), 1)
-        self.assertEqual(del_calls[0]["variables"], ["BIFROST_MASTER_VK"])
+        self.assertEqual(del_calls, [])
+        sens_calls = [args for _, args in calls if args.get("action") == "set" and args.get("sensitive")]
+        sens_vars = [v for c in sens_calls for v in c.get("variables", [])]
+        self.assertIn("BIFROST_MASTER_VK=vk-123", sens_vars)
+        self.assertIn("DEEPSEEK_API_KEY=sk-ds-123", sens_vars)
+        self.assertIn("TTYD_PASSWORD=ttyd-secret-pass", sens_vars)
+        all_vars = [v for _, args in calls for v in args.get("variables", [])]
+        self.assertFalse(any(v.startswith("GITHUB_TOKEN=") or v.startswith("LINEAR_API_KEY=") for v in all_vars))
+
+        # 2. Explicit opt-in copyable_creds=True allows flipping operational creds to plain.
+        calls.clear()
+        FakeZcp().upsert_project_envs({"BIFROST_MASTER_VK": "vk-123"}, copyable_creds=True)
+        del_calls_opt_in = [args for _, args in calls if args.get("action") == "delete"]
+        self.assertEqual(len(del_calls_opt_in), 1)
+        self.assertEqual(del_calls_opt_in[0]["variables"], ["BIFROST_MASTER_VK"])
+        plain_calls_opt_in = [args for _, args in calls if args.get("action") == "set" and not args.get("sensitive")]
+        plain_vars_opt_in = [v for c in plain_calls_opt_in for v in c.get("variables", [])]
+        self.assertIn("BIFROST_MASTER_VK=vk-123", plain_vars_opt_in)
 
     def test_discover_freellm_pools_from_keys_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -154,19 +194,28 @@ class TestVaultEnv(unittest.TestCase):
             self.assertEqual(discovered, [str(extra_pool), str(sibling_pool)])
             self.assertEqual(len(discovered), len(set(discovered)))
 
-    def test_discover_freellm_pools_from_parent_keys_dir(self):
+    def test_discover_freellm_pools_isolates_tenants(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             users_apis = Path(tmpdir) / "users-apis"
             users_apis.mkdir()
             global_keys = users_apis / "api_keys_global"
             global_keys.write_text("DEEPSEEK_API_KEY=sk-test\n", encoding="utf-8")
-            pool_dir = users_apis / "PoolA"
-            pool_dir.mkdir()
-            nested_pool = pool_dir / "pool_a_freellm.md"
-            nested_pool.write_text("- **Plataforma:** `groq`\n- **API Key:** `gsk_test123`\n", encoding="utf-8")
+            brand_a = users_apis / "BrandA"
+            brand_a.mkdir()
+            (brand_a / "branda_freellm.md").write_text("- **Plataforma:** `groq`\n- **API Key:** `gsk_a`\n", encoding="utf-8")
+            brand_b = users_apis / "BrandB"
+            brand_b.mkdir()
+            (brand_b / "brandb_freellm.md").write_text("- **Plataforma:** `groq`\n- **API Key:** `gsk_b`\n", encoding="utf-8")
+            brand_c = users_apis / "BrandC"
+            brand_c.mkdir()
+            brand_c_keys = brand_c / "brandc.md"
+            brand_c_keys.write_text("PROJECT_NAME=BrandC\n", encoding="utf-8")
 
-            discovered = discover_freellm_pools(global_keys)
-            self.assertEqual(discovered, [str(nested_pool)])
+            self.assertEqual(discover_freellm_pools(global_keys), [])
+            self.assertEqual(discover_freellm_pools(brand_c_keys), [])
+            brand_a_keys = brand_a / "branda.md"
+            brand_a_keys.write_text("PROJECT_NAME=BrandA\n", encoding="utf-8")
+            self.assertEqual(discover_freellm_pools(brand_a_keys), [str(brand_a / "branda_freellm.md")])
 
     def test_resolve_project_vault_payload_is_independent(self):
         payload = resolve_project_vault_payload(
@@ -207,11 +256,12 @@ class TestVaultEnv(unittest.TestCase):
 
     def test_resolve_freellmapi_vault_payload_fresh_and_idempotent_update(self):
         self.assertFalse(is_sensitive_vault_key("FREEAPI_ADMIN_EMAIL"))
-        self.assertFalse(is_sensitive_vault_key("FREEAPI_ADMIN_PASSWORD"))
+        self.assertTrue(is_sensitive_vault_key("FREEAPI_ADMIN_PASSWORD"))
+        self.assertFalse(is_sensitive_vault_key("FREEAPI_ADMIN_PASSWORD", copyable_creds=True))
 
         keys_list = [{"platform": "groq", "key": "dummy_groq_key_1234567890", "label": "groq-test", "enabled": True}]
 
-        # 1. Fresh project seeds copyable admin credentials matching FREEAPI_CONFIG_JSON_SECRET.
+        # 1. Fresh project seeds credentials matching FREEAPI_CONFIG_JSON_SECRET.
         fresh_cfg, fresh_payload = resolve_freellmapi_vault_payload({}, "Marca Nueva", keys_list, [], existing={})
         self.assertEqual(fresh_payload["FREEAPI_ADMIN_EMAIL"], "freellmapi@marca-nueva.internal")
         self.assertGreaterEqual(len(fresh_payload["FREEAPI_ADMIN_PASSWORD"]), 24)
@@ -240,7 +290,47 @@ class TestVaultEnv(unittest.TestCase):
         self.assertEqual(upd_cfg["unifiedApiKey"], "client-key-existing-demo")
         self.assertEqual(upd_cfg["admin"]["password"], "existing-stable-password")
 
-        # 3. Legacy vault with FREEAPI_CONFIG_JSON_SECRET but without FREEAPI_ADMIN_PASSWORD does not invent a fake password.
+        # 3. Existing sensitive vault preserves credentials from env_values without rotating.
+        sens_existing = {
+            "FREEAPI_CONFIG_JSON_SECRET": True,
+            "FREEAPI_ENCRYPTION_KEY": True,
+            "FREELLMAPI_CLIENT_KEY": True,
+            "FREEAPI_ADMIN_EMAIL": False,
+            "FREEAPI_ADMIN_PASSWORD": True,
+        }
+        sens_cfg, sens_payload = resolve_freellmapi_vault_payload(
+            {},
+            "Marca Sens",
+            keys_list,
+            [],
+            existing=sens_existing,
+            plain_values={"FREEAPI_ADMIN_EMAIL": "freellmapi@marca-sens.internal"},
+            env_values={
+                "FREELLMAPI_CLIENT_KEY": "client-key-env-stable",
+                "FREEAPI_ADMIN_PASSWORD": "env-stable-password",
+            },
+            rotate=False,
+        )
+        self.assertEqual(set(sens_payload.keys()), {"FREEAPI_CONFIG_JSON_SECRET"})
+        self.assertEqual(sens_cfg["unifiedApiKey"], "client-key-env-stable")
+        self.assertEqual(sens_cfg["admin"]["password"], "env-stable-password")
+
+        # 4. Existing sensitive vault without plain/env/kv creds never fabricates mismatched random values.
+        blind_cfg, blind_payload = resolve_freellmapi_vault_payload(
+            {},
+            "Marca Blind",
+            keys_list,
+            [],
+            existing=sens_existing,
+            plain_values={},
+            env_values={},
+            rotate=False,
+        )
+        self.assertEqual(set(blind_payload.keys()), {"FREEAPI_CONFIG_JSON_SECRET"})
+        self.assertNotIn("unifiedApiKey", blind_cfg)
+        self.assertNotIn("admin", blind_cfg)
+
+        # 5. Legacy vault with FREEAPI_CONFIG_JSON_SECRET but without FREEAPI_ADMIN_PASSWORD does not invent a fake password.
         legacy_existing = {
             "FREEAPI_CONFIG_JSON_SECRET": True,
             "FREEAPI_ENCRYPTION_KEY": True,
@@ -259,7 +349,7 @@ class TestVaultEnv(unittest.TestCase):
         self.assertNotIn("admin", legacy_cfg)
         self.assertEqual(legacy_cfg["unifiedApiKey"], "client-key-legacy-demo")
 
-        # 4. Explicit --rotate regenerates secrets consistently across Vault and JSON config.
+        # 6. Explicit --rotate regenerates secrets consistently across Vault and JSON config.
         rot_cfg, rot_payload = resolve_freellmapi_vault_payload(
             {}, "Marca Nueva", keys_list, [], existing=existing, plain_values=plain_values, rotate=True
         )
@@ -267,6 +357,25 @@ class TestVaultEnv(unittest.TestCase):
         self.assertNotEqual(rot_payload["FREEAPI_ADMIN_PASSWORD"], "existing-stable-password")
         self.assertEqual(rot_cfg["admin"]["password"], rot_payload["FREEAPI_ADMIN_PASSWORD"])
         self.assertEqual(rot_cfg["unifiedApiKey"], rot_payload["FREELLMAPI_CLIENT_KEY"])
+
+    def test_zcp_vault_client_surfaces_stderr_and_cleans_up_on_auth_failure(self):
+        from vault_env import ZcpVaultClient
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fake_zcp = Path(tmpdir) / "zcp"
+            fake_zcp.write_text(
+                "#!/bin/sh\necho '2026/11/24 12:16:14 auth: Not authorized' >&2\nexit 1\n",
+                encoding="utf-8",
+            )
+            fake_zcp.chmod(0o755)
+            client = ZcpVaultClient(zcp_bin=str(fake_zcp))
+            with self.assertRaises(RuntimeError) as ctx:
+                with client:
+                    pass
+            msg = str(ctx.exception)
+            self.assertIn("auth: Not authorized", msg)
+            self.assertIn("ZCP_API_KEY", msg)
+            self.assertIsNone(client._proc)
 
 
 if __name__ == "__main__":

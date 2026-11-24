@@ -13,6 +13,8 @@ LIB_DIR="$SCRIPT_DIR/lib"
 DO_SYNC=false
 OUTPUT_JSON=false
 SKIP_RESTART=true
+COPYABLE_CREDS=false
+INCLUDE_OPERATOR_KEYS=false
 PROJECT_OVERRIDE=""
 ENV_FILE=""
 
@@ -26,6 +28,14 @@ while [[ "$#" -gt 0 ]]; do
             SKIP_RESTART=false
             shift
             ;;
+        --copyable-creds)
+            COPYABLE_CREDS=true
+            shift
+            ;;
+        --include-operator-keys)
+            INCLUDE_OPERATOR_KEYS=true
+            shift
+            ;;
         --project|-p)
             PROJECT_OVERRIDE="${2:-}"
             shift 2
@@ -35,10 +45,12 @@ while [[ "$#" -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo "Uso: zeropsenv [sync|--sync] [--restart] [--project <nombre>] [-j|--json] [/path/to/keys.md|.env]"
+            echo "Uso: zeropsenv [sync|--sync] [--restart] [--copyable-creds] [--include-operator-keys] [--project <nombre>] [-j|--json] [/path/to/keys.md|.env]"
             echo "  (sin args)    : Muestra variables detectadas con valores enmascarados."
             echo "  sync          : Sube claves parseadas al Vault Compartido del proyecto (zerops_env project=true)."
             echo "  --restart     : Reinicia servicios lectores tras actualizar el Vault."
+            echo "  --copyable-creds      : Marca credenciales operativas como sensitive=false en Zerops UI."
+            echo "  --include-operator-keys : Incluye claves locales del operador (GitHub/Linear/MCP)."
             echo "  --project     : Define PROJECT_NAME / ENGRAM_PROJECT explicitamente."
             echo "  -j, --json    : Imprime resumen estructural en JSON (sin exponer secretos)."
             exit 0
@@ -55,8 +67,8 @@ done
 if [ -z "$ENV_FILE" ]; then
     for cand in \
         "/var/www/baiosfera/0ZEROPS-AGY/users-apis/api_keys_global" \
-        "/etc/environment" \
-        "/var/www/.env"; do
+        "/home/zerops/.env" \
+        "/etc/environment"; do
         if [ -f "$cand" ]; then
             ENV_FILE="$cand"
             break
@@ -69,7 +81,7 @@ if [ -z "$ENV_FILE" ] || [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 
-PYTHONPATH="$LIB_DIR" python3 - "$ENV_FILE" "$DO_SYNC" "$OUTPUT_JSON" "$SKIP_RESTART" "$PROJECT_OVERRIDE" << 'EOF_PY'
+PYTHONPATH="$LIB_DIR" python3 - "$ENV_FILE" "$DO_SYNC" "$OUTPUT_JSON" "$SKIP_RESTART" "$PROJECT_OVERRIDE" "$COPYABLE_CREDS" "$INCLUDE_OPERATOR_KEYS" << 'EOF_PY'
 import json
 import os
 import sys
@@ -81,8 +93,10 @@ do_sync = sys.argv[2] == "true"
 output_json = sys.argv[3] == "true"
 skip_restart = sys.argv[4] == "true"
 project_override = sys.argv[5].strip()
+copyable_creds = sys.argv[6] == "true"
+include_operator_keys = sys.argv[7] == "true"
 
-vars_dict = parse_kv_file(env_path)
+vars_dict = parse_kv_file(env_path, include_operator_keys=include_operator_keys)
 
 if project_override:
     vars_dict["PROJECT_NAME"] = project_override
@@ -93,7 +107,7 @@ elif os.getenv("PROJECT_NAME"):
 
 if do_sync:
     print("============================================================")
-    print("  🚀 Sincronizando Vault Compartido en Zerops (zeropsenv v3.0)")
+    print("  🚀 Sincronizando Vault Compartido en Zerops (zeropsenv v3.1)")
     print("============================================================")
     print(f"• Archivo origen: {env_path}")
     with ZcpVaultClient() as zcp:
@@ -102,7 +116,12 @@ if do_sync:
         if effective_proj:
             vars_dict["PROJECT_NAME"] = effective_proj
             vars_dict.setdefault("ENGRAM_PROJECT", os.getenv("ENGRAM_PROJECT") or effective_proj)
-        summary = zcp.upsert_project_envs(vars_dict, skip_restart=skip_restart)
+        summary = zcp.upsert_project_envs(
+            vars_dict,
+            skip_restart=skip_restart,
+            copyable_creds=copyable_creds,
+            include_operator_keys=include_operator_keys,
+        )
     print(f"• Variables procesadas: {len(vars_dict)} (sensibles existentes={summary['existing_sensitive']}, planas={summary['existing_plain']}, nuevas={summary['new_auto']})")
     print("✅ Sincronización exitosa hacia Zerops Project Shared Vault.")
     print("============================================================")
@@ -116,15 +135,13 @@ elif output_json:
     }, indent=2))
 else:
     print("============================================================")
-    print("  🌐 Zerops Environment Helper (zeropsenv v3.0)")
+    print("  🌐 Zerops Environment Helper (zeropsenv v3.1)")
     print("============================================================")
     print(f"• Archivo origen: {env_path}")
     print(f"• Total variables válidas: {len(vars_dict)}\n")
     print("Variables detectadas (valores enmascarados):")
     for k in sorted(vars_dict.keys()):
-        v = vars_dict[k]
-        masked = f"{v[:3]}...{v[-3:]}" if len(v) > 8 else "<set>"
-        print(f"  🔑 {k:<32} : {masked}")
+        print(f"  🔑 {k:<32} : <set>")
     print("\n💡 Para sincronizar al Vault Compartido del proyecto:")
     print(f"   zeropsenv sync {env_path}")
     print("============================================================")

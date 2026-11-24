@@ -4,7 +4,7 @@
 # Reads client keys file (--keys <file>) and upserts project-level shared
 # vault secrets (Paperclip, Bifrost, Evolution, TTYD, copyable API keys)
 # directly into Zerops Project Shared Vault via ZcpVaultClient.
-# Usage: ./scripts/seed-project-vault.sh [--keys <file>] [--project <name>] [--rotate] [--dry-run] [--restart]
+# Usage: ./scripts/seed-project-vault.sh [--keys <file>] [--project <name>] [--rotate] [--dry-run] [--restart] [--copyable-creds] [--include-operator-keys]
 # ==============================================================================
 set -euo pipefail
 
@@ -20,6 +20,8 @@ KEYS_FILE=""
 ROTATE=false
 DRY_RUN=false
 SKIP_RESTART=true
+COPYABLE_CREDS=false
+INCLUDE_OPERATOR_KEYS=false
 PROJECT_OVERRIDE=""
 
 while [[ "$#" -gt 0 ]]; do
@@ -44,8 +46,16 @@ while [[ "$#" -gt 0 ]]; do
             SKIP_RESTART=false
             shift
             ;;
+        --copyable-creds)
+            COPYABLE_CREDS=true
+            shift
+            ;;
+        --include-operator-keys)
+            INCLUDE_OPERATOR_KEYS=true
+            shift
+            ;;
         -h|--help)
-            echo "Usage: seed-project-vault.sh [--keys <keys.md>] [--project <name>] [--rotate] [--dry-run] [--restart]"
+            echo "Usage: seed-project-vault.sh [--keys <keys.md>] [--project <name>] [--rotate] [--dry-run] [--restart] [--copyable-creds] [--include-operator-keys]"
             exit 0
             ;;
         *)
@@ -64,7 +74,7 @@ fi
 
 log_info "Hydrating agnostic Project Shared Vault secrets..."
 
-PYTHONPATH="$LIB_DIR" python3 - "$KEYS_FILE" "$ROTATE" "$DRY_RUN" "$SKIP_RESTART" "$PROJECT_OVERRIDE" << 'EOF_PY'
+PYTHONPATH="$LIB_DIR" python3 - "$KEYS_FILE" "$ROTATE" "$DRY_RUN" "$SKIP_RESTART" "$PROJECT_OVERRIDE" "$COPYABLE_CREDS" "$INCLUDE_OPERATOR_KEYS" << 'EOF_PY'
 import json
 import os
 import sys
@@ -80,18 +90,22 @@ rotate = sys.argv[2] == "true"
 dry_run = sys.argv[3] == "true"
 skip_restart = sys.argv[4] == "true"
 project_override = sys.argv[5].strip()
+copyable_creds = sys.argv[6] == "true"
+include_operator_keys = sys.argv[7] == "true"
 
-kv = parse_kv_file(keys_file) if keys_file else {}
+kv = parse_kv_file(keys_file, include_operator_keys=include_operator_keys) if keys_file else {}
 
 if dry_run:
     proj_slug = (project_override or kv.get("PROJECT_NAME") or os.getenv("PROJECT_NAME") or "zerops").strip()
     payload = resolve_project_vault_payload(kv, proj_slug, existing={}, rotate=rotate)
-    sensitive_keys = sorted(k for k in payload if is_sensitive_vault_key(k))
-    plain_keys = sorted(k for k in payload if not is_sensitive_vault_key(k))
+    sensitive_keys = sorted(k for k in payload if is_sensitive_vault_key(k, copyable_creds=copyable_creds))
+    plain_keys = sorted(k for k in payload if not is_sensitive_vault_key(k, copyable_creds=copyable_creds))
     print(json.dumps({
         "dry_run": True,
         "project_slug": proj_slug,
         "keys_file": keys_file or None,
+        "copyable_creds": copyable_creds,
+        "include_operator_keys": include_operator_keys,
         "total_vars": len(payload),
         "sensitive_count": len(sensitive_keys),
         "plain_count": len(plain_keys),
@@ -106,7 +120,12 @@ with ZcpVaultClient() as zcp:
     live_project, existing = zcp.get_project_envs()
     proj_slug = (project_override or kv.get("PROJECT_NAME") or os.getenv("PROJECT_NAME") or live_project or "zerops").strip()
     payload = resolve_project_vault_payload(kv, proj_slug, existing=existing, rotate=rotate)
-    summary = zcp.upsert_project_envs(payload, skip_restart=skip_restart)
+    summary = zcp.upsert_project_envs(
+        payload,
+        skip_restart=skip_restart,
+        copyable_creds=copyable_creds,
+        include_operator_keys=include_operator_keys,
+    )
     print(
         f"[INFO] Project '{live_project}' agnostic Shared Vault hydrated: "
         f"upserted {len(payload)} vars (existing_sensitive={summary['existing_sensitive']}, "

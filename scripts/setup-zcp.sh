@@ -242,23 +242,9 @@ if command -v zcp >/dev/null 2>&1; then
     fi
 fi
 
-# 6. Autenticación Soberana Determinista de zcli CLI
-if command -v zcli >/dev/null 2>&1; then
-    RESOLVED_ZCLI_TOKEN="${ZCP_API_KEY:-${ZEROPS_TOKEN:-${Z_TOKEN:-}}}"
-    if [ -z "$RESOLVED_ZCLI_TOKEN" ] && [ -f /var/www/.env ]; then
-        RESOLVED_ZCLI_TOKEN=$(grep -E '^(ZCP_API_KEY|ZEROPS_TOKEN|Z_TOKEN)=' /var/www/.env | head -n1 | cut -d= -f2- | sed 's/["'\'']//g') || true
-    fi
-    if [ -n "$RESOLVED_ZCLI_TOKEN" ]; then
-        echo "• Autenticando zcli con token oficial de plataforma Zerops..."
-        zcli login "$RESOLVED_ZCLI_TOKEN" 2>/dev/null || true
-        if [ -f "$HOME/.config/zerops/.zcli.yml" ]; then
-            sudo mkdir -p /root/.config/zerops /home/zerops/.config/zerops 2>/dev/null || true
-            sudo cp -f "$HOME/.config/zerops/.zcli.yml" /root/.config/zerops/.zcli.yml 2>/dev/null || true
-            sudo cp -f "$HOME/.config/zerops/.zcli.yml" /home/zerops/.config/zerops/.zcli.yml 2>/dev/null || true
-            sudo chown -R zerops:zerops /home/zerops/.config 2>/dev/null || true
-        fi
-        echo "  ✅ zcli autenticado deterministamente para $(whoami)"
-    fi
+# 6. Gobernanza de token ZCP (sin persistir $ZCP_API_KEY en .zcli.yml)
+if [ -n "${ZCP_API_KEY:-}" ]; then
+    echo "• Token ZCP detectado en memoria (\$ZCP_API_KEY); omitiendo 'zcli login' para no persistir credenciales en disco."
 fi
 
 # 7. Montaje dinámico de runtimes Zerops adoptados

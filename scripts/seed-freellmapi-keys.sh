@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Seed FreeLLMAPI & AI Mesh Shared Vault Secrets (v3.0 Declarative SSoT)
-# Compiles BOTH primary free-tier pools (baiosfera_freellm.md + damaren_freellm.md)
-# and upserts all runtime Vault secrets directly into Zerops Project Shared Vault.
-# Usage: ./scripts/seed-freellmapi-keys.sh [--keys <file>] [--pool <md>] [--rotate] [--dry-run] [--restart]
+# Seed FreeLLMAPI & AI Mesh Shared Vault Secrets (v3.1 Declarative SSoT)
+# Compiles explicit or sibling brand free-tier pools (`--pool`, `FREELLM_POOL_FILES`,
+# or `*_freellm.md` next to `--keys`) and upserts runtime secrets into Zerops Shared Vault.
+# Usage: ./scripts/seed-freellmapi-keys.sh [--keys <file>] [--pool <md>] [--rotate] [--dry-run] [--restart] [--copyable-creds]
 # ==============================================================================
 set -euo pipefail
 
@@ -20,6 +20,7 @@ KEYS_FILE=""
 ROTATE=false
 DRY_RUN=false
 SKIP_RESTART=true
+COPYABLE_CREDS=false
 PROJECT_OVERRIDE=""
 EXTRA_POOLS=()
 
@@ -49,8 +50,12 @@ while [[ "$#" -gt 0 ]]; do
             SKIP_RESTART=false
             shift
             ;;
+        --copyable-creds)
+            COPYABLE_CREDS=true
+            shift
+            ;;
         -h|--help)
-            echo "Usage: seed-freellmapi-keys.sh [--keys <keys.md>] [--pool <freellm.md>] [--project <name>] [--rotate] [--dry-run] [--restart]"
+            echo "Usage: seed-freellmapi-keys.sh [--keys <keys.md>] [--pool <freellm.md>] [--project <name>] [--rotate] [--dry-run] [--restart] [--copyable-creds]"
             exit 0
             ;;
         *)
@@ -64,7 +69,7 @@ done
 
 log_info "Compiling FreeLLMAPI multi-account declarative configuration and Shared Vault secrets..."
 
-PYTHONPATH="$LIB_DIR" python3 - "$KEYS_FILE" "$ROTATE" "$DRY_RUN" "$SKIP_RESTART" "$PROJECT_OVERRIDE" "${EXTRA_POOLS[@]}" << 'EOF_PY'
+PYTHONPATH="$LIB_DIR" python3 - "$KEYS_FILE" "$ROTATE" "$DRY_RUN" "$SKIP_RESTART" "$PROJECT_OVERRIDE" "$COPYABLE_CREDS" "${EXTRA_POOLS[@]}" << 'EOF_PY'
 import json
 import os
 import re
@@ -82,14 +87,18 @@ rotate = sys.argv[2] == "true"
 dry_run = sys.argv[3] == "true"
 skip_restart = sys.argv[4] == "true"
 project_override = sys.argv[5].strip()
-extra_pools = [p for p in sys.argv[6:] if p]
+copyable_creds = sys.argv[6] == "true"
+extra_pools = [p for p in sys.argv[7:] if p]
 
 kv = parse_kv_file(keys_file) if keys_file else {}
 pools = discover_freellm_pools(keys_file or None, extra_pools)
 
 keys_list, custom_providers, loaded_sources = collect_freellm_pools(pools, extra_kv=kv)
 if not keys_list and not custom_providers:
-    print("[ERROR] No FreeLLM provider keys found in discovered pools or keys file.", file=sys.stderr)
+    print(
+        "[ERROR] No FreeLLM provider keys found; pass --pool <freellm.md> or set FREELLM_POOL_FILES.",
+        file=sys.stderr,
+    )
     sys.exit(1)
 
 if dry_run:
@@ -101,6 +110,7 @@ if dry_run:
     print(f"[INFO] Compiled {len(keys_list)} FreeLLM keys from {len(loaded_sources)} pool file(s), {len(preview_cfg['models'])} curated models, {len(preview_cfg['fallback'])} fallback priorities.")
     print(json.dumps({
         "dry_run": True,
+        "copyable_creds": copyable_creds,
         "sources": loaded_sources,
         "key_labels": [k["label"] for k in keys_list],
         "model_count": len(preview_cfg["models"]),
@@ -125,11 +135,12 @@ with ZcpVaultClient() as zcp:
         custom_providers,
         existing=existing,
         plain_values=plain_values,
+        env_values=dict(os.environ),
         rotate=rotate,
     )
     print(f"[INFO] Compiled {len(keys_list)} FreeLLM keys from {len(loaded_sources)} pool file(s), {len(cfg['models'])} curated models, {len(cfg['fallback'])} fallback priorities.")
 
-    summary = zcp.upsert_project_envs(payload, skip_restart=skip_restart)
+    summary = zcp.upsert_project_envs(payload, skip_restart=skip_restart, copyable_creds=copyable_creds)
     print(f"[INFO] Project '{live_project}' FreeLLMAPI vault hydrated: upserted {len(payload)} vars (existing_sensitive={summary['existing_sensitive']}, existing_plain={summary['existing_plain']}, new={summary['new_auto']}).")
 EOF_PY
 

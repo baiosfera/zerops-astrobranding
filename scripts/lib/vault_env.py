@@ -26,36 +26,55 @@ IGNORED_VAULT_KEYS = re.compile(
     r"ZCP_API_KEY|ZEROPS_TOKEN|Z_TOKEN|ZEROPS_API_KEY|INICIAR_REEXEC)$"
 )
 
+# Operator/agency-master keys that stay local to the operator workstation (~/.env)
+# unless explicitly opted into with `--include-operator-keys`.
+OPERATOR_LOCAL_ONLY_KEYS = re.compile(
+    r"^(GITHUB_TOKEN|GITHUB_API_KEY|GH_TOKEN|GITHUB_TOKEN_.*|LINEAR_API_KEY|"
+    r"GDRIVE_.*|EXA_API_KEY|TAVILY_API_KEY|FIRECRAWL_API_KEY|FIRE_CRAWL_API.*|"
+    r"JINA_API_KEY|BRAVE_API_KEY)$"
+)
+
 # Suffixes and explicit credential names that must always be stored as sensitive when created.
 SENSITIVE_VAULT_KEYS = re.compile(
     r"(SECRET|TOKEN|KEY|PASSWORD|PASS|DSN|PRIVATE|CREDENTIAL|_VK$|_PAT$|^ASTROLOGY_API_IO$)",
     re.IGNORECASE,
 )
 
-# Operational admin logins, panel API keys, and TTYD credentials that must remain
-# unmasked (`sensitive: false`) so operators can read and copy them directly in Zerops UI.
-COPYABLE_VAULT_KEYS = frozenset(
+# Non-secret usernames/emails that remain unmasked (`sensitive: false`) in Zerops UI.
+PLAIN_NON_SECRET_VAULT_KEYS = frozenset(
     {
         "FREEAPI_ADMIN_EMAIL",
+        "PAPERCLIP_ADMIN_EMAIL",
+        "BIFROST_ADMIN_USER_SECRET",
+        "EVOLUTION_OPERATOR_EMAIL",
+        "TTYD_USER",
+    }
+)
+
+# Operational credentials stored `sensitive: true` by default; only stored unmasked
+# when operators explicitly opt in with `--copyable-creds`.
+OPT_IN_COPYABLE_CREDENTIAL_KEYS = frozenset(
+    {
         "FREEAPI_ADMIN_PASSWORD",
         "FREELLMAPI_CLIENT_KEY",
         "FREELLMAPI_API_KEY",
-        "PAPERCLIP_ADMIN_EMAIL",
         "PAPERCLIP_ADMIN_PASSWORD",
         "BIFROST_MASTER_VK",
-        "BIFROST_ADMIN_USER_SECRET",
         "BIFROST_ADMIN_PASS_SECRET",
         "EVOLUTION_API_KEY",
-        "EVOLUTION_OPERATOR_EMAIL",
-        "TTYD_USER",
         "TTYD_PASSWORD",
     }
 )
 
+# Backwards-compatible alias for plain non-secret keys.
+COPYABLE_VAULT_KEYS = PLAIN_NON_SECRET_VAULT_KEYS
 
-def is_sensitive_vault_key(key: str) -> bool:
-    """Return True when a vault variable holds an opaque provider/crypto secret."""
-    if key in COPYABLE_VAULT_KEYS:
+
+def is_sensitive_vault_key(key: str, *, copyable_creds: bool = False) -> bool:
+    """Return True when a vault variable holds a secret; operational creds are sensitive by default."""
+    if key in PLAIN_NON_SECRET_VAULT_KEYS:
+        return False
+    if copyable_creds and key in OPT_IN_COPYABLE_CREDENTIAL_KEYS:
         return False
     return bool(SENSITIVE_VAULT_KEYS.search(key))
 
@@ -142,7 +161,13 @@ def _unquote_and_strip(raw_val: str) -> str:
     return v
 
 
-def parse_kv_file(path: str | Path, *, apply_derivations: bool = True, filter_vault_ignored: bool = True) -> dict[str, str]:
+def parse_kv_file(
+    path: str | Path,
+    *,
+    apply_derivations: bool = True,
+    filter_vault_ignored: bool = True,
+    include_operator_keys: bool = False,
+) -> dict[str, str]:
     """Parse `.env` or `.md` secret files into a clean key->value dictionary."""
     file_path = Path(path)
     if not file_path.is_file():
@@ -193,10 +218,11 @@ def parse_kv_file(path: str | Path, *, apply_derivations: bool = True, filter_va
         "FIRE_CRAWL_API": "FIRECRAWL_API_KEY",
         "FIRE_CRAWL_API_KEY": "FIRECRAWL_API_KEY",
         "GITHUB_API_KEY": "GITHUB_TOKEN",
-        "GITHUB_TOKEN_BAIOSFERA": "GITHUB_TOKEN",
         "ASTRO_WAY_API": "ASTROWAY_API_KEY",
         "ASTRO_API_KEY": "VEDASTRO_API_KEY",
     }
+    if include_operator_keys:
+        synonyms["GITHUB_TOKEN_BAIOSFERA"] = "GITHUB_TOKEN"
     for src_k, dst_k in synonyms.items():
         if src_k in raw_keys and dst_k not in raw_keys:
             raw_keys[dst_k] = raw_keys[src_k]
@@ -215,7 +241,12 @@ def parse_kv_file(path: str | Path, *, apply_derivations: bool = True, filter_va
             raw_keys.setdefault("SMTP_PASSWORD", raw_keys["ZEPTOMAIL_SEND_MAIL_TOKEN"])
 
     if filter_vault_ignored:
-        raw_keys = {k: v for k, v in raw_keys.items() if not IGNORED_VAULT_KEYS.match(k)}
+        raw_keys = {
+            k: v
+            for k, v in raw_keys.items()
+            if not IGNORED_VAULT_KEYS.match(k)
+            and (include_operator_keys or not OPERATOR_LOCAL_ONLY_KEYS.match(k))
+        }
 
     return raw_keys
 
@@ -281,12 +312,6 @@ def discover_freellm_pools(
         if kf.is_file():
             for cand in sorted(kf.parent.glob("*_freellm.md")):
                 _add(cand)
-            if not pools and kf.parent.is_dir():
-                for cand in sorted(kf.parent.glob("*/*_freellm.md")):
-                    _add(cand)
-            if not pools and kf.parent.parent.is_dir():
-                for cand in sorted(kf.parent.parent.glob("*/*_freellm.md")):
-                    _add(cand)
 
     return pools
 
@@ -386,19 +411,32 @@ def resolve_freellmapi_vault_payload(
     *,
     existing: Optional[dict[str, bool]] = None,
     plain_values: Optional[dict[str, str]] = None,
+    env_values: Optional[dict[str, str]] = None,
     rotate: bool = False,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Build FreeLLMAPI declarative config and idempotent Shared Vault payload without overwriting existing credentials."""
     existing = existing or {}
     plain_values = plain_values or {}
+    env_values = env_values or {}
     clean_slug = re.sub(r"[^a-z0-9-]+", "-", proj_slug.strip().lower()).strip("-") or "zerops"
 
     kv_client_key = (kv.get("FREELLMAPI_CLIENT_KEY") or "").strip()
-    existing_client_key = (plain_values.get("FREELLMAPI_CLIENT_KEY") or "").strip()
+    existing_client_key = (
+        plain_values.get("FREELLMAPI_CLIENT_KEY")
+        or env_values.get("FREELLMAPI_CLIENT_KEY")
+        or ""
+    ).strip()
     if rotate:
         client_key = kv_client_key or f"sk-freellmapi-{generate_secret(32)}"
+    elif existing_client_key:
+        client_key = existing_client_key
+    elif kv_client_key:
+        client_key = kv_client_key
+    elif "FREELLMAPI_CLIENT_KEY" not in existing:
+        client_key = f"sk-freellmapi-{generate_secret(32)}"
     else:
-        client_key = existing_client_key or kv_client_key or f"sk-freellmapi-{generate_secret(32)}"
+        # Existing sensitive FREELLMAPI_CLIENT_KEY not exposed via plain_values/env: never fabricate a mismatched key.
+        client_key = ""
 
     kv_email = (
         kv.get("FREEAPI_ADMIN_EMAIL")
@@ -412,8 +450,8 @@ def resolve_freellmapi_vault_payload(
         or kv.get("FREELLMAPI_PASSWORD")
         or ""
     ).strip()
-    existing_email = (plain_values.get("FREEAPI_ADMIN_EMAIL") or "").strip()
-    existing_pass = (plain_values.get("FREEAPI_ADMIN_PASSWORD") or "").strip()
+    existing_email = (plain_values.get("FREEAPI_ADMIN_EMAIL") or env_values.get("FREEAPI_ADMIN_EMAIL") or "").strip()
+    existing_pass = (plain_values.get("FREEAPI_ADMIN_PASSWORD") or env_values.get("FREEAPI_ADMIN_PASSWORD") or "").strip()
 
     if rotate:
         admin_email = kv_email or existing_email or f"freellmapi@{clean_slug}.internal"
@@ -435,14 +473,14 @@ def resolve_freellmapi_vault_payload(
         custom_providers,
         admin_email=admin_email or None,
         admin_password=admin_pass or None,
-        unified_api_key=client_key,
+        unified_api_key=client_key or None,
     )
     payload: dict[str, str] = {
         "FREEAPI_CONFIG_JSON_SECRET": json.dumps(cfg, separators=(",", ":")),
     }
     if rotate or "FREEAPI_ENCRYPTION_KEY" not in existing:
         payload["FREEAPI_ENCRYPTION_KEY"] = generate_secret(32, hex_only=True)
-    if rotate or "FREELLMAPI_CLIENT_KEY" not in existing:
+    if client_key and (rotate or "FREELLMAPI_CLIENT_KEY" not in existing):
         payload["FREELLMAPI_CLIENT_KEY"] = client_key
     if admin_email and (rotate or "FREEAPI_ADMIN_EMAIL" not in existing):
         payload["FREEAPI_ADMIN_EMAIL"] = admin_email
@@ -540,17 +578,21 @@ class ZcpVaultClient:
             stderr=subprocess.PIPE,
             text=True,
         )
-        self._rpc(
-            "initialize",
-            {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "zerops-astrobranding-vault", "version": "3.0"},
-            },
-        )
-        assert self._proc.stdin is not None
-        self._proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
-        self._proc.stdin.flush()
+        try:
+            self._rpc(
+                "initialize",
+                {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "zerops-astrobranding-vault", "version": "3.0"},
+                },
+            )
+            assert self._proc.stdin is not None
+            self._proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+            self._proc.stdin.flush()
+        except Exception:
+            self.__exit__(None, None, None)
+            raise
         return self
 
     def __exit__(self, *_exc: object) -> None:
@@ -560,6 +602,13 @@ class ZcpVaultClient:
                 self._proc.wait(timeout=3)
             except Exception:
                 self._proc.kill()
+            finally:
+                for stream in (self._proc.stdin, self._proc.stdout, self._proc.stderr):
+                    if stream is not None:
+                        try:
+                            stream.close()
+                        except Exception:
+                            pass
             self._proc = None
 
     def _rpc(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -571,7 +620,22 @@ class ZcpVaultClient:
         while True:
             line = self._proc.stdout.readline()
             if not line:
-                raise RuntimeError("zcp serve closed stdout unexpectedly")
+                stderr_text = ""
+                if self._proc.stderr is not None:
+                    try:
+                        stderr_text = self._proc.stderr.read().strip()
+                    except Exception:
+                        stderr_text = ""
+                rc = self._proc.poll()
+                detail = f" (exit={rc})" if rc is not None else ""
+                if stderr_text:
+                    detail += f": {stderr_text}"
+                if "Not authorized" in stderr_text or "401" in stderr_text:
+                    detail += (
+                        " [Hint: ZCP_API_KEY was rejected by Zerops API (401); "
+                        "refresh ZCP_API_KEY in Zerops or pass --skip-vault]"
+                    )
+                raise RuntimeError(f"zcp serve closed stdout unexpectedly{detail}")
             try:
                 data = json.loads(line)
             except ValueError:
@@ -617,7 +681,14 @@ class ZcpVaultClient:
                 plain[key] = val
         return plain
 
-    def upsert_project_envs(self, kv: dict[str, str], *, skip_restart: bool = True) -> dict[str, int]:
+    def upsert_project_envs(
+        self,
+        kv: dict[str, str],
+        *,
+        skip_restart: bool = True,
+        copyable_creds: bool = False,
+        include_operator_keys: bool = False,
+    ) -> dict[str, int]:
         """Upsert variables into Project Shared Vault respecting existing sensitivity groups."""
         if not kv:
             return {"existing_sensitive": 0, "existing_plain": 0, "new_auto": 0, "new_sensitive": 0, "new_plain": 0}
@@ -633,14 +704,23 @@ class ZcpVaultClient:
             v = kv[k]
             if not v or IGNORED_VAULT_KEYS.match(k):
                 continue
+            if not include_operator_keys and OPERATOR_LOCAL_ONLY_KEYS.match(k):
+                continue
             pair = f"{k}={v}"
-            if k in COPYABLE_VAULT_KEYS:
+            want_plain = k in PLAIN_NON_SECRET_VAULT_KEYS or (
+                copyable_creds and k in OPT_IN_COPYABLE_CREDENTIAL_KEYS
+            )
+            if want_plain:
                 if existing.get(k) is True:
                     flip_to_plain_keys.append(k)
-                new_plain.append(pair)
+                    new_plain.append(pair)
+                elif k in existing:
+                    existing_plain.append(pair)
+                else:
+                    new_plain.append(pair)
             elif k in existing:
                 (existing_sensitive if existing[k] else existing_plain).append(pair)
-            elif is_sensitive_vault_key(k):
+            elif is_sensitive_vault_key(k, copyable_creds=copyable_creds):
                 new_sensitive.append(pair)
             else:
                 new_plain.append(pair)

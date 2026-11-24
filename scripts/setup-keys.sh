@@ -68,7 +68,6 @@ fi
 # Definición Categorizada de Claves del Ecosistema (10 Grupos Base)
 G1_BASE_IA_KEYS=(
     "GITHUB_TOKEN:Token de GitHub (Classic PAT con scopes repo, workflow, delete_repo)"
-    "Z_TOKEN:Token de Acceso de Zerops (API Token)"
     "EXA_API_KEY:Clave de API de Exa AI (Búsqueda semántica de código)"
     "JINA_API_KEY:Clave de API de Jina AI (Extracción limpia a Markdown)"
     "TAVILY_API_KEY:Clave de API de Tavily AI (Búsqueda factual y agentes)"
@@ -186,8 +185,10 @@ if [ -n "$FILE_ARG" ] && [ -f "$FILE_ARG" ]; then
 import sys
 from vault_env import parse_kv_file
 
-keys = parse_kv_file(sys.argv[1])
+keys = parse_kv_file(sys.argv[1], filter_vault_ignored=False, include_operator_keys=True)
 for k, v in sorted(keys.items()):
+    if k in {"ZCP_API_KEY", "Z_TOKEN", "ZEROPS_TOKEN", "ZEROPS_API_KEY"}:
+        continue
     # Single-line tab delimiter preserves spaces and angle brackets in values cleanly.
     print(f"{k}\t{v.replace(chr(9), ' ').replace(chr(10), ' ')}")
 EOF_PY
@@ -197,22 +198,9 @@ fi
 
 [ -z "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_API_KEY:-}" ] && export GITHUB_TOKEN="$GITHUB_API_KEY"
 
-# Auto-adopción nativa del token ZCP y paridad Z_TOKEN / ZEROPS_TOKEN
-if [ -z "${ZCP_API_KEY:-}" ] && [ -f /etc/environment ]; then
-    ZCP_API_KEY=$(grep -m1 '^ZCP_API_KEY=' /etc/environment | cut -d= -f2- | sed 's/["'\'']//g') || true
-fi
-
+# ZCP_API_KEY permanece estrictamente en memoria desde el entorno de runtime Zerops (nunca se escribe a disco).
 if [ -n "${ZCP_API_KEY:-}" ]; then
-    echo "  🛡️ Plataforma Zerops detectada (\$ZCP_API_KEY activa). Adoptando token oficial de runtime..."
-    export Z_TOKEN="$ZCP_API_KEY"
-    export ZEROPS_TOKEN="$ZCP_API_KEY"
-    if [ -f /etc/environment ] && ! grep -q "^ZCP_API_KEY=" /etc/environment; then
-        echo "ZCP_API_KEY=\"$ZCP_API_KEY\"" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
-    fi
-elif [ -n "${ZEROPS_TOKEN:-}" ] && [ -z "${Z_TOKEN:-}" ]; then
-    export Z_TOKEN="$ZEROPS_TOKEN"
-elif [ -n "${Z_TOKEN:-}" ] && [ -z "${ZEROPS_TOKEN:-}" ]; then
-    export ZEROPS_TOKEN="$Z_TOKEN"
+    echo "  🛡️ Plataforma Zerops detectada (\$ZCP_API_KEY activa en memoria; sin persistencia en disco)."
 fi
 
 # Auto-derivaciones inteligentes de configuración
@@ -295,9 +283,7 @@ for k in "${!PARSED_KEYS_MAP[@]}"; do
     if ! echo "$COLLECTED_EXPORTS" | grep -q "^$k="; then
         v="${PARSED_KEYS_MAP[$k]}"
         if [ -n "$v" ]; then
-            masked_val="${v:0:3}...${v: -3}"
-            [ ${#v} -le 8 ] && masked_val="<set>"
-            echo "  🔑 $k: Ingestada dinámicamente ($masked_val)"
+            echo "  🔑 $k: Ingestada dinámicamente (<set>)"
             COLLECTED_EXPORTS+="$k=$v"$'\n'
             DYNAMIC_KEYS_ADDED=$((DYNAMIC_KEYS_ADDED + 1))
         fi
@@ -317,12 +303,13 @@ if [ -n "$COLLECTED_EXPORTS" ]; then
     printf '%s' "$COLLECTED_EXPORTS" | python3 - "$WRITE_ETC_ENV" "$HOME/.env" "/home/zerops/.env" << 'EOF_PERSIST'
 import os, subprocess, sys
 
+NEVER_PERSIST_TOKENS = {"ZCP_API_KEY", "Z_TOKEN", "ZEROPS_TOKEN", "ZEROPS_API_KEY"}
 pairs: dict[str, str] = {}
 for line in sys.stdin.read().splitlines():
     if "=" in line:
         k, v = line.split("=", 1)
         k = k.strip()
-        if k and v:
+        if k and v and k not in NEVER_PERSIST_TOKENS:
             pairs[k] = v
 
 def escape_dq(val: str) -> str:
@@ -337,7 +324,11 @@ def update_env_file(path: str, quoted: bool, use_sudo: bool = False) -> None:
         except PermissionError:
             if use_sudo:
                 existing_lines = subprocess.check_output(["sudo", "cat", path], text=True).splitlines()
-    kept = [ln for ln in existing_lines if not any(ln.startswith(f"{k}=") for k in pairs)]
+    kept = [
+        ln for ln in existing_lines
+        if not any(ln.startswith(f"{k}=") for k in pairs)
+        and not any(ln.startswith(f"{k}=") for k in NEVER_PERSIST_TOKENS)
+    ]
     for k, v in sorted(pairs.items()):
         rendered = f'{k}="{escape_dq(v)}"' if quoted else f"{k}={v}"
         kept.append(rendered)
@@ -345,10 +336,19 @@ def update_env_file(path: str, quoted: bool, use_sudo: bool = False) -> None:
     if use_sudo:
         subprocess.run(["sudo", "tee", path], input=content, text=True, stdout=subprocess.DEVNULL, check=False)
     else:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
-        os.chmod(path, 0o600)
+        parent = os.path.dirname(path)
+        os.makedirs(parent, exist_ok=True)
+        tmp_path = f"{path}.tmp.{os.getpid()}"
+        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.chmod(tmp_path, 0o600)
+            os.replace(tmp_path, path)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
 
 write_etc_env = sys.argv[1] == "true"
 if write_etc_env:

@@ -253,46 +253,51 @@ elif [ ${#MISSING_KEYS[@]} -gt 0 ]; then
     echo "  Puedes ingresarlas con: $0 --interactive"
 fi
 
-# 6. Persistir en el entorno del sistema y perfiles bash
+# 6. Persistir de forma segura en ~/.env (0600, atómico, sin tocar /etc/environment ni .bashrc)
 if [ -n "$COLLECTED_EXPORTS" ]; then
-    echo "• Persistiendo variables en /etc/environment, .env y .bashrc..."
-    sudo touch /etc/environment 2>/dev/null || true
-    while IFS='=' read -r k v; do
-        if [ -n "$k" ] && [ -n "$v" ]; then
-            sudo sed -i "/^$k=/d" /etc/environment 2>/dev/null || true
-            sudo bash -c "echo '$k=\"$v\"' >> /etc/environment" 2>/dev/null || true
-        fi
-    done <<< "$COLLECTED_EXPORTS"
-    
-    # Inyectar en subshells de usuario (sin escribir /var/www/.env para proteger el arranque en Zerops)
-    for env_file in "$HOME/.env" "/home/zerops/.env"; do
-        mkdir -p "$(dirname "$env_file")" 2>/dev/null || true
-        touch "$env_file" 2>/dev/null || true
-        while IFS='=' read -r k v; do
-            if [ -n "$k" ] && [ -n "$v" ]; then
-                sed -i "/^$k=/d" "$env_file" 2>/dev/null || true
-                echo "$k=$v" >> "$env_file"
-            fi
-        done <<< "$COLLECTED_EXPORTS"
-    done
+    echo "• Persistiendo variables astrológicas en ~/.env (0600)..."
+    printf '%s' "$COLLECTED_EXPORTS" | python3 - "$HOME/.env" "/home/zerops/.env" << 'EOF_ASTRO_PERSIST'
+import os, sys
 
-    # Inyectar en profile.d para que cualquier subshell / login cargue las variables desde /etc/environment
-    sudo bash -c "cat << 'PROFILE_EOF' > /etc/profile.d/zerops_env.sh
-set -a
-[ -f /etc/environment ] && . /etc/environment
-set +a
-PROFILE_EOF" 2>/dev/null || true
+NEVER_PERSIST_TOKENS = {"ZCP_API_KEY", "Z_TOKEN", "ZEROPS_TOKEN", "ZEROPS_API_KEY"}
+pairs: dict[str, str] = {}
+for line in sys.stdin.read().splitlines():
+    if "=" in line:
+        k, v = line.split("=", 1)
+        k = k.strip()
+        if k and v and k not in NEVER_PERSIST_TOKENS:
+            pairs[k] = v
 
-    for rc in "$HOME/.bashrc" "/home/zerops/.bashrc" "/root/.bashrc"; do
-        if [ -f "$rc" ]; then
-            while IFS='=' read -r k v; do
-                if [ -n "$k" ] && [ -n "$v" ]; then
-                    sed -i "/export $k=/d" "$rc" 2>/dev/null || true
-                    echo "export $k=\"$v\"" >> "$rc"
-                fi
-            done <<< "$COLLECTED_EXPORTS"
-        fi
-    done
+def escape_dq(val: str) -> str:
+    return val.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
+
+for path in dict.fromkeys(sys.argv[1:]):
+    existing_lines: list[str] = []
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            existing_lines = f.read().splitlines()
+    kept = [
+        ln for ln in existing_lines
+        if not any(ln.startswith(f"{k}=") for k in pairs)
+        and not any(ln.startswith(f"{k}=") for k in NEVER_PERSIST_TOKENS)
+    ]
+    for k, v in sorted(pairs.items()):
+        kept.append(f'{k}="{escape_dq(v)}"')
+    content = "\n".join(kept) + "\n"
+    parent = os.path.dirname(path)
+    os.makedirs(parent, exist_ok=True)
+    tmp_path = f"{path}.tmp.{os.getpid()}"
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.chmod(tmp_path, 0o600)
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+EOF_ASTRO_PERSIST
     sudo chown -R zerops:zerops /home/zerops/.env 2>/dev/null || true
     rm -f /var/www/.env /var/www/gdrive.env 2>/dev/null || true
 fi

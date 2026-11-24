@@ -45,13 +45,10 @@ if [ -f "$HOME/.bashrc" ] && ! grep -q "PYTHONDONTWRITEBYTECODE" "$HOME/.bashrc"
     echo 'export PYTHONDONTWRITEBYTECODE=1' >> "$HOME/.bashrc" 2>/dev/null || true
 fi
 
-# Auto-detección y persistencia soberana de ZCP_API_KEY en plataforma Zerops
+# Auto-detección en memoria de ZCP_API_KEY (sin persistir en /etc/environment)
 if [ -n "${ZCP_API_KEY:-}" ]; then
     export Z_TOKEN="$ZCP_API_KEY"
     export ZEROPS_TOKEN="$ZCP_API_KEY"
-    if [ -f "/etc/environment" ] && ! grep -q "^ZCP_API_KEY=" /etc/environment 2>/dev/null; then
-        echo "ZCP_API_KEY=\"$ZCP_API_KEY\"" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
-    fi
 fi
 
 # 0b-scale. Blindaje Soberano Single-Node en ZCP (minContainers: 1, maxContainers: 1, cpuMode: SHARED)

@@ -12,6 +12,7 @@ echo "============================================================"
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
 EXPLICIT_DIR=""
 EXPLICIT_REPO=""
+CI_TOKEN_ARG=""
 DRY_RUN=false
 
 while [[ "$#" -gt 0 ]]; do
@@ -22,11 +23,14 @@ while [[ "$#" -gt 0 ]]; do
         --repo|-R)
             EXPLICIT_REPO="${2:-}"
             shift 2 ;;
+        --ci-token)
+            CI_TOKEN_ARG="${2:-}"
+            shift 2 ;;
         --dry-run)
             DRY_RUN=true
             shift ;;
         -h|--help)
-            echo "Usage: setup-gh.sh [--dir <repo_dir>] [--repo <owner/repo>] [--dry-run]"
+            echo "Usage: setup-gh.sh [--dir <repo_dir>] [--repo <owner/repo>] [--ci-token <zerops_ci_token>] [--dry-run]"
             exit 0 ;;
         *)
             shift ;;
@@ -115,11 +119,8 @@ if [ -n "$REPO_SLUG" ] && is_blocked_upstream_repo "$REPO_SLUG"; then
     exit 1
 fi
 
-# 6. Sincronización dinámica de secretos de GitHub Actions (si el repo es accesible)
-RESOLVED_Z_TOKEN="${ZCP_API_KEY:-${ZEROPS_TOKEN:-${Z_TOKEN:-}}}"
-if [ -z "$RESOLVED_Z_TOKEN" ] && [ -f "/etc/environment" ]; then
-    RESOLVED_Z_TOKEN=$(grep -E '^(ZCP_API_KEY|ZEROPS_TOKEN|Z_TOKEN)=' /etc/environment | head -n1 | cut -d= -f2- | sed "s/[\"']//g" | tr -d '\r\n') || true
-fi
+# 6. Sincronización dinámica de secretos de GitHub Actions (solo token CI dedicado; nunca $ZCP_API_KEY)
+RESOLVED_CI_TOKEN="${CI_TOKEN_ARG:-${CI_ZEROPS_TOKEN:-}}"
 
 RESOLVED_SERVICE_ID="${ZEROPS_SERVICE_ID:-${APP_SERVICE_ID:-}}"
 if [ -z "$RESOLVED_SERVICE_ID" ] && [ -f "/etc/environment" ]; then
@@ -132,17 +133,25 @@ if [ -z "$RESOLVED_SERVICE_ID" ] && command -v zcli >/dev/null 2>&1 && [ -n "${Z
     [ -n "$CANDIDATE_ID" ] && RESOLVED_SERVICE_ID="$CANDIDATE_ID"
 fi
 
-if [ -n "$REPO_SLUG" ] && [ -n "$RESOLVED_Z_TOKEN" ]; then
+if [ -n "$REPO_SLUG" ]; then
     if [ "$DRY_RUN" = "true" ]; then
-        echo "• [DRY-RUN] Target repository '$REPO_SLUG' allowed (ZEROPS_SERVICE_ID=${RESOLVED_SERVICE_ID:-pending})."
+        echo "• [DRY-RUN] Target repository '$REPO_SLUG' allowed (ZEROPS_SERVICE_ID=${RESOLVED_SERVICE_ID:-pending}, CI_ZEROPS_TOKEN=$([ -n "$RESOLVED_CI_TOKEN" ] && echo set || echo unset))."
     elif gh repo view "$REPO_SLUG" >/dev/null 2>&1; then
-        echo "• Sincronizando secretos de CI/CD hacia $REPO_SLUG..."
-        gh secret set ZEROPS_TOKEN -b "$RESOLVED_Z_TOKEN" -R "$REPO_SLUG" 2>/dev/null || true
-        if [ -n "$RESOLVED_SERVICE_ID" ]; then
-            gh secret set ZEROPS_SERVICE_ID -b "$RESOLVED_SERVICE_ID" -R "$REPO_SLUG" 2>/dev/null || true
-            echo "  ✓ Secretos ZEROPS_TOKEN y ZEROPS_SERVICE_ID ($RESOLVED_SERVICE_ID) actualizados en $REPO_SLUG."
+        if [ -n "$RESOLVED_CI_TOKEN" ]; then
+            echo "• Sincronizando secretos de CI/CD hacia $REPO_SLUG..."
+            printf '%s' "$RESOLVED_CI_TOKEN" | gh secret set ZEROPS_TOKEN -R "$REPO_SLUG" 2>/dev/null || true
+            if [ -n "$RESOLVED_SERVICE_ID" ]; then
+                printf '%s' "$RESOLVED_SERVICE_ID" | gh secret set ZEROPS_SERVICE_ID -R "$REPO_SLUG" 2>/dev/null || true
+                echo "  ✓ Secretos ZEROPS_TOKEN y ZEROPS_SERVICE_ID ($RESOLVED_SERVICE_ID) actualizados en $REPO_SLUG."
+            else
+                echo "  ✓ Secreto ZEROPS_TOKEN actualizado en $REPO_SLUG (ZEROPS_SERVICE_ID pendiente de provisión de runtime)."
+            fi
         else
-            echo "  ✓ Secreto ZEROPS_TOKEN actualizado en $REPO_SLUG (ZEROPS_SERVICE_ID pendiente de provisión de runtime)."
+            echo "  ℹ️ CI_ZEROPS_TOKEN / --ci-token no definido; omitiendo upload de ZEROPS_TOKEN a $REPO_SLUG para no exponer \$ZCP_API_KEY en CI cliente."
+            if [ -n "$RESOLVED_SERVICE_ID" ]; then
+                printf '%s' "$RESOLVED_SERVICE_ID" | gh secret set ZEROPS_SERVICE_ID -R "$REPO_SLUG" 2>/dev/null || true
+                echo "  ✓ Secreto ZEROPS_SERVICE_ID ($RESOLVED_SERVICE_ID) actualizado en $REPO_SLUG."
+            fi
         fi
     else
         echo "  ℹ️ Repositorio '$REPO_SLUG' no alcanzable con permisos de escritura. Omitiendo inyección de secretos."

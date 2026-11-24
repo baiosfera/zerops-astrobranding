@@ -84,16 +84,7 @@ if [ -f "/var/www/gdrive.env" ]; then
     sudo chmod 600 "$LOCAL_ROOT/gdrive.env" 2>/dev/null || true
 fi
 
-# Inyectar en /etc/environment para blindar persistencia nativa del contenedor tras stop/start
-if [ -n "${GDRIVE_REFRESH_TOKEN:-}" ]; then
-    if [ -w /etc/environment ] || command -v sudo >/dev/null 2>&1; then
-        for gvar in GDRIVE_CLIENT_ID GDRIVE_CLIENT_SECRET GDRIVE_REFRESH_TOKEN GDRIVE_REMOTE_NAME GDRIVE_MOUNT_DIR; do
-            if [ -n "${!gvar:-}" ] && ! grep -q "^${gvar}=" /etc/environment 2>/dev/null; then
-                echo "${gvar}=${!gvar}" | sudo tee -a /etc/environment >/dev/null 2>&1 || true
-            fi
-        done
-    fi
-fi
+# Credenciales OAuth permanecen en entorno Zerops / /var/www/.rclone/gdrive.env (0600), nunca en /etc/environment.
 
 GDRIVE_CLIENT_ID="${GDRIVE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}"
 GDRIVE_CLIENT_SECRET="${GDRIVE_CLIENT_SECRET:-${GOOGLE_CLIENT_SECRET:-}}"
@@ -103,12 +94,14 @@ GDRIVE_REMOTE_NAME="${GDRIVE_REMOTE_NAME:-baiosfera}"
 if [ -z "$GDRIVE_CLIENT_ID" ] || [ -z "$GDRIVE_CLIENT_SECRET" ] || [ -z "$GDRIVE_REFRESH_TOKEN" ]; then
     echo "❌ [GDRIVE-ERROR] Missing Google Drive OAuth credentials."
     echo "   Ensure GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, and GDRIVE_REFRESH_TOKEN are set in"
-    echo "   Zerops project env, /etc/environment, or exported in the environment."
+    echo "   Zerops project env, /var/www/.rclone/gdrive.env, or exported in the environment."
     exit 1
 fi
 
 RCLONE_CONF="$LOCAL_ROOT/config/rclone/rclone.conf"
-sudo tee "$RCLONE_CONF" > /dev/null << EOF
+sudo mkdir -p "$(dirname "$RCLONE_CONF")"
+sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" /dev/null "$RCLONE_CONF"
+cat << EOF > "$RCLONE_CONF"
 [${GDRIVE_REMOTE_NAME}]
 type = drive
 scope = drive
@@ -116,7 +109,7 @@ client_id = ${GDRIVE_CLIENT_ID}
 client_secret = ${GDRIVE_CLIENT_SECRET}
 token = {"access_token":"ya29","token_type":"Bearer","refresh_token":"${GDRIVE_REFRESH_TOKEN}","expiry":"2000-01-01T00:00:00Z"}
 EOF
-sudo chmod 644 "$RCLONE_CONF"
+chmod 600 "$RCLONE_CONF"
 
 # 5b. PRE-MOUNT VS CODE & INOTIFY SHIELD (Dynamic Watcher Exclusions)
 echo "[ZCP-BOOT] Configuring dynamic VS Code / Code-Server file watcher exclusions..."

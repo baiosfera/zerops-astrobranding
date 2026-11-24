@@ -19,8 +19,10 @@ DEFAULT_KEYS_FILE="/var/www/baiosfera/0ZEROPS-AGY/users-apis/api_keys_global"
 
 UPDATE_ONLY=false
 SKIP_VAULT=false
+COPYABLE_CREDS=false
 EXPLICIT_KEYS_FILE=""
 PROJECT_OVERRIDE=""
+EXTRA_POOLS=()
 
 parse_args() {
   if [ "$(basename "$0")" = "zcp-update" ]; then
@@ -39,6 +41,13 @@ parse_args() {
       --skip-vault)
         SKIP_VAULT=true
         ;;
+      --copyable-creds)
+        COPYABLE_CREDS=true
+        ;;
+      --pool)
+        i=$((i + 1))
+        [ -n "${args[$i]:-}" ] && EXTRA_POOLS+=("${args[$i]}")
+        ;;
       --keys|-k)
         i=$((i + 1))
         EXPLICIT_KEYS_FILE="${args[$i]:-}"
@@ -48,7 +57,7 @@ parse_args() {
         PROJECT_OVERRIDE="${args[$i]:-}"
         ;;
       -h|--help)
-        echo "Uso: iniciar.sh [--update|--full] [--keys /path/to/keys.md] [--project <slug>] [--skip-vault]"
+        echo "Uso: iniciar.sh [--update|--full] [--keys /path/to/keys.md] [--pool /path/to/pool_freellm.md] [--project <slug>] [--copyable-creds] [--skip-vault]"
         exit 0
         ;;
     esac
@@ -274,15 +283,18 @@ sync_playbooks() {
 hydrate_project_vault() {
   [ "$SKIP_VAULT" = true ] && return 0
 
-  local keys_file="${EXPLICIT_KEYS_FILE:-${ZCP_KEYS_FILE:-}}"
-  # Only auto-hydrate without explicit --keys during fresh install (`--update` alone stays read/sync-safe)
-  if [ -z "$keys_file" ] && [ "$UPDATE_ONLY" = false ] && [ -f "$DEFAULT_KEYS_FILE" ]; then
-    keys_file="$DEFAULT_KEYS_FILE"
+  # In update mode (`zcp-update`), ignore $ZCP_KEYS_FILE and $DEFAULT_KEYS_FILE unless --keys is passed explicitly.
+  local keys_file="$EXPLICIT_KEYS_FILE"
+  if [ -z "$keys_file" ] && [ "$UPDATE_ONLY" = false ]; then
+    keys_file="${ZCP_KEYS_FILE:-}"
+    if [ -z "$keys_file" ] && [ -f "$DEFAULT_KEYS_FILE" ]; then
+      keys_file="$DEFAULT_KEYS_FILE"
+    fi
   fi
 
   if [ -z "$keys_file" ]; then
     if [ "$UPDATE_ONLY" = false ]; then
-      log "WARN: No master keys file detected (expected --keys <path> or $DEFAULT_KEYS_FILE). Run 'zcp-update --update --keys /path/to/keys.md' before deploying runtimes."
+      log "WARN: No master keys file detected (expected --keys <path> or $DEFAULT_KEYS_FILE). Run 'zcp-update --keys /path/to/keys.md' before deploying runtimes."
     fi
     return 0
   fi
@@ -292,10 +304,19 @@ hydrate_project_vault() {
     return 1
   fi
 
-  local proj_args=()
+  local vault_args=()
   if [ -n "$PROJECT_OVERRIDE" ]; then
-    proj_args=(--project "$PROJECT_OVERRIDE")
+    vault_args+=(--project "$PROJECT_OVERRIDE")
   fi
+  if [ "$COPYABLE_CREDS" = true ]; then
+    vault_args+=(--copyable-creds)
+  fi
+
+  local pool_args=()
+  local pool_path
+  for pool_path in "${EXTRA_POOLS[@]}"; do
+    pool_args+=(--pool "$pool_path")
+  done
 
   if [ -x "$CATALOG_DIR/scripts/setup-keys.sh" ]; then
     bash "$CATALOG_DIR/scripts/setup-keys.sh" --file "$keys_file" --non-interactive >/dev/null
@@ -303,12 +324,27 @@ hydrate_project_vault() {
 
   if [ -x "/usr/local/bin/zcp" ]; then
     if [ -x "$LOCAL_BIN/seed-project-vault" ]; then
-      "$LOCAL_BIN/seed-project-vault" --keys "$keys_file" "${proj_args[@]}"
+      "$LOCAL_BIN/seed-project-vault" --keys "$keys_file" "${vault_args[@]}"
     else
-      "$LOCAL_BIN/zeropsenv" sync "${proj_args[@]}" "$keys_file"
+      "$LOCAL_BIN/zeropsenv" sync "${vault_args[@]}" "$keys_file"
     fi
     if [ -x "$LOCAL_BIN/seed-freellmapi-keys" ]; then
-      "$LOCAL_BIN/seed-freellmapi-keys" --keys "$keys_file" "${proj_args[@]}"
+      if PYTHONPATH="$CATALOG_DIR/scripts/lib" python3 - "$keys_file" "${EXTRA_POOLS[@]}" << 'EOF_HAS_POOLS'
+import sys
+from vault_env import collect_freellm_pools, discover_freellm_pools, parse_kv_file
+
+kf = sys.argv[1]
+extra = [p for p in sys.argv[2:] if p]
+kv = parse_kv_file(kf)
+pools = discover_freellm_pools(kf, extra)
+keys_list, custom_providers, _ = collect_freellm_pools(pools, extra_kv=kv)
+sys.exit(0 if (keys_list or custom_providers) else 1)
+EOF_HAS_POOLS
+      then
+        "$LOCAL_BIN/seed-freellmapi-keys" --keys "$keys_file" "${vault_args[@]}" "${pool_args[@]}"
+      else
+        log "INFO: No FreeLLM pool specified for '$keys_file'; pass --pool <path> or set FREELLM_POOL_FILES to seed FreeLLMAPI."
+      fi
     fi
   else
     log "WARN: /usr/local/bin/zcp not found; skipped Zerops Vault remote sync."
