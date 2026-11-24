@@ -44,6 +44,7 @@ class CommercialFunnelType:
     PWYW_REPORT = "pwyw_report"              # Pay-what-you-want digital report/product
     LOCAL_SERVICE = "local_service"          # Territorial/in-person services, physical visits
     BOOK_WAITLIST = "book_waitlist"          # Intellectual authority, book waitlist/saga
+    READY_NOW_BIFURCATED_SLO_APPLICATION = "ready_now_bifurcated_slo_application"  # BANT split: Ready-Now VSL+Call vs Unqualified AI Diagnostic PWYW+Order Bump
 
 
 class MessagingChannel(str, Enum):
@@ -209,9 +210,14 @@ def infer_funnel_type(text_sample: str) -> Tuple[str, List[str]]:
                 return val, ["ViewContent", "SchedulePhysicalVisit", "Lead"]
             elif val == CommercialFunnelType.BOOK_WAITLIST:
                 return val, ["ViewContent", "JoinWaitlist", "Lead"]
+            elif val == CommercialFunnelType.READY_NOW_BIFURCATED_SLO_APPLICATION:
+                return val, ["ViewContent", "Lead", "InitiateCheckout", "Purchase"]
             return val, ["Lead", "Contact"]
 
     # 2. Check keyword patterns
+    if any(k in t for k in ["ready_now_bifurcated_slo_application", "ready-now", "bifurcated", "bifurcado", "diagnostico pwyw"]):
+        return CommercialFunnelType.READY_NOW_BIFURCATED_SLO_APPLICATION, ["ViewContent", "Lead", "InitiateCheckout", "Purchase"]
+
     if any(k in t for k in ["cita", "agenda", "calendario", "booking_calendar", "consulta", "sesion", "sesión", "reserva", "booking"]):
         return CommercialFunnelType.BOOKING_CALENDAR, ["Schedule", "Lead"]
 
@@ -1509,6 +1515,50 @@ def build_default_messaging_spec(funnel_type: str, currency: str = "USD") -> Mes
             anti_collision=policy,
             currency=currency
         )
+    elif funnel_type == CommercialFunnelType.READY_NOW_BIFURCATED_SLO_APPLICATION:
+        return MessagingEcosystemSpec(
+            enabled_channels=["email", "whatsapp"],
+            tofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="lead_magnet_calculator_delivery"
+                )
+            ],
+            mofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=60,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="ready_now_vsl_calendar_nudge", condition="bant_qualified"
+                ),
+                MessagingSequenceStep(
+                    step_order=2, channel="email", delay_minutes=120,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="ai_diagnostic_pwyw_followup", condition="bant_unqualified"
+                )
+            ],
+            bofu=[
+                MessagingSequenceStep(
+                    step_order=1, channel="whatsapp", delay_minutes=360,
+                    priority=MessagePriority.P2_LIFECYCLE.value,
+                    template_ref="strategic_call_confirmation_or_order_bump_nudge", condition="unconverted"
+                )
+            ],
+            post_conversion=[
+                MessagingSequenceStep(
+                    step_order=1, channel="email", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="order_bump_kit_and_receipt"
+                ),
+                MessagingSequenceStep(
+                    step_order=2, channel="whatsapp", delay_minutes=5,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="welcome_onboarding_concierge"
+                )
+            ],
+            anti_collision=policy,
+            currency=currency
+        )
     else:  # Generic / LEAD_GENERATION / SUBSCRIPTION
         return MessagingEcosystemSpec(
             enabled_channels=["email", "whatsapp"],
@@ -1555,12 +1605,22 @@ def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerti
     messaging = messaging_obj.model_dump()
 
     # Domino 4 (τε-Final): Conversión y Cobro
+    if vert.funnel_type == CommercialFunnelType.DIRECT_CHECKOUT:
+        gateways = ["wompi", "cod_otp"]
+        webhook_path = "/api/webhooks/orders"
+    elif vert.funnel_type == CommercialFunnelType.READY_NOW_BIFURCATED_SLO_APPLICATION:
+        gateways = ["iionpay", "dlocalgo", "booking_calendar"]
+        webhook_path = "/api/webhooks/orders"
+    else:
+        gateways = ["booking_calendar", "whatsapp_direct"]
+        webhook_path = "/api/webhooks/leads"
+
     deployment = {
         "funnel_type": vert.funnel_type,
         "offer_structure": vert.primary_offer.get("structure", f"Oferta {vert.display_name}"),
         "currency": currency,
-        "gateways": ["wompi", "cod_otp"] if vert.funnel_type == CommercialFunnelType.DIRECT_CHECKOUT else ["booking_calendar", "whatsapp_direct"],
-        "post_purchase_webhook": "/api/webhooks/orders" if vert.funnel_type == CommercialFunnelType.DIRECT_CHECKOUT else "/api/webhooks/leads"
+        "gateways": gateways,
+        "post_purchase_webhook": webhook_path
     }
 
     # Domino 3 (τε-1): Telemetría y Atribución
@@ -2428,7 +2488,12 @@ def main():
         CommercialFunnelType.LEAD_GENERATION,
         CommercialFunnelType.BOOKING_CALENDAR,
         CommercialFunnelType.SUBSCRIPTION,
-        CommercialFunnelType.CONTENT_COMMUNITY
+        CommercialFunnelType.CONTENT_COMMUNITY,
+        CommercialFunnelType.APPLICATION_FLOW,
+        CommercialFunnelType.PWYW_REPORT,
+        CommercialFunnelType.LOCAL_SERVICE,
+        CommercialFunnelType.BOOK_WAITLIST,
+        CommercialFunnelType.READY_NOW_BIFURCATED_SLO_APPLICATION
     ], default=CommercialFunnelType.DIRECT_CHECKOUT)
     p_add.set_defaults(func=cmd_add_vertical)
 

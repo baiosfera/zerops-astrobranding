@@ -367,6 +367,29 @@ class TestDynamicZeropsDiscovery(unittest.TestCase):
             self.assertIn("Dominó 0", content)
             self.assertIn("Dominó 4", content)
 
+    def test_ready_now_bifurcated_slo_application(self):
+        fn, evts = apotelos.infer_funnel_type("funnel_type: ready_now_bifurcated_slo_application")
+        self.assertEqual(fn, "ready_now_bifurcated_slo_application")
+        self.assertIn("Purchase", evts)
+        self.assertIn("InitiateCheckout", evts)
+
+        msg = apotelos.build_default_messaging_spec(fn, currency="COP")
+        self.assertEqual(msg.currency, "COP")
+        self.assertEqual(msg.tofu[0].template_ref, "lead_magnet_calculator_delivery")
+        self.assertEqual(len(msg.mofu), 2)
+
+        v = apotelos.DynamicVerticalSpec(
+            vertical_slug="bifurcated-sample",
+            display_name="Bifurcated Sample",
+            funnel_type=fn,
+            conversion_events=evts,
+            primary_offer={"structure": "Bifurcated", "pricing": {"currency": "COP"}},
+        )
+        eco = apotelos.UniversalBrandEcosystem(brand_slug="sample-brand", verticals={"bifurcated-sample": v})
+        manifest = apotelos.compile_blackboard_manifest(eco, v)
+        self.assertIn("iionpay", manifest.deployment_spec["gateways"])
+        self.assertIn("dlocalgo", manifest.deployment_spec["gateways"])
+
 
 if __name__ == "__main__":
     unittest.main()

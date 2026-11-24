@@ -1,5 +1,5 @@
 ---
-// Sovereign Zero-Fee RGPD/GDPR Cookie Consent Component
+// Sovereign Zero-Fee RGPD/GDPR & Google Consent Mode v2 Component
 interface Props {
   privacyPolicyUrl?: string;
   cookieName?: string;
@@ -10,6 +10,18 @@ const {
   cookieName = 'zcp_cookie_consent'
 } = Astro.props;
 ---
+
+<script is:inline>
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
+  window.gtag('consent', 'default', {
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+    analytics_storage: 'denied',
+    wait_for_update: 500
+  });
+</script>
 
 <div id="zcp-cookie-banner" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 max-w-md z-50 p-4 rounded-xl border border-white/10 bg-neutral-950/90 backdrop-blur-md text-white shadow-2xl transition-all duration-300 hidden">
   <div class="flex flex-col gap-3">
@@ -37,12 +49,33 @@ const {
     const CONSENT_KEY = cookieName || 'zcp_cookie_consent';
 
     function getConsent() {
-      return localStorage.getItem(CONSENT_KEY);
+      try {
+        return localStorage.getItem(CONSENT_KEY);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function applyGoogleConsent(granted) {
+      const state = granted ? 'granted' : 'denied';
+      if (typeof window.gtag === 'function') {
+        window.gtag('consent', 'update', {
+          ad_storage: state,
+          ad_user_data: state,
+          ad_personalization: state,
+          analytics_storage: state
+        });
+      }
+      window.dispatchEvent(new CustomEvent('zcp:consent-updated', { detail: { status: granted ? 'accepted' : 'rejected' } }));
     }
 
     function setConsent(status) {
-      localStorage.setItem(CONSENT_KEY, status);
-      if (status === 'accepted') {
+      try {
+        localStorage.setItem(CONSENT_KEY, status);
+      } catch (_) {}
+      const granted = status === 'accepted';
+      applyGoogleConsent(granted);
+      if (granted) {
         activateScripts();
       }
       hideBanner();
@@ -78,7 +111,10 @@ const {
       if (!consent) {
         showBanner();
       } else if (consent === 'accepted') {
+        applyGoogleConsent(true);
         activateScripts();
+      } else if (consent === 'rejected') {
+        applyGoogleConsent(false);
       }
 
       document.getElementById('zcp-cookie-accept')?.addEventListener('click', () => setConsent('accepted'));
