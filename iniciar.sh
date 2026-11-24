@@ -397,9 +397,9 @@ ensure_path() {
 
 setup_localstorage() {
   local mnt="/mnt/localstorage"
-  if [ -d "$mnt" ] && mountpoint -q "$mnt" 2>/dev/null; then
+  if [ -d "$mnt" ] && { mountpoint -q "$mnt" 2>/dev/null || [ -L "$BASE_DIR/localstorage" ] || [ -d "$mnt/engram" ] || [ -d "$mnt/apps" ]; }; then
     ln -sfn "$mnt" "$BASE_DIR/localstorage"
-    log "LocalStorage mounted at $mnt"
+    log "LocalStorage active at $mnt"
     sync_playbooks "$mnt"
   else
     log "INFO: $mnt not mounted yet; skipping symlink to avoid split-brain."
