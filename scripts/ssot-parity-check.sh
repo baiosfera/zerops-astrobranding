@@ -109,6 +109,9 @@ echo "--- [1/4] Governance & Harness SSoT Parity ---"
 compare_agents_md "$CATALOG_REPO/AGENTS.md" "$LOCAL_BASE/AGENTS.md"
 compare_files "00-SUPREME-DIRECTIVE.md (.agents)" "$CATALOG_REPO/.agents/rules/00-SUPREME-DIRECTIVE.md" "$LOCAL_BASE/.agents/rules/00-SUPREME-DIRECTIVE.md"
 compare_files "00-SUPREME-DIRECTIVE.md (~/.gemini/config/rules)" "$CATALOG_REPO/.agents/rules/00-SUPREME-DIRECTIVE.md" "${HOME:-/home/zerops}/.gemini/config/rules/00-SUPREME-DIRECTIVE.md"
+if [ -f "${HOME:-/home/zerops}/.gemini/config/rules/gentle-ai-02-engram-protocol.md" ]; then
+    compare_files "gentle-ai-02-engram-protocol.md (~/.gemini/config/rules)" "$CATALOG_REPO/scripts/templates/gentle-ai-02-engram-protocol.md" "${HOME:-/home/zerops}/.gemini/config/rules/gentle-ai-02-engram-protocol.md"
+fi
 if [ -e "${HOME:-/home/zerops}/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md" ]; then
     if [ "$AUTO_FIX_MODE" = true ]; then
         rm -f "${HOME:-/home/zerops}/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md"

@@ -196,7 +196,12 @@ EOF_SYNC_CUSTOM
     rm -f "$HOME/.gemini/config/rules/$obsolete_rule" 2>/dev/null || true
   done
 
-  # Ensure single Engram MCP server (--tools=agent, cwd=/var/www) and disable duplicate plugin
+  if [ -f "$CATALOG_DIR/scripts/templates/gentle-ai-02-engram-protocol.md" ]; then
+    cp -f "$CATALOG_DIR/scripts/templates/gentle-ai-02-engram-protocol.md" "$HOME/.gemini/config/rules/gentle-ai-02-engram-protocol.md"
+  fi
+
+  # Ensure single Engram MCP server (--tools=agent, cwd=/var/www), disable duplicate plugin,
+  # and seed Antigravity CLI defaults (Orchestrator (Neon) + /var/www trusted workspace)
   if command -v agy >/dev/null 2>&1; then
     agy plugin disable gentle-ai-engram >/dev/null 2>&1 || true
   fi
@@ -212,6 +217,21 @@ cfg.setdefault("plugins", {}).setdefault("gentle-ai-engram", {})["enabled"] = Fa
 with open(cfg_path, "w", encoding="utf-8") as wf:
     json.dump(cfg, wf, indent=2)
     wf.write("\n")
+
+agy_settings = os.path.expanduser("~/.gemini/antigravity-cli/settings.json")
+os.makedirs(os.path.dirname(agy_settings), exist_ok=True)
+try:
+    st = json.load(open(agy_settings, "r", encoding="utf-8")) if os.path.isfile(agy_settings) else {}
+except Exception:
+    st = {}
+st.setdefault("model", "Orchestrator (Neon)")
+tw = st.setdefault("trustedWorkspaces", [])
+if "/var/www" not in tw:
+    tw.append("/var/www")
+with open(agy_settings, "w", encoding="utf-8") as wf:
+    json.dump(st, wf, indent=2)
+    wf.write("\n")
+os.chmod(agy_settings, 0o600)
 
 mcp_path = os.path.expanduser("~/.gemini/config/mcp_config.json")
 if os.path.isfile(mcp_path):

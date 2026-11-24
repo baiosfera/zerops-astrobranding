@@ -31,7 +31,7 @@ echo "============================================================"
 
 # 1. Asegurar directorios canónicos y jerarquía de respaldos bak/
 echo "• Verificando directorios de gobernanza y respaldo centralizado..."
-mkdir -p "$PROJECT_ROOT/.agents/rules" "$PROJECT_ROOT/.agents/skills" "$PROJECT_ROOT/.agents/references" 2>/dev/null || true
+mkdir -p "$PROJECT_ROOT/.agents/rules" "$PROJECT_ROOT/.agents/skills" 2>/dev/null || true
 mkdir -p "$ZCP_ROOT/bak/scripts" "$ZCP_ROOT/bak/rules" "$ZCP_ROOT/bak/skills" "$ZCP_ROOT/bak/apis" "$ZCP_ROOT/bak/mcp" 2>/dev/null || true
 
 # 2. Desplegar e Instalar Binarios de Gobernanza (engram, gga, gentle-ai, inject-agent-rule)
@@ -286,6 +286,26 @@ EOF_ENGRAM_MCP
         gentle-ai-04-agent-routing-part2.md; do
         rm -f "/home/zerops/.gemini/config/rules/$rule_name" 2>/dev/null || true
     done
+    if [ -f "$SCRIPT_DIR/templates/gentle-ai-02-engram-protocol.md" ]; then
+        cp -f "$SCRIPT_DIR/templates/gentle-ai-02-engram-protocol.md" "/home/zerops/.gemini/config/rules/gentle-ai-02-engram-protocol.md"
+    fi
+    python3 - << 'EOF_AGY_SETTINGS'
+import json, os
+agy_settings = os.path.expanduser("~/.gemini/antigravity-cli/settings.json")
+os.makedirs(os.path.dirname(agy_settings), exist_ok=True)
+try:
+    st = json.load(open(agy_settings, "r", encoding="utf-8")) if os.path.isfile(agy_settings) else {}
+except Exception:
+    st = {}
+st.setdefault("model", "Orchestrator (Neon)")
+tw = st.setdefault("trustedWorkspaces", [])
+if "/var/www" not in tw:
+    tw.append("/var/www")
+with open(agy_settings, "w", encoding="utf-8") as wf:
+    json.dump(st, wf, indent=2)
+    wf.write("\n")
+os.chmod(agy_settings, 0o600)
+EOF_AGY_SETTINGS
     echo "• Verificando salud del ecosistema Gentle AI..."
     gentle-ai doctor || true
 fi
