@@ -6,9 +6,6 @@ project:
   corePackage: ${CORE_PACKAGE}
   vault:
     PROJECT_NAME: ${PROJECT_NAME}
-    FREEAPI_ENCRYPTION_KEY:
-      value: <@generateRandomString(<64>)>
-      sensitive: true
     FREELLMAPI_CLIENT_KEY:
       value: <@generateRandomString(<32>)>
       sensitive: true
@@ -56,6 +53,10 @@ services:
     priority: 8
     minContainers: 1
     maxContainers: 1
+    envVariables:
+      FREEAPI_ENCRYPTION_KEY:
+        value: <@generateRandomString(<64>)>
+        sensitive: true
     verticalAutoscaling:
       cpuMode: SHARED
       minFreeRamGB: 0.25

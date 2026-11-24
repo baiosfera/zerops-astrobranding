@@ -19,6 +19,17 @@ from typing import Any, Optional
 
 DEFAULT_ZCP_BIN = "/usr/local/bin/zcp"
 
+# Keys exclusive to `freellmapi` that must live on `serviceHostname="freellmapi"` (never Project Shared Vault,
+# where Zerops replicates every variable across all services and build containers into zcp's saved settings).
+FREELLMAPI_SERVICE_ONLY_KEYS = frozenset({"FREEAPI_CONFIG_JSON_SECRET", "FREEAPI_ENCRYPTION_KEY"})
+PROJECT_VAULT_MAX_VALUE_BYTES = 2048
+
+
+def get_freellmapi_seed_state_path() -> Path:
+    """Return path to the non-secret pending FreeLLMAPI seed metadata file."""
+    override = os.getenv("ZCP_FREELLMAPI_SEED_STATE", "").strip()
+    return Path(override) if override else Path("/home/zerops/.config/zcp/freellmapi-seed.json")
+
 # Host-local or platform-private keys that must never be pushed to Project Shared Vault.
 IGNORED_VAULT_KEYS = re.compile(
     r"^(PATH|PWD|OLDPWD|HOME|USER|LOGNAME|SHELL|SHLVL|_|LS_COLORS|"
@@ -490,6 +501,70 @@ def resolve_freellmapi_vault_payload(
     return cfg, payload
 
 
+def split_freellmapi_payload(payload: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
+    """Split FreeLLMAPI payload into `(service_only_payload, project_shared_payload)`."""
+    service_payload: dict[str, str] = {}
+    shared_payload: dict[str, str] = {}
+    for k, v in payload.items():
+        if k in FREELLMAPI_SERVICE_ONLY_KEYS:
+            service_payload[k] = v
+        else:
+            shared_payload[k] = v
+    return service_payload, shared_payload
+
+
+def save_pending_freellmapi_seed(
+    *,
+    keys_file: str | None = None,
+    pools: list[str] | tuple[str, ...] = (),
+    project: str | None = None,
+    copyable_creds: bool = False,
+    state_path: str | Path | None = None,
+) -> Path:
+    """Persist non-secret source paths so FreeLLMAPI service seeding runs after service creation."""
+    target = Path(state_path) if state_path else get_freellmapi_seed_state_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(target.parent, 0o700)
+    except OSError:
+        pass
+    data = {
+        "keys_file": str(keys_file) if keys_file else "",
+        "pools": [str(p) for p in pools if p],
+        "project": str(project or ""),
+        "copyable_creds": bool(copyable_creds),
+    }
+    tmp = target.with_name(f".{target.name}.tmp.{os.getpid()}")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=2)
+        handle.write("\n")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, target)
+    return target
+
+
+def load_pending_freellmapi_seed(state_path: str | Path | None = None) -> Optional[dict[str, Any]]:
+    """Load pending non-secret FreeLLMAPI seed metadata if present and valid."""
+    target = Path(state_path) if state_path else get_freellmapi_seed_state_path()
+    if not target.is_file():
+        return None
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def clear_pending_freellmapi_seed(state_path: str | Path | None = None) -> None:
+    """Remove pending FreeLLMAPI seed metadata once `freellmapi` service env is hydrated."""
+    target = Path(state_path) if state_path else get_freellmapi_seed_state_path()
+    try:
+        target.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def generate_secret(length: int = 32, *, hex_only: bool = False) -> str:
     """Generate a cryptographically secure random secret or 64-char hex encryption key."""
     if hex_only:
@@ -654,6 +729,15 @@ class ZcpVaultClient:
         raw_text = (result.get("content") or [{}])[0].get("text", "{}")
         return json.loads(raw_text) if raw_text.strip().startswith("{") else {"raw": raw_text}
 
+    def list_services(self) -> set[str]:
+        """Return the set of service hostnames currently present in the Zerops project."""
+        data = self.call_tool("zerops_discover", {})
+        return {
+            str(entry["hostname"]).strip()
+            for entry in data.get("services", [])
+            if isinstance(entry, dict) and entry.get("hostname")
+        }
+
     def get_project_envs(self) -> tuple[str, dict[str, bool]]:
         """Return `(project_name, {key: isSensitive})` without reading sensitive values."""
         data = self.call_tool("zerops_env", {"action": "get", "project": True})
@@ -664,6 +748,28 @@ class ZcpVaultClient:
             if entry.get("key")
         }
         return project_name, existing
+
+    def get_service_envs(self, service_hostname: str) -> dict[str, bool]:
+        """Return `{key: isSensitive}` for a specific service's own env variables."""
+        data = self.call_tool("zerops_env", {"action": "get", "serviceHostname": service_hostname})
+        return {
+            str(entry["key"]): bool(entry.get("isSensitive", False))
+            for entry in data.get("envs", [])
+            if entry.get("key")
+        }
+
+    def delete_project_envs(self, keys: list[str] | tuple[str, ...], *, skip_restart: bool = True) -> list[str]:
+        """Delete specified keys from Project Shared Vault if currently present."""
+        if not keys:
+            return []
+        _, existing = self.get_project_envs()
+        present = [k for k in keys if k in existing]
+        if present:
+            self.call_tool(
+                "zerops_env",
+                {"action": "delete", "project": True, "skipRestart": skip_restart, "variables": present},
+            )
+        return present
 
     def get_project_plain_env_values(self) -> dict[str, str]:
         """Return `{key: value}` for non-sensitive Project Shared Vault variables."""
@@ -681,18 +787,20 @@ class ZcpVaultClient:
                 plain[key] = val
         return plain
 
-    def upsert_project_envs(
+    def _upsert_env_map(
         self,
+        scope_args: dict[str, Any],
         kv: dict[str, str],
+        existing: dict[str, bool],
         *,
         skip_restart: bool = True,
         copyable_creds: bool = False,
         include_operator_keys: bool = False,
+        force_sensitive_keys: frozenset[str] = frozenset(),
     ) -> dict[str, int]:
-        """Upsert variables into Project Shared Vault respecting existing sensitivity groups."""
+        """Upsert variables into either Project Shared Vault or a service env respecting sensitivity."""
         if not kv:
             return {"existing_sensitive": 0, "existing_plain": 0, "new_auto": 0, "new_sensitive": 0, "new_plain": 0}
-        _, existing = self.get_project_envs()
 
         existing_sensitive: list[str] = []
         existing_plain: list[str] = []
@@ -707,6 +815,16 @@ class ZcpVaultClient:
             if not include_operator_keys and OPERATOR_LOCAL_ONLY_KEYS.match(k):
                 continue
             pair = f"{k}={v}"
+            if k in force_sensitive_keys:
+                if k in existing and existing[k] is False:
+                    flip_to_plain_keys.append(k)
+                    new_sensitive.append(pair)
+                elif k in existing:
+                    existing_sensitive.append(pair)
+                else:
+                    new_sensitive.append(pair)
+                continue
+
             want_plain = k in PLAIN_NON_SECRET_VAULT_KEYS or (
                 copyable_creds and k in OPT_IN_COPYABLE_CREDENTIAL_KEYS
             )
@@ -728,28 +846,28 @@ class ZcpVaultClient:
         if flip_to_plain_keys:
             self.call_tool(
                 "zerops_env",
-                {"action": "delete", "project": True, "skipRestart": skip_restart, "variables": flip_to_plain_keys},
+                {"action": "delete", "skipRestart": skip_restart, "variables": flip_to_plain_keys, **scope_args},
             )
 
         if existing_sensitive:
             self.call_tool(
                 "zerops_env",
-                {"action": "set", "project": True, "sensitive": True, "skipRestart": skip_restart, "variables": existing_sensitive},
+                {"action": "set", "sensitive": True, "skipRestart": skip_restart, "variables": existing_sensitive, **scope_args},
             )
         if existing_plain:
             self.call_tool(
                 "zerops_env",
-                {"action": "set", "project": True, "sensitive": False, "skipRestart": skip_restart, "variables": existing_plain},
+                {"action": "set", "sensitive": False, "skipRestart": skip_restart, "variables": existing_plain, **scope_args},
             )
         if new_sensitive:
             self.call_tool(
                 "zerops_env",
-                {"action": "set", "project": True, "sensitive": True, "skipRestart": skip_restart, "variables": new_sensitive},
+                {"action": "set", "sensitive": True, "skipRestart": skip_restart, "variables": new_sensitive, **scope_args},
             )
         if new_plain:
             self.call_tool(
                 "zerops_env",
-                {"action": "set", "project": True, "sensitive": False, "skipRestart": skip_restart, "variables": new_plain},
+                {"action": "set", "sensitive": False, "skipRestart": skip_restart, "variables": new_plain, **scope_args},
             )
 
         return {
@@ -759,3 +877,156 @@ class ZcpVaultClient:
             "new_sensitive": len(new_sensitive),
             "new_plain": len(new_plain),
         }
+
+    def upsert_service_envs(
+        self,
+        service_hostname: str,
+        kv: dict[str, str],
+        *,
+        skip_restart: bool = True,
+        copyable_creds: bool = False,
+        force_sensitive_keys: frozenset[str] = FREELLMAPI_SERVICE_ONLY_KEYS,
+    ) -> dict[str, int]:
+        """Upsert variables directly into a target service's own env scope."""
+        if not kv:
+            return {"existing_sensitive": 0, "existing_plain": 0, "new_auto": 0, "new_sensitive": 0, "new_plain": 0}
+        existing = self.get_service_envs(service_hostname)
+        return self._upsert_env_map(
+            {"serviceHostname": service_hostname},
+            kv,
+            existing,
+            skip_restart=skip_restart,
+            copyable_creds=copyable_creds,
+            force_sensitive_keys=force_sensitive_keys,
+        )
+
+    def upsert_project_envs(
+        self,
+        kv: dict[str, str],
+        *,
+        skip_restart: bool = True,
+        copyable_creds: bool = False,
+        include_operator_keys: bool = False,
+        allow_large: bool = False,
+    ) -> dict[str, int]:
+        """Upsert variables into Project Shared Vault, blocking service-exclusive or oversized blobs."""
+        if not kv:
+            return {"existing_sensitive": 0, "existing_plain": 0, "new_auto": 0, "new_sensitive": 0, "new_plain": 0}
+        filtered: dict[str, str] = {}
+        skipped: list[str] = []
+        for k, v in kv.items():
+            if not allow_large and (
+                k in FREELLMAPI_SERVICE_ONLY_KEYS
+                or (isinstance(v, str) and len(v.encode("utf-8")) > PROJECT_VAULT_MAX_VALUE_BYTES)
+            ):
+                skipped.append(k)
+                continue
+            filtered[k] = v
+        if skipped:
+            import sys
+
+            print(
+                f"[WARN] Blocked Project Shared Vault upsert for oversized/service-only key(s) {sorted(skipped)} "
+                f"(max {PROJECT_VAULT_MAX_VALUE_BYTES}B; store on target serviceHostname instead to prevent ZCP settings bloat).",
+                file=sys.stderr,
+            )
+        if not filtered:
+            return {"existing_sensitive": 0, "existing_plain": 0, "new_auto": 0, "new_sensitive": 0, "new_plain": 0}
+        _, existing = self.get_project_envs()
+        return self._upsert_env_map(
+            {"project": True},
+            filtered,
+            existing,
+            skip_restart=skip_restart,
+            copyable_creds=copyable_creds,
+            include_operator_keys=include_operator_keys,
+        )
+
+
+def apply_freellmapi_vault(
+    zcp: ZcpVaultClient,
+    kv: dict[str, str],
+    proj_slug: str,
+    keys_list: list[dict[str, Any]],
+    custom_providers: list[dict[str, Any]],
+    *,
+    env_values: Optional[dict[str, str]] = None,
+    rotate: bool = False,
+    skip_restart: bool = True,
+    copyable_creds: bool = False,
+    keys_file: str | None = None,
+    pools: list[str] | tuple[str, ...] = (),
+    state_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Hydrate FreeLLMAPI secrets safely: large service-only blobs go strictly to `freellmapi`, never Project Shared Vault."""
+    env_map = env_values if env_values is not None else dict(os.environ)
+    live_project, existing_proj = zcp.get_project_envs()
+    plain_values = zcp.get_project_plain_env_values()
+    services = zcp.list_services()
+    has_freellmapi = "freellmapi" in services
+    existing_svc = zcp.get_service_envs("freellmapi") if has_freellmapi else {}
+    existing_merged = {**existing_proj, **existing_svc}
+
+    effective_slug = (proj_slug or live_project or "zerops").strip()
+    cfg, payload = resolve_freellmapi_vault_payload(
+        kv,
+        effective_slug,
+        keys_list,
+        custom_providers,
+        existing=existing_merged,
+        plain_values=plain_values,
+        env_values=env_map,
+        rotate=rotate,
+    )
+    svc_payload, shared_payload = split_freellmapi_payload(payload)
+
+    shared_summary = zcp.upsert_project_envs(
+        shared_payload,
+        skip_restart=skip_restart,
+        copyable_creds=copyable_creds,
+    )
+
+    if has_freellmapi:
+        if not rotate and "FREEAPI_ENCRYPTION_KEY" not in svc_payload and "FREEAPI_ENCRYPTION_KEY" not in existing_svc:
+            carried_enc = (env_map.get("FREEAPI_ENCRYPTION_KEY") or env_map.get("freellmapi_ENCRYPTION_KEY") or "").strip()
+            if carried_enc:
+                svc_payload["FREEAPI_ENCRYPTION_KEY"] = carried_enc
+
+        svc_summary = zcp.upsert_service_envs(
+            "freellmapi",
+            svc_payload,
+            skip_restart=skip_restart,
+            copyable_creds=copyable_creds,
+        )
+        cleanup_keys = ["FREEAPI_CONFIG_JSON_SECRET"]
+        if "FREEAPI_ENCRYPTION_KEY" in svc_payload or "FREEAPI_ENCRYPTION_KEY" in existing_svc:
+            cleanup_keys.append("FREEAPI_ENCRYPTION_KEY")
+        deleted_from_project = zcp.delete_project_envs(cleanup_keys, skip_restart=True)
+        clear_pending_freellmapi_seed(state_path)
+        mode = "service"
+        staged_path = None
+    else:
+        svc_summary = {"existing_sensitive": 0, "existing_plain": 0, "new_auto": 0, "new_sensitive": 0, "new_plain": 0}
+        deleted_from_project = zcp.delete_project_envs(["FREEAPI_CONFIG_JSON_SECRET"], skip_restart=True)
+        staged = save_pending_freellmapi_seed(
+            keys_file=keys_file,
+            pools=pools,
+            project=effective_slug,
+            copyable_creds=copyable_creds,
+            state_path=state_path,
+        )
+        mode = "deferred_until_freellmapi_created"
+        staged_path = str(staged)
+
+    return {
+        "project": live_project,
+        "mode": mode,
+        "has_freellmapi": has_freellmapi,
+        "cfg": cfg,
+        "service_keys": sorted(svc_payload.keys()),
+        "shared_keys": sorted(shared_payload.keys()),
+        "service_summary": svc_summary,
+        "shared_summary": shared_summary,
+        "deleted_from_project": deleted_from_project,
+        "staged_path": staged_path,
+    }

@@ -296,6 +296,7 @@ hydrate_project_vault() {
     if [ "$UPDATE_ONLY" = false ]; then
       log "WARN: No master keys file detected (expected --keys <path> or $DEFAULT_KEYS_FILE). Run 'zcp-update --keys /path/to/keys.md' before deploying runtimes."
     fi
+    reconcile_freellmapi_vault_scope
     return 0
   fi
 
@@ -346,9 +347,52 @@ EOF_HAS_POOLS
         log "INFO: No FreeLLM pool specified for '$keys_file'; pass --pool <path> or set FREELLM_POOL_FILES to seed FreeLLMAPI."
       fi
     fi
+    reconcile_freellmapi_vault_scope
   else
     log "WARN: /usr/local/bin/zcp not found; skipped Zerops Vault remote sync."
   fi
+}
+
+reconcile_freellmapi_vault_scope() {
+  [ -x "/usr/local/bin/zcp" ] || return 0
+  PYTHONPATH="$CATALOG_DIR/scripts/lib" python3 - "$CATALOG_DIR/scripts/seed-freellmapi-keys.sh" << 'EOF_RECONCILE'
+import os, subprocess, sys
+from vault_env import (
+    FREELLMAPI_SERVICE_ONLY_KEYS,
+    ZcpVaultClient,
+    load_pending_freellmapi_seed,
+)
+
+seed_script = sys.argv[1]
+pending = load_pending_freellmapi_seed()
+
+with ZcpVaultClient() as zcp:
+    services = zcp.list_services()
+    if "freellmapi" not in services:
+        sys.exit(0)
+    _, proj_existing = zcp.get_project_envs()
+    leaked = [k for k in sorted(FREELLMAPI_SERVICE_ONLY_KEYS) if k in proj_existing]
+    if pending and os.path.isfile(seed_script):
+        rc = subprocess.run(["bash", seed_script], check=False).returncode
+        if rc == 0:
+            sys.exit(0)
+    if leaked:
+        svc_existing = zcp.get_service_envs("freellmapi")
+        to_copy = {}
+        to_delete = []
+        for k in leaked:
+            val = os.environ.get(k) or os.environ.get(f"freellmapi_{k}") or ""
+            if k in svc_existing:
+                to_delete.append(k)
+            elif val:
+                to_copy[k] = val
+                to_delete.append(k)
+        if to_copy:
+            zcp.upsert_service_envs("freellmapi", to_copy, skip_restart=True)
+        if to_delete:
+            zcp.delete_project_envs(to_delete, skip_restart=True)
+            print(f"[iniciar] Migrated service-only FreeLLMAPI env(s) {to_delete} off Project Shared Vault onto 'freellmapi'.")
+EOF_RECONCILE
 }
 
 setup_pre_bifrost_deepseek() {

@@ -12,5 +12,6 @@ services:
       cpuMode: SHARED
       minFreeRamGB: 0.25
       minFreeRamPercent: 10
-    # Inject secrets (FREEAPI_ADMIN_EMAIL, FREEAPI_ADMIN_PASSWORD, FREEAPI_CONFIG_JSON,
-    # FREEAPI_ENCRYPTION_KEY) via vault or `zerops_env`; runtime wiring lives in runtime-freellmapi/zerops.yaml.
+    # Inject service-only secrets (FREEAPI_CONFIG_JSON_SECRET, FREEAPI_ENCRYPTION_KEY) directly on
+    # serviceHostname=freellmapi via `seed-freellmapi-keys.sh` / `zerops_env` (never Project Shared Vault);
+    # runtime wiring lives in runtime-freellmapi/zerops.yaml.

@@ -61,8 +61,8 @@ case "$STEP" in
         fi
         log_ok "Hito 1 verificado."
         if [ -x "$SCRIPT_DIR/seed-freellmapi-keys.sh" ]; then
-            log_info "Inyectando configuración y claves declarativas en freellmapi..."
-            "$SCRIPT_DIR/seed-freellmapi-keys.sh" || log_warn "Inyección preliminar completada; se confirmará tras despliegue de código."
+            log_info "Inyectando configuración y claves declarativas en freellmapi (scope servicio, nunca Shared Vault)..."
+            "$SCRIPT_DIR/seed-freellmapi-keys.sh" || log_warn "Inyección preliminar completada; si 'freellmapi' aún no existe en Zerops, ejecuta 'seed-freellmapi-keys' justo después de zerops_import."
         fi
         log_ok "Próximo paso: desplegar código de 'freellmapi' y auditar /api/ping."
         ;;

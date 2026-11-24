@@ -76,10 +76,13 @@ import re
 import sys
 from vault_env import (
     ZcpVaultClient,
+    apply_freellmapi_vault,
     collect_freellm_pools,
     discover_freellm_pools,
+    load_pending_freellmapi_seed,
     parse_kv_file,
     resolve_freellmapi_vault_payload,
+    split_freellmapi_payload,
 )
 
 keys_file = sys.argv[1].strip()
@@ -89,6 +92,16 @@ skip_restart = sys.argv[4] == "true"
 project_override = sys.argv[5].strip()
 copyable_creds = sys.argv[6] == "true"
 extra_pools = [p for p in sys.argv[7:] if p]
+
+if not keys_file and not extra_pools:
+    pending = load_pending_freellmapi_seed()
+    if pending:
+        keys_file = str(pending.get("keys_file") or "").strip()
+        extra_pools = [str(p) for p in (pending.get("pools") or []) if p]
+        if not project_override:
+            project_override = str(pending.get("project") or "").strip()
+        if not copyable_creds and pending.get("copyable_creds"):
+            copyable_creds = True
 
 kv = parse_kv_file(keys_file) if keys_file else {}
 pools = discover_freellm_pools(keys_file or None, extra_pools)
@@ -106,6 +119,7 @@ if dry_run:
     preview_cfg, preview_payload = resolve_freellmapi_vault_payload(
         kv, preview_slug, keys_list, custom_providers, existing={}, plain_values={}, rotate=rotate
     )
+    svc_payload, shared_payload = split_freellmapi_payload(preview_payload)
     preview_json = preview_payload["FREEAPI_CONFIG_JSON_SECRET"]
     print(f"[INFO] Compiled {len(keys_list)} FreeLLM keys from {len(loaded_sources)} pool file(s), {len(preview_cfg['models'])} curated models, {len(preview_cfg['fallback'])} fallback priorities.")
     print(json.dumps({
@@ -120,28 +134,45 @@ if dry_run:
         "admin_email": preview_cfg.get("admin", {}).get("email", ""),
         "has_unified_api_key": bool(preview_cfg.get("unifiedApiKey")),
         "config_json_bytes": len(preview_json),
+        "service_scope": "freellmapi",
+        "service_keys": sorted(svc_payload.keys()),
+        "shared_keys": sorted(shared_payload.keys()),
         "vault_keys": sorted(preview_payload.keys()),
     }, indent=2))
     sys.exit(0)
 
 with ZcpVaultClient() as zcp:
-    live_project, existing = zcp.get_project_envs()
-    plain_values = zcp.get_project_plain_env_values()
-    proj_slug = (project_override or kv.get("PROJECT_NAME") or os.getenv("PROJECT_NAME") or live_project or "zerops").strip()
-    cfg, payload = resolve_freellmapi_vault_payload(
+    proj_slug = (project_override or kv.get("PROJECT_NAME") or os.getenv("PROJECT_NAME") or "").strip()
+    res = apply_freellmapi_vault(
+        zcp,
         kv,
         proj_slug,
         keys_list,
         custom_providers,
-        existing=existing,
-        plain_values=plain_values,
         env_values=dict(os.environ),
         rotate=rotate,
+        skip_restart=skip_restart,
+        copyable_creds=copyable_creds,
+        keys_file=keys_file or None,
+        pools=extra_pools,
     )
+    cfg = res["cfg"]
     print(f"[INFO] Compiled {len(keys_list)} FreeLLM keys from {len(loaded_sources)} pool file(s), {len(cfg['models'])} curated models, {len(cfg['fallback'])} fallback priorities.")
-
-    summary = zcp.upsert_project_envs(payload, skip_restart=skip_restart, copyable_creds=copyable_creds)
-    print(f"[INFO] Project '{live_project}' FreeLLMAPI vault hydrated: upserted {len(payload)} vars (existing_sensitive={summary['existing_sensitive']}, existing_plain={summary['existing_plain']}, new={summary['new_auto']}).")
+    if res["mode"] == "service":
+        svc_s = res["service_summary"]
+        sh_s = res["shared_summary"]
+        print(
+            f"[INFO] Project '{res['project']}' FreeLLMAPI service env hydrated on 'freellmapi': "
+            f"service={res['service_keys']} (sens={svc_s['existing_sensitive']}, new={svc_s['new_auto']}), "
+            f"shared={res['shared_keys']} (sens={sh_s['existing_sensitive']}, new={sh_s['new_auto']}), "
+            f"cleaned_from_project={res['deleted_from_project']}."
+        )
+    else:
+        print(
+            f"[INFO] Project '{res['project']}' shared keys hydrated ({res['shared_keys']}); "
+            f"'freellmapi' service not created yet, so FREEAPI_CONFIG_JSON_SECRET was NOT placed in Project Shared Vault. "
+            f"Staged non-secret seed pointer at {res['staged_path']} for deploy-step.sh 1 / seed-freellmapi-keys."
+        )
 EOF_PY
 
 log_ok "FreeLLMAPI declarative config & vault seeding complete."

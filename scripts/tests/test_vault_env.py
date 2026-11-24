@@ -11,14 +11,17 @@ if str(LIB_DIR) not in sys.path:
     sys.path.insert(0, str(LIB_DIR))
 
 from vault_env import (
+    apply_freellmapi_vault,
     build_freellm_declarative_config,
     collect_freellm_pools,
     discover_freellm_pools,
     is_sensitive_vault_key,
+    load_pending_freellmapi_seed,
     parse_freellm_markdown,
     parse_kv_file,
     resolve_freellmapi_vault_payload,
     resolve_project_vault_payload,
+    split_freellmapi_payload,
 )
 
 
@@ -376,6 +379,119 @@ class TestVaultEnv(unittest.TestCase):
             self.assertIn("auth: Not authorized", msg)
             self.assertIn("ZCP_API_KEY", msg)
             self.assertIsNone(client._proc)
+
+    def test_project_vault_blocks_oversized_and_service_only_keys(self):
+        from vault_env import ZcpVaultClient
+
+        calls: list[tuple[str, dict]] = []
+
+        class FakeZcp(ZcpVaultClient):
+            def get_project_envs(self):
+                return "Demo", {}
+
+            def call_tool(self, name: str, arguments: dict):
+                calls.append((name, arguments))
+                return {}
+
+        summary = FakeZcp().upsert_project_envs(
+            {
+                "FREEAPI_CONFIG_JSON_SECRET": '{"keys":[]}',
+                "FREEAPI_ENCRYPTION_KEY": "a" * 64,
+                "HUGE_BLOB": "x" * 3000,
+                "FREELLMAPI_CLIENT_KEY": "client-key-demo-1234567890",
+            }
+        )
+        self.assertEqual(summary["new_sensitive"], 1)
+        all_vars = [v for _, args in calls for v in args.get("variables", [])]
+        self.assertEqual(all_vars, ["FREELLMAPI_CLIENT_KEY=client-key-demo-1234567890"])
+
+    def test_apply_freellmapi_vault_defers_when_absent_and_targets_service_when_present(self):
+        from vault_env import ZcpVaultClient
+
+        keys_list = [{"platform": "groq", "key": "dummy_groq_key_1234567890", "label": "groq-test", "enabled": True}]
+
+        class FakeStatefulZcp(ZcpVaultClient):
+            def __init__(self, has_freellmapi: bool):
+                super().__init__()
+                self.has_freellmapi = has_freellmapi
+                self.proj_envs: dict[str, tuple[str, bool]] = {"FREEAPI_CONFIG_JSON_SECRET": ("old", True)}
+                self.svc_envs: dict[str, tuple[str, bool]] = {}
+
+            def list_services(self):
+                return {"zcp", "freellmapi"} if self.has_freellmapi else {"zcp"}
+
+            def get_project_envs(self):
+                return "Demo", {k: sens for k, (_, sens) in self.proj_envs.items()}
+
+            def get_service_envs(self, service_hostname: str):
+                assert service_hostname == "freellmapi"
+                return {k: sens for k, (_, sens) in self.svc_envs.items()}
+
+            def get_project_plain_env_values(self):
+                return {k: val for k, (val, sens) in self.proj_envs.items() if not sens}
+
+            def call_tool(self, name: str, arguments: dict):
+                assert name == "zerops_env"
+                target = self.proj_envs if arguments.get("project") else self.svc_envs
+                action = arguments["action"]
+                if action == "delete":
+                    for k in arguments.get("variables", []):
+                        target.pop(k, None)
+                elif action == "set":
+                    sens = bool(arguments.get("sensitive", False))
+                    for pair in arguments.get("variables", []):
+                        k, v = pair.split("=", 1)
+                        target[k] = (v, sens)
+                return {}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / "freellmapi-seed.json"
+            fake = FakeStatefulZcp(has_freellmapi=False)
+
+            # 1. Before freellmapi exists: never puts FREEAPI_CONFIG_JSON_SECRET in project vault, cleans legacy leak, stages non-secret pointer.
+            res_deferred = apply_freellmapi_vault(
+                fake,
+                {},
+                "Demo",
+                keys_list,
+                [],
+                env_values={},
+                keys_file="/tmp/keys.md",
+                pools=["/tmp/pool_freellm.md"],
+                state_path=state_file,
+            )
+            self.assertEqual(res_deferred["mode"], "deferred_until_freellmapi_created")
+            self.assertNotIn("FREEAPI_CONFIG_JSON_SECRET", fake.proj_envs)
+            self.assertIn("FREELLMAPI_CLIENT_KEY", fake.proj_envs)
+            self.assertEqual(fake.svc_envs, {})
+            staged = load_pending_freellmapi_seed(state_file)
+            self.assertIsNotNone(staged)
+            self.assertEqual(staged["keys_file"], "/tmp/keys.md")
+            self.assertNotIn("dummy_groq_key", state_file.read_text(encoding="utf-8"))
+
+            # 2. Once freellmapi exists: writes config & encryption key directly to freellmapi (sensitive=True) and clears pointer.
+            fake.has_freellmapi = True
+            fake.proj_envs["FREEAPI_CONFIG_JSON_SECRET"] = ("stale", True)
+            res_svc = apply_freellmapi_vault(
+                fake,
+                {},
+                "Demo",
+                keys_list,
+                [],
+                env_values={},
+                keys_file="/tmp/keys.md",
+                pools=["/tmp/pool_freellm.md"],
+                state_path=state_file,
+            )
+            self.assertEqual(res_svc["mode"], "service")
+            self.assertNotIn("FREEAPI_CONFIG_JSON_SECRET", fake.proj_envs)
+            self.assertNotIn("FREEAPI_ENCRYPTION_KEY", fake.proj_envs)
+            self.assertTrue(fake.svc_envs["FREEAPI_CONFIG_JSON_SECRET"][1])
+            self.assertTrue(fake.svc_envs["FREEAPI_ENCRYPTION_KEY"][1])
+            self.assertIsNone(load_pending_freellmapi_seed(state_file))
+            svc_p, sh_p = split_freellmapi_payload({"FREEAPI_CONFIG_JSON_SECRET": "x", "FREELLMAPI_CLIENT_KEY": "y"})
+            self.assertEqual(set(svc_p.keys()), {"FREEAPI_CONFIG_JSON_SECRET"})
+            self.assertEqual(set(sh_p.keys()), {"FREELLMAPI_CLIENT_KEY"})
 
 
 if __name__ == "__main__":
