@@ -385,29 +385,6 @@ ENV_EOF" > "$TMP_EXPANDED" 2>/dev/null || cp "$MCP_REGISTRY" "$TMP_EXPANDED"
     echo "  ✅ MCPs astrológicos locales apagados fuera de mcp_config.json activo"
 fi
 
-# 11. Inyección de Suites de Astrología y Branding en AGENTS.md
-INJECTOR=$(command -v inject-agent-rule 2>/dev/null || echo "/home/zerops/.local/bin/inject-agent-rule")
-if [ -x "$INJECTOR" ]; then
-    echo "• Registrando suites de Astrología y Branding (Offloaded to references)..."
-    
-    mkdir -p "/var/www/.agents/references" "$ZCP_ROOT/.agents/references" 2>/dev/null || true
-    if [ -f "$ZCP_ROOT/.agents/references/astro_suites_encyclopedia.md" ]; then
-        cp -f "$ZCP_ROOT/.agents/references/astro_suites_encyclopedia.md" "/var/www/.agents/references/astro_suites_encyclopedia.md"
-    fi
-    if [ -d "$HOME/.gemini/antigravity-cli" ] && [ -f "/var/www/.agents/references/astro_suites_encyclopedia.md" ]; then
-        mkdir -p "$HOME/.gemini/antigravity-cli/references" 2>/dev/null || true
-        cp -f "/var/www/.agents/references/astro_suites_encyclopedia.md" "$HOME/.gemini/antigravity-cli/references/" 2>/dev/null || true
-    fi
-    echo "• Suites Astrológica y Branding indexadas en .agents/references/astro_suites_encyclopedia.md y .atl/skill-registry.md (Lean AGENTS.md)"
-fi
-
-# 12. Compilación del Registro de Gentle AI
-if command -v gentle-ai >/dev/null 2>&1; then
-    echo "• Refrescando registro nativo de skills (.atl/skill-registry.md)..."
-    gentle-ai skill-registry refresh --force 2>/dev/null || true
-    echo "  ✅ Skill registry refrescado con éxito."
-fi
-
 echo "============================================================"
-echo "  🔑 Ingestión de Claves Astrológicas, NLM & MCPs Finalizado (v4.5)"
+echo "  🔑 Ingestión de Claves Astrológicas, NLM & MCPs Finalizado (v4.6)"
 echo "============================================================"

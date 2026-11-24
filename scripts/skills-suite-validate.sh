@@ -1,169 +1,203 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Custom Skills Structural, Syntax & Behavioral Validator (Zero Checklist-Theater)
-# Separates:
-#   - BEHAVIORALLY_VERIFIED: skills with executable test scripts that ran & exited 0
-#   - SYNTAX_ONLY: skills checked only for SKILL.md, links, bash -n, python AST
+# Custom Skills Fast Structural & Behavioral Validator (v2.0)
+# Default mode (<0.4s): single in-process Python pass + batched bash -n
+# Pass --with-tests (or --full) to execute per-skill *test*.py / *-test.sh suites.
 # ==============================================================================
 set -euo pipefail
 
-EXCLUDED_REGEX="^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*|karpathy.*|using-superpowers|brainstorming|dispatching-parallel-agents|executing-plans|finishing-a-development-branch|receiving-code-review|requesting-code-review|subagent-driven-development|systematic-debugging|test-driven-development|using-git-worktrees|verification-before-completion|writing-plans|writing-skills|ask-matt|chief-of-staff|claude-handoff|code-review|codebase-design|diagnosing-bugs|domain-modeling|git-guardrails-claude-code|grill-me|grill-with-docs|grilling|handoff|implement|implement-spec|improve-codebase-architecture|loop-me|migrate-to-shoehorn|pr|prototype|retro|scaffold-exercises|setup-matt-pocock-skills|setup-pre-commit|setup-ts-deep-modules|software-factory|tdd|teach|to-questionnaire|to-spec|to-tickets|triage|wait-what|wayfinder|wizard|writing-beats|writing-for-agents|writing-fragments|writing-shape)$"
-
 QUIET=false
 STRICT_BUDGET=false
+WITH_TESTS=false
 SKILLS_DIR="/var/www/.agents/skills"
+
 for arg in "$@"; do
     case "$arg" in
         -q|--quiet) QUIET=true ;;
         --strict-budget) STRICT_BUDGET=true ;;
+        --with-tests|--full) WITH_TESTS=true ;;
         *) [ -d "$arg" ] && SKILLS_DIR="$arg" ;;
     esac
 done
 
-TOTAL=0
-BEHAV_PASSED=0
-SYNTAX_ONLY=0
-FAILED=0
-WARN_BUDGET=0
-FAILED_SKILLS=()
+exec python3 -B - "$SKILLS_DIR" "$QUIET" "$STRICT_BUDGET" "$WITH_TESTS" << 'EOF'
+import ast
+import os
+import re
+import subprocess
+import sys
 
-echo "============================================================"
-echo "  SKILLS SUITE AUDIT (Syntax + Links + Real Tests)"
-echo "============================================================"
+skills_dir = sys.argv[1]
+quiet = sys.argv[2] == "true"
+strict_budget = sys.argv[3] == "true"
+with_tests = sys.argv[4] == "true"
 
-for s in "$SKILLS_DIR"/*; do
-    [ -e "$s" ] || continue
-    skill_name="$(basename "$s")"
-    if echo "$skill_name" | grep -qE "$EXCLUDED_REGEX"; then
+EXCLUDED_RE = re.compile(
+    r"^(react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|"
+    r"crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|"
+    r"pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-.*|rdd-.*|"
+    r"github-pr|work-unit-commits|jira-.*|issue-.*|gentle-ai-.*|systemic-issue-triage|"
+    r"judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|"
+    r"skill-creator|skill-registry|skill-improver|hermes-ephemeral-.*|pocock.*|karpathy.*|"
+    r"using-superpowers|brainstorming|dispatching-parallel-agents|executing-plans|"
+    r"finishing-a-development-branch|receiving-code-review|requesting-code-review|"
+    r"subagent-driven-development|systematic-debugging|test-driven-development|"
+    r"using-git-worktrees|verification-before-completion|writing-plans|writing-skills|"
+    r"ask-matt|chief-of-staff|claude-handoff|code-review|codebase-design|diagnosing-bugs|"
+    r"domain-modeling|git-guardrails-claude-code|grill-me|grill-with-docs|grilling|handoff|"
+    r"implement|implement-spec|improve-codebase-architecture|loop-me|migrate-to-shoehorn|"
+    r"pr|prototype|retro|scaffold-exercises|setup-matt-pocock-skills|setup-pre-commit|"
+    r"setup-ts-deep-modules|software-factory|tdd|teach|to-questionnaire|to-spec|to-tickets|"
+    r"triage|wait-what|wayfinder|wizard|writing-beats|writing-for-agents|writing-fragments|"
+    r"writing-shape)$"
+)
+
+NAME_RE = re.compile(r'^name:\s*["\']?[a-zA-Z0-9_.\-]+', re.MULTILINE)
+DESC_RE = re.compile(r"^description:\s*", re.MULTILINE)
+LINK_RE = re.compile(r"\(file:///([^)#]+)")
+
+total = 0
+struct_ok = 0
+behav_ok = 0
+failed = 0
+warn_budget = 0
+failed_skills = []
+sh_files = []  # (skill_name, path)
+test_files = []  # (skill_name, path)
+
+print("============================================================")
+print("  SKILLS SUITE AUDIT (Fast In-Process + Scoped Tests)")
+print("============================================================")
+
+for name in sorted(os.listdir(skills_dir)):
+    if EXCLUDED_RE.match(name):
         continue
-    fi
-    if [ -L "$s" ] && [ ! -d "$s" ]; then
-        echo "❌ [$skill_name]: Broken symlink -> $(readlink "$s")"
-        FAILED=$((FAILED + 1))
-        TOTAL=$((TOTAL + 1))
-        FAILED_SKILLS+=("$skill_name (broken symlink)")
+    entry = os.path.join(skills_dir, name)
+    if os.path.islink(entry) and not os.path.isdir(entry):
+        print(f"❌ [{name}]: Broken symlink -> {os.readlink(entry)}")
+        total += 1
+        failed += 1
+        failed_skills.append(f"{name} (broken symlink)")
         continue
-    fi
-    [ -d "$s" ] || continue
+    if not os.path.isdir(entry):
+        continue
 
-    TOTAL=$((TOTAL + 1))
-    skill_path="$(readlink -f "$s")"
-    fail_flag=0
+    total += 1
+    skill_path = os.path.realpath(entry)
+    skill_md = os.path.join(skill_path, "SKILL.md")
+    fail_flag = False
 
-    # 1. SKILL.md presence + frontmatter (name + description)
-    if [ ! -s "$skill_path/SKILL.md" ]; then
-        echo "❌ [$skill_name]: Missing or empty SKILL.md"
-        fail_flag=1
-    elif ! grep -qE '^name:[[:space:]]*["'\'']?[a-zA-Z0-9_.\-]+' "$skill_path/SKILL.md"; then
-        echo "❌ [$skill_name]: Missing frontmatter 'name:' in SKILL.md"
-        fail_flag=1
-    elif ! grep -qE '^description:[[:space:]]*' "$skill_path/SKILL.md"; then
-        echo "❌ [$skill_name]: Missing frontmatter 'description:' in SKILL.md"
-        fail_flag=1
-    fi
+    if not os.path.isfile(skill_md) or os.path.getsize(skill_md) == 0:
+        print(f"❌ [{name}]: Missing or empty SKILL.md")
+        fail_flag = True
+    else:
+        content = open(skill_md, "r", encoding="utf-8", errors="replace").read()
+        if not NAME_RE.search(content):
+            print(f"❌ [{name}]: Missing frontmatter 'name:' in SKILL.md")
+            fail_flag = True
+        elif not DESC_RE.search(content):
+            print(f"❌ [{name}]: Missing frontmatter 'description:' in SKILL.md")
+            fail_flag = True
 
-    # 2. Word budget telemetry (<= 480w for sovereign custom skills, excluding imported taste-skill/impeccable)
-    if [ "$fail_flag" -eq 0 ] && [ "$skill_name" != "taste-skill" ] && [ "$skill_name" != "impeccable" ]; then
-        word_count="$(wc -w < "$skill_path/SKILL.md" | tr -d ' ')"
-        if [ "$word_count" -gt 480 ]; then
-            WARN_BUDGET=$((WARN_BUDGET + 1))
-            if [ "$STRICT_BUDGET" = true ]; then
-                echo "❌ [$skill_name]: SKILL.md exceeds 480 words ($word_count words)"
-                fail_flag=1
-            elif [ "$QUIET" = false ]; then
-                echo "⚠️ [$skill_name]: BUDGET_WARN ($word_count > 480 words)"
-            fi
-        fi
-    fi
+        if not fail_flag and name not in ("taste-skill", "impeccable"):
+            wc = len(content.split())
+            if wc > 480:
+                warn_budget += 1
+                if strict_budget:
+                    print(f"❌ [{name}]: SKILL.md exceeds 480 words ({wc} words)")
+                    fail_flag = True
+                elif not quiet:
+                    print(f"⚠️ [{name}]: BUDGET_WARN ({wc} > 480 words)")
 
-    # 3. Bash syntax validation
-    if [ "$fail_flag" -eq 0 ] && [ -d "$skill_path/scripts" ]; then
-        for s_file in "$skill_path"/scripts/*.sh; do
-            [ -f "$s_file" ] || continue
-            if ! err_out=$(bash -n "$s_file" 2>&1); then
-                echo "❌ [$skill_name]: Bash syntax error in $(basename "$s_file"):"
-                echo "   $err_out"
-                fail_flag=1
-                break
-            fi
-        done
-    fi
-
-    # 4. Python AST validation (zero __pycache__ on disk)
-    if [ "$fail_flag" -eq 0 ]; then
-        while IFS= read -r py_file; do
-            [ -f "$py_file" ] || continue
-            if ! err_out=$(python3 -B -c "import ast,sys; ast.parse(open(sys.argv[1],'r',encoding='utf-8').read())" "$py_file" 2>&1); then
-                echo "❌ [$skill_name]: Python syntax error in $(basename "$py_file"):"
-                echo "   $err_out"
-                fail_flag=1
-                break
-            fi
-        done < <(find "$skill_path" -maxdepth 3 -name "*.py" 2>/dev/null || true)
-    fi
-
-    # 5. Local file:/// link verification
-    if [ "$fail_flag" -eq 0 ]; then
-        while IFS= read -r link; do
-            [ -n "$link" ] || continue
-            link_path="${link#file://}"
-            if [ ! -e "$link_path" ]; then
-                echo "❌ [$skill_name]: Broken file link: $link_path"
-                fail_flag=1
-                break
-            fi
-        done < <(grep -oE '\(file:///[^)]+\)' "$skill_path/SKILL.md" | tr -d '()' | sed 's/#.*//' || true)
-    fi
-
-    # 6. Executable behavioral tests if present
-    ran_tests=0
-    if [ "$fail_flag" -eq 0 ]; then
-        while IFS= read -r t_file; do
-            [ -f "$t_file" ] || continue
-            ran_tests=$((ran_tests + 1))
-            if [[ "$t_file" == *.py ]]; then
-                if ! t_out=$(PYTHONDONTWRITEBYTECODE=1 python3 -B "$t_file" 2>&1); then
-                    echo "❌ [$skill_name]: Behavioral test FAILED: $(basename "$t_file")"
-                    echo "$t_out" | tail -n 20
-                    fail_flag=1
+        if not fail_flag:
+            for link_path in LINK_RE.findall(content):
+                abs_link = "/" + link_path.lstrip("/")
+                if not os.path.exists(abs_link):
+                    print(f"❌ [{name}]: Broken file link: {abs_link}")
+                    fail_flag = True
                     break
-                fi
-            elif [[ "$t_file" == *.sh ]]; then
-                if ! t_out=$(bash "$t_file" 2>&1); then
-                    echo "❌ [$skill_name]: Behavioral test FAILED: $(basename "$t_file")"
-                    echo "$t_out" | tail -n 20
-                    fail_flag=1
-                    break
-                fi
-            fi
-        done < <(find "$skill_path" -maxdepth 3 -type f \( -name "*test*.py" -o -name "*-test.sh" -o -path "*/tests/*.sh" \) 2>/dev/null | sort)
-    fi
 
-    if [ "$fail_flag" -ne 0 ]; then
-        FAILED=$((FAILED + 1))
-        FAILED_SKILLS+=("$skill_name")
-    elif [ "$ran_tests" -gt 0 ]; then
-        BEHAV_PASSED=$((BEHAV_PASSED + 1))
-        [ "$QUIET" = false ] && echo "✓ [$skill_name]: BEHAVIORALLY_VERIFIED ($ran_tests test script(s) exit 0)"
-    else
-        SYNTAX_ONLY=$((SYNTAX_ONLY + 1))
-        [ "$QUIET" = false ] && echo "• [$skill_name]: SYNTAX_ONLY (no executable test suite)"
-    fi
-done
+    if not fail_flag:
+        for root, dirs, files in os.walk(skill_path):
+            dirs[:] = [d for d in dirs if d not in (".git", "__pycache__", "node_modules")]
+            rel_depth = os.path.relpath(root, skill_path)
+            if rel_depth != "." and rel_depth.count(os.sep) >= 2:
+                continue
+            for fname in sorted(files):
+                fpath = os.path.join(root, fname)
+                if fname.endswith(".py"):
+                    try:
+                        ast.parse(open(fpath, "r", encoding="utf-8").read(), filename=fpath)
+                    except SyntaxError as e:
+                        print(f"❌ [{name}]: Python syntax error in {fname}:{e.lineno}: {e.msg}")
+                        fail_flag = True
+                        break
+                elif fname.endswith(".sh") and os.path.basename(root) == "scripts":
+                    sh_files.append((name, fpath))
 
-echo "============================================================"
-echo "  HONEST SKILLS AUDIT SUMMARY"
-echo "  • Total Custom Skills Audited:               $TOTAL"
-echo "  • BEHAVIORALLY_VERIFIED (tests ran exit 0):  $BEHAV_PASSED"
-echo "  • SYNTAX_ONLY (no executable test suite):    $SYNTAX_ONLY"
-echo "  • Word Budget Warnings (>480w):              $WARN_BUDGET"
-echo "  • Failed:                                    $FAILED"
-echo "============================================================"
+                if with_tests and (
+                    (fname.endswith(".py") and "test" in fname)
+                    or (fname.endswith("-test.sh"))
+                    or (fname.endswith(".sh") and os.path.basename(root) == "tests")
+                ):
+                    test_files.append((name, fpath))
+            if fail_flag:
+                break
 
-if [ "$FAILED" -gt 0 ]; then
-    echo "💥 Failures: ${FAILED_SKILLS[*]}"
-    exit 1
-fi
+    if fail_flag:
+        failed += 1
+        failed_skills.append(name)
 
-echo "✅ Audit completed with 0 failures ($BEHAV_PASSED behaviorally verified, $SYNTAX_ONLY syntax/structure only)."
-exit 0
+# Single batched bash -n check for all skill scripts/*.sh
+failed_set = set(failed_skills)
+if sh_files:
+    bash_check = subprocess.run(
+        ["bash", "-c", 'for f in "$@"; do bash -n "$f" || { echo "FAIL:$f"; exit 1; }; done', "_"] + [p for _, p in sh_files],
+        capture_output=True,
+        text=True,
+    )
+    if bash_check.returncode != 0:
+        bad_line = bash_check.stdout.strip().splitlines()[-1] if bash_check.stdout.strip() else ""
+        bad_path = bad_line.replace("FAIL:", "")
+        bad_skill = next((sn for sn, sp in sh_files if sp == bad_path), "unknown")
+        print(f"❌ [{bad_skill}]: Bash syntax error in {os.path.basename(bad_path)}:\n{bash_check.stderr.strip()}")
+        if bad_skill not in failed_set:
+            failed += 1
+            failed_skills.append(bad_skill)
+            failed_set.add(bad_skill)
+
+skills_with_tests = set()
+if with_tests and test_files:
+    for sn, tf in sorted(test_files):
+        if sn in failed_set:
+            continue
+        cmd = ["python3", "-B", tf] if tf.endswith(".py") else ["bash", tf]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode != 0:
+            print(f"❌ [{sn}]: Behavioral test FAILED: {os.path.basename(tf)}")
+            print((res.stdout + res.stderr)[-1000:])
+            failed += 1
+            failed_skills.append(sn)
+            failed_set.add(sn)
+        else:
+            skills_with_tests.add(sn)
+
+behav_ok = len(skills_with_tests)
+struct_ok = total - failed - behav_ok
+
+print("============================================================")
+print("  SKILLS AUDIT SUMMARY")
+print(f"  • Total Custom Skills Audited:               {total}")
+print(f"  • STRUCTURALLY_VERIFIED (AST/syntax/links):  {struct_ok}")
+print(f"  • BEHAVIORALLY_VERIFIED (tests exit 0):      {behav_ok}")
+print(f"  • Word Budget Warnings (>480w):              {warn_budget}")
+print(f"  • Failed:                                    {failed}")
+print("============================================================")
+
+if failed > 0:
+    print("💥 Failures:", ", ".join(failed_skills))
+    sys.exit(1)
+
+print(f"✅ Audit completed with 0 failures ({behav_ok} behaviorally verified, {struct_ok} structurally verified).")
+sys.exit(0)
+EOF

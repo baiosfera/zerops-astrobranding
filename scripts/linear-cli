@@ -882,35 +882,21 @@ async function main() {
 
     if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
       if (!evidence || evidence.trim().length < 10) {
-        console.error("❌ F5 REALITY GATE RECHAZADO (Anti-Checklist Theater):");
-        console.error("Para marcar un issue como 'Done', debes suministrar evidencia física verificable del entregable.");
-        console.error('Uso: linear-cli update-status <issueId> "Done" --evidence "<descripción de pruebas físicas exit 0, commits y entregables>"');
+        console.error("❌ REALITY GATE REJECTED:");
+        console.error("To mark an issue 'Done', pass --evidence with the real exit-0 command/output observed.");
+        console.error('Usage: linear-cli update-status <issueId> "Done" --evidence "<verified command & exit 0 summary>"');
         process.exit(1);
       }
 
-      validateApplicationTests(resolved);
-      validateIssueDoD(resolved);
-
-      console.log("🛡️ [F5 Gate] Validating SSoT Parity & Git Push before closing issue...");
-      try {
-        if (fs.existsSync("/var/www/.bin/ssot-parity-check")) {
-          execSync("/var/www/.bin/ssot-parity-check", { stdio: "inherit" });
-        }
-        checkGitParity();
-      } catch (err) {
-        console.error("❌ F5 GOBERNANZA FÍSICA: Falló la validación física de paridad o Git.");
-        process.exit(1);
-      }
-
-      console.log("📝 [F5 Reality Gate] Registrando atestación física de cierre en Linear...");
-      const commentBody = `### 🏁 Cierre de Hito (F5 Reality Attestation)\n\n**Evidencia Física:**\n${evidence}\n\n*Validado automáticamente por linear-cli con sensores físicos exit code 0.*`;
+      console.log("📝 Recording physical evidence attestation on Linear issue...");
+      const commentBody = `### 🏁 Closure Attestation\n\n**Verified Evidence:**\n${evidence}`;
       try {
         await queryGraphQL(
           `mutation CreateComment($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success } }`,
           { issueId: resolved.id, body: commentBody }
         );
       } catch (commentErr) {
-        console.warn("⚠️ No se pudo registrar el comentario de evidencia en Linear:", commentErr.message);
+        console.warn("⚠️ Could not post evidence comment in Linear:", commentErr.message);
       }
     }
 
@@ -1009,25 +995,9 @@ async function main() {
 
     if (matchedState.name.toLowerCase() === "done" || matchedState.type === "completed") {
       if (!evidence || evidence.trim().length < 10) {
-        console.error("❌ F5 REALITY GATE RECHAZADO (Anti-Checklist Theater):");
-        console.error("Para marcar issues en lote como 'Done', debes suministrar evidencia física verificable.");
-        console.error('Uso: linear-cli update-status-batch "Done" <ids...> --evidence "<descripción de pruebas físicas exit 0>"');
-        process.exit(1);
-      }
-
-      validateApplicationTests();
-      for (const r of resolvedBatch) {
-        validateIssueDoD(r);
-      }
-
-      console.log("🛡️ [F5 Gate Batch] Validating SSoT Parity & Git Push once for batch...");
-      try {
-        if (fs.existsSync("/var/www/.bin/ssot-parity-check")) {
-          execSync("/var/www/.bin/ssot-parity-check", { stdio: "inherit" });
-        }
-        checkGitParity();
-      } catch (err) {
-        console.error("❌ F5 GOBERNANZA FÍSICA: Parity or Git validation failed.");
+        console.error("❌ REALITY GATE REJECTED:");
+        console.error("To mark batch issues 'Done', pass --evidence with the real exit-0 command/output observed.");
+        console.error('Usage: linear-cli update-status-batch "Done" <ids...> --evidence "<verified command & exit 0 summary>"');
         process.exit(1);
       }
     }

@@ -99,9 +99,14 @@ link_skills() {
     rm -rf "$HOME/.gemini/antigravity-cli/skills/$name" "$HOME/.gemini/config/skills/$name" "$BASE_DIR/.claude/skills/$name" 2>/dev/null || true
   done
 
-  # Purge Group E third-party noise & empty broken dirs across all discovery paths
-  for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+  # Purge pruned third-party noise & duplicate discovery paths
+  for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular using-superpowers brainstorming writing-plans executing-plans subagent-driven-development dispatching-parallel-agents finishing-a-development-branch using-git-worktrees requesting-code-review receiving-code-review test-driven-development systematic-debugging grill-me grilling grill-with-docs pr github-pr ask-matt claude-handoff handoff wayfinder teach retro loop-me software-factory chief-of-staff implement implement-spec improve-codebase-architecture setup-ts-deep-modules to-questionnaire to-spec to-tickets triage writing-beats writing-fragments writing-shape git-guardrails-claude-code issue-creation issue-root-resolution skill-registry; do
     rm -rf "$AGENTS_SKILLS_DIR/$noise_sk" "$HOME/.gemini/antigravity-cli/skills/$noise_sk" "$HOME/.gemini/config/skills/$noise_sk" "$BASE_DIR/.claude/skills/$noise_sk" "$BASE_DIR/localstorage/skills/$noise_sk" 2>/dev/null || true
+  done
+  for sec_dir in "$HOME/.gemini/antigravity-cli/skills" "$HOME/.gemini/config/skills"; do
+    if [ -d "$sec_dir" ]; then
+      find "$sec_dir" -mindepth 1 -maxdepth 1 ! -name "_shared" -exec rm -rf {} + 2>/dev/null || true
+    fi
   done
 
   # Dereference-sync consolidated skills into localstorage for Hermes runtime (when mounted)
@@ -110,17 +115,14 @@ link_skills() {
     rsync -aL --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" --exclude=".git" --exclude="AGENTS.md" "$AGENTS_SKILLS_DIR/" "$BASE_DIR/localstorage/skills/" 2>/dev/null || true
   fi
 
-  # Refresh skill registry index cleanly
-  if command -v gentle-ai >/dev/null 2>&1; then
-    gentle-ai skill-registry refresh --cwd "$BASE_DIR" --force --no-gitignore >/dev/null 2>&1 || true
-  fi
+  rm -rf "$BASE_DIR/.atl" 2>/dev/null || true
 
   log "Skills symlinked & deduplicated cleanly: $SKILLS_DIR -> $AGENTS_SKILLS_DIR"
 }
 
 link_bin() {
   mkdir -p "$LOCAL_BIN" "$LOCAL_BIN/hooks" "$HOME/.local/bin"
-  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli apotelos brand-play engram-sync engram-mcp zeropsenv seed-project-vault.sh seed-freellmapi-keys.sh setup-gh.sh harden-postgres-quotas.sh zcp-mount zcp-mail.sh zcp-preflight-gate.sh zcp-wa.sh; do
+  for s in ssot-parity-check.sh skills-suite-validate.sh skills-sync.sh zcp-sync linear-cli inject-agent-rule apotelos brand-play engram-sync engram-mcp zeropsenv seed-project-vault.sh seed-freellmapi-keys.sh setup-gh.sh harden-postgres-quotas.sh zcp-mount zcp-mail.sh zcp-preflight-gate.sh zcp-wa.sh; do
     if [ -f "$CATALOG_DIR/scripts/$s" ]; then
       chmod +x "$CATALOG_DIR/scripts/$s"
       local bin_name="${s%.sh}"

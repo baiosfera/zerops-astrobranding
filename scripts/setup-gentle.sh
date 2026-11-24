@@ -197,9 +197,9 @@ rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/pipeline/synthesis.py" 2>/dev/null 
 
 rm -rf "$TMP_SKILLS_DIR" 2>/dev/null || true
 
-# Purgar ruido Grupo E y copias congeladas en perfiles secundarios que sombreen .agents/skills
-echo "• Limpiando ruido Grupo E y copias congeladas en perfiles secundarios..."
-for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+# Purgar ruido externo y copias congeladas en perfiles secundarios que sombreen .agents/skills
+echo "• Limpiando ruido externo y copias congeladas en perfiles secundarios..."
+for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular using-superpowers brainstorming writing-plans executing-plans subagent-driven-development dispatching-parallel-agents finishing-a-development-branch using-git-worktrees requesting-code-review receiving-code-review test-driven-development systematic-debugging grill-me grilling grill-with-docs pr github-pr ask-matt claude-handoff handoff wayfinder teach retro loop-me software-factory chief-of-staff implement implement-spec improve-codebase-architecture setup-ts-deep-modules to-questionnaire to-spec to-tickets triage writing-beats writing-fragments writing-shape git-guardrails-claude-code issue-creation issue-root-resolution skill-registry; do
     rm -rf "$PROJECT_ROOT/.agents/skills/$noise_sk" "/home/zerops/.gemini/antigravity-cli/skills/$noise_sk" "/home/zerops/.gemini/config/skills/$noise_sk" "/var/www/.claude/skills/$noise_sk" 2>/dev/null || true
 done
 if [ -d "/var/www/zerops-astro-skills" ]; then
@@ -278,76 +278,22 @@ if os.path.isfile(global_mcp):
     except Exception as e:
         print(f"  ⚠️ No se pudo actualizar {global_mcp}: {e}")
 EOF_ENGRAM_MCP
-    echo "• Compilando registro de skills (.atl/skill-registry.md)..."
-    gentle-ai skill-registry refresh --cwd "$PROJECT_ROOT" --force --no-gitignore 2>/dev/null || gentle-ai skill-registry refresh --force 2>/dev/null || true
+    rm -rf "$PROJECT_ROOT/.atl" "/home/zerops/.gemini/GEMINI.md" "/home/zerops/.gemini/system.md" "/home/zerops/.gemini/antigravity-cli/references" 2>/dev/null || true
+    for rule_name in \
+        gentle-ai-03-orchestrator-part1.md \
+        gentle-ai-03-orchestrator-part2.md \
+        gentle-ai-04-agent-routing-part1.md \
+        gentle-ai-04-agent-routing-part2.md; do
+        rm -f "/home/zerops/.gemini/config/rules/$rule_name" 2>/dev/null || true
+    done
     echo "• Verificando salud del ecosistema Gentle AI..."
     gentle-ai doctor || true
-
-    # 3b. Optimización idempotente de GEMINI.md + Purga de reglas redundantes gentle-ai-03/04 (<20K budget)
-    python3 - << 'EOF_OPT'
-import os, re
-
-gemini_path = "/home/zerops/.gemini/GEMINI.md"
-dest_local = "/home/zerops/.gemini/antigravity-cli/skills/_shared/sdd-orchestrator-full.md"
-dest_drive = "/var/www/.agents/references/sdd-orchestrator-full.md"
-
-if os.path.isfile(gemini_path):
-    with open(gemini_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    blocks = re.findall(r'<!-- gentle-ai:orchestrator -->.*?<!-- /gentle-ai:agent-routing -->', content, flags=re.DOTALL)
-    for b in blocks:
-        if len(b) > 1000:
-            os.makedirs(os.path.dirname(dest_local), exist_ok=True)
-            with open(dest_local, "w", encoding="utf-8") as f:
-                f.write(b)
-            os.makedirs(os.path.dirname(dest_drive), exist_ok=True)
-            with open(dest_drive, "w", encoding="utf-8") as f:
-                f.write(b)
-            break
-
-    jit_pointer = (
-        "<!-- gentle-ai:orchestrator -->\n"
-        "## Agent Teams Lite — Orchestrator (Dual-RAG JIT Mode)\n\n"
-        "Spec-Driven Development (SDD) & ODD orchestrator protocol is offloaded to conserve token budget.\n"
-        "When the user requests an SDD/ODD change, phase agent delegation, or Agent Teams workflow, read:\n"
-        "file:///home/zerops/.gemini/antigravity-cli/skills/_shared/sdd-orchestrator-full.md\n"
-        "<!-- /gentle-ai:agent-routing -->\n"
-    )
-    cleaned = re.sub(
-        r'(?:<!-- gentle-ai:orchestrator -->|## Agent Teams Lite — Orchestrator \(Dual-RAG JIT Mode\)).*?(?:<!-- /gentle-ai:agent-routing -->|<!-- /gentle-ai:sdd-orchestrator -->|skills/_shared/sdd-orchestrator-full\.md)\n*',
-        '',
-        content,
-        flags=re.DOTALL,
-    ).strip()
-    new_content = f"{cleaned}\n\n{jit_pointer}" if cleaned else jit_pointer
-    with open(gemini_path, "w", encoding="utf-8") as f:
-        f.write(new_content)
-    print("  ✓ GEMINI.md deduplicado y compactado a 1 bloque Dual-RAG JIT.")
-
-# Eliminar gentle-ai-03* y gentle-ai-04* (conflictivas con F0-F5 y causantes de overflow >20K tokens)
-for rule_name in (
-    "gentle-ai-03-orchestrator-part1.md",
-    "gentle-ai-03-orchestrator-part2.md",
-    "gentle-ai-04-agent-routing-part1.md",
-    "gentle-ai-04-agent-routing-part2.md",
-):
-    rpath = os.path.join("/home/zerops/.gemini/config/rules", rule_name)
-    if os.path.lexists(rpath):
-        os.remove(rpath)
-        print(f"  ✓ Eliminada regla conflictiva/excedente: {rule_name}")
-EOF_OPT
 fi
 
 INJECT_CMD="inject-agent-rule"
 
 # 4. Inyectar Protocolos de Gobernanza en AGENTS.md (preservando ZCP:BEGIN y ZEROPS:REFLOG)
 echo "• Inyectando protocolos de gobernanza en AGENTS.md (Lean Mode)..."
-
-    mkdir -p "$PROJECT_ROOT/.agents/references"
-    if [ -f "$ZCP_ROOT/.agents/references/gentle_governance_encyclopedia.md" ]; then
-        cp -f "$ZCP_ROOT/.agents/references/gentle_governance_encyclopedia.md" "$PROJECT_ROOT/.agents/references/gentle_governance_encyclopedia.md"
-    fi
 
     if [ -f "$ZCP_ROOT/AGENTS.md" ]; then
         if [ ! -f "$PROJECT_ROOT/AGENTS.md" ]; then
@@ -370,9 +316,9 @@ EOF_SYNC_CUSTOM
         fi
     fi
 
-# 5. Sincronizar Supreme Directive (.agents/rules + symlink a ~/.gemini/config/rules) y Referencias
-echo "• Sincronizando Supreme Directive y Referencias desde SSoT..."
-mkdir -p "$PROJECT_ROOT/.agents/rules" "$PROJECT_ROOT/.agents/references" "$ZCP_ROOT/.agents/references" "$HOME/.gemini/config/rules" 2>/dev/null || true
+# 5. Sincronizar Supreme Directive (.agents/rules + symlink a ~/.gemini/config/rules)
+echo "• Sincronizando Supreme Directive desde SSoT..."
+mkdir -p "$PROJECT_ROOT/.agents/rules" "$HOME/.gemini/config/rules" 2>/dev/null || true
 
 if [ -f "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ] && [ "$(readlink -f "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md")" != "$(readlink -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true)" ]; then
     cp -f "$ZCP_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md"
@@ -381,14 +327,6 @@ if [ -f "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" ]; then
     ln -sfn "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" "$HOME/.gemini/config/rules/00-SUPREME-DIRECTIVE.md"
 fi
 rm -f "$HOME/.gemini/antigravity-cli/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
-if [ -d "$ZCP_ROOT/.agents/references" ] && [ "$(readlink -f "$ZCP_ROOT/.agents/references")" != "$(readlink -f "$PROJECT_ROOT/.agents/references" 2>/dev/null || true)" ]; then
-    cp -f "$ZCP_ROOT/.agents/references/"*.md "$PROJECT_ROOT/.agents/references/" 2>/dev/null || true
-fi
-
-if [ -d "$HOME/.gemini/antigravity-cli" ]; then
-    mkdir -p "$HOME/.gemini/antigravity-cli/references" 2>/dev/null || true
-    cp -f "$PROJECT_ROOT/.agents/references/"*_encyclopedia.md "$HOME/.gemini/antigravity-cli/references/" 2>/dev/null || true
-fi
 mkdir -p "$HOME/.gemini/config" 2>/dev/null || true
 echo '{}' > "$HOME/.gemini/config/hooks.json" 2>/dev/null || true
 

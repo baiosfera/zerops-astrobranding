@@ -85,21 +85,11 @@ Shape: `{code, error, suggestion?, apiCode?, diagnostic?, apiMeta?, checks?, rec
 <!-- ZCP:END -->
 
 <!-- CUSTOM:BEGIN -->
-## 🏛️ Gobernanza Soberana & Contratos ZCP
-Regido por [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) (F0–F5 unificado para `agy` + Engram, 7 Invariantes Soberanos, CoHaLo Positivo y verificación real). Enciclopedia: [`.agents/references/supreme_directive_encyclopedia.md`](file:///var/www/.agents/references/supreme_directive_encyclopedia.md).
-
-## 🧭 Topología ZCP & Despliegue Modular
-1. **ZCP Single-Node & SHARED**: Mantener `zcp` siempre a 1 contenedor (`minContainers: 1, maxContainers: 1`, `cpuMode: SHARED`). Ejecutar builds, tests y procesos de cada runtime por SSH en su contenedor dedicado (`ssh {hostname} "cd /var/www && <cmd>"`).
-2. **Arquitectura Lego & Plantillas `baiosfera/*`**: [`zerops-astrobranding`](file:///var/www/zerops-astrobranding/iniciar.sh) actúa exclusivamente como **Catálogo & Registry** (`recipes/`, `blueprints/`, `templates/`, `scripts/`), mientras cada runtime reusable vive aislado en su repo plantilla (`baiosfera/runtime-*` + `template-astro-web`). Descubrir hosts y puertos dinámicamente vía DNS privado (`zerops_discover`). Invariantes probados: **Bifrost** usa PostgreSQL 18 (`config_store`/`logs_store`) y `chromem`/`qdrant` (en lugar de `redis` contra Valkey 7.2); **FreeLLMAPI** persiste en `localstorage` con cooldown 429; **CrewAI** vive embebido dentro de `runtime-hermes`.
-3. **Soberanía GitOps (Upstream vs Cliente)**:
-   - `baiosfera/*`: repositorios **upstream** agnósticos sin código ni credenciales de clientes.
-   - `<marca>/<app>`: repositorio aislado del cliente, usando su token en `/var/www/baiosfera/0ZEROPS-AGY/users-apis/<Marca>/<marca>-keys.md`.
-   - `zcp-update` (`iniciar.sh --update`): sincroniza upstream (`--ff-only`) y enlaza `/var/www/.bin/` desde `zerops-astrobranding`.
-
-## 🛑 Contratos Operativos, Verificación Real & Higiene
-- **Secretos & Env**: Inyectar secretos vía `zerops_env` (`$VAR` / `process.env`) y proteger `mcp_config.json` con `chmod 600`; mantener repos 100% libres de tokens reales.
-- **Anti-AMN (`research`)**: En arquitectura, APIs externas o skills, contrastar fuentes primarias con subagentes `research` y herramientas MCP (`context7`, `exa`, `tavily`, `jina`, `firecrawl`; fallbacks `brave`/`duckduckgo`) y esperar reportes completos.
-- **Cero Checklist-Theater**: En F4 pedir `Go` explícito antes de ejecutar o cerrar épicas Linear. En F5 distinguir `BEHAVIORALLY_VERIFIED` (tests/builds/sondas reales exit 0) de `SYNTAX_ONLY` o `UNVERIFIED`.
-- **Higiene de Procesos & Storage**: Comandos cortos (`timeout 10s`), servidores largos vía `zerops_dev_server`. `/var/www/localstorage` prioriza `ENGRAM_PROJECT`; Google Drive (`/var/www/baiosfera/PROYECTOS/`, `users-apis/`, `0ZEROPS-AGY/<proyecto>/engram`) actúa como archivo multi-proyecto.
-- **CLIs en PATH**: `ssot-parity-check`, `skills-suite-validate`, `engram-sync`, `linear-cli`, `zcp-update`, `apotelos`, `brand-play`, `orchesbrand`, `cockpit-status`, `anti-slop-linter`.
+## Zerops Lego Topology & GitOps
+- **Governance**: [`00-SUPREME-DIRECTIVE.md`](file:///var/www/.agents/rules/00-SUPREME-DIRECTIVE.md) governs operational invariants.
+- **Control Plane (`zcp`)**: Keep at 1 container (`minContainers: 1, maxContainers: 1`, `cpuMode: SHARED`). Execute runtime builds/tests inside target containers via `zcp run {hostname} <cmd>`.
+- **Modular Lego (`baiosfera/*`)**: [`zerops-astrobranding`](file:///var/www/zerops-astrobranding/iniciar.sh) is the agnostic catalog/registry (`recipes/`, `blueprints/`, `templates/`, `scripts/`). Each runtime lives in its own template repo (`baiosfera/runtime-*` + `template-astro-web`). Discover live services via `zerops_discover`.
+- **Proven Topology Invariants**: **Bifrost** uses PostgreSQL 18 (`config_store`/`logs_store`) + `chromem`/`qdrant` (not Valkey); **FreeLLMAPI** persists on `localstorage` with 429 cooldown; **CrewAI** runs inside `runtime-hermes`.
+- **Upstream vs Client Isolation**: `baiosfera/*` stays brand-agnostic and secret-free (secrets in `zerops_env`, `chmod 600` on `mcp_config.json`). Client apps (`<brand>/<app>`) isolate keys in `/var/www/baiosfera/0ZEROPS-AGY/users-apis/<Brand>/<brand>-keys.md`. `zcp-update` syncs upstream.
+- **Storage & CLIs**: `/var/www/localstorage` prioritizes `ENGRAM_PROJECT`; Google Drive (`/var/www/baiosfera/`) is multi-project archive. CLIs: `zcp-update`, `ssot-parity-check`, `skills-suite-validate`, `zcp-preflight-gate`, `engram-sync`, `apotelos`, `brand-play`, `orchesbrand`, `anti-slop-linter`, optional `linear-cli`.
 <!-- CUSTOM:END -->

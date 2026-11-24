@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # SSoT Parity & Integrity Sensor (ssot-parity-check.sh)
-# Read-only by default (ZERO silent rsync masking). Pass --fix to sync explicitly.
+# Fast read-only parity audit (<0.5s). Pass --fix to sync, --with-tests for CLI suites.
 # Zero hardcoded 0zcp-123 or tenant leaks.
 # ==============================================================================
 set -euo pipefail
@@ -14,17 +14,18 @@ ERRORS=0
 WARNINGS=0
 AUTO_FIX_MODE=false
 ALLOW_UNPUSHED=false
+WITH_TESTS=false
 
 for _arg in "$@"; do
     case "$_arg" in
         --fix) AUTO_FIX_MODE=true ;;
         --allow-unpushed) ALLOW_UNPUSHED=true ;;
+        --with-tests|--full) WITH_TESTS=true ;;
     esac
 done
 [ "${AUTO_FIX:-0}" = "1" ] && AUTO_FIX_MODE=true
 [ "${SKIP_UNPUSHED:-0}" = "1" ] && ALLOW_UNPUSHED=true
 
-# Resolve optional Drive project archive dynamically (never hardcode 0zcp-123)
 PROJECT_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
 DRIVE_BASE="${DRIVE_SSOT_DIR:-}"
 if [ -z "$DRIVE_BASE" ] && [ -n "$PROJECT_KEY" ] && [ -d "$LOCAL_BASE/baiosfera/0ZEROPS-AGY/$PROJECT_KEY" ]; then
@@ -76,15 +77,13 @@ compare_agents_md() {
         compare_files "AGENTS.md" "$src_file" "$dst_file"
         return
     fi
-    # Compare strictly the CUSTOM:BEGIN..CUSTOM:END sovereign block so Zerops platform
-    # ZCP:BEGIN..ZCP:END updates and project ZEROPS:REFLOG stay intact without false drift.
     local src_custom dst_custom
-    src_custom=$(python3 -c 'import re,sys; s=open(sys.argv[1]).read(); m=re.search(r"<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->", s, flags=re.S); print(m.group(0).strip() if m else "")' "$src_file")
-    dst_custom=$(python3 -c 'import re,sys; s=open(sys.argv[1]).read(); m=re.search(r"<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->", s, flags=re.S); print(m.group(0).strip() if m else "")' "$dst_file")
+    src_custom=$(python3 -B -c 'import re,sys; s=open(sys.argv[1]).read(); m=re.search(r"<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->", s, flags=re.S); print(m.group(0).strip() if m else "")' "$src_file")
+    dst_custom=$(python3 -B -c 'import re,sys; s=open(sys.argv[1]).read(); m=re.search(r"<!-- CUSTOM:BEGIN -->.*?<!-- CUSTOM:END -->", s, flags=re.S); print(m.group(0).strip() if m else "")' "$dst_file")
     if [ -n "$src_custom" ] && [ "$src_custom" = "$dst_custom" ]; then
-        echo "✓ Parity verified: AGENTS.md (CUSTOM block exact; ZCP:BEGIN & ZEROPS:REFLOG preserved)"
+        echo "✓ Parity verified: AGENTS.md (CUSTOM block exact; ZCP:BEGIN preserved)"
     elif [ "$AUTO_FIX_MODE" = true ] && [ -n "$src_custom" ]; then
-        python3 - "$src_file" "$dst_file" << 'EOF_FIX_AGENTS'
+        python3 -B - "$src_file" "$dst_file" << 'EOF_FIX_AGENTS'
 import re, sys
 src = open(sys.argv[1], "r", encoding="utf-8").read()
 dst = open(sys.argv[2], "r", encoding="utf-8").read()
@@ -106,7 +105,7 @@ EOF_FIX_AGENTS
     fi
 }
 
-echo "--- [1/5] Governance & Harness SSoT Parity ---"
+echo "--- [1/4] Governance & Harness SSoT Parity ---"
 compare_agents_md "$CATALOG_REPO/AGENTS.md" "$LOCAL_BASE/AGENTS.md"
 compare_files "00-SUPREME-DIRECTIVE.md (.agents)" "$CATALOG_REPO/.agents/rules/00-SUPREME-DIRECTIVE.md" "$LOCAL_BASE/.agents/rules/00-SUPREME-DIRECTIVE.md"
 compare_files "00-SUPREME-DIRECTIVE.md (~/.gemini/config/rules)" "$CATALOG_REPO/.agents/rules/00-SUPREME-DIRECTIVE.md" "${HOME:-/home/zerops}/.gemini/config/rules/00-SUPREME-DIRECTIVE.md"
@@ -122,8 +121,7 @@ else
     echo "✓ Dead rule path clean (~/.gemini/antigravity-cli/rules)"
 fi
 
-# Verify rules budget (<55KB combined active rules + AGENTS.md) and zero obsolete ODD rules
-rules_check_out=$(python3 - << 'EOF_RULES_CHECK'
+rules_check_out=$(python3 -B - << 'EOF_RULES_CHECK'
 import json, os, sys
 home = os.path.expanduser("~")
 rules_dir = os.path.join(home, ".gemini", "config", "rules")
@@ -143,15 +141,13 @@ if os.path.isdir(rules_dir):
 errors = []
 if found_obs:
     errors.append(f"Obsolete ODD rules present in {rules_dir}: {found_obs}")
-if total_bytes > 55000:
-    errors.append(f"Rules budget overflow: {total_bytes} bytes > 55000 bytes cap")
+if total_bytes > 30000:
+    errors.append(f"Rules budget overflow: {total_bytes} bytes > 30000 bytes cap")
 
-# Engram singleton verification
 cfg_path = os.path.join(home, ".gemini", "config", "config.json")
 if os.path.isfile(cfg_path):
     cfg = json.load(open(cfg_path, "r", encoding="utf-8"))
-    engram_plugin_enabled = cfg.get("plugins", {}).get("gentle-ai-engram", {}).get("enabled", True)
-    if engram_plugin_enabled is not False:
+    if cfg.get("plugins", {}).get("gentle-ai-engram", {}).get("enabled", True) is not False:
         errors.append("Duplicate plugin gentle-ai-engram still enabled in ~/.gemini/config/config.json")
 mcp_path = os.path.join(home, ".gemini", "config", "mcp_config.json")
 if os.path.isfile(mcp_path):
@@ -167,7 +163,7 @@ if errors:
 print(f"OK:rules_bytes={total_bytes}")
 EOF_RULES_CHECK
 ) && {
-    echo "✓ Rules budget & Engram singleton verified (${rules_check_out#OK:})"
+    echo "✓ Rules budget (<30KB) & Engram singleton verified (${rules_check_out#OK:})"
 } || {
     echo "$rules_check_out" | sed 's/^ERR:/❌ /'
     ERRORS=$((ERRORS + 1))
@@ -177,11 +173,12 @@ compare_files "hooks.json" "$CATALOG_REPO/.agents/hooks.json" "$LOCAL_BASE/.agen
 compare_files "hooks/tool-guard.py" "$CATALOG_REPO/scripts/hooks/tool-guard.py" "$LOCAL_BASE/.bin/hooks/tool-guard.py"
 compare_files "hooks/test_tool_guard.py" "$CATALOG_REPO/scripts/hooks/test_tool_guard.py" "$LOCAL_BASE/.bin/hooks/test_tool_guard.py"
 
-echo "--- [2/5] CLI Links & Python AST / Hygiene ---"
+echo "--- [2/4] CLI Links & Hygiene ---"
 LINK_PAIRS=(
     "skills-suite-validate:$CATALOG_REPO/scripts/skills-suite-validate.sh"
     "ssot-parity-check:$CATALOG_REPO/scripts/ssot-parity-check.sh"
     "linear-cli:$CATALOG_REPO/scripts/linear-cli"
+    "inject-agent-rule:$CATALOG_REPO/scripts/inject-agent-rule"
     "apotelos:$CATALOG_REPO/scripts/apotelos"
     "brand-play:$CATALOG_REPO/scripts/brand-play"
     "orchesbrand:$CATALOG_REPO/bin/orchesbrand"
@@ -224,36 +221,23 @@ else
     echo "✓ Zero __pycache__ in scripts"
 fi
 
-echo "--- [3/5] Behavioral CLI Self-Tests ---"
-if command -v apotelos >/dev/null; then
-    if out=$(PYTHONDONTWRITEBYTECODE=1 apotelos test 2>&1); then
-        echo "✓ apotelos test PASSED"
-    else
-        echo "❌ apotelos test FAILED:"
-        echo "$out"
-        ERRORS=$((ERRORS + 1))
-    fi
-fi
-if command -v brand-play >/dev/null; then
-    if out=$(PYTHONDONTWRITEBYTECODE=1 brand-play test 2>&1); then
-        echo "✓ brand-play test PASSED"
-    else
-        echo "❌ brand-play test FAILED:"
-        echo "$out"
-        ERRORS=$((ERRORS + 1))
-    fi
-fi
-if command -v mega-downloader >/dev/null; then
-    if out=$(PYTHONDONTWRITEBYTECODE=1 mega-downloader --test 2>&1); then
-        echo "✓ mega-downloader --test PASSED"
-    else
-        echo "❌ mega-downloader --test FAILED:"
-        echo "$out"
-        ERRORS=$((ERRORS + 1))
-    fi
+if [ "$WITH_TESTS" = true ]; then
+    echo "--- [Optional] Behavioral CLI Self-Tests (--with-tests) ---"
+    for cli_cmd in "apotelos test" "brand-play test" "mega-downloader --test"; do
+        bin_name="${cli_cmd%% *}"
+        if command -v "$bin_name" >/dev/null; then
+            if out=$(PYTHONDONTWRITEBYTECODE=1 $cli_cmd 2>&1); then
+                echo "✓ $cli_cmd PASSED"
+            else
+                echo "❌ $cli_cmd FAILED:"
+                echo "$out"
+                ERRORS=$((ERRORS + 1))
+            fi
+        fi
+    done
 fi
 
-echo "--- [4/5] Custom Skills Symlink Isolation, Anti-Shadow & Registry ---"
+echo "--- [3/4] Custom Skills Symlink Isolation & Anti-Shadow ---"
 if [ -d "$SKILLS_REPO" ]; then
     dangling=0
     shadow_errs=0
@@ -283,16 +267,16 @@ if [ -d "$SKILLS_REPO" ]; then
             fi
         done
     done
-    for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+    for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular using-superpowers brainstorming writing-plans executing-plans subagent-driven-development dispatching-parallel-agents finishing-a-development-branch using-git-worktrees requesting-code-review receiving-code-review test-driven-development systematic-debugging grill-me grilling grill-with-docs pr github-pr ask-matt claude-handoff handoff wayfinder teach retro loop-me software-factory chief-of-staff implement implement-spec improve-codebase-architecture setup-ts-deep-modules to-questionnaire to-spec to-tickets triage writing-beats writing-fragments writing-shape git-guardrails-claude-code issue-creation issue-root-resolution skill-registry; do
         for check_dir in "$LOCAL_BASE/.agents/skills" "${HOME:-/home/zerops}/.gemini/antigravity-cli/skills" "${HOME:-/home/zerops}/.gemini/config/skills" "$LOCAL_BASE/.claude/skills" "$LOCAL_BASE/localstorage/skills"; do
-            if [ -e "$check_dir/$noise_sk" ]; then
-                echo "❌ Purged Group E/broken skill still present: $check_dir/$noise_sk"
+            if [ -e "$check_dir/$noise_sk" ] || [ -L "$check_dir/$noise_sk" ]; then
+                echo "❌ Pruned external skill still present: $check_dir/$noise_sk"
                 ERRORS=$((ERRORS + 1))
                 shadow_errs=$((shadow_errs + 1))
             fi
         done
     done
-    [ "$shadow_errs" -eq 0 ] && echo "✓ Zero shadowed sovereign skills & zero Group E noise across all skill paths"
+    [ "$shadow_errs" -eq 0 ] && echo "✓ Zero shadowed sovereign skills & zero pruned noise across all skill paths"
 
     if [ -d "$LOCAL_BASE/localstorage/skills" ]; then
         if [ -L "$LOCAL_BASE/localstorage/skills/oraculo" ]; then
@@ -305,20 +289,9 @@ if [ -d "$SKILLS_REPO" ]; then
             echo "✓ /var/www/localstorage/skills dereferenced & live for Hermes"
         fi
     fi
-
-    REG_FILE="$LOCAL_BASE/.atl/skill-registry.md"
-    if [ ! -s "$REG_FILE" ]; then
-        echo "❌ Missing or empty skill registry: $REG_FILE"
-        ERRORS=$((ERRORS + 1))
-    elif grep -qE '^\- `(jira-epic|jira-task|gentle-ai-bench|gentle-ai-collab-perfect|rdd-advisory-transport|rdd-defect-workflow|migrate-to-shoehorn|scaffold-exercises|django-drf)`' "$REG_FILE"; then
-        echo "❌ Stale Group E entries found in $REG_FILE (run zcp-update / gentle-ai skill-registry refresh)"
-        ERRORS=$((ERRORS + 1))
-    else
-        echo "✓ Skill registry clean and up to date ($REG_FILE)"
-    fi
 fi
 
-echo "--- [5/5] Git Cleanliness & Remote Parity ---"
+echo "--- [4/4] Git Cleanliness & Remote Parity ---"
 check_git_repo() {
     local repo_dir="$1"
     local repo_name

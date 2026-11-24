@@ -3,34 +3,35 @@ import sys
 import os
 import re
 
+
 def main():
     args = sys.argv[1:]
     prepend = False
     if "--prepend" in args:
         prepend = True
         args.remove("--prepend")
-        
+
     if len(args) < 2:
         print("Uso: inject-agent-rule [--prepend] <Titulo_Seccion> <Cuerpo_Markdown> [ruta_AGENTS.md]")
         sys.exit(1)
-        
+
     title = args[0].strip()
     rule_body = args[1].strip()
     agents_file = args[2] if len(args) > 2 else "/var/www/AGENTS.md"
-    
+
     if not os.path.exists(agents_file):
         print(f"Error: {agents_file} no existe.")
         sys.exit(1)
-        
+
     with open(agents_file, "r", encoding="utf-8") as f:
         content = f.read()
-        
+
     custom_begin = "<!-- CUSTOM:BEGIN -->"
     custom_end = "<!-- CUSTOM:END -->"
-    
+
     if custom_begin not in content:
         content = content.rstrip() + f"\n\n{custom_begin}\n{custom_end}\n"
-        
+
     content = re.sub(r"(<!-- CUSTOM:BEGIN -->\s*)+", "<!-- CUSTOM:BEGIN -->\n\n", content)
     content = re.sub(r"(<!-- CUSTOM:END -->\s*)+", "\n<!-- CUSTOM:END -->\n", content)
 
@@ -39,7 +40,7 @@ def main():
     post_parts = parts[1].split(custom_end)
     custom_body = post_parts[0]
     post = custom_end + post_parts[1] if len(post_parts) > 1 else f"\n{custom_end}\n"
-    
+
     section_pattern = re.compile(r"## " + re.escape(title) + r"\n.*?(?=(\n## |$))", re.DOTALL)
     custom_body = section_pattern.sub("", custom_body).strip()
     new_section = f"## {title}\n{rule_body}"
@@ -47,15 +48,14 @@ def main():
         custom_body = (new_section + "\n\n" + custom_body) if custom_body else new_section
     else:
         custom_body = (custom_body + "\n\n" + new_section) if custom_body else new_section
-    
+
     final_output = f"{pre}\n\n{custom_begin}\n\n{custom_body}\n\n{post.strip()}\n"
-    final_output = re.sub(r'\n{3,}', '\n\n', final_output)
-    
+    final_output = re.sub(r"\n{3,}", "\n\n", final_output)
+
     with open(agents_file, "w", encoding="utf-8") as f:
         f.write(final_output)
 
-    # Dual-Target SSoT Mirroring: sync ONLY CUSTOM:BEGIN..CUSTOM:END into zerops-astrobranding/AGENTS.md
-    # Preserves catalog ZCP:BEGIN template and avoids leaking project ZEROPS:REFLOG upstream.
+    # Sync ONLY CUSTOM:BEGIN..CUSTOM:END into zerops-astrobranding/AGENTS.md
     catalog_agents = "/var/www/zerops-astrobranding/AGENTS.md"
     if agents_file == "/var/www/AGENTS.md" and os.path.isfile(catalog_agents):
         try:
@@ -65,12 +65,24 @@ def main():
             e_idx = cat_content.find(custom_end)
             new_custom_block = f"{custom_begin}\n\n{custom_body}\n\n{custom_end}"
             if c_idx != -1 and e_idx != -1 and e_idx > c_idx:
-                cat_updated = cat_content[:c_idx] + new_custom_block + cat_content[e_idx + len(custom_end):]
-                cat_updated = re.sub(r'\n{3,}', '\n\n', cat_updated).rstrip() + "\n"
+                cat_updated = cat_content[:c_idx] + new_custom_block + cat_content[e_idx + len(custom_end) :]
+                cat_updated = re.sub(r"\n{3,}", "\n\n", cat_updated).rstrip() + "\n"
                 with open(catalog_agents, "w", encoding="utf-8") as f:
                     f.write(cat_updated)
         except Exception as e:
             print(f"Aviso SSoT Mirror: No se pudo actualizar CUSTOM en {catalog_agents}: {e}", file=sys.stderr)
+
+    # Optional dynamic Drive project archive (never hardcode project slugs)
+    proj_slug = (os.environ.get("ENGRAM_PROJECT") or os.environ.get("PROJECT_NAME") or "").strip().lower()
+    if proj_slug and agents_file == "/var/www/AGENTS.md":
+        drive_dir = f"/var/www/baiosfera/0ZEROPS-AGY/{proj_slug}"
+        if os.path.isdir(drive_dir):
+            try:
+                with open(os.path.join(drive_dir, "AGENTS.md"), "w", encoding="utf-8") as f:
+                    f.write(final_output)
+            except Exception as e:
+                print(f"Aviso Drive Mirror: {e}", file=sys.stderr)
+
 
 if __name__ == "__main__":
     main()
