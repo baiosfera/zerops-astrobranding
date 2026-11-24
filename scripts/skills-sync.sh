@@ -117,16 +117,14 @@ fi
 for sov_sk in "${!SOVEREIGN_SET[@]}"; do
     rm -rf "$HOME/.gemini/antigravity-cli/skills/$sov_sk" "$HOME/.gemini/config/skills/$sov_sk" "/var/www/.claude/skills/$sov_sk" 2>/dev/null || true
 done
-for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular using-superpowers brainstorming writing-plans executing-plans subagent-driven-development dispatching-parallel-agents finishing-a-development-branch using-git-worktrees requesting-code-review receiving-code-review test-driven-development systematic-debugging grill-me grilling grill-with-docs pr github-pr ask-matt claude-handoff handoff wayfinder teach retro loop-me software-factory chief-of-staff implement implement-spec improve-codebase-architecture setup-ts-deep-modules to-questionnaire to-spec to-tickets triage writing-beats writing-fragments writing-shape git-guardrails-claude-code issue-creation issue-root-resolution skill-registry; do
     rm -rf "$LOCAL_SKILLS/$noise_sk" "$HOME/.gemini/antigravity-cli/skills/$noise_sk" "$HOME/.gemini/config/skills/$noise_sk" "/var/www/.claude/skills/$noise_sk" "/var/www/localstorage/skills/$noise_sk" 2>/dev/null || true
 done
 if [ -d "/var/www/localstorage" ]; then
     mkdir -p "/var/www/localstorage/skills"
     rsync -aL --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" --exclude=".git" --exclude="AGENTS.md" "$LOCAL_SKILLS/" "/var/www/localstorage/skills/" 2>/dev/null || true
 fi
-if command -v gentle-ai >/dev/null 2>&1; then
-    gentle-ai skill-registry refresh --cwd /var/www --force --no-gitignore >/dev/null 2>&1 || true
-fi
+rm -rf /var/www/.atl 2>/dev/null || true
 
 echo "------------------------------------------------------------"
 echo "✅ Sincronización completada: $SYNCED de ${#SOVEREIGN_SET[@]} skill(s) actualizadas en SSoT Drive."

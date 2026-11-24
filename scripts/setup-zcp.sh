@@ -11,21 +11,12 @@ PROJECT_ROOT="/var/www"
 PERSISTENT_BIN="$PROJECT_ROOT/.bin"
 PERSISTENT_AGENTS="$PROJECT_ROOT/.agents"
 
-mkdir -p "$PERSISTENT_BIN" "$PERSISTENT_AGENTS/skills/zcp" "$PERSISTENT_AGENTS/skills/dckr"
+mkdir -p "$PERSISTENT_BIN" "$PERSISTENT_AGENTS/skills"
 rm -rf "$SCRIPT_DIR/__pycache__" 2>/dev/null || true
 
 echo "============================================================"
-echo "  [4/4] Desplegando Skills ZCP & DCKR (setup-zcp.sh v6.2)"
+echo "  [4/4] Desplegando Skills ZCP & DCKR (setup-zcp.sh v6.8)"
 echo "============================================================"
-
-# 1. Instalar Herramienta de Arnés Físico Extendido zcp-validate (v6.2)
-if [ -f "$SCRIPT_DIR/zcp-validate.sh" ]; then
-    cp -f "$SCRIPT_DIR/zcp-validate.sh" "$PERSISTENT_BIN/zcp-validate"
-    chmod +x "$PERSISTENT_BIN/zcp-validate"
-    cp "$PERSISTENT_BIN/zcp-validate" "$HOME/.local/bin/zcp-validate" 2>/dev/null || true
-    cp "$PERSISTENT_BIN/zcp-validate" "/home/zerops/.local/bin/zcp-validate" 2>/dev/null || true
-    sudo ln -sf "$PERSISTENT_BIN/zcp-validate" /usr/local/bin/zcp-validate 2>/dev/null || true
-fi
 
 # 1.1 - 1.3 Enlazar CLIs soberanas desde SSoT (sin pisar symlinks de iniciar.sh)
 mkdir -p "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
@@ -106,17 +97,10 @@ if ! command -v agent-browser >/dev/null 2>&1; then
     sudo npm install -g agent-browser 2>/dev/null || true
 fi
 
-# Auto-sync SSoT to runtime directory if Google Drive courses mount is active
-if [ -d "/var/www/baiosfera/CURSOS/MCV" ] && [ -f "$SCRIPT_DIR/mcv_downloader.py" ]; then
-    if [ ! -f "/var/www/baiosfera/CURSOS/MCV/mcv_downloader.py" ] || ! cmp -s "$SCRIPT_DIR/mcv_downloader.py" "/var/www/baiosfera/CURSOS/MCV/mcv_downloader.py"; then
-        cp -f "$SCRIPT_DIR/mcv_downloader.py" "/var/www/baiosfera/CURSOS/MCV/mcv_downloader.py" 2>/dev/null || true
-    fi
-fi
-
-if [ -f "/var/www/baiosfera/CURSOS/MCV/mcv_downloader.py" ]; then
-    MCV_SCRIPT_SRC="/var/www/baiosfera/CURSOS/MCV/mcv_downloader.py"
-elif [ -f "$SCRIPT_DIR/mcv_downloader.py" ]; then
+if [ -f "$SCRIPT_DIR/mcv_downloader.py" ]; then
     MCV_SCRIPT_SRC="$SCRIPT_DIR/mcv_downloader.py"
+elif [ -f "/var/www/baiosfera/CURSOS/MCV/mcv_downloader.py" ]; then
+    MCV_SCRIPT_SRC="/var/www/baiosfera/CURSOS/MCV/mcv_downloader.py"
 else
     MCV_SCRIPT_SRC=""
 fi
@@ -206,38 +190,31 @@ if [ -f "/etc/nginx/nginx.conf" ] && ! grep -q "location /cockpit/" /etc/nginx/n
     sudo nginx -s reload 2>/dev/null || true
 fi
 
-# 3. Skills de Plataforma ZCP y DCKR gestionadas de forma centralizada por setup-drive.sh
-
-# 4. Contratos ZCP & DCKR indexados canónicamente en setup-gentle.sh y .atl/skill-registry.md (Lean AGENTS.md)
-echo "• Contratos arquitectónicos ZCP & Docker preservados canónicamente en AGENTS.md y .atl/skill-registry.md."
-
-# 5. Instalación y Activación Nativa de Skill Packs de la Plataforma Zerops (zcp skills en vivo)
+# 3. Instalación y Activación Nativa de Skill Packs de la Plataforma Zerops (zcp skills en vivo)
 if command -v zcp >/dev/null 2>&1; then
     echo "• Aprovisionando packs nativos de la plataforma Zerops (zcp skills en vivo)..."
-    # Limpiar posibles colisiones de packs nativos gestionados por ZCP (superpowers y karpathy)
-    for sk in brainstorming dispatching-parallel-agents executing-plans finishing-a-development-branch receiving-code-review requesting-code-review subagent-driven-development systematic-debugging test-driven-development using-git-worktrees using-superpowers verification-before-completion writing-plans writing-skills karpathy-guidelines; do
+    for sk in karpathy-guidelines; do
         if [ -d "/var/www/.agents/skills/$sk" ] && [ ! -f "/var/www/.agents/skills/$sk/.zcp-skillpack.json" ]; then
             rm -rf "/var/www/.agents/skills/$sk" "/var/www/.claude/skills/$sk" 2>/dev/null || true
         fi
     done
-    (cd /var/www && zcp skills pack-add superpowers --json >/dev/null 2>&1 || zcp skills pack-add superpowers 2>/dev/null || true)
     (cd /var/www && zcp skills pack-add andrej-karpathy-skills --json >/dev/null 2>&1 || zcp skills pack-add andrej-karpathy-skills 2>/dev/null || true)
 
-    # Invariante Soberano: Garantizar que la skill personalizada research NUNCA sea alterada
-    if [ -d "$ZCP_ROOT/.agents/skills/research" ]; then
-        rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" "$ZCP_ROOT/.agents/skills/research/" "/var/www/.agents/skills/research/" 2>/dev/null || true
+    # Invariante Soberano: mantener skills de zerops-astro-skills como symlinks canónicos
+    if [ -d "/var/www/zerops-astro-skills/research" ]; then
+        [ -d "/var/www/.agents/skills/research" ] && [ ! -L "/var/www/.agents/skills/research" ] && rm -rf "/var/www/.agents/skills/research"
+        ln -sfn "/var/www/zerops-astro-skills/research" "/var/www/.agents/skills/research"
     fi
 
-    # Purgar ruido Grupo E y copias congeladas en Antigravity/Claude que sombreen .agents/skills
-    for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+    # Purgar skills externas ruidosas/podadas y copias congeladas en Antigravity/Claude
+    for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular using-superpowers brainstorming writing-plans executing-plans subagent-driven-development dispatching-parallel-agents finishing-a-development-branch using-git-worktrees requesting-code-review receiving-code-review test-driven-development systematic-debugging grill-me grilling grill-with-docs pr github-pr ask-matt claude-handoff handoff wayfinder teach retro loop-me software-factory chief-of-staff implement implement-spec improve-codebase-architecture setup-ts-deep-modules to-questionnaire to-spec to-tickets triage writing-beats writing-fragments writing-shape git-guardrails-claude-code issue-creation issue-root-resolution skill-registry; do
         rm -rf "/var/www/.agents/skills/$noise_sk" "/home/zerops/.gemini/antigravity-cli/skills/$noise_sk" "/home/zerops/.gemini/config/skills/$noise_sk" "/var/www/.claude/skills/$noise_sk" 2>/dev/null || true
     done
     if [ -d "/var/www/zerops-astro-skills" ]; then
         for sov_dir in /var/www/zerops-astro-skills/*/; do
             [ -d "$sov_dir" ] || continue
             sov_name=$(basename "$sov_dir")
-            [ -d "/home/zerops/.gemini/antigravity-cli/skills/$sov_name" ] && rm -rf "/home/zerops/.gemini/antigravity-cli/skills/$sov_name" 2>/dev/null || true
-            [ -d "/home/zerops/.gemini/config/skills/$sov_name" ] && rm -rf "/home/zerops/.gemini/config/skills/$sov_name" 2>/dev/null || true
+            rm -rf "/home/zerops/.gemini/antigravity-cli/skills/$sov_name" "/home/zerops/.gemini/config/skills/$sov_name" 2>/dev/null || true
         done
     fi
 fi

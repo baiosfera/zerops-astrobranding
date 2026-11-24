@@ -6,20 +6,17 @@
 set -euo pipefail
 
 INTERACTIVE=false
+NON_INTERACTIVE=false
 CUSTOM_FILE=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
 DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
-PROJ_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
-DRIVE_SSOT="${PROJ_KEY:+$DRIVE_MOUNT/0ZEROPS-AGY/$PROJ_KEY}"
 
-if [ -d "$DRIVE_SSOT" ]; then
-    SSOT_ROOT="$DRIVE_SSOT"
-elif [ -d "$SCRIPT_DIR/.." ] && [ -d "$SCRIPT_DIR/../.agents" ]; then
-    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-elif [ -d "$REPO_DIR/.agents" ]; then
+if [ -d "$REPO_DIR/.agents" ]; then
     SSOT_ROOT="$REPO_DIR"
+elif [ -d "$SCRIPT_DIR/../.agents" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 else
     SSOT_ROOT="$PROJECT_ROOT"
 fi
@@ -38,6 +35,7 @@ mkdir -p "$PERSISTENT_BIN" "$HOME/.local/bin"
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -i|--interactive) INTERACTIVE=true; shift ;;
+        --non-interactive|--no-interactive) NON_INTERACTIVE=true; shift ;;
         --file|-f) CUSTOM_FILE="$2"; shift 2 ;;
         *)
             if [ -f "$1" ]; then
@@ -159,7 +157,7 @@ RESOLVED_KEY_FILE=""
 if [ -n "$CUSTOM_FILE" ] && [ -f "$CUSTOM_FILE" ]; then
     RESOLVED_KEY_FILE="$CUSTOM_FILE"
     echo "• Usando archivo de claves especificado: $RESOLVED_KEY_FILE"
-elif [ -z "$CUSTOM_FILE" ] && [ -t 0 ] && [ "$INTERACTIVE" = false ]; then
+elif [ -z "$CUSTOM_FILE" ] && [ -t 0 ] && [ "$INTERACTIVE" = false ] && [ "$NON_INTERACTIVE" = false ]; then
     read -r -p "• Ingrese la ruta del archivo de claves astrológicas (.md / .env) [o Enter para continuar]: " USER_ASTRO_FILE
     USER_ASTRO_FILE=$(echo "$USER_ASTRO_FILE" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     [ -n "$USER_ASTRO_FILE" ] && [ -f "$USER_ASTRO_FILE" ] && RESOLVED_KEY_FILE="$USER_ASTRO_FILE"

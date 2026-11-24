@@ -46,7 +46,6 @@ sanitize_val() {
 
 if [ -z "$FILE_ARG" ]; then
     for candidate in \
-        "/var/www/baiosfera/0ZEROPS-AGY/users-apis/api_keys_global" \
         "$PROJECT_ROOT/key.md" \
         "$PROJECT_ROOT/keys.md" \
         "$PROJECT_ROOT/key.env" \

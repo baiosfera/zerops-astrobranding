@@ -11,16 +11,11 @@ export PYTHONDONTWRITEBYTECODE=1
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
-DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
-PROJ_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
-DRIVE_SSOT="${PROJ_KEY:+$DRIVE_MOUNT/0ZEROPS-AGY/$PROJ_KEY}"
 
-if [ -d "$DRIVE_SSOT" ]; then
-    SSOT_ROOT="$DRIVE_SSOT"
-elif [ -d "$SCRIPT_DIR/.." ] && [ -d "$SCRIPT_DIR/../.agents" ]; then
-    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-elif [ -d "$REPO_DIR/.agents" ]; then
+if [ -d "$REPO_DIR/.agents" ]; then
     SSOT_ROOT="$REPO_DIR"
+elif [ -d "$SCRIPT_DIR/../.agents" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 else
     SSOT_ROOT="$PROJECT_ROOT"
 fi
@@ -79,18 +74,6 @@ fi
 
 # Proactive Bytecode Hygiene: purge any residual __pycache__ across hooks and scripts
 rm -rf "$SCRIPT_DIR/__pycache__" "$PROJECT_ROOT/.bin/hooks/__pycache__" "$SCRIPT_DIR/hooks/__pycache__" 2>/dev/null || true
-
-# Garantizar estructura canónica de respaldos centralizada en bak/
-mkdir -p "$ZCP_ROOT/bak/scripts" "$ZCP_ROOT/bak/rules" "$ZCP_ROOT/bak/skills" "$ZCP_ROOT/bak/apis" "$ZCP_ROOT/bak/mcp" 2>/dev/null || true
-
-# Snapshot preventivo de scripts en bak/scripts/
-SNAPSHOT_TS=$(date +%Y%m%d_%H%M%S)
-for s in "$SCRIPT_DIR"/*.sh; do
-    if [ -f "$s" ]; then
-        s_base=$(basename "$s")
-        cp -n "$s" "$ZCP_ROOT/bak/scripts/${s_base}_${SNAPSHOT_TS}.bak" 2>/dev/null || true
-    fi
-done
 
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
@@ -269,8 +252,9 @@ except Exception: pass
     echo "{\"project_name\": \"$ACTIVE_LOWER\"}" > "$PROJECT_ROOT/.engram/config.json"
 
     if [ -f "$SCRIPT_DIR/engram-sync" ]; then
-        cp -f "$SCRIPT_DIR/engram-sync" "$PROJECT_ROOT/.bin/engram-sync"
-        chmod +x "$PROJECT_ROOT/.bin/engram-sync"
+        chmod +x "$SCRIPT_DIR/engram-sync"
+        ln -sfn "$SCRIPT_DIR/engram-sync" "$PROJECT_ROOT/.bin/engram-sync"
+        ln -sfn "$SCRIPT_DIR/engram-sync" "/home/zerops/.local/bin/engram-sync" 2>/dev/null || true
         sudo ln -sf "$PROJECT_ROOT/.bin/engram-sync" /usr/local/bin/engram-sync 2>/dev/null || true
     fi
 
@@ -386,7 +370,7 @@ except Exception: pass
             else
                 cp -rfL "$skills_src"/* "$skills_dst/" 2>/dev/null || true
             fi
-            for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+            for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular using-superpowers brainstorming writing-plans executing-plans subagent-driven-development dispatching-parallel-agents finishing-a-development-branch using-git-worktrees requesting-code-review receiving-code-review test-driven-development systematic-debugging grill-me grilling grill-with-docs pr github-pr ask-matt claude-handoff handoff wayfinder teach retro loop-me software-factory chief-of-staff implement implement-spec improve-codebase-architecture setup-ts-deep-modules to-questionnaire to-spec to-tickets triage writing-beats writing-fragments writing-shape git-guardrails-claude-code issue-creation issue-root-resolution skill-registry; do
                 rm -rf "$skills_dst/$noise_sk" 2>/dev/null || true
             done
             echo "  ✓ LocalStorage skills sincronizadas ($(ls -1d "$skills_dst"/*/ 2>/dev/null | wc -l) skills activas)."
@@ -396,27 +380,20 @@ except Exception: pass
     seed_localstorage_from_ssot
     seed_localstorage_skills
 
-    if command -v gentle-ai >/dev/null 2>&1; then
-        echo "• Refrescando registro de skills..."
-        gentle-ai skill-registry refresh --cwd "$PROJECT_ROOT" --force --no-gitignore 2>/dev/null || gentle-ai skill-registry refresh --force 2>/dev/null || true
-        if [ -f "$PROJECT_ROOT/.atl/skill-registry.md" ]; then
-            mkdir -p "$ZCP_ROOT/.atl" 2>/dev/null || true
-            cp -f "$PROJECT_ROOT/.atl/skill-registry.md" "$ZCP_ROOT/.atl/skill-registry.md" 2>/dev/null || true
-        fi
-    fi
+    rm -rf "$PROJECT_ROOT/.atl" 2>/dev/null || true
     mkdir -p "$PROJECT_ROOT/.bin" 2>/dev/null || true
     if [ -f "$SCRIPT_DIR/skills-suite-validate.sh" ]; then
-        echo "• Desplegando y ejecutando suite física de validación (Standard v3.0)..."
-        cp -f "$SCRIPT_DIR/skills-suite-validate.sh" "$PROJECT_ROOT/.bin/skills-suite-validate"
-        chmod +x "$PROJECT_ROOT/.bin/skills-suite-validate"
+        echo "• Desplegando y ejecutando suite física de validación (v2.0)..."
+        chmod +x "$SCRIPT_DIR/skills-suite-validate.sh"
+        ln -sfn "$SCRIPT_DIR/skills-suite-validate.sh" "$PROJECT_ROOT/.bin/skills-suite-validate"
         sudo ln -sf "$PROJECT_ROOT/.bin/skills-suite-validate" /usr/local/bin/skills-suite-validate 2>/dev/null || true
         bash "$SCRIPT_DIR/skills-suite-validate.sh" --quiet
     fi
 
     if [ -f "$SCRIPT_DIR/harden-postgres-quotas.sh" ]; then
         echo "• Calibrando cuotas de conexión y anti-starvation en PostgreSQL..."
-        cp -f "$SCRIPT_DIR/harden-postgres-quotas.sh" "$PROJECT_ROOT/.bin/harden-postgres-quotas" 2>/dev/null || true
-        chmod +x "$PROJECT_ROOT/.bin/harden-postgres-quotas" "$SCRIPT_DIR/harden-postgres-quotas.sh" 2>/dev/null || true
+        chmod +x "$SCRIPT_DIR/harden-postgres-quotas.sh" 2>/dev/null || true
+        ln -sfn "$SCRIPT_DIR/harden-postgres-quotas.sh" "$PROJECT_ROOT/.bin/harden-postgres-quotas" 2>/dev/null || true
         sudo ln -sf "$PROJECT_ROOT/.bin/harden-postgres-quotas" /usr/local/bin/harden-postgres-quotas 2>/dev/null || true
         bash "$SCRIPT_DIR/harden-postgres-quotas.sh" || true
     fi
@@ -440,19 +417,9 @@ except Exception: pass
 
     # Invariante Anti-Basura y Barrido Determinista (FUSE Mount Prune)
     echo "• Ejecutando barrido determinista de higiene y bytecode..."
-    find "$PROJECT_ROOT" \( -path "$PROJECT_ROOT/baiosfera" -o -path "$PROJECT_ROOT/mnt" -o -path "$PROJECT_ROOT/.rclone" \) -prune -o -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-    find "$SCRIPT_DIR" -maxdepth 2 -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-    find "$SCRIPT_DIR" -maxdepth 2 -name "*.pyc" -delete 2>/dev/null || true
-    rm -rf "$PROJECT_ROOT/baiosfera/CURSOS/MCV/__pycache__" 2>/dev/null || true
     find /tmp -maxdepth 1 \( -name "gentle_*" -o -name "gai_*" -o -name "engram_*" -o -name "gga_*" \) -type d -exec rm -rf {} + 2>/dev/null || true
     rm -f "$PROJECT_ROOT/.env" "$PROJECT_ROOT/gdrive.env" "$PROJECT_ROOT"/key*.md "$PROJECT_ROOT"/key*.env 2>/dev/null || true
-    # Invariante de Paridad de Skills Soberanas: purga de subcarpetas ajenas o residuales
-    rm -rf "$PROJECT_ROOT/.agents/skills/planner/"{assets,scripts} 2>/dev/null || true
-    rm -rf "$PROJECT_ROOT/.agents/skills/docu/scripts" 2>/dev/null || true
-    rm -rf "$PROJECT_ROOT/.agents/skills/research/scripts" 2>/dev/null || true
-    rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/raw" 2>/dev/null || true
-    rm -rf "$PROJECT_ROOT/.agents/skills/oraculo/pipeline/synthesis.py" 2>/dev/null || true
-    echo "  ✓ Bytecode (__pycache__, *.pyc), residuos de skills y archivos temporales (.env, gdrive.env, keys) purgados."
+    echo "  ✓ Bytecode (__pycache__, *.pyc) y temporales (.env, gdrive.env, keys) purgados."
 
     # Invariante Anti-Forwarding y Persistencia de Terminales Web en Code-Server
     echo "• Asegurando persistencia de terminales web y remote.autoForwardPorts en Code-Server..."

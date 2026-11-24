@@ -7,31 +7,26 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-/var/www}"
-DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
-PROJ_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
-DRIVE_SSOT="${PROJ_KEY:+$DRIVE_MOUNT/0ZEROPS-AGY/$PROJ_KEY}"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-if [ -d "$DRIVE_SSOT" ]; then
-    SSOT_ROOT="$DRIVE_SSOT"
-elif [ -d "$SCRIPT_DIR/.." ] && [ -d "$SCRIPT_DIR/../.agents" ]; then
-    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-elif [ -d "$(cd "$SCRIPT_DIR/.." && pwd)/.agents" ]; then
+if [ -d "$REPO_DIR/.agents" ]; then
+    SSOT_ROOT="$REPO_DIR"
+elif [ -d "$SCRIPT_DIR/../.agents" ]; then
     SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 else
     SSOT_ROOT="$PROJECT_ROOT"
 fi
 ZCP_ROOT="$SSOT_ROOT"
 
-SKILLS_SRC="$SSOT_ROOT/.agents/skills"
+SKILLS_SRC="$ZCP_ROOT/.agents/skills"
 TARGET_AGENTS="/var/www/.agents/skills"
 GEMINI_SKILLS="$HOME/.gemini/antigravity-cli/skills"
 
 echo "============================================================"
-echo "  [3/6] Sincronización Google Drive & Auto-Discovery de Skills (v1.7)"
+echo "  [3/6] Sincronización Custom Skills SSoT (setup-drive.sh v2.0)"
 echo "============================================================"
 
 mkdir -p "$TARGET_AGENTS" "$GEMINI_SKILLS" "/home/zerops/.gemini/antigravity-cli/skills" 2>/dev/null || true
-mkdir -p "$ZCP_ROOT/bak/scripts" "$ZCP_ROOT/bak/rules" "$ZCP_ROOT/bak/skills" "$ZCP_ROOT/bak/apis" "$ZCP_ROOT/bak/mcp" 2>/dev/null || true
 
 DISCOVERED_EXTENSIONS=""
 
@@ -62,13 +57,11 @@ if [ -d "$SKILLS_SRC" ]; then
         if [ -d "$skill_dir" ]; then
             skill_name=$(basename "$skill_dir")
             
-            # Sincronización activa soberana: actualizar o desplegar la skill hacia el workspace local
-            mkdir -p "$TARGET_AGENTS/$skill_name"
-            if command -v rsync >/dev/null 2>&1; then
-                rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$skill_dir/" "$TARGET_AGENTS/$skill_name/"
-            else
-                cp -rf "$skill_dir"/* "$TARGET_AGENTS/$skill_name/" 2>/dev/null || true
+            # Enlace simbólico canónico desde zerops-astro-skills (sin copias físicas duplicadas)
+            if [ -d "$TARGET_AGENTS/$skill_name" ] && [ ! -L "$TARGET_AGENTS/$skill_name" ]; then
+                rm -rf "$TARGET_AGENTS/$skill_name"
             fi
+            ln -sfn "$skill_dir" "$TARGET_AGENTS/$skill_name"
 
             # Remover posibles copias congeladas de skills soberanas en perfiles secundarios
             rm -rf "$GEMINI_SKILLS/$skill_name" "/home/zerops/.gemini/config/skills/$skill_name" "/var/www/.claude/skills/$skill_name" 2>/dev/null || true
@@ -86,63 +79,14 @@ if [ -d "$SKILLS_SRC" ]; then
         fi
     done
 
-    # Blindaje Soberano Anti-Deriva: Re-sincronizar core skills hacia .agents y limpiar copias congeladas
+    # Blindaje Soberano Anti-Deriva: Re-enlazar core skills hacia .agents y limpiar copias congeladas
     for core_sk in oraculo planner docu research; do
         if [ -d "$SKILLS_LOCAL_CACHE/$core_sk" ]; then
-            rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$SKILLS_LOCAL_CACHE/$core_sk/" "$TARGET_AGENTS/$core_sk/"
+            [ -d "$TARGET_AGENTS/$core_sk" ] && [ ! -L "$TARGET_AGENTS/$core_sk" ] && rm -rf "$TARGET_AGENTS/$core_sk"
+            ln -sfn "$SKILLS_LOCAL_CACHE/$core_sk" "$TARGET_AGENTS/$core_sk"
             rm -rf "$GEMINI_SKILLS/$core_sk" "/home/zerops/.gemini/antigravity-cli/skills/$core_sk" "/home/zerops/.gemini/config/skills/$core_sk" 2>/dev/null || true
         fi
     done
-
-    # AUTO-HEALING SSoT DRIVE PARITY (Garantizar paridad bidireccional absoluta)
-    DRIVE_SSOT_SKILLS="$SSOT_ROOT/.agents/skills"
-    if [ -d "$DRIVE_SSOT_SKILLS" ]; then
-        if [ "$SYNCED_FROM_GITHUB" = true ]; then
-            echo "• Verificando paridad y auto-sanando Google Drive SSoT desde GitHub..."
-            for s_dir in "$TARGET_AGENTS"/*; do
-                [ -d "$s_dir" ] || continue
-                s_name=$(basename "$s_dir")
-                case "$s_name" in
-                    react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-*|rdd-*|github-pr|work-unit-commits|jira-*|issue-*|gentle-ai-*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-*|pocock*|karpathy*|using-superpowers|brainstorming|dispatching-parallel-agents|executing-plans|finishing-a-development-branch|receiving-code-review|requesting-code-review|subagent-driven-development|systematic-debugging|test-driven-development|using-git-worktrees|verification-before-completion|writing-plans|writing-skills|ask-matt|chief-of-staff|claude-handoff|code-review|codebase-design|diagnosing-bugs|domain-modeling|git-guardrails-claude-code|grill-me|grill-with-docs|grilling|handoff|implement|implement-spec|improve-codebase-architecture|loop-me|migrate-to-shoehorn|pr|prototype|retro|scaffold-exercises|setup-matt-pocock-skills|setup-pre-commit|setup-ts-deep-modules|tdd|teach|to-questionnaire|to-spec|to-tickets|triage|wait-what|wayfinder|wizard|writing-beats|writing-for-agents|writing-fragments|writing-shape)
-                        continue
-                        ;;
-                esac
-                d_skill_md="$DRIVE_SSOT_SKILLS/$s_name/SKILL.md"
-                l_skill_md="$s_dir/SKILL.md"
-                if [ -f "$l_skill_md" ]; then
-                    if [ ! -f "$d_skill_md" ]; then
-                        mkdir -p "$DRIVE_SSOT_SKILLS/$s_name"
-                        cp -f "$l_skill_md" "$d_skill_md" 2>/dev/null || true
-                    elif ! cmp -s "$l_skill_md" "$d_skill_md"; then
-                        cp -f "$l_skill_md" "$d_skill_md" 2>/dev/null || true
-                    fi
-                fi
-                case "$s_name" in
-                    oraculo|planner|docu|research)
-                        if command -v rsync >/dev/null 2>&1; then
-                            rsync -a --delete --exclude="__pycache__" --exclude="*.pyc" --exclude="*.bak" "$s_dir/" "$DRIVE_SSOT_SKILLS/$s_name/" 2>/dev/null || true
-                        fi
-                        ;;
-                esac
-            done
-        else
-            echo "• Sincronizando skills desde Google Drive SSoT (modo fallback)..."
-            for s_dir in "$DRIVE_SSOT_SKILLS"/*; do
-                [ -d "$s_dir" ] || continue
-                s_name=$(basename "$s_dir")
-                case "$s_name" in
-                    react-19|zustand-5|tailwind-4|ai-sdk-5|nextjs-15|typescript|zod-4|playwright|puppeteer|crawl4ai|firecrawl|angular|django-drf|spring-boot-3|java-21|electron|elixir-antipatterns|pytest|go-testing|hexagonal-architecture-layers-java|react-native|sdd-*|rdd-*|github-pr|work-unit-commits|jira-*|issue-*|gentle-ai-*|systemic-issue-triage|judgment-day|comment-writer|cognitive-doc-design|gga|_shared|branch-pr|chained-pr|skill-creator|skill-registry|skill-improver|hermes-ephemeral-*|pocock*|karpathy*|using-superpowers|brainstorming|dispatching-parallel-agents|executing-plans|finishing-a-development-branch|receiving-code-review|requesting-code-review|subagent-driven-development|systematic-debugging|test-driven-development|using-git-worktrees|verification-before-completion|writing-plans|writing-skills|ask-matt|chief-of-staff|claude-handoff|code-review|codebase-design|diagnosing-bugs|domain-modeling|git-guardrails-claude-code|grill-me|grill-with-docs|grilling|handoff|implement|implement-spec|improve-codebase-architecture|loop-me|migrate-to-shoehorn|pr|prototype|retro|scaffold-exercises|setup-matt-pocock-skills|setup-pre-commit|setup-ts-deep-modules|tdd|teach|to-questionnaire|to-spec|to-tickets|triage|wait-what|wayfinder|wizard|writing-beats|writing-for-agents|writing-fragments|writing-shape)
-                        continue
-                        ;;
-                esac
-                if command -v rsync >/dev/null 2>&1; then
-                    rsync -a --exclude="__pycache__" --exclude="*.pyc" "$s_dir/" "$TARGET_AGENTS/$s_name/" 2>/dev/null || true
-                else
-                    cp -rf "$s_dir"/* "$TARGET_AGENTS/$s_name/" 2>/dev/null || true
-                fi
-            done
-        fi
-    fi
 
     # Sincronizar bloque CUSTOM de AGENTS.md (preservando ZCP:BEGIN y ZEROPS:REFLOG) y reglas canónicas
     if [ -f "$SSOT_ROOT/AGENTS.md" ]; then
@@ -181,21 +125,12 @@ else
     echo "  ℹ️ No se detectó directorio de Google Drive en $SKILLS_SRC (Omitiendo)."
 fi
 
-# Purgar Grupo E y evitar copias congeladas que sombreen .agents/skills
-for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular; do
+# Purgar skills ruidosas/podadas y copias congeladas que sombreen .agents/skills
+for noise_sk in jira-epic jira-task gentle-ai-bench gentle-ai-collab-perfect rdd-advisory-transport rdd-defect-workflow migrate-to-shoehorn scaffold-exercises django-drf angular using-superpowers brainstorming writing-plans executing-plans subagent-driven-development dispatching-parallel-agents finishing-a-development-branch using-git-worktrees requesting-code-review receiving-code-review test-driven-development systematic-debugging grill-me grilling grill-with-docs pr github-pr ask-matt claude-handoff handoff wayfinder teach retro loop-me software-factory chief-of-staff implement implement-spec improve-codebase-architecture setup-ts-deep-modules to-questionnaire to-spec to-tickets triage writing-beats writing-fragments writing-shape git-guardrails-claude-code issue-creation issue-root-resolution skill-registry; do
     rm -rf "$TARGET_AGENTS/$noise_sk" "$GEMINI_SKILLS/$noise_sk" "/home/zerops/.gemini/antigravity-cli/skills/$noise_sk" "/home/zerops/.gemini/config/skills/$noise_sk" "/var/www/.claude/skills/$noise_sk" 2>/dev/null || true
 done
-
-# Las extensiones descubiertas residen canónicamente en .atl/skill-registry.md para no inflar el prompt de sistema
-echo "• Extensiones de proyecto indexadas en .atl/skill-registry.md (Lean AGENTS.md)"
-
-# Compilación del Registro de Gentle AI
-if command -v gentle-ai >/dev/null 2>&1; then
-    echo "• Refrescando registro nativo de skills (.atl/skill-registry.md)..."
-    gentle-ai skill-registry refresh --cwd /var/www --force --no-gitignore 2>/dev/null || gentle-ai skill-registry refresh --force 2>/dev/null || true
-    echo "  ✅ Skill registry refrescado con éxito."
-fi
+rm -rf /var/www/.atl 2>/dev/null || true
 
 echo "============================================================"
-echo "  Google Drive Skills Sync & Auto-Discovery Finalizado (v1.6)"
+echo "  Custom Skills Sync & Auto-Discovery Finalizado (v2.0)"
 echo "============================================================"

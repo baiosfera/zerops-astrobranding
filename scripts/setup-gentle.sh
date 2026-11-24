@@ -43,6 +43,7 @@ if [ ! -f "$SCRIPT_DIR/engram" ] && [ ! -f "$PROJECT_ROOT/.bin/engram" ]; then
             cp "$TMP_ENGRAM/engram" "$PROJECT_ROOT/.bin/engram"
             cp "$TMP_ENGRAM/engram" "$SCRIPT_DIR/engram" 2>/dev/null || true
             chmod +x "$PROJECT_ROOT/.bin/engram"
+            sudo ln -sf "$PROJECT_ROOT/.bin/engram" /usr/local/bin/engram 2>/dev/null || true
             echo "  ✓ Engram instalado con éxito desde GitHub Releases."
         fi
     fi
@@ -67,40 +68,7 @@ if [ ! -f "$SCRIPT_DIR/gga" ] || [ ! -f "$SCRIPT_DIR/lib/gga/providers.sh" ] || 
     rm -rf "$TMP_GGA" 2>/dev/null || true
 fi
 
-# 2c. Descarga y aprovisionamiento autónomo de Gentle-AI CLI si no existe localmente
-GAI_ARCH="linux_amd64"
-[ "$(uname -m)" = "aarch64" ] && GAI_ARCH="linux_arm64"
-GAI_LATEST=$(curl -sSL "https://api.github.com/repos/Gentleman-Programming/gentle-ai/releases/latest" 2>/dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || echo "v4.0.0")
-[ -z "$GAI_LATEST" ] && GAI_LATEST="v4.0.0"
-GAI_VER="${GAI_LATEST#v}"
-
-NEED_GAI_DL=false
-if [ ! -f "$SCRIPT_DIR/gentle-ai" ] || [ ! -f "$PROJECT_ROOT/.bin/gentle-ai" ]; then
-    NEED_GAI_DL=true
-else
-    CURRENT_VER=$("$PROJECT_ROOT/.bin/gentle-ai" --version 2>/dev/null | awk '{print $2}' || echo "0.0.0")
-    if [ "$CURRENT_VER" != "$GAI_VER" ]; then
-        NEED_GAI_DL=true
-    fi
-fi
-
-if [ "$NEED_GAI_DL" = true ]; then
-    echo "• Descargando binario oficial de Gentle-AI CLI ($GAI_LATEST) desde GitHub Releases..."
-    TMP_GAI="$(mktemp -d 2>/dev/null || mktemp -d -t 'gai_dl.XXXXXX')"
-    if curl -sSL "https://github.com/Gentleman-Programming/gentle-ai/releases/download/${GAI_LATEST}/gentle-ai_${GAI_VER}_${GAI_ARCH}.tar.gz" -o "$TMP_GAI/gentle-ai.tar.gz" 2>/dev/null; then
-        tar -xzf "$TMP_GAI/gentle-ai.tar.gz" -C "$TMP_GAI" 2>/dev/null || true
-        if [ -f "$TMP_GAI/gentle-ai" ]; then
-            cp "$TMP_GAI/gentle-ai" "$PROJECT_ROOT/.bin/gentle-ai"
-            cp "$TMP_GAI/gentle-ai" "$SCRIPT_DIR/gentle-ai" 2>/dev/null || true
-            chmod +x "$PROJECT_ROOT/.bin/gentle-ai" "$SCRIPT_DIR/gentle-ai" 2>/dev/null || true
-            sudo ln -sf "$PROJECT_ROOT/.bin/gentle-ai" "/usr/local/bin/gentle-ai" 2>/dev/null || true
-            echo "  ✓ Gentle-AI CLI $GAI_LATEST instalado con éxito desde GitHub Releases."
-        fi
-    fi
-    rm -rf "$TMP_GAI" 2>/dev/null || true
-fi
-
-# 2d. Aprovisionamiento autónomo de inject-agent-rule desde SSoT (symlink canónico)
+# 2c. Aprovisionamiento autónomo de inject-agent-rule desde SSoT (symlink canónico)
 if [ -f "$SCRIPT_DIR/inject-agent-rule" ]; then
     chmod +x "$SCRIPT_DIR/inject-agent-rule"
     ln -sfn "$SCRIPT_DIR/inject-agent-rule" "$PROJECT_ROOT/.bin/inject-agent-rule"
@@ -109,7 +77,7 @@ if [ -f "$SCRIPT_DIR/inject-agent-rule" ]; then
     echo "  ✓ inject-agent-rule enlazado desde SSoT."
 fi
 
-for b in "engram" "gga" "gentle-ai"; do
+for b in "engram" "gga"; do
     if [ -f "$SCRIPT_DIR/$b" ]; then
         cp "$SCRIPT_DIR/$b" "$PROJECT_ROOT/.bin/$b" 2>/dev/null || true
         chmod +x "$PROJECT_ROOT/.bin/$b" 2>/dev/null || true
@@ -231,19 +199,16 @@ if command -v gga >/dev/null 2>&1; then
     done
 fi
 
-if command -v gentle-ai >/dev/null 2>&1; then
-    echo "• Configurando stack de Gentle AI para el agente: $TARGET_AGENT..."
-    CI=true GENTLE_NO_UPDATE_PROMPT=1 gentle-ai install --agents "$TARGET_AGENT" --scope=global 2>/dev/null || true
-    # Garantizar cwd=/var/www y --tools=agent para Engram MCP único (sin plugin duplicado)
-    if [ -f "$SCRIPT_DIR/engram-mcp" ]; then
-        chmod +x "$SCRIPT_DIR/engram-mcp"
-        ln -sfn "$SCRIPT_DIR/engram-mcp" "$PROJECT_ROOT/.bin/engram-mcp"
-        ln -sfn "$SCRIPT_DIR/engram-mcp" "/home/zerops/.local/bin/engram-mcp" 2>/dev/null || true
-    fi
-    if command -v agy >/dev/null 2>&1; then
-        agy plugin disable gentle-ai-engram 2>/dev/null || true
-    fi
-    python3 - << 'EOF_ENGRAM_MCP'
+echo "• Configurando stack Engram & Antigravity para el agente: $TARGET_AGENT..."
+if [ -f "$SCRIPT_DIR/engram-mcp" ]; then
+    chmod +x "$SCRIPT_DIR/engram-mcp"
+    ln -sfn "$SCRIPT_DIR/engram-mcp" "$PROJECT_ROOT/.bin/engram-mcp"
+    ln -sfn "$SCRIPT_DIR/engram-mcp" "/home/zerops/.local/bin/engram-mcp" 2>/dev/null || true
+fi
+if command -v agy >/dev/null 2>&1; then
+    agy plugin disable gentle-ai-engram 2>/dev/null || true
+fi
+python3 - << 'EOF_ENGRAM_MCP'
 import json, os
 
 cfg_json = "/home/zerops/.gemini/config/config.json"
@@ -269,22 +234,24 @@ if os.path.isfile(global_mcp):
         with open(global_mcp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
+        os.chmod(global_mcp, 0o600)
         print(f"  ✓ Engram MCP único (--tools=agent, cwd=/var/www) en {global_mcp}")
     except Exception as e:
         print(f"  ⚠️ No se pudo actualizar {global_mcp}: {e}")
 EOF_ENGRAM_MCP
-    rm -rf "$PROJECT_ROOT/.atl" "/home/zerops/.gemini/GEMINI.md" "/home/zerops/.gemini/system.md" "/home/zerops/.gemini/antigravity-cli/references" 2>/dev/null || true
-    for rule_name in \
-        gentle-ai-03-orchestrator-part1.md \
-        gentle-ai-03-orchestrator-part2.md \
-        gentle-ai-04-agent-routing-part1.md \
-        gentle-ai-04-agent-routing-part2.md; do
-        rm -f "/home/zerops/.gemini/config/rules/$rule_name" 2>/dev/null || true
-    done
-    if [ -f "$SCRIPT_DIR/templates/gentle-ai-02-engram-protocol.md" ]; then
-        cp -f "$SCRIPT_DIR/templates/gentle-ai-02-engram-protocol.md" "/home/zerops/.gemini/config/rules/gentle-ai-02-engram-protocol.md"
-    fi
-    python3 - << 'EOF_AGY_SETTINGS'
+rm -rf "$PROJECT_ROOT/.atl" "/home/zerops/.gemini/GEMINI.md" "/home/zerops/.gemini/system.md" "/home/zerops/.gemini/antigravity-cli/references" 2>/dev/null || true
+for rule_name in \
+    gentle-ai-03-orchestrator-part1.md \
+    gentle-ai-03-orchestrator-part2.md \
+    gentle-ai-04-agent-routing-part1.md \
+    gentle-ai-04-agent-routing-part2.md; do
+    rm -f "/home/zerops/.gemini/config/rules/$rule_name" 2>/dev/null || true
+done
+if [ -f "$SCRIPT_DIR/templates/gentle-ai-02-engram-protocol.md" ]; then
+    mkdir -p "/home/zerops/.gemini/config/rules" 2>/dev/null || true
+    cp -f "$SCRIPT_DIR/templates/gentle-ai-02-engram-protocol.md" "/home/zerops/.gemini/config/rules/gentle-ai-02-engram-protocol.md"
+fi
+python3 - << 'EOF_AGY_SETTINGS'
 import json, os
 agy_settings = os.path.expanduser("~/.gemini/antigravity-cli/settings.json")
 os.makedirs(os.path.dirname(agy_settings), exist_ok=True)
@@ -301,9 +268,6 @@ with open(agy_settings, "w", encoding="utf-8") as wf:
     wf.write("\n")
 os.chmod(agy_settings, 0o600)
 EOF_AGY_SETTINGS
-    echo "• Verificando salud del ecosistema Gentle AI..."
-    gentle-ai doctor || true
-fi
 
 INJECT_CMD="inject-agent-rule"
 

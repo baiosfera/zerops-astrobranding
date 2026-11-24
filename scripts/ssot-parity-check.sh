@@ -191,6 +191,8 @@ LINK_PAIRS=(
     "engram-mcp:$CATALOG_REPO/scripts/engram-mcp"
     "zcp-sync:$CATALOG_REPO/scripts/zcp-sync"
     "skills-sync:$CATALOG_REPO/scripts/skills-sync.sh"
+    "astrobranding-check:$CATALOG_REPO/scripts/astrobranding-check.sh"
+    "drive-keys:$CATALOG_REPO/scripts/drive-keys.sh"
 )
 for pair in "${LINK_PAIRS[@]}"; do
     name="${pair%%:*}"

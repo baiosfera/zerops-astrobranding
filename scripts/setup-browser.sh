@@ -21,6 +21,8 @@ echo "============================================================"
 # 1. Configurar Servidores MCP con las API keys del entorno
 [ -f /etc/environment ] && set -a && . /etc/environment 2>/dev/null && set +a || true
 [ -f "$HOME/.bashrc" ] && set -a && . "$HOME/.bashrc" 2>/dev/null && set +a || true
+[ -f "$HOME/.env" ] && set -a && . "$HOME/.env" 2>/dev/null && set +a || true
+[ -f "/home/zerops/.env" ] && set -a && . "/home/zerops/.env" 2>/dev/null && set +a || true
 [ -f "$PROJECT_ROOT/.env" ] && set -a && . "$PROJECT_ROOT/.env" 2>/dev/null && set +a || true
 
 mkdir -p "$PERSISTENT_GEMINI/config" "$PERSISTENT_GEMINI/antigravity-cli"
@@ -44,6 +46,11 @@ cat > "$PERSISTENT_GEMINI/config/mcp_config.json" << EOF
       "command": "npx",
       "args": ["-y", "duckduckgo-mcp-server"],
       "disabled": false
+    },
+    "engram": {
+      "command": "/var/www/.bin/engram-mcp",
+      "args": [],
+      "cwd": "/var/www"
     },
     "exa": {
       "disabled": false,
@@ -87,22 +94,22 @@ EOF
 
 # Sincronizar configuración MCP en todos los perfiles con permisos restrictivos (600)
 chmod 600 "$PERSISTENT_GEMINI/config/mcp_config.json"
-cp "$PERSISTENT_GEMINI/config/mcp_config.json" "$PERSISTENT_GEMINI/antigravity-cli/mcp_config.json"
+cp -f "$PERSISTENT_GEMINI/config/mcp_config.json" "$PERSISTENT_GEMINI/antigravity-cli/mcp_config.json"
 chmod 600 "$PERSISTENT_GEMINI/antigravity-cli/mcp_config.json"
 
-for base_dir in "$HOME/.gemini" "/home/zerops/.gemini" "/root/.gemini"; do
+for base_dir in "$HOME/.gemini" "/home/zerops/.gemini"; do
     if [ -d "$base_dir" ] || [ "$base_dir" = "$HOME/.gemini" ]; then
         mkdir -p "$base_dir/config" "$base_dir/antigravity-cli" 2>/dev/null || true
-        ln -sf "$PERSISTENT_GEMINI/config/mcp_config.json" "$base_dir/config/mcp_config.json" 2>/dev/null || true
+        if [ -L "$base_dir/config/mcp_config.json" ]; then
+            ln -sf "$PERSISTENT_GEMINI/config/mcp_config.json" "$base_dir/config/mcp_config.json" 2>/dev/null || true
+        else
+            cp -f "$PERSISTENT_GEMINI/config/mcp_config.json" "$base_dir/config/mcp_config.json" 2>/dev/null || true
+            chmod 600 "$base_dir/config/mcp_config.json" 2>/dev/null || true
+        fi
         ln -sf "$PERSISTENT_GEMINI/antigravity-cli/mcp_config.json" "$base_dir/antigravity-cli/mcp_config.json" 2>/dev/null || true
     fi
 done
 
-# 2. Skills de Scraping y Browser gestionadas de forma centralizada por setup-drive.sh
-
-# 3. Reglas de Scraping indexadas canónicamente en setup-gentle.sh y .atl/skill-registry.md (Lean AGENTS.md)
-echo "• Skills de Scraping y Browser preservadas canónicamente en AGENTS.md y .atl/skill-registry.md."
-
 echo "============================================================"
-echo "  MCP Servers, research & docu Skills v3.5 Desplegados"
+echo "  MCP Servers Desplegados con Engram & Search Hub (0600)"
 echo "============================================================"

@@ -35,12 +35,10 @@ if (!existsSync(envPath) && existsSync(envExamplePath)) {
 // 2. Install Workspace Dependencies
 runStep("Installing Dependencies via Bun", "bun install");
 
-// 3. Validate Zerops Platform Manifests
-if (existsSync("/home/zerops/.local/bin/zcp-validate") || existsSync("/usr/local/bin/zcp-validate")) {
-  runStep("Validating Zerops Platform Topology", "zcp-validate yaml import.yaml");
+// 3. Validate SSoT Parity & Architecture Guardian Check
+if (existsSync("/var/www/.bin/ssot-parity-check")) {
+  runStep("Validating SSoT Parity", "ssot-parity-check --allow-unpushed");
 }
-
-// 4. Architecture Guardian Check
 runStep("Enforcing Architecture Boundaries", "bun scripts/architecture-check.mjs");
 
 // 5. Build Unified Fullstack App (Astro 5 SSR + React 19 + Hono)
