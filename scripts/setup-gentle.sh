@@ -8,16 +8,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_ROOT="/var/www"
-DRIVE_MOUNT="${GDRIVE_MOUNT_DIR:-/var/www/baiosfera}"
-PROJ_KEY="$(echo "${ENGRAM_PROJECT:-${PROJECT_NAME:-}}" | tr '[:upper:]' '[:lower:]')"
-DRIVE_SSOT="${PROJ_KEY:+$DRIVE_MOUNT/0ZEROPS-AGY/$PROJ_KEY}"
 
-if [ -d "$DRIVE_SSOT" ]; then
-    SSOT_ROOT="$DRIVE_SSOT"
-elif [ -d "$SCRIPT_DIR/.." ] && [ -d "$SCRIPT_DIR/../.agents" ]; then
-    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-elif [ -d "$REPO_DIR/.agents" ]; then
+if [ -d "$REPO_DIR/.agents" ]; then
     SSOT_ROOT="$REPO_DIR"
+elif [ -d "$SCRIPT_DIR/../.agents" ]; then
+    SSOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 else
     SSOT_ROOT="$PROJECT_ROOT"
 fi
@@ -29,10 +24,9 @@ echo "============================================================"
 echo "  [2/7] Despliegue Gentle AI, Engram & GGA (v8.2 - SSoT)"
 echo "============================================================"
 
-# 1. Asegurar directorios canónicos y jerarquía de respaldos bak/
-echo "• Verificando directorios de gobernanza y respaldo centralizado..."
+# 1. Asegurar directorios canónicos de gobernanza
+echo "• Verificando directorios de gobernanza..."
 mkdir -p "$PROJECT_ROOT/.agents/rules" "$PROJECT_ROOT/.agents/skills" 2>/dev/null || true
-mkdir -p "$ZCP_ROOT/bak/scripts" "$ZCP_ROOT/bak/rules" "$ZCP_ROOT/bak/skills" "$ZCP_ROOT/bak/apis" "$ZCP_ROOT/bak/mcp" 2>/dev/null || true
 
 # 2. Desplegar e Instalar Binarios de Gobernanza (engram, gga, gentle-ai, inject-agent-rule)
 mkdir -p "$PROJECT_ROOT/.bin" "$HOME/.local/bin" "/home/zerops/.local/bin" 2>/dev/null || true
@@ -106,15 +100,16 @@ if [ "$NEED_GAI_DL" = true ]; then
     rm -rf "$TMP_GAI" 2>/dev/null || true
 fi
 
-# 2d. Aprovisionamiento autónomo de inject-agent-rule desde SSoT
+# 2d. Aprovisionamiento autónomo de inject-agent-rule desde SSoT (symlink canónico)
 if [ -f "$SCRIPT_DIR/inject-agent-rule" ]; then
-    cp -f "$SCRIPT_DIR/inject-agent-rule" "$PROJECT_ROOT/.bin/inject-agent-rule"
-    chmod +x "$PROJECT_ROOT/.bin/inject-agent-rule"
+    chmod +x "$SCRIPT_DIR/inject-agent-rule"
+    ln -sfn "$SCRIPT_DIR/inject-agent-rule" "$PROJECT_ROOT/.bin/inject-agent-rule"
+    ln -sfn "$SCRIPT_DIR/inject-agent-rule" "/home/zerops/.local/bin/inject-agent-rule" 2>/dev/null || true
     sudo ln -sf "$PROJECT_ROOT/.bin/inject-agent-rule" "/usr/local/bin/inject-agent-rule" 2>/dev/null || true
-    echo "  ✓ inject-agent-rule desplegado desde SSoT."
+    echo "  ✓ inject-agent-rule enlazado desde SSoT."
 fi
 
-for b in "engram" "gga" "gentle-ai" "inject-agent-rule"; do
+for b in "engram" "gga" "gentle-ai"; do
     if [ -f "$SCRIPT_DIR/$b" ]; then
         cp "$SCRIPT_DIR/$b" "$PROJECT_ROOT/.bin/$b" 2>/dev/null || true
         chmod +x "$PROJECT_ROOT/.bin/$b" 2>/dev/null || true
@@ -419,14 +414,13 @@ if os.path.exists('/home/zerops'):
 
 # 7. Despliegue de Hooks de Ciclo de Vida Nativos de Antigravity (hooks.json & tool-guard.py)
 echo "• Desplegando arnés físico de interceptores y guardianes de ciclo de vida (hooks.json)..."
-mkdir -p "$PROJECT_ROOT/.bin/hooks" "$PROJECT_ROOT/.agents" "$ZCP_ROOT/scripts/hooks" 2>/dev/null || true
-if [ -f "$SCRIPT_DIR/hooks/tool-guard.py" ]; then
-    cp -f "$SCRIPT_DIR/hooks/tool-guard.py" "$PROJECT_ROOT/.bin/hooks/tool-guard.py"
-    chmod +x "$PROJECT_ROOT/.bin/hooks/tool-guard.py"
-    if [ -d "$ZCP_ROOT/scripts/hooks" ]; then
-        cp -f "$SCRIPT_DIR/hooks/tool-guard.py" "$ZCP_ROOT/scripts/hooks/tool-guard.py" 2>/dev/null || true
+mkdir -p "$PROJECT_ROOT/.bin/hooks" "$PROJECT_ROOT/.agents" 2>/dev/null || true
+for hf in tool-guard.py test_tool_guard.py; do
+    if [ -f "$SCRIPT_DIR/hooks/$hf" ]; then
+        chmod +x "$SCRIPT_DIR/hooks/$hf"
+        ln -sfn "$SCRIPT_DIR/hooks/$hf" "$PROJECT_ROOT/.bin/hooks/$hf"
     fi
-fi
+done
 
 if [ -f "$ZCP_ROOT/.agents/hooks.json" ]; then
     cp -f "$ZCP_ROOT/.agents/hooks.json" "$PROJECT_ROOT/.agents/hooks.json"
@@ -434,18 +428,17 @@ elif [ -f "$REPO_DIR/.agents/hooks.json" ]; then
     cp -f "$REPO_DIR/.agents/hooks.json" "$PROJECT_ROOT/.agents/hooks.json"
 fi
 
-# Desplegar Sensor Universal de Capacidades (Standard v3.3)
-if [ -f "$SCRIPT_DIR/skills-suite-validate.sh" ]; then
-    cp -f "$SCRIPT_DIR/skills-suite-validate.sh" "$PROJECT_ROOT/.bin/skills-suite-validate"
-    chmod +x "$PROJECT_ROOT/.bin/skills-suite-validate" 2>/dev/null || true
-    sudo ln -sf "$PROJECT_ROOT/.bin/skills-suite-validate" /usr/local/bin/skills-suite-validate 2>/dev/null || true
-fi
-# Desplegar astrobranding-check incondicionalmente (Arnés Resiliente Anti-Fallo en ZCP limpio)
-if [ -f "$SCRIPT_DIR/astrobranding-check.sh" ]; then
-    cp -f "$SCRIPT_DIR/astrobranding-check.sh" "$PROJECT_ROOT/.bin/astrobranding-check"
-    chmod +x "$PROJECT_ROOT/.bin/astrobranding-check" 2>/dev/null || true
-    sudo ln -sf "$PROJECT_ROOT/.bin/astrobranding-check" /usr/local/bin/astrobranding-check 2>/dev/null || true
-fi
+# Desplegar Sensores Universales desde SSoT (symlinks canónicos)
+for s_pair in "skills-suite-validate:skills-suite-validate.sh" "ssot-parity-check:ssot-parity-check.sh" "astrobranding-check:astrobranding-check.sh"; do
+    s_bin="${s_pair%%:*}"
+    s_src="$SCRIPT_DIR/${s_pair#*:}"
+    if [ -f "$s_src" ]; then
+        chmod +x "$s_src" 2>/dev/null || true
+        ln -sfn "$s_src" "$PROJECT_ROOT/.bin/$s_bin"
+        ln -sfn "$s_src" "/home/zerops/.local/bin/$s_bin" 2>/dev/null || true
+        sudo ln -sf "$PROJECT_ROOT/.bin/$s_bin" "/usr/local/bin/$s_bin" 2>/dev/null || true
+    fi
+done
 
 echo "  ✅ Despliegue de Gentle AI, Engram & Supreme Directive v8.4 completado con éxito."
 chmod +x "$PROJECT_ROOT/.agents/rules/00-SUPREME-DIRECTIVE.md" 2>/dev/null || true
