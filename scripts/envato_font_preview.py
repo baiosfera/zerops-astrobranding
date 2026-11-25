@@ -97,35 +97,56 @@ def fetch_svg_preview(item_uuid: str, text: str, variant_id: Optional[str], refe
         return resp.read().decode("utf-8")
 
 
-def _extract_theme_css(chroma_path: Optional[Path]) -> Tuple[str, str]:
-    dark_vars = "--bg:#090b10;--surface:#121622;--border:#23293a;--text:#f1f5f9;--muted:#94a3b8;--accent:#38b6ff;"
-    light_vars = "--bg:#f8fafc;--surface:#ffffff;--border:#e2e8f0;--text:#0f172a;--muted:#475569;--accent:#0c4f88;"
+def _extract_chroma_palettes(chroma_path: Optional[Path]) -> Tuple[str, str, Dict[str, Any], str, str]:
+    dark_vars = "--bg:#0a0b0e;--surface:#14161c;--border:#262b36;--text:#f2f4f7;--muted:#94a0b2;--accent:#a3b8ff;"
+    light_vars = "--bg:#f8f9fb;--surface:#eef1f6;--border:#d4dbe6;--text:#121621;--muted:#525c70;--accent:#23449e;"
+    palettes: Dict[str, Any] = {}
+    default_eco = "default"
+    default_mode = "light"
     if not chroma_path or not chroma_path.exists():
-        return dark_vars, light_vars
+        return dark_vars, light_vars, palettes, default_eco, default_mode
     try:
         cdata = json.loads(chroma_path.read_text(encoding="utf-8"))
         sel_id = cdata.get("selected_ecosystem_id")
+        default_mode = cdata.get("recommended_mode", "light")
         ecos = cdata.get("ecosystems", [])
+        for idx, eco in enumerate(ecos):
+            eid = eco.get("id") or f"eco_{idx + 1}"
+            d = eco.get("themes", {}).get("dark", {})
+            lt = eco.get("themes", {}).get("light", {})
+            palettes[eid] = {
+                "name": eco.get("name", eid),
+                "recommended_mode": eco.get("recommended_mode", default_mode),
+                "dark": {
+                    "--bg": d["background"]["hex"],
+                    "--surface": d["surface"]["hex"],
+                    "--border": f"{d['text_muted']['hex']}44",
+                    "--text": d["text_primary"]["hex"],
+                    "--muted": d["text_muted"]["hex"],
+                    "--accent": d["primary"]["hex"],
+                } if d else {},
+                "light": {
+                    "--bg": lt["background"]["hex"],
+                    "--surface": lt["surface"]["hex"],
+                    "--border": f"{lt['text_muted']['hex']}44",
+                    "--text": lt["text_primary"]["hex"],
+                    "--muted": lt["text_muted"]["hex"],
+                    "--accent": lt["primary"]["hex"],
+                } if lt else {},
+            }
         eco = next((e for e in ecos if e.get("id") == sel_id), ecos[0] if ecos else None)
-        if not eco:
-            return dark_vars, light_vars
-        d = eco.get("themes", {}).get("dark", {})
-        lt = eco.get("themes", {}).get("light", {})
-        if d:
-            dark_vars = (
-                f"--bg:{d['background']['hex']};--surface:{d['surface']['hex']};"
-                f"--border:{d['primary']['hex']}33;--text:{d['text_primary']['hex']};"
-                f"--muted:{d['text_muted']['hex']};--accent:{d['primary']['hex']};"
-            )
-        if lt:
-            light_vars = (
-                f"--bg:{lt['background']['hex']};--surface:{lt['surface']['hex']};"
-                f"--border:{lt['primary']['hex']}33;--text:{lt['text_primary']['hex']};"
-                f"--muted:{lt['text_muted']['hex']};--accent:{lt['primary']['hex']};"
-            )
+        if eco:
+            default_eco = eco.get("id") or default_eco
+            default_mode = eco.get("recommended_mode", default_mode)
+            d = eco.get("themes", {}).get("dark", {})
+            lt = eco.get("themes", {}).get("light", {})
+            if d:
+                dark_vars = "".join(f"{k}:{v};" for k, v in palettes[default_eco]["dark"].items())
+            if lt:
+                light_vars = "".join(f"{k}:{v};" for k, v in palettes[default_eco]["light"].items())
     except Exception:
         pass
-    return dark_vars, light_vars
+    return dark_vars, light_vars, palettes, default_eco, default_mode
 
 
 def generate_gallery_html(
@@ -134,7 +155,12 @@ def generate_gallery_html(
     chroma_path: Optional[Path] = None,
     gallery_title: str = "Visualizador de Fuentes Envato + Google Fonts",
 ) -> None:
-    dark_vars, light_vars = _extract_theme_css(chroma_path)
+    dark_vars, light_vars, palettes_map, default_eco, default_mode = _extract_chroma_palettes(chroma_path)
+    eco_options = "".join(
+        f'<option value="{html.escape(eid)}"{" selected" if eid == default_eco else ""}>{html.escape(pdata["name"])}</option>'
+        for eid, pdata in palettes_map.items()
+    )
+    palettes_json = json.dumps(palettes_map, ensure_ascii=False)
 
     google_links: List[str] = []
     seen_gf: set[str] = set()
@@ -194,7 +220,7 @@ def generate_gallery_html(
                     <span class="role-pill">{role_badge}</span>
                 </div>
                 <h2>{font_title}</h2>
-                <p class="brand-preview">Texto: <strong>"{brand_text}"</strong> · <a href="{font_url}" target="_blank">Descargar / Ver en Envato Elements ↗</a></p>
+                <p class="brand-preview">Texto: <strong>"{brand_text}"</strong> · <a href="{font_url}" target="_blank">Abrir / Descargar en Envato Elements ↗</a></p>
             </div>
             <div class="variants-grid">{''.join(variant_cards)}</div>
             {body_sample_html}
@@ -208,15 +234,17 @@ def generate_gallery_html(
 <title>{html.escape(gallery_title)}</title>
 {''.join(google_links)}
 <style>
-  :root {{ {dark_vars} }}
+  :root {{ --preview-h: 84px; {light_vars if default_mode == "light" else dark_vars} }}
+  [data-theme="dark"] {{ {dark_vars} }}
   [data-theme="light"] {{ {light_vars} }}
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{ background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 32px 24px; transition: background .2s, color .2s; }}
   .header {{ max-width: 1200px; margin: 0 auto 28px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }}
-  .header h1 {{ font-size: 23px; font-weight: 700; }}
+  .header h1 {{ font-size: 22px; font-weight: 700; }}
   .header p {{ color: var(--muted); font-size: 14px; margin-top: 4px; }}
   .controls {{ display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }}
-  .live-input {{ background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; min-width: 240px; }}
+  .live-input, .eco-select {{ background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }}
+  .live-input {{ min-width: 220px; }}
   .btn {{ background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }}
   .btn-primary {{ background: var(--accent); color: var(--bg); border-color: var(--accent); }}
   .container {{ max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }}
@@ -235,32 +263,44 @@ def generate_gallery_html(
   .btn-download, .btn-external {{ font-size: 12px; color: var(--muted); text-decoration: none; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); }}
   .btn-download:hover, .btn-external:hover {{ color: var(--text); border-color: var(--accent); }}
   .svg-container {{ min-height: 110px; display: flex; align-items: center; justify-content: center; padding: 14px; background: var(--surface); border-radius: 8px; border: 1px dashed var(--border); overflow-x: auto; }}
-  .svg-container svg {{ max-width: 100%; height: auto; max-height: 92px; display: block; }}
+  .svg-container svg {{ max-width: 100%; height: auto; max-height: var(--preview-h); display: block; }}
   .svg-container svg path {{ fill: var(--text) !important; }}
-  .live-img {{ max-width: 100%; max-height: 88px; filter: invert(0); }}
+  .live-img {{ max-width: 100%; max-height: var(--preview-h); filter: invert(0); }}
   [data-theme="dark"] .live-img {{ filter: invert(1); }}
   .body-pair {{ margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text); }}
   .body-pair small {{ color: var(--muted); display: block; margin-bottom: 4px; }}
   .body-pair p {{ font-size: 15px; line-height: 1.55; max-width: 72ch; }}
 </style>
 </head>
-<body data-theme="dark">
+<body data-theme="{html.escape(default_mode)}">
   <div class="header">
     <div>
       <h1>{html.escape(gallery_title)}</h1>
-      <p>Vectores SVG reales extraídos de Envato Elements sin descarga previa · Alterna Oscuro/Claro o prueba texto en vivo.</p>
+      <p>Vectores SVG reales de Envato Elements + Paletas Chroma OKLCH · Prueba cualquier texto o cambia entre los 3 ecosistemas cromáticos.</p>
     </div>
     <div class="controls">
-      <input id="liveText" class="live-input" type="text" placeholder="Probar otro texto (ej. Método Unipolio)..." />
+      {f'<select id="ecoSelect" class="eco-select" onchange="applyChromaPalette()">{eco_options}</select>' if eco_options else ''}
+      <input id="liveText" class="live-input" type="text" placeholder="Probar texto en vivo (ej. Método Unipolio)..." />
+      <label style="font-size:12px;color:var(--muted)">Tamaño <input id="sizeRange" type="range" min="48" max="130" value="84" oninput="document.documentElement.style.setProperty('--preview-h', this.value + 'px')" /></label>
       <button class="btn btn-primary" onclick="updateLivePreviews()">Probar en vivo</button>
       <button class="btn" onclick="toggleTheme()">Modo Oscuro / Claro</button>
     </div>
   </div>
   <div class="container">{''.join(cards_html)}</div>
   <script>
+    const CHROMA_PALETTES = {palettes_json};
+    function applyChromaPalette() {{
+      const sel = document.getElementById('ecoSelect');
+      if (!sel || !CHROMA_PALETTES[sel.value]) return;
+      const mode = document.body.getAttribute('data-theme') || '{html.escape(default_mode)}';
+      const vars = CHROMA_PALETTES[sel.value][mode] || CHROMA_PALETTES[sel.value].light || CHROMA_PALETTES[sel.value].dark;
+      if (!vars) return;
+      Object.entries(vars).forEach(([k, v]) => document.body.style.setProperty(k, v));
+    }}
     function toggleTheme() {{
       const next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
       document.body.setAttribute('data-theme', next);
+      applyChromaPalette();
     }}
     function updateLivePreviews() {{
       const txt = document.getElementById('liveText').value.trim();
@@ -274,6 +314,7 @@ def generate_gallery_html(
         el.innerHTML = '<img class="live-img" alt="' + txt + '" src="https://elements.envato.com/font-preview.svg?' + params.toString() + '" />';
       }});
     }}
+    applyChromaPalette();
   </script>
 </body>
 </html>"""

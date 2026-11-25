@@ -132,7 +132,7 @@ def merge_brandbook_non_destructive(target_dir: Path, project_dir: Optional[Path
 
     font_patch: Dict[str, Any] = {}
     selected_font_eco = None
-    disp_font, body_font, acc_font = "Newsreader", "Manrope", "Fraunces"
+    disp_font, body_font, acc_font = "Space Grotesk", "Plus Jakarta Sans", "JetBrains Mono"
     if font_file.is_file():
         fdata = json.loads(font_file.read_text(encoding="utf-8"))
         selected_font_eco = fdata.get("selected_ecosystem_id")
@@ -194,34 +194,49 @@ def run_pipeline(
     phases: List[str],
     brief_path: Optional[Path] = None,
     shards_path: Optional[Path] = None,
+    vertical_json_path: Optional[Path] = None,
     project_dir: Optional[Path] = None,
     vertical: Optional[str] = None,
     preview_texts: str = "",
     no_live: bool = False,
+    chroma_mode: str = "auto",
+    style_profile: str = "auto",
+    seed: int = 0,
 ) -> Dict[str, Any]:
     target_dir.mkdir(parents=True, exist_ok=True)
     results: Dict[str, Any] = {"brand": brand, "vertical": vertical, "target_dir": str(target_dir), "generated": []}
 
     run_all = "all" in phases
     if run_all or "chroma" in phases:
-        cmd = [sys.executable, "-B", str(resolve_script("chroma_engine.py")), "--brand", brand, "--output-dir", str(target_dir)]
+        cmd = [
+            sys.executable, "-B", str(resolve_script("chroma_engine.py")),
+            "--brand", brand, "--output-dir", str(target_dir), "--mode", chroma_mode,
+        ]
         if vertical:
             cmd.extend(["--vertical", vertical])
         if brief_path:
             cmd.extend(["--brief", str(brief_path)])
         if shards_path:
             cmd.extend(["--shards", str(shards_path)])
+        if vertical_json_path:
+            cmd.extend(["--vertical-json", str(vertical_json_path)])
         subprocess.run(cmd, check=True)
         results["generated"].extend(["chroma_manifest.json", "chroma_preview.html"])
 
     if run_all or "fontgen" in phases:
-        cmd = [sys.executable, "-B", str(resolve_script("fontgen_engine.py")), "--brand", brand, "--output-dir", str(target_dir)]
+        cmd = [
+            sys.executable, "-B", str(resolve_script("fontgen_engine.py")),
+            "--brand", brand, "--output-dir", str(target_dir),
+            "--style-profile", style_profile, "--seed", str(seed),
+        ]
         if brief_path:
             cmd.extend(["--brief", str(brief_path)])
-        else:
+        elif not shards_path:
             cmd.append("--allow-default")
         if shards_path:
             cmd.extend(["--shards", str(shards_path)])
+        if vertical_json_path:
+            cmd.extend(["--vertical-json", str(vertical_json_path)])
         if no_live:
             cmd.append("--no-live")
         subprocess.run(cmd, check=True)
@@ -317,13 +332,17 @@ def run_unit_tests() -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="orchesbrand", description="Sovereign Agnostic Brand Pipeline CLI (v3.0)")
+    parser = argparse.ArgumentParser(prog="orchesbrand", description="Sovereign Agnostic Brand Pipeline CLI (v3.1)")
     parser.add_argument("--brand", default=None, help="Umbrella brand slug (e.g. AURELIUS)")
     parser.add_argument("--vertical", default=None, help="Vertical slug inside workspaces/<vertical>/brand")
     parser.add_argument("--project-dir", type=Path, default=None, help="Project dev root (e.g. /mnt/localstorage/<Project>/dev)")
     parser.add_argument("--output-dir", type=Path, default=None, help="Explicit output directory")
     parser.add_argument("--brief", type=Path, default=None, help="Explicit astrobranding_<brand>.md path")
     parser.add_argument("--shards", type=Path, default=None, help="Explicit client_dumps_15_shards.json path")
+    parser.add_argument("--vertical-json", type=Path, default=None, help="Explicit verticals/<vertical>.json path")
+    parser.add_argument("--chroma-mode", default="auto", choices=["auto", "synthesize", "brief"])
+    parser.add_argument("--style-profile", default="auto", choices=["auto", "architectural_b2b", "editorial_authority"])
+    parser.add_argument("--seed", type=int, default=0, help="Rotate ranked Envato font hits across iterations")
     parser.add_argument("--phases", default="chroma,fontgen,previews,brandbook", help="Comma-separated phases: chroma,fontgen,previews,brandbook,all")
     parser.add_argument("--preview-texts", default="", help="Comma-separated preview strings for Envato SVG gallery")
     parser.add_argument("--no-live", action="store_true", help="Offline mode (skip live Envato scraping/previews)")
@@ -340,6 +359,23 @@ def main() -> int:
     if args.brief:
         brief = args.brief
 
+    shards = args.shards
+    if not shards:
+        b_up = re.sub(r"[^a-zA-Z0-9_-]+", "", brand).upper()
+        for cand in (
+            Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{b_up}/raw/json/dumps/client_dumps_15_shards.json"),
+            proj_dir / "client_dumps_15_shards.json" if proj_dir else None,
+        ):
+            if cand and cand.is_file():
+                shards = cand
+                break
+
+    vjson = args.vertical_json
+    if not vjson and args.vertical and proj_dir:
+        cand_v = proj_dir / "verticals" / f"{args.vertical.lower()}.json"
+        if cand_v.is_file():
+            vjson = cand_v
+
     if args.output_dir:
         targets = [(args.vertical, args.output_dir)]
     elif args.vertical and args.vertical.lower() != "all" and proj_dir:
@@ -355,10 +391,16 @@ def main() -> int:
     all_res = []
     has_err = False
     for vslug, tdir in targets:
+        vjson_target = vjson
+        if not vjson_target and vslug and proj_dir:
+            cand_vs = proj_dir / "verticals" / f"{vslug}.json"
+            if cand_vs.is_file():
+                vjson_target = cand_vs
         res = run_pipeline(
             brand=brand, target_dir=tdir, phases=phases, brief_path=brief,
-            shards_path=args.shards, project_dir=proj_dir, vertical=vslug,
+            shards_path=shards, vertical_json_path=vjson_target, project_dir=proj_dir, vertical=vslug,
             preview_texts=args.preview_texts, no_live=args.no_live,
+            chroma_mode=args.chroma_mode, style_profile=args.style_profile, seed=args.seed,
         )
         if args.audit:
             ok, errs = audit_target(tdir, phases)
