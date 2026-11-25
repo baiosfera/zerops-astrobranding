@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-chroma_engine.py — Sovereign OKLCH Color Architecture & Dual WCAG 2.2 AAA / APCA Engine (v4.0).
-Multi-Axis Oráculo 15-Shards + Vertical Context + Anti-Slop Editorial Synthesizer.
+chroma_engine.py — Sovereign OKLCH Color Architecture & Dual WCAG 2.2 AAA / APCA Engine (v4.1).
+Multi-Axis Oráculo 15-Shards + 5-Tier Vertical Archetype Synthesizer + Anti-Slop Editorial Rules.
 Complies with W3C DTCG 2025.10, Display P3, Tailwind CSS v4 @theme, Impeccable & Design-Taste rules:
-- Clamped chroma (< 0.17), restrained single-accent lock per ecosystem, intentional Dark/Light composition.
+- Same founder Oráculo 15-shards + different vertical JSONs yield genuinely distinct visual worlds.
+- Fixes brief_path yong_shen regex overwriting shards, preserves shard Element normalization.
 - Rejects AI neon-blue-on-navy clichés (#38b6ff/#080c14) and warm-beige/brass slop (#f5f1ea/#b08947).
 - 100% brand-agnostic and isolated to --output-dir (0 phantom directories).
 """
@@ -14,7 +15,6 @@ import argparse
 import html as html_lib
 import json
 import math
-import os
 import re
 import sys
 import tempfile
@@ -31,22 +31,22 @@ BANNED_SLOP_HEXES = {
 }
 
 ELEMENT_BASE_HUES = {
-    "Fire": 28.0,    # Vermilion / terracotta mineral (not brass)
-    "Earth": 148.0,  # Mineral sage-stone / moss basalt (not beige)
-    "Air": 258.0,    # Architectural deep cobalt / steel-ink
-    "Water": 236.0,  # Oceanic slate / ink
-    "Wood": 162.0,   # Pine-viridian architectural mineral
-    "Metal": 252.0,  # Graphite steel / cool titanium
+    "Fire": 28.0,
+    "Earth": 148.0,
+    "Air": 258.0,
+    "Water": 236.0,
+    "Wood": 162.0,
+    "Metal": 252.0,
 }
 
 PLANET_HUE_SHIFTS = {
-    "Sun": 12.0,
-    "Moon": 218.0,
+    "Sun": 18.0,
+    "Moon": 222.0,
     "Mercury": 256.0,
     "Venus": 158.0,
     "Mars": 26.0,
-    "Jupiter": 244.0,
-    "Saturn": 250.0,
+    "Jupiter": 274.0,
+    "Saturn": 248.0,
 }
 
 
@@ -148,10 +148,10 @@ def apca_contrast_lc(hex_fg: str, hex_bg: str) -> float:
     if abs(y_bg - y_txt) < 0.0005:
         return 0.0
 
-    if y_bg > y_txt:  # Dark text on light background (BoW)
+    if y_bg > y_txt:
         sapc = ((y_bg ** 0.56) - (y_txt ** 0.57)) * 1.14
         out = 0.0 if sapc < 0.1 else (sapc - 0.027) * 100.0
-    else:  # Light text on dark background (WoB)
+    else:
         sapc = ((y_bg ** 0.65) - (y_txt ** 0.62)) * 1.14
         out = 0.0 if sapc > -0.1 else (sapc + 0.027) * 100.0
     return round(abs(out), 1)
@@ -257,7 +257,6 @@ def synthesize_light_theme(dark_theme: Dict[str, Dict[str, Any]]) -> Dict[str, D
     s_comp = dark_theme["secondary"]["components"]
     a_comp = dark_theme["accent"]["components"]
     bg_comp = dark_theme["background"]["components"]
-    txt_comp = dark_theme["text_primary"]["components"]
 
     paper_h = bg_comp["hue"] or p_comp["hue"]
     bg_light = make_color_token(0.985, 0.004, paper_h, f"{dark_theme['background']['$description']} (Light Canvas)")
@@ -306,28 +305,27 @@ def _compose_intentional_ecosystem(
     light_surf_l: float = 0.952,
     derivation_params: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Builds an anti-slop composed Light + Dark ecosystem (not naive inversion)."""
-    p_c = min(0.165, max(0.02, primary_chroma))
+    """Builds an anti-slop composed Light + Dark ecosystem (never naive inversion)."""
+    p_c = min(0.165, max(0.015, primary_chroma))
     n_c = min(0.022, max(0.002, neutral_chroma))
 
-    # Dark Mode (calibrated charcoal/obsidian/pine-slate — never AI pure navy+neon cyan)
-    bg_d = make_color_token(dark_bg_l, n_c * 0.65, neutral_hue, "Lienzo oscuro calibrado")
-    surf_d = make_color_token(dark_bg_l + 0.055, n_c * 0.85, neutral_hue, "Superficie elevada")
+    bg_d = make_color_token(dark_bg_l, n_c * 0.72, neutral_hue, "Lienzo oscuro calibrado")
+    surf_d = make_color_token(dark_bg_l + 0.055, n_c * 0.9, neutral_hue, "Superficie elevada")
     txt_d = _ensure_aaa_contrast(
-        make_color_token(0.962, n_c * 0.35, neutral_hue, "Texto principal nítido"),
+        make_color_token(0.962, min(0.008, n_c * 0.4), neutral_hue, "Texto principal nítido"),
         bg_d["hex"], is_dark_bg=True, min_wcag=12.0, min_lc=94.0
     )
     muted_d = _ensure_aaa_contrast(
-        make_color_token(0.695, n_c * 1.1, neutral_hue, "Texto secundario legible"),
+        make_color_token(0.695, n_c * 1.0, neutral_hue, "Texto secundario legible"),
         bg_d["hex"], is_dark_bg=True, min_wcag=4.8, min_lc=55.0
     )
     prim_d = _ensure_aaa_contrast(
-        make_color_token(0.71, min(0.145, p_c), primary_hue, "Acento primario interactivo"),
+        make_color_token(0.71, min(0.14, p_c), primary_hue, "Acento primario interactivo"),
         bg_d["hex"], is_dark_bg=True, min_wcag=5.2, min_lc=60.0
     )
     sec_d = make_color_token(0.56, min(0.085, p_c * 0.65), (primary_hue + 14.0) % 360.0, "Secundario estructural")
     acc_d = _ensure_aaa_contrast(
-        make_color_token(0.78, min(0.135, p_c * 0.9), accent_hue, "Acento de foco / estado"),
+        make_color_token(0.77, min(0.13, p_c * 0.88), accent_hue, "Acento de foco / estado"),
         surf_d["hex"], is_dark_bg=True, min_wcag=5.0, min_lc=58.0
     )
     dark_theme = {
@@ -335,24 +333,23 @@ def _compose_intentional_ecosystem(
         "background": bg_d, "surface": surf_d, "text_primary": txt_d, "text_muted": muted_d,
     }
 
-    # Light Mode (intentionally composed paper / porcelain / stone — never warm beige slop)
     bg_l = make_color_token(light_bg_l, light_bg_c, neutral_hue, "Lienzo claro arquitectónico")
     surf_l = make_color_token(light_surf_l, min(0.012, light_bg_c + 0.004), neutral_hue, "Superficie elevada clara")
     txt_l = _ensure_aaa_contrast(
-        make_color_token(0.165, n_c * 0.85, neutral_hue, "Tinta principal"),
+        make_color_token(0.165, min(0.016, n_c * 0.85), neutral_hue, "Tinta principal"),
         bg_l["hex"], is_dark_bg=False, min_wcag=12.0, min_lc=94.0
     )
     muted_l = _ensure_aaa_contrast(
-        make_color_token(0.445, n_c * 1.1, neutral_hue, "Texto secundario claro"),
+        make_color_token(0.445, n_c * 1.0, neutral_hue, "Texto secundario claro"),
         bg_l["hex"], is_dark_bg=False, min_wcag=4.8, min_lc=55.0
     )
     prim_l = _ensure_aaa_contrast(
-        make_color_token(0.425, min(0.155, p_c * 1.05), primary_hue, "Acento primario sobre claro"),
+        make_color_token(0.425, min(0.15, p_c * 1.02), primary_hue, "Acento primario sobre claro"),
         bg_l["hex"], is_dark_bg=False, min_wcag=5.2, min_lc=62.0
     )
     sec_l = make_color_token(0.50, min(0.085, p_c * 0.65), (primary_hue + 14.0) % 360.0, "Secundario estructural claro")
     acc_l = _ensure_aaa_contrast(
-        make_color_token(0.37, min(0.15, p_c), accent_hue, "Acento de estado claro"),
+        make_color_token(0.37, min(0.145, p_c), accent_hue, "Acento de estado claro"),
         surf_l["hex"], is_dark_bg=False, min_wcag=5.2, min_lc=60.0
     )
     light_theme = {
@@ -378,6 +375,35 @@ def _compose_intentional_ecosystem(
     }
 
 
+def _norm_element(raw: str, default: str = "Water") -> str:
+    txt = str(raw or "").lower()
+    for tok, norm in (
+        ("water", "Water"), ("agua", "Water"),
+        ("wood", "Wood"), ("madera", "Wood"),
+        ("fire", "Fire"), ("fuego", "Fire"),
+        ("earth", "Earth"), ("tierra", "Earth"),
+        ("metal", "Metal"),
+        ("air", "Air"), ("aire", "Air"),
+    ):
+        if re.search(rf"\b{tok}\b", txt):
+            return norm
+    return default
+
+
+def classify_vertical_archetype(vblob: str, vertical_slug: str = "") -> str:
+    """5-tier brand-agnostic classifier driving distinct aesthetics under one umbrella chart."""
+    t = f"{vertical_slug} {vblob}".lower()
+    if any(k in t for k in ("astrotipia", "sabidurías cósmicas", "arquetipo vocacional", "kabbalah", "human design", "numerolog", "tarot", "autoconocimiento")):
+        return "cosmic_archetypal"
+    if any(k in t for k in ("synthemika", "astrobranding aplicado", "tokens de diseño", "brandbook", "monogramas vectoriales", "tipografía curada", "tokens dtcg")):
+        return "design_system_atelier"
+    if any(k in t for k in ("apotelos", "causalidad inversa", "arqueología del futuro", "saga editorial", "manifiesto conceptual", "book_waitlist")):
+        return "editorial_manifesto"
+    if any(k in t for k in ("consultor", "b2b", "financier", "abogado", "médico", "unipersonal", "agencia", "automatiz", "saas", "seo local", "google maps", "baiosfera")):
+        return "architectural_b2b"
+    return "editorial_brand"
+
+
 # -----------------------------------------------------------------------------
 # Signal Extraction: Oráculo 15-Shards + Vertical JSON + Brief Markdown
 # -----------------------------------------------------------------------------
@@ -386,6 +412,7 @@ def extract_oraculo_and_vertical_signals(
     brief_path: Optional[Path] = None,
     shards_path: Optional[Path] = None,
     vertical_json_path: Optional[Path] = None,
+    vertical_slug: Optional[str] = None,
 ) -> Dict[str, Any]:
     sig: Dict[str, Any] = {
         "sources": [],
@@ -406,10 +433,16 @@ def extract_oraculo_and_vertical_signals(
         "bazi_day_element": "Earth",
         "bazi_month_element": "Earth",
         "yong_shen": "Water",
-        "vertical_domain": "general",
+        "vertical_archetype": "editorial_brand",
+        "vertical_slug": vertical_slug or "",
+        "vertical_display_name": "",
         "vertical_is_b2b": False,
         "vertical_category": "",
     }
+
+    shards_had_ys = False
+    shards_had_el = False
+    shards_had_sun = False
 
     if shards_path and shards_path.is_file():
         sdata = json.loads(shards_path.read_text(encoding="utf-8"))
@@ -424,8 +457,10 @@ def extract_oraculo_and_vertical_signals(
         arroyo = s1.get("arroyo_elements", {})
         if planets.get("Sun", {}).get("longitude") is not None:
             sig["sun_lon"] = float(planets["Sun"]["longitude"])
+            shards_had_sun = True
         elif tripod.get("sun", {}).get("longitude") is not None:
             sig["sun_lon"] = float(tripod["sun"]["longitude"])
+            shards_had_sun = True
         if tripod.get("sun", {}).get("sign"):
             sig["sun_sign"] = str(tripod["sun"]["sign"])
         if tripod.get("midheaven_house_10", {}).get("sign"):
@@ -435,7 +470,8 @@ def extract_oraculo_and_vertical_signals(
         if planets.get("Venus", {}).get("sign"):
             sig["venus_sign"] = str(planets["Venus"]["sign"])
         if arroyo.get("dominant_element"):
-            sig["dominant_element"] = str(arroyo["dominant_element"])
+            sig["dominant_element"] = _norm_element(arroyo["dominant_element"], "Earth")
+            shards_had_el = True
 
         fb = s2.get("fagan_bradley", {})
         if fb.get("sun", {}).get("sign") or fb.get("planets", {}).get("Sun", {}).get("sign"):
@@ -460,34 +496,30 @@ def extract_oraculo_and_vertical_signals(
         if dm.get("name"):
             sig["bazi_day_master"] = str(dm["name"]).split()[0]
         if dm.get("element"):
-            sig["bazi_day_element"] = str(dm["element"])
+            sig["bazi_day_element"] = _norm_element(dm["element"], "Earth")
         fp = s4.get("four_pillars", {})
         if fp.get("month", {}).get("element"):
-            sig["bazi_month_element"] = str(fp["month"]["element"])
+            sig["bazi_month_element"] = _norm_element(fp["month"]["element"], "Earth")
         ys = s4.get("yong_shen", {})
         if ys.get("element"):
-            ys_text = str(ys["element"]).lower()
-            for token, norm in (("water", "Water"), ("agua", "Water"), ("wood", "Wood"), ("madera", "Wood"), ("fire", "Fire"), ("fuego", "Fire"), ("earth", "Earth"), ("tierra", "Earth"), ("metal", "Metal")):
-                if re.search(rf"\b{token}\b", ys_text):
-                    sig["yong_shen"] = norm
-                    break
-            else:
-                sig["yong_shen"] = str(ys["element"]).split()[0].title()
+            sig["yong_shen"] = _norm_element(ys["element"], "Water")
+            shards_had_ys = True
 
     if brief_path and brief_path.is_file():
         sig["sources"].append(f"brief:{brief_path.name}")
         txt = brief_path.read_text(encoding="utf-8", errors="replace")
-        m_sun = re.search(r"Longitud solar[^:\n]*:\s*([\d.]+)", txt, re.IGNORECASE)
-        if m_sun and sig["sun_lon"] == 210.0:
-            sig["sun_lon"] = float(m_sun.group(1))
-        m_el = re.search(r"Elemento dominante[^:\n]*:\s*([A-Za-zÁÉÍÓÚáéíóú]+)", txt, re.IGNORECASE)
-        if m_el and sig["dominant_element"] == "Earth":
-            el_raw = m_el.group(1).lower()
-            sig["dominant_element"] = {"aire": "Air", "tierra": "Earth", "fuego": "Fire", "agua": "Water"}.get(el_raw, el_raw.title())
-        m_ys = re.search(r"Yong Shen[^:\n]*:\s*([A-Za-z]+)", txt, re.IGNORECASE)
-        if m_ys and sig["yong_shen"] == "Water":
-            ys_raw = m_ys.group(1).lower()
-            sig["yong_shen"] = {"agua": "Water", "madera": "Wood", "fuego": "Fire", "tierra": "Earth", "metal": "Metal"}.get(ys_raw, ys_raw.title())
+        if not shards_had_sun:
+            m_sun = re.search(r"Longitud solar[^:\n]*:\s*([\d.]+)", txt, re.IGNORECASE)
+            if m_sun:
+                sig["sun_lon"] = float(m_sun.group(1))
+        if not shards_had_el:
+            m_el = re.search(r"Elemento dominante[^:\n]*:\s*([A-Za-zÁÉÍÓÚáéíóú]+)", txt, re.IGNORECASE)
+            if m_el:
+                sig["dominant_element"] = _norm_element(m_el.group(1), sig["dominant_element"])
+        if not shards_had_ys:
+            m_ys = re.search(r"Elemento balancín Yong Shen[^:\n]*:\s*([^\n]+)", txt, re.IGNORECASE)
+            if m_ys:
+                sig["yong_shen"] = _norm_element(m_ys.group(1), "Water")
         m_lord = re.search(r"\*\*Regente:\*\*\s*([A-Za-zÁÉÍÓÚáéíóú]+)", txt, re.IGNORECASE)
         if m_lord and sig["nakshatra_lord"] == "Moon":
             lord_raw = m_lord.group(1).lower()
@@ -496,31 +528,157 @@ def extract_oraculo_and_vertical_signals(
     if vertical_json_path and vertical_json_path.is_file():
         sig["sources"].append(f"vertical:{vertical_json_path.name}")
         vdata = json.loads(vertical_json_path.read_text(encoding="utf-8"))
-        vblob = json.dumps(vdata, ensure_ascii=False).lower()
-        sig["vertical_category"] = str(vdata.get("category") or vdata.get("positioning", {}).get("category") or "")
-        b2b_markers = ("consultor", "b2b", "financier", "abogado", "médico", "unipersonal", "arquitect", "sistemas", "saas", "ia")
-        sig["vertical_is_b2b"] = any(m in vblob for m in b2b_markers)
-        sig["vertical_domain"] = "b2b_consulting_systems" if sig["vertical_is_b2b"] else "editorial_brand"
+        vblob = json.dumps(vdata, ensure_ascii=False)
+        sig["vertical_display_name"] = str(vdata.get("display_name") or "")
+        sig["vertical_slug"] = str(vdata.get("vertical_slug") or vertical_slug or vertical_json_path.stem)
+        sig["vertical_category"] = str(vdata.get("category") or vdata.get("role_in_ecosystem") or "")
+        arch = classify_vertical_archetype(vblob, sig["vertical_slug"])
+        sig["vertical_archetype"] = arch
+        sig["vertical_is_b2b"] = arch == "architectural_b2b"
+    elif vertical_slug:
+        sig["vertical_archetype"] = classify_vertical_archetype("", vertical_slug)
+        sig["vertical_is_b2b"] = sig["vertical_archetype"] == "architectural_b2b"
 
     return sig
 
 
 def synthesize_multiaxis_ecosystems(sig: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Synthesizes 3 radically differentiated, non-cliché visual worlds combining:
-    - Eco 1 (Light-first): Tropical MC + Yong Shen + Vertical B2B authority (Cool Architectural Paper + Crisp Ink)
-    - Eco 2 (Dark-first): Vedic Shadbala + Nakshatra Lord + BaZi Month Element (Obsidian Carbon + Mineral Signal Accent)
-    - Eco 3 (Dual Light/Dark): BaZi Day Master + Sidereal Sun/Venus + House 2 (Mineral Botanical Slate & Bone)
+    Synthesizes 3 differentiated visual worlds calibrated BOTH to Oráculo coordinates
+    AND the vertical's commercial/psychological archetype (`vertical_archetype`).
     """
     ys = sig.get("yong_shen", "Water")
     dom_el = sig.get("dominant_element", "Earth")
-    nak_lord = sig.get("nakshatra_lord", "Moon")
-    sh_planet = sig.get("vedic_shadbala_planet", "Jupiter")
+    nak_lord = sig.get("nakshatra_lord", "Mars")
+    sh_planet = sig.get("vedic_shadbala_planet", "Sun")
     bazi_day = sig.get("bazi_day_element", "Wood")
     sun_lon = float(sig.get("sun_lon", 79.0))
     venus_deg = float(sig.get("venus_deg", 77.3))
+    arch = sig.get("vertical_archetype", "editorial_brand")
 
-    # Eco 1: Authority Light-First (Tropical MC + Yong Shen, cool crisp paper + deep cobalt/slate ink)
+    if arch == "cosmic_archetypal":
+        # Eco 1 (Dark-first nocturnal observatory: refined astral indigo slate, zero AI-cyan & zero neon purple)
+        h1 = (PLANET_HUE_SHIFTS.get("Jupiter", 274.0) + (sun_lon % 12.0) - 6.0) % 360.0
+        eco1 = _compose_intentional_ecosystem(
+            eco_id="eco_1_nocturnal_observatory",
+            name=f"Observatorio Nocturno & Índigo Astral (Casa 7 · Yong Shen {ys})",
+            concept=(
+                f"Atmósfera introspectiva nocturna de alta legibilidad para lectura vocacional: "
+                f"pizarra celeste profunda con acento índigo astral (Chitra + {ys}), cero púrpuras neón."
+            ),
+            recommended_mode="dark",
+            primary_hue=h1,
+            primary_chroma=0.132,
+            accent_hue=(h1 + 18.0) % 360.0,
+            neutral_hue=272.0,
+            neutral_chroma=0.020,
+            dark_bg_l=0.132,
+            light_bg_l=0.985,
+            light_bg_c=0.005,
+            light_surf_l=0.948,
+            derivation_params={
+                "vertical_archetype": arch,
+                "axes": ["house_7_mirror", "yong_shen", "jupiter_dharma"],
+                "yong_shen": ys,
+                "sun_sign": sig["sun_sign"],
+            },
+        )
+        # Eco 2 (Light-first ephemeris solstice paper: archival cool paper + Mars/Sun vermilion-crimson)
+        h2 = PLANET_HUE_SHIFTS.get(nak_lord, 24.0)
+        eco2 = _compose_intentional_ecosystem(
+            eco_id="eco_2_ephemeris_solstice",
+            name=f"Efemérides de Solsticio & Carmesí {nak_lord} (Shadbala {sh_planet} · {sig['nakshatra']})",
+            concept=(
+                f"Cuaderno técnico de efemérides en papel frío archival con tinta nocturna y señal "
+                f"solar carmesí ({sh_planet} {sig['vedic_shadbala_rupas']} Rupas · {sig['nakshatra']})."
+            ),
+            recommended_mode="light",
+            primary_hue=h2,
+            primary_chroma=0.145,
+            accent_hue=(h2 + 12.0) % 360.0,
+            neutral_hue=248.0,
+            neutral_chroma=0.006,
+            dark_bg_l=0.125,
+            light_bg_l=0.986,
+            light_bg_c=0.004,
+            light_surf_l=0.950,
+            derivation_params={
+                "vertical_archetype": arch,
+                "axes": ["vedic_shadbala", "nakshatra_lord"],
+                "vedic_shadbala": f"{sh_planet} ({sig['vedic_shadbala_rupas']} Rupas)",
+                "nakshatra": f"{sig['nakshatra']} ({nak_lord})",
+            },
+        )
+        # Eco 3 (Dual sea-jade alchemy: Jia Wood + Cancer Casa 11 + Water Yong Shen)
+        h3 = 192.0
+        eco3 = _compose_intentional_ecosystem(
+            eco_id="eco_3_alchemical_aegean",
+            name=f"Alquimia Egeo & Madera {sig['bazi_day_master']} (Casa 11 · {bazi_day})",
+            concept=(
+                f"Equilibrio entre profundidad oceánica ({ys}) y crecimiento estructural ({sig['bazi_day_master']} {bazi_day}) "
+                f"para reportes interactivos y mapas natales sin ruido visual."
+            ),
+            recommended_mode="dark",
+            primary_hue=h3,
+            primary_chroma=0.115,
+            accent_hue=(h3 + 14.0) % 360.0,
+            neutral_hue=196.0,
+            neutral_chroma=0.016,
+            dark_bg_l=0.138,
+            light_bg_l=0.984,
+            light_bg_c=0.005,
+            light_surf_l=0.948,
+            derivation_params={
+                "vertical_archetype": arch,
+                "axes": ["bazi_day_master", "yong_shen", "house_11"],
+                "bazi_day_master": f"{sig['bazi_day_master']} ({bazi_day})",
+            },
+        )
+        return [eco1, eco2, eco3]
+
+    if arch in ("design_system_atelier", "editorial_manifesto"):
+        mode_1 = "light" if arch == "editorial_manifesto" else "dark"
+        h1 = 248.0 if arch == "editorial_manifesto" else 224.0
+        eco1 = _compose_intentional_ecosystem(
+            eco_id=f"eco_1_{arch[:8]}_ink",
+            name=f"Monolito Editorial & Tinta Pura ({sig['mc_sign']} MC · {ys})",
+            concept=f"Jerarquía suiza de alto contraste inspirada en {sig['nakshatra']} y rigor estructural {sig['mc_sign']}.",
+            recommended_mode=mode_1,
+            primary_hue=h1,
+            primary_chroma=0.065 if arch == "editorial_manifesto" else 0.125,
+            accent_hue=(h1 + 16.0) % 360.0,
+            neutral_hue=250.0,
+            neutral_chroma=0.005,
+            derivation_params={"vertical_archetype": arch, "mc_sign": sig["mc_sign"], "yong_shen": ys},
+        )
+        h2 = PLANET_HUE_SHIFTS.get(nak_lord, 26.0)
+        eco2 = _compose_intentional_ecosystem(
+            eco_id=f"eco_2_{arch[:8]}_signal",
+            name=f"Edición Contundente & Señal {nak_lord} ({sh_planet} · {sig['bazi_month_element']})",
+            concept=f"Composición editorial intensa regida por {nak_lord} ({sig['nakshatra']}) y precisión {sig['bazi_month_element']}.",
+            recommended_mode="dark",
+            primary_hue=h2,
+            primary_chroma=0.145,
+            accent_hue=(h2 + 12.0) % 360.0,
+            neutral_hue=255.0,
+            neutral_chroma=0.004,
+            derivation_params={"vertical_archetype": arch, "nakshatra_lord": nak_lord},
+        )
+        eco3 = _compose_intentional_ecosystem(
+            eco_id=f"eco_3_{arch[:8]}_mineral",
+            name=f"Piedra Mineral & Trazo {sig['bazi_day_master']} ({bazi_day})",
+            concept=f"Base mineral templada derivada de Day Master {sig['bazi_day_master']} ({bazi_day}).",
+            recommended_mode="light",
+            primary_hue=166.0,
+            primary_chroma=0.11,
+            accent_hue=178.0,
+            neutral_hue=170.0,
+            neutral_chroma=0.012,
+            derivation_params={"vertical_archetype": arch, "bazi_day_master": sig["bazi_day_master"]},
+        )
+        return [eco1, eco2, eco3]
+
+    # Default / architectural_b2b (Light-first cool porcelain + deep cobalt; Carbon+Mars; Viridian+Bone)
     ys_hue = ELEMENT_BASE_HUES.get(ys, 236.0)
     h1_prim = 262.0 if ys == "Water" and sig.get("vertical_is_b2b") else (ys_hue + (sun_lon % 18.0) - 9.0) % 360.0
     h1_neutral = (h1_prim - 6.0) % 360.0
@@ -542,16 +700,14 @@ def synthesize_multiaxis_ecosystems(sig: Dict[str, Any]) -> List[Dict[str, Any]]
         light_bg_c=0.004,
         light_surf_l=0.954,
         derivation_params={
+            "vertical_archetype": arch,
             "axes": ["tropical_mc", "yong_shen", "vertical_context"],
             "mc_sign": sig["mc_sign"],
             "yong_shen": ys,
-            "vertical_domain": sig["vertical_domain"],
         },
     )
 
-    # Eco 2: Sovereign Dark-First (Vedic Shadbala + Nakshatra Lord + BaZi Month Metal/Fire, true neutral carbon + single crisp signal accent)
-    lord_hue = PLANET_HUE_SHIFTS.get(nak_lord, 28.0)
-    # Keep distinct separation from Eco 1 (>= 45 deg away)
+    lord_hue = PLANET_HUE_SHIFTS.get(nak_lord, 26.0)
     if abs((lord_hue - h1_prim + 180) % 360 - 180) < 45.0:
         lord_hue = (h1_prim + 130.0) % 360.0
     eco2 = _compose_intentional_ecosystem(
@@ -572,6 +728,7 @@ def synthesize_multiaxis_ecosystems(sig: Dict[str, Any]) -> List[Dict[str, Any]]
         light_bg_c=0.003,
         light_surf_l=0.950,
         derivation_params={
+            "vertical_archetype": arch,
             "axes": ["vedic_shadbala", "nakshatra_lord", "bazi_month_element"],
             "vedic_shadbala": f"{sh_planet} ({sig['vedic_shadbala_rupas']} Rupas)",
             "nakshatra": f"{sig['nakshatra']} (Lord: {nak_lord})",
@@ -579,7 +736,6 @@ def synthesize_multiaxis_ecosystems(sig: Dict[str, Any]) -> List[Dict[str, Any]]
         },
     )
 
-    # Eco 3: Rooted Dual Ecosystem (BaZi Day Master + Sidereal Sun/Venus, viridian mineral + glacial bone — anti warm-beige slop)
     h3_prim = ELEMENT_BASE_HUES.get(bazi_day, 162.0)
     if abs((h3_prim - h1_prim + 180) % 360 - 180) < 40.0 or abs((h3_prim - lord_hue + 180) % 360 - 180) < 40.0:
         h3_prim = 164.0
@@ -602,6 +758,7 @@ def synthesize_multiaxis_ecosystems(sig: Dict[str, Any]) -> List[Dict[str, Any]]
         light_bg_c=0.005,
         light_surf_l=0.948,
         derivation_params={
+            "vertical_archetype": arch,
             "axes": ["bazi_day_master", "sidereal_sun_venus"],
             "bazi_day_master": f"{sig['bazi_day_master']} ({bazi_day})",
             "sidereal_sun": sig.get("sidereal_sun_sign") or sig["sun_sign"],
@@ -754,6 +911,8 @@ def build_css_blocks(selected: Dict[str, Any]) -> Dict[str, str]:
 
 def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
     brand_esc = html_lib.escape(str(manifest.get("brand", "BRAND")))
+    vslug = html_lib.escape(str(manifest.get("vertical_slug") or manifest.get("brand", "")))
+    varch = html_lib.escape(str(manifest.get("vertical_archetype") or "editorial_brand"))
     sel_id = manifest.get("selected_ecosystem_id", "")
     sections: List[str] = []
 
@@ -792,9 +951,9 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
                 f'<div class="mode-head"><span>{mode_name.upper()} MODE</span>'
                 f'<span class="metrics">Texto {maud.get("body_to_bg_ratio", audit.get("wcag_aaa_ratio"))}:1 · Botón {maud.get("button_to_bg_ratio", "4.5+")}:1 · APCA Lc {maud.get("body_lc", audit.get("apca_lc"))}</span></div>'
                 f'<div class="sample-ui" style="background:{surf};border-color:{mut}33">'
-                f'<h3 style="color:{txt}">Sistema propio para negocios unipersonales</h3>'
-                f'<p style="color:{mut}">Ejemplo real de jerarquía sin gradientes artificiales, con un único foco de acción.</p>'
-                f'<button style="background:{prim};color:{bg}">Calcular mi ahorro</button> '
+                f'<h3 style="color:{txt}">Muestra tipográfica y jerarquía ({vslug})</h3>'
+                f'<p style="color:{mut}">Ejemplo real de contraste y elevación sin resplandor AI ni relleno artificial.</p>'
+                f'<button style="background:{prim};color:{bg}">Acción principal</button> '
                 f'<span class="pill" style="border:1px solid {acc};color:{acc}">Estado</span>'
                 f'</div>'
                 f'<div class="swatches">{"".join(swatches)}</div>'
@@ -814,7 +973,7 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
 <html lang="es">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Chroma v4.0 OKLCH Preview — {brand_esc}</title>
+<title>Chroma v4.1 OKLCH Preview — {brand_esc} / {vslug}</title>
 <style>
   body {{ font-family: system-ui, -apple-system, sans-serif; background:#101216; color:#f1f5f9; margin:0; padding:32px 24px; }}
   .wrap {{ max-width:1280px; margin:0 auto; display:flex; flex-direction:column; gap:28px; }}
@@ -842,8 +1001,8 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
 <body>
 <div class="wrap">
   <header>
-    <h1>Chroma Engine v4.0 — 3 Ecosistemas Oráculo + Vertical ({brand_esc})</h1>
-    <p class="sub">Auditoría física WCAG 2.2 AAA (≥7:1 texto, ≥4.5:1 botón) + APCA (Lc ≥75) · Anti-Slop Editorial.</p>
+    <h1>Chroma Engine v4.1 — {brand_esc} / {vslug} ({varch})</h1>
+    <p class="sub">Auditoría física WCAG 2.2 AAA (≥7:1 texto, ≥4.5:1 botón) + APCA (Lc ≥75) · Oráculo 15 Shards + Vertical.</p>
   </header>
   {"".join(sections)}
 </div>
@@ -861,8 +1020,7 @@ def generate_chroma_manifest(
     mode: str = "auto",
 ) -> Dict[str, Any]:
     brand_upper = re.sub(r"[^a-zA-Z0-9_-]+", "", brand.strip()).upper() or "BRAND"
-    ecosystems: List[Dict[str, Any]] = []
-    signals = extract_oraculo_and_vertical_signals(brief_path, shards_path, vertical_json_path)
+    signals = extract_oraculo_and_vertical_signals(brief_path, shards_path, vertical_json_path, vertical_slug=vertical_slug)
 
     use_brief_literal = (
         mode == "brief"
@@ -887,7 +1045,8 @@ def generate_chroma_manifest(
     manifest: Dict[str, Any] = {
         "$schema": "https://www.designtokens.org/tr/2025.10/color/",
         "brand": brand_upper,
-        "engine": "chroma_engine.py v4.0 (Oráculo 15-Shards + Vertical Anti-Slop)",
+        "vertical_archetype": signals["vertical_archetype"],
+        "engine": "chroma_engine.py v4.1 (Oráculo 15-Shards + 5-Tier Vertical Anti-Slop)",
         "color_space": "oklch",
         "selected_ecosystem_id": selected["id"],
         "recommended_mode": selected.get("recommended_mode", "light"),
@@ -911,17 +1070,20 @@ def generate_chroma_manifest(
         },
         "css_integration": build_css_blocks(selected),
     }
-    if vertical_slug:
-        manifest["vertical_slug"] = vertical_slug
+    if vertical_slug or signals.get("vertical_slug"):
+        manifest["vertical_slug"] = vertical_slug or signals.get("vertical_slug")
     return manifest
 
 
 def run_unit_tests() -> int:
-    print("Running chroma_engine v4.0 unit tests...")
-    with tempfile.TemporaryDirectory(prefix="chroma_v4_test_") as tmp:
+    print("Running chroma_engine v4.1 unit tests...")
+    with tempfile.TemporaryDirectory(prefix="chroma_v41_test_") as tmp:
         tp = Path(tmp)
         shards_p = tp / "client_dumps_15_shards.json"
-        vert_p = tp / "vert.json"
+        brief_p = tp / "astrobranding_testcorp.md"
+        vert_b2b = tp / "juan-damaren.json"
+        vert_cos = tp / "astrotipia.json"
+
         shards_p.write_text(json.dumps({
             "shard_01": {"data": {
                 "arroyo_elements": {"dominant_element": "Air"},
@@ -932,37 +1094,40 @@ def run_unit_tests() -> int:
             "shard_03": {"data": {"shadbala": {"dominant_planet": "Sun", "max_rupas": 9.85}, "nakshatra": {"name": "Chitra Pada 4", "lord": "Mars"}}},
             "shard_04": {"data": {"day_master": {"name": "Jia", "element": "Wood"}, "four_pillars": {"month": {"element": "Metal"}}, "yong_shen": {"element": "Water"}}},
         }), encoding="utf-8")
-        vert_p.write_text(json.dumps({"category": "Consultoría unipersonal B2B e IA"}), encoding="utf-8")
+        # Intentionally include a trap Spanish sentence matching "Yong Shen: La tinta" to test overwrite guard!
+        brief_p.write_text("# Brief\n**Elemento balancín Yong Shen:** La tinta abisal.\n", encoding="utf-8")
+        vert_b2b.write_text(json.dumps({"vertical_slug": "acme-b2b", "display_name": "Consultoría B2B e IA", "category": "b2b"}), encoding="utf-8")
+        vert_cos.write_text(json.dumps({"vertical_slug": "astrotipia", "display_name": "Astrotipia — Sabidurías Cósmicas & Arquetipos Vocacionales"}), encoding="utf-8")
 
-        manifest = generate_chroma_manifest("TESTCORP", shards_path=shards_p, vertical_json_path=vert_p, mode="synthesize")
-        assert len(manifest["ecosystems"]) == 3
-        hues = []
-        for eco in manifest["ecosystems"]:
-            assert eco["audit"]["wcag_aaa_ratio"] >= 7.0
-            assert eco["audit"]["apca_lc"] >= 75.0
-            for mode_name in ("dark", "light"):
-                t = eco["themes"][mode_name]
-                btn_ratio = wcag_contrast_ratio(t["background"]["hex"], t["primary"]["hex"])
-                assert btn_ratio >= 4.5, f"Button contrast < 4.5 in {eco['id']} {mode_name}: {btn_ratio}"
-                for tok in t.values():
-                    assert tok["hex"].lower() not in BANNED_SLOP_HEXES, f"Banned slop hex {tok['hex']} in {eco['id']}"
-            hues.append(eco["themes"]["light"]["primary"]["components"]["hue"])
-        # Ensure 3 genuinely different hue families (>=35 deg pairwise separation)
-        for i in range(3):
-            for j in range(i + 1, 3):
-                diff = abs((hues[i] - hues[j] + 180) % 360 - 180)
-                assert diff >= 35.0, f"Hues too similar: {hues}"
+        m_b2b = generate_chroma_manifest("TESTCORP", brief_path=brief_p, shards_path=shards_p, vertical_json_path=vert_b2b, mode="synthesize")
+        m_cos = generate_chroma_manifest("TESTCORP", brief_path=brief_p, shards_path=shards_p, vertical_json_path=vert_cos, mode="synthesize")
 
-        out_html = render_chroma_preview_html(manifest)
-        assert "Chroma Engine v4.0" in out_html
+        assert m_b2b["inputs_used"]["yong_shen"] == "Water", f"yong_shen overwritten: {m_b2b['inputs_used']['yong_shen']}"
+        assert m_b2b["vertical_archetype"] == "architectural_b2b"
+        assert m_cos["vertical_archetype"] == "cosmic_archetypal"
+        assert m_b2b["selected_ecosystem_id"] != m_cos["selected_ecosystem_id"]
+        assert m_b2b["recommended_mode"] == "light" and m_cos["recommended_mode"] == "dark"
+        assert m_b2b["themes"]["light"]["primary"]["hex"] != m_cos["themes"]["dark"]["primary"]["hex"]
 
+        for man in (m_b2b, m_cos):
+            for eco in man["ecosystems"]:
+                assert eco["audit"]["wcag_aaa_ratio"] >= 7.0
+                assert eco["audit"]["apca_lc"] >= 75.0
+                for mode_name in ("dark", "light"):
+                    t = eco["themes"][mode_name]
+                    btn_ratio = wcag_contrast_ratio(t["background"]["hex"], t["primary"]["hex"])
+                    assert btn_ratio >= 4.5, f"Button contrast < 4.5 in {eco['id']} {mode_name}: {btn_ratio}"
+                    for tok in t.values():
+                        assert tok["hex"].lower() not in BANNED_SLOP_HEXES, f"Banned slop hex {tok['hex']}"
+
+        assert "Chroma Engine v4.1" in render_chroma_preview_html(m_cos)
     assert not Path("/mnt/localstorage/TESTCORP").exists()
-    print("✅ CHROMA ENGINE v4.0 UNIT TESTS PASSED (Oráculo+Vertical, 3 distinct hues, button>=4.5:1, 0 slop hexes, 0 phantom dirs)")
+    print("✅ CHROMA ENGINE v4.1 UNIT TESTS PASSED (Multi-vertical differentiation, Water preserved, >=4.5:1 buttons, 0 slop hexes, 0 phantom dirs)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Chroma Engine v4.0 — Sovereign OKLCH & WCAG AAA/APCA Synthesizer")
+    parser = argparse.ArgumentParser(description="Chroma Engine v4.1 — Sovereign OKLCH & WCAG AAA/APCA Synthesizer")
     parser.add_argument("--brand", default="BRAND")
     parser.add_argument("--vertical", default=None)
     parser.add_argument("--brief", type=Path, default=None)
@@ -1000,7 +1165,7 @@ def main() -> int:
         (out_dir / "chroma_preview.html").write_text(render_chroma_preview_html(manifest), encoding="utf-8")
 
     audit = manifest["accessibility_audit"]
-    print(f"✅ CHROMA ENGINE v4.0 COMPLETED FOR: {manifest['brand']} (selected={manifest['selected_ecosystem_id']}, default={manifest['recommended_mode']})")
+    print(f"✅ CHROMA ENGINE v4.1 COMPLETED FOR: {manifest['brand']}/{manifest.get('vertical_slug', 'root')} (arch={manifest['vertical_archetype']}, selected={manifest['selected_ecosystem_id']}, default={manifest['recommended_mode']})")
     print(f"  • Source SSoT: {manifest['source_ssot']}")
     print(f"  • WCAG 2.2 AAA: {audit['wcag_2_2_compliance']['body_to_bg_ratio']}:1 | Btn: {audit['wcag_2_2_compliance']['button_to_bg_ratio']}:1 | APCA Lc: {audit['apca_compliance']['body_lc']}")
     print(f"  • Output: {out_dir / 'chroma_manifest.json'}")

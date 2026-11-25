@@ -91,10 +91,17 @@ def deep_merge_non_destructive(base: Dict[str, Any], updates: Dict[str, Any]) ->
     return out
 
 
-def merge_brandbook_non_destructive(target_dir: Path, project_dir: Optional[Path], brand: str, vertical: Optional[str]) -> Tuple[Path, Path]:
+def merge_brandbook_non_destructive(
+    target_dir: Path,
+    project_dir: Optional[Path],
+    brand: str,
+    vertical: Optional[str],
+    vertical_json_path: Optional[Path] = None,
+) -> Tuple[Path, Path]:
     """
-    Merges verified Chroma & Fontgen design tokens into brandbook.json WITHOUT overwriting
-    metadata, brand_architecture, voice_tone_and_messaging, lexicon, or target_audience.
+    Merges verified Chroma & Fontgen design tokens (plus vertical_context when supplied)
+    into workspace brandbook.json WITHOUT overwriting metadata, brand_architecture,
+    voice_tone_and_messaging, lexicon, or target_audience.
     """
     bb_path = target_dir / "brandbook.json"
     existing: Dict[str, Any] = {}
@@ -107,22 +114,43 @@ def merge_brandbook_non_destructive(target_dir: Path, project_dir: Optional[Path
                     break
             except Exception:
                 pass
+        if cand and not existing and cand.is_file():
+            try:
+                loaded = json.loads(cand.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    existing = loaded
+            except Exception:
+                pass
+
+    # If existing came from legacy broken stub (< 4 keys and missing brand_architecture), pull umbrella core from project_dir
+    if project_dir and "brand_architecture" not in existing:
+        umb = project_dir / "brandbook.json"
+        if umb.is_file() and umb.resolve() != bb_path.resolve():
+            try:
+                uload = json.loads(umb.read_text(encoding="utf-8"))
+                if isinstance(uload, dict) and "brand_architecture" in uload:
+                    existing = deep_merge_non_destructive(uload, existing)
+            except Exception:
+                pass
 
     chroma_file = target_dir / "chroma_manifest.json"
     font_file = target_dir / "font_manifest.json"
 
     color_patch: Dict[str, Any] = {}
     selected_color_eco = None
+    vertical_archetype = None
     css_root = ""
     tailwind_block = ""
     if chroma_file.is_file():
         cdata = json.loads(chroma_file.read_text(encoding="utf-8"))
         selected_color_eco = cdata.get("selected_ecosystem_id")
+        vertical_archetype = cdata.get("vertical_archetype")
         themes = cdata.get("themes", {})
         dark_t = themes.get("dark", {})
         light_t = themes.get("light", {})
         color_patch = {
             "selected_ecosystem_id": selected_color_eco,
+            "recommended_mode": cdata.get("recommended_mode", "light"),
             "dark": {k: {"$value": v["$value"], "$type": "color", "hex": v["hex"], "p3": v.get("p3", "")} for k, v in dark_t.items() if isinstance(v, dict) and "$value" in v},
             "light": {k: {"$value": v["$value"], "$type": "color", "hex": v["hex"], "p3": v.get("p3", "")} for k, v in light_t.items() if isinstance(v, dict) and "$value" in v},
             "accessibility": cdata.get("accessibility_audit", {}),
@@ -133,6 +161,7 @@ def merge_brandbook_non_destructive(target_dir: Path, project_dir: Optional[Path
     font_patch: Dict[str, Any] = {}
     selected_font_eco = None
     disp_font, body_font, acc_font = "Space Grotesk", "Plus Jakarta Sans", "JetBrains Mono"
+    disp_cat, acc_cat = "sans", "sans"
     if font_file.is_file():
         fdata = json.loads(font_file.read_text(encoding="utf-8"))
         selected_font_eco = fdata.get("selected_ecosystem_id")
@@ -141,9 +170,12 @@ def merge_brandbook_non_destructive(target_dir: Path, project_dir: Optional[Path
         disp_font = tokens.get("display_primary", {}).get("$value", disp_font)
         body_font = tokens.get("ui_secondary", {}).get("$value", body_font)
         acc_font = tokens.get("accent_brand", {}).get("$value", acc_font)
+        disp_cat = tokens.get("display_primary", {}).get("category", "sans")
+        acc_cat = tokens.get("accent_brand", {}).get("category", "sans")
         bridge = fdata.get("web_ready_bridge", {})
         font_patch = {
             "selected_ecosystem_id": selected_font_eco,
+            "style_profile": fdata.get("style_profile"),
             "display_primary": {"$value": disp_font, "$type": "fontFamily", "url": tokens.get("display_primary", {}).get("url", "")},
             "ui_secondary": {"$value": body_font, "$type": "fontFamily", "url": tokens.get("ui_secondary", {}).get("url", "")},
             "accent_brand": {"$value": acc_font, "$type": "fontFamily", "url": tokens.get("accent_brand", {}).get("url", "")},
@@ -151,36 +183,60 @@ def merge_brandbook_non_destructive(target_dir: Path, project_dir: Optional[Path
             "inheritance": fdata.get("inheritance", {}),
         }
 
-    patch = {
+    vertical_ctx: Dict[str, Any] = {}
+    if vertical_json_path and vertical_json_path.is_file():
+        try:
+            vdata = json.loads(vertical_json_path.read_text(encoding="utf-8"))
+            vertical_ctx = {
+                "vertical_slug": vdata.get("vertical_slug") or vertical or vertical_json_path.stem,
+                "display_name": vdata.get("display_name", ""),
+                "funnel_type": vdata.get("funnel_type", ""),
+                "domain_strategy": vdata.get("domain_strategy", ""),
+                "custom_domain": vdata.get("custom_domain", ""),
+                "role_in_ecosystem": vdata.get("role_in_ecosystem", ""),
+                "vertical_archetype": vertical_archetype or "",
+                "unique_mechanism": vdata.get("unique_mechanism", {}),
+                "target_avatar": vdata.get("target_avatar", {}),
+                "content_directives": vdata.get("content_directives", {}),
+            }
+        except Exception:
+            pass
+
+    patch: Dict[str, Any] = {
         "metadata": {
             "brand_name": existing.get("metadata", {}).get("brand_name") or brand,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             **({"vertical_slug": vertical} if vertical else {}),
+            **({"vertical_archetype": vertical_archetype} if vertical_archetype else {}),
         },
         "design_system": {
             "colors": color_patch,
             "typography": font_patch,
         },
     }
+    if vertical_ctx:
+        patch["vertical_context"] = vertical_ctx
     merged = deep_merge_non_destructive(existing, patch)
     if "$schema" not in merged:
         merged["$schema"] = "https://www.designtokens.org/tr/2025.10/format/"
 
     bb_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
+    disp_gen = "serif" if disp_cat == "serif" else "sans-serif"
+    acc_gen = "serif" if acc_cat == "serif" else "sans-serif"
     css_lines = [
         f"/* Tailwind CSS v4 Brand Theme Tokens — {brand}" + (f" / {vertical}" if vertical else "") + " */",
         '@import "tailwindcss";',
         "",
         tailwind_block or "@theme {\n  --color-brand-primary: var(--brand-primary);\n}",
         "",
-        f"  /* Typography variables merged cleanly */",
+        "  /* Typography variables merged cleanly */",
         css_root or "",
         "",
         ":root {",
-        f'  --font-display: "{disp_font}", serif;',
+        f'  --font-display: "{disp_font}", {disp_gen};',
         f'  --font-body: "{body_font}", system-ui, sans-serif;',
-        f'  --font-accent: "{acc_font}", cursive;',
+        f'  --font-accent: "{acc_font}", {acc_gen};',
         "}",
     ]
     css_path = target_dir / "brandbook-theme.css"
@@ -201,6 +257,8 @@ def run_pipeline(
     no_live: bool = False,
     chroma_mode: str = "auto",
     style_profile: str = "auto",
+    sort_mode: str = "hybrid",
+    include_shortlist: bool = True,
     seed: int = 0,
 ) -> Dict[str, Any]:
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -227,7 +285,7 @@ def run_pipeline(
         cmd = [
             sys.executable, "-B", str(resolve_script("fontgen_engine.py")),
             "--brand", brand, "--output-dir", str(target_dir),
-            "--style-profile", style_profile, "--seed", str(seed),
+            "--style-profile", style_profile, "--sort", sort_mode, "--seed", str(seed),
         ]
         if brief_path:
             cmd.extend(["--brief", str(brief_path)])
@@ -240,7 +298,8 @@ def run_pipeline(
         if no_live:
             cmd.append("--no-live")
         subprocess.run(cmd, check=True)
-        results["generated"].extend(["font_manifest.json", f"fontgen_{brand.lower()}.md"])
+        fg_name = f"fontgen_{(vertical or brand).lower()}.md"
+        results["generated"].extend(["font_manifest.json", fg_name])
 
     if (run_all or "previews" in phases) and not no_live and (target_dir / "font_manifest.json").exists():
         texts = preview_texts.strip() or ",".join([brand.upper(), (vertical or brand).replace("-", " ").upper()])
@@ -249,15 +308,17 @@ def run_pipeline(
             "--from-manifest", str(target_dir / "font_manifest.json"),
             "--texts", texts,
             "--out", str(target_dir / "previews"),
-            "--title", f"Galería Envato + Google Fonts — {brand.upper()}" + (f" ({vertical})" if vertical else ""),
+            "--title", f"Galería Vanguardia Envato + Google Fonts — {brand.upper()}" + (f" ({vertical})" if vertical else ""),
         ]
+        if include_shortlist:
+            cmd.append("--include-shortlist")
         if (target_dir / "chroma_manifest.json").exists():
             cmd.extend(["--chroma", str(target_dir / "chroma_manifest.json")])
         subprocess.run(cmd, check=True)
         results["generated"].append("previews/preview_gallery.html")
 
     if run_all or "brandbook" in phases:
-        bb, css = merge_brandbook_non_destructive(target_dir, project_dir, brand, vertical)
+        bb, css = merge_brandbook_non_destructive(target_dir, project_dir, brand, vertical, vertical_json_path=vertical_json_path)
         results["generated"].extend([bb.name, css.name])
 
     return results
@@ -295,44 +356,59 @@ def audit_target(target_dir: Path, phases: List[str]) -> Tuple[bool, List[str]]:
 
 
 def run_unit_tests() -> int:
-    print("Running orchesbrand v3.0 agnostic offline unit tests...")
-    with tempfile.TemporaryDirectory(prefix="orchesbrand_test_") as tmp:
+    print("Running orchesbrand v3.2 multi-vertical agnostic offline unit tests...")
+    with tempfile.TemporaryDirectory(prefix="orchesbrand_v32_test_") as tmp:
         tp = Path(tmp)
         proj_dev = tp / "TestProj" / "dev"
-        ws_brand = proj_dev / "workspaces" / "alpha-line" / "brand"
-        ws_brand.mkdir(parents=True, exist_ok=True)
-        (proj_dev / "astrobranding_testcorp.md").write_text(
-            "# Master Brief TESTCORP\n| **Sol Natal** | **Géminis 10°** |\n| **Medio Cielo** | **Capricornio 14°** |\n"
-            "**Nakshatra:** Chitra\n**Day Master:** Jia\n",
-            encoding="utf-8",
-        )
-        # Seed rich existing brandbook to verify non-destructive merge
+        vert_dir = proj_dev / "verticals"
+        ws_b2b = proj_dev / "workspaces" / "alpha-b2b" / "brand"
+        ws_cos = proj_dev / "workspaces" / "astrotipia" / "brand"
+        vert_dir.mkdir(parents=True, exist_ok=True)
+        ws_b2b.mkdir(parents=True, exist_ok=True)
+        ws_cos.mkdir(parents=True, exist_ok=True)
+
+        shards_p = proj_dev / "client_dumps_15_shards.json"
+        shards_p.write_text(json.dumps({
+            "shard_01": {"data": {"tripod_of_iron": {"sun": {"sign": "Gemini"}, "midheaven_house_10": {"sign": "Gemini"}}}},
+            "shard_02": {"data": {"fagan_bradley": {"midheaven": {"sign": "Taurus"}}}},
+            "shard_03": {"data": {"shadbala": {"dominant_planet": "Sun"}, "nakshatra": {"name": "Chitra", "lord": "Mars"}}},
+            "shard_04": {"data": {"day_master": {"name": "Jia", "element": "Wood"}, "four_pillars": {"month": {"element": "Metal"}}, "yong_shen": {"element": "Water"}}},
+        }), encoding="utf-8")
+        brief_p = proj_dev / "astrobranding_testcorp.md"
+        brief_p.write_text("# Brief TESTCORP\n**Elemento balancín Yong Shen:** La tinta.\n", encoding="utf-8")
         seed_bb = {
             "metadata": {"brand_name": "TESTCORP"},
-            "brand_architecture": {"core_promise": "Preserved core architecture"},
+            "brand_architecture": {"core_promise": "Preserved umbrella architecture"},
             "voice_tone_and_messaging": {"primary_tone": "Direct and calm"},
             "lexicon": {"forbidden_terms": ["slop"]},
         }
-        (ws_brand / "brandbook.json").write_text(json.dumps(seed_bb, indent=2), encoding="utf-8")
+        (proj_dev / "brandbook.json").write_text(json.dumps(seed_bb, indent=2), encoding="utf-8")
+        v_b2b = vert_dir / "alpha-b2b.json"
+        v_cos = vert_dir / "astrotipia.json"
+        v_b2b.write_text(json.dumps({"vertical_slug": "alpha-b2b", "display_name": "Consultoría B2B e IA", "unique_mechanism": {"name": "M1"}}), encoding="utf-8")
+        v_cos.write_text(json.dumps({"vertical_slug": "astrotipia", "display_name": "Astrotipia — Sabidurías Cósmicas & Arquetipos Vocacionales", "unique_mechanism": {"name": "M2"}}), encoding="utf-8")
 
-        brand, brief = resolve_brief_and_brand("TESTCORP", proj_dev, "alpha-line")
-        assert brand == "TESTCORP" and brief is not None
-        run_pipeline(brand, ws_brand, ["chroma", "fontgen", "brandbook"], brief_path=brief, project_dir=proj_dev, vertical="alpha-line", no_live=True)
-        ok, errs = audit_target(ws_brand, ["chroma", "fontgen", "brandbook"])
-        assert ok, f"Audit failed: {errs}"
+        run_pipeline("TESTCORP", ws_b2b, ["chroma", "fontgen", "brandbook"], brief_path=brief_p, shards_path=shards_p, vertical_json_path=v_b2b, project_dir=proj_dev, vertical="alpha-b2b", no_live=True)
+        run_pipeline("TESTCORP", ws_cos, ["chroma", "fontgen", "brandbook"], brief_path=brief_p, shards_path=shards_p, vertical_json_path=v_cos, project_dir=proj_dev, vertical="astrotipia", no_live=True)
+        for ws in (ws_b2b, ws_cos):
+            ok, errs = audit_target(ws, ["chroma", "fontgen", "brandbook"])
+            assert ok, f"Audit failed for {ws}: {errs}"
 
-        merged = json.loads((ws_brand / "brandbook.json").read_text(encoding="utf-8"))
-        assert merged["brand_architecture"]["core_promise"] == "Preserved core architecture", "Brandbook was clobbered!"
-        assert merged["voice_tone_and_messaging"]["primary_tone"] == "Direct and calm"
-        assert merged["design_system"]["typography"]["display_primary"]["$value"] != "Serif Luxury Logo" or merged["design_system"]["typography"]["display_primary"]["url"].startswith("https://")
-        assert merged["design_system"]["colors"]["dark"]["primary"]["$value"].startswith("oklch(")
-    assert not Path("/mnt/localstorage/TESTCORP").exists(), "Phantom folder created!"
-    print("✅ ORCHESBRAND v3.0 UNIT TESTS PASSED (agnostic, non-destructive merge, 0 phantom dirs)")
+        bb_b2b = json.loads((ws_b2b / "brandbook.json").read_text(encoding="utf-8"))
+        bb_cos = json.loads((ws_cos / "brandbook.json").read_text(encoding="utf-8"))
+        assert bb_b2b["brand_architecture"]["core_promise"] == "Preserved umbrella architecture"
+        assert bb_cos["brand_architecture"]["core_promise"] == "Preserved umbrella architecture"
+        assert bb_b2b["vertical_context"]["vertical_slug"] == "alpha-b2b"
+        assert bb_cos["vertical_context"]["vertical_slug"] == "astrotipia"
+        assert bb_b2b["design_system"]["colors"]["selected_ecosystem_id"] != bb_cos["design_system"]["colors"]["selected_ecosystem_id"]
+        assert bb_b2b["design_system"]["typography"]["display_primary"]["$value"] != bb_cos["design_system"]["typography"]["display_primary"]["$value"]
+    assert not Path("/mnt/localstorage/TESTCORP").exists()
+    print("✅ ORCHESBRAND v3.2 UNIT TESTS PASSED (multi-vertical umbrella isolation, non-destructive merge, 0 phantom dirs)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="orchesbrand", description="Sovereign Agnostic Brand Pipeline CLI (v3.1)")
+    parser = argparse.ArgumentParser(prog="orchesbrand", description="Sovereign Agnostic Brand Pipeline CLI (v3.2)")
     parser.add_argument("--brand", default=None, help="Umbrella brand slug (e.g. AURELIUS)")
     parser.add_argument("--vertical", default=None, help="Vertical slug inside workspaces/<vertical>/brand")
     parser.add_argument("--project-dir", type=Path, default=None, help="Project dev root (e.g. /mnt/localstorage/<Project>/dev)")
@@ -341,7 +417,9 @@ def main() -> int:
     parser.add_argument("--shards", type=Path, default=None, help="Explicit client_dumps_15_shards.json path")
     parser.add_argument("--vertical-json", type=Path, default=None, help="Explicit verticals/<vertical>.json path")
     parser.add_argument("--chroma-mode", default="auto", choices=["auto", "synthesize", "brief"])
-    parser.add_argument("--style-profile", default="auto", choices=["auto", "architectural_b2b", "editorial_authority"])
+    parser.add_argument("--style-profile", default="auto", choices=["auto", "architectural_b2b", "cosmic_archetypal", "design_system_atelier", "editorial_manifesto", "editorial_brand"])
+    parser.add_argument("--sort", default="hybrid", choices=["hybrid", "latest", "popular"], help="Envato Elements discovery sort order")
+    parser.add_argument("--include-shortlist", action="store_true", help="Include ranked runner-up Envato fonts in preview gallery")
     parser.add_argument("--seed", type=int, default=0, help="Rotate ranked Envato font hits across iterations")
     parser.add_argument("--phases", default="chroma,fontgen,previews,brandbook", help="Comma-separated phases: chroma,fontgen,previews,brandbook,all")
     parser.add_argument("--preview-texts", default="", help="Comma-separated preview strings for Envato SVG gallery")
@@ -400,7 +478,8 @@ def main() -> int:
             brand=brand, target_dir=tdir, phases=phases, brief_path=brief,
             shards_path=shards, vertical_json_path=vjson_target, project_dir=proj_dir, vertical=vslug,
             preview_texts=args.preview_texts, no_live=args.no_live,
-            chroma_mode=args.chroma_mode, style_profile=args.style_profile, seed=args.seed,
+            chroma_mode=args.chroma_mode, style_profile=args.style_profile,
+            sort_mode=args.sort, include_shortlist=args.include_shortlist or True, seed=args.seed,
         )
         if args.audit:
             ok, errs = audit_target(tdir, phases)

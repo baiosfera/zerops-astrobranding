@@ -16,10 +16,12 @@ import os
 import re
 import sys
 import tempfile
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.IGNORECASE)
@@ -92,9 +94,30 @@ def fetch_svg_preview(item_uuid: str, text: str, variant_id: Optional[str], refe
     if variant_id:
         params["variant"] = variant_id
     svg_url = f"https://elements.envato.com/font-preview.svg?{urllib.parse.urlencode(params)}"
-    req = urllib.request.Request(svg_url, headers={"User-Agent": USER_AGENT, "Referer": referer or "https://elements.envato.com/"})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return resp.read().decode("utf-8")
+    last_err: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(svg_url, headers={"User-Agent": USER_AGENT, "Referer": referer or "https://elements.envato.com/"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                svg_body = resp.read().decode("utf-8", errors="replace")
+                if "<svg" in svg_body.lower():
+                    return svg_body
+                raise ValueError(f"Respuesta no SVG recibida ({len(svg_body)} bytes)")
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code in (429, 500, 502, 503, 504) and attempt < 2:
+                time.sleep(0.6 * (attempt + 1))
+                continue
+            raise
+        except Exception as e:
+            last_err = e
+            if attempt < 2:
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            raise
+    if last_err:
+        raise last_err
+    return ""
 
 
 def _extract_chroma_palettes(chroma_path: Optional[Path]) -> Tuple[str, str, Dict[str, Any], str, str]:
@@ -283,6 +306,7 @@ def generate_gallery_html(
       <input id="liveText" class="live-input" type="text" placeholder="Probar texto en vivo (ej. Método Unipolio)..." />
       <label style="font-size:12px;color:var(--muted)">Tamaño <input id="sizeRange" type="range" min="48" max="130" value="84" oninput="document.documentElement.style.setProperty('--preview-h', this.value + 'px')" /></label>
       <button class="btn btn-primary" onclick="updateLivePreviews()">Probar en vivo</button>
+      <button class="btn" onclick="document.getElementById('liveText').value='DISEÑO MÉTODO ÑÁÉ ¿¡';updateLivePreviews()">Probar Tildes ES</button>
       <button class="btn" onclick="toggleTheme()">Modo Oscuro / Claro</button>
     </div>
   </div>
@@ -321,10 +345,11 @@ def generate_gallery_html(
     Path(output_file).write_text(full_html, encoding="utf-8")
 
 
-def entries_from_manifest(manifest_path: Path, texts: List[str]) -> List[Dict[str, Any]]:
+def entries_from_manifest(manifest_path: Path, texts: List[str], include_shortlist: bool = False) -> List[Dict[str, Any]]:
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     ecos = data.get("candidate_ecosystems", [])
     entries: List[Dict[str, Any]] = []
+    seen_pairs: set[Tuple[str, str]] = set()
     for eco in ecos:
         eco_id = eco.get("id", "eco")
         eco_name = eco.get("name", eco_id)
@@ -340,6 +365,7 @@ def entries_from_manifest(manifest_path: Path, texts: List[str]) -> List[Dict[st
             if not url:
                 continue
             for t in texts:
+                seen_pairs.add((url, t))
                 entries.append({
                     "url": url,
                     "text": t,
@@ -349,6 +375,24 @@ def entries_from_manifest(manifest_path: Path, texts: List[str]) -> List[Dict[st
                     "body_family": body_fam,
                     "google_fonts_v2_url": gf_url,
                 })
+        if include_shortlist and texts:
+            sc = eco.get("shortlist_candidates", {})
+            primary_text = texts[0]
+            for alt_key, alt_lbl in (("display_alternatives", "Alternativa Vanguardia (Display)"), ("accent_alternatives", "Alternativa Vanguardia (Acento)")):
+                for alt in sc.get(alt_key, [])[:2]:
+                    aurl = alt.get("url") or ""
+                    if not aurl or (aurl, primary_text) in seen_pairs:
+                        continue
+                    seen_pairs.add((aurl, primary_text))
+                    entries.append({
+                        "url": aurl,
+                        "text": primary_text,
+                        "title_hint": alt.get("family", ""),
+                        "ecosystem_label": f"{eco_id}: {eco_name}",
+                        "role_label": f"{alt_lbl} · {alt.get('sort_source', 'vanguard')}",
+                        "body_family": body_fam,
+                        "google_fonts_v2_url": gf_url,
+                    })
     return entries
 
 
@@ -478,6 +522,7 @@ def main() -> int:
     parser.add_argument("--from-manifest", type=Path, help="Leer fuentes Envato desde font_manifest.json")
     parser.add_argument("--chroma", type=Path, default=None, help="Chroma manifest JSON para ambientar Dark/Light")
     parser.add_argument("--texts", default="BRAND,MARCA", help="Textos separados por coma para --from-manifest")
+    parser.add_argument("--include-shortlist", action="store_true", help="Incluir alternativas vanguardia de shortlist_candidates")
     parser.add_argument("--title", default="Visualizador de Fuentes Envato + Google Fonts", help="Título HTML de la galería")
     parser.add_argument("--test", action="store_true", help="Ejecutar pruebas unitarias offline")
     args = parser.parse_args()
@@ -488,7 +533,7 @@ def main() -> int:
     items: List[Dict[str, Any]] = []
     if args.from_manifest:
         texts = [t.strip() for t in args.texts.split(",") if t.strip()]
-        items = entries_from_manifest(args.from_manifest, texts or ["BRAND"])
+        items = entries_from_manifest(args.from_manifest, texts or ["BRAND"], include_shortlist=args.include_shortlist)
     elif args.batch:
         items = json.loads(Path(args.batch).read_text(encoding="utf-8"))
     elif args.url and args.text:
