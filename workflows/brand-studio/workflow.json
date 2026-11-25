@@ -1,0 +1,25 @@
+{
+  "name": "brand-studio",
+  "version": "1.0.0",
+  "description": "5-Phase Playbook-First Brand Studio Workflow (Con o Sin Oráculo · Live SERP · Art Direction Full-Color · Human Visual Gate · Concatenation Matrix · Parallel Copy Squad · Blind Adversarial Critic)",
+  "entry": "brand_studio.wf",
+  "argsSchema": {
+    "type": "object",
+    "required": ["project", "vertical", "workspace_dir"],
+    "properties": {
+      "project": { "type": "string", "description": "Nombre del proyecto en /mnt/localstorage/<Project>" },
+      "vertical": { "type": "string", "description": "Slug de la vertical en dev/verticals/<vertical>.json" },
+      "workspace_dir": { "type": "string", "description": "Ruta absoluta a /mnt/localstorage/<Project>/dev/workspaces/<vertical>" },
+      "intake_mode": { "type": "string", "enum": ["auto", "oraculo", "client"], "default": "auto" },
+      "target_country": { "type": "string", "default": "Colombia y Latinoamérica" },
+      "reference_urls": { "type": "array", "items": { "type": "string" }, "default": [] },
+      "envato_urls": { "type": "array", "items": { "type": "string" }, "default": [] },
+      "stop_after_phase": {
+        "type": "string",
+        "enum": ["phase_1_seo", "phase_2_art_direction", "phase_3_concatenation", "phase_4_copy", "phase_5_critic"],
+        "default": "phase_2_art_direction",
+        "description": "Detiene por defecto tras Fase 2 para aprobación humana de paleta y fuentes antes de escribir copy"
+      }
+    }
+  }
+}

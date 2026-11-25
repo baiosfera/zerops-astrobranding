@@ -122,8 +122,6 @@ UNACCENTED_SPANISH_MAP: Dict[str, str] = {
 }
 
 CLIENT_INTERNAL_JARGON: List[Tuple[str, str]] = [
-    (r"\bOPB\b", "Evita siglas internas ('OPB'); escribe 'negocio unipersonal'."),
-    (r"\bCO1\b", "Evita siglas internas ('CO1'); escribe 'propuesta única sin sustitutos'."),
     (r"\bBANT\b", "Evita jerga interna ('BANT'); habla de 'preguntas de calificación' o 'ajuste mutuo'."),
     (r"\bAEO\b", "Evita jerga interna ('AEO'); escribe 'visibilidad en buscadores y asistentes de IA'."),
     (r"\bGEO\b", "Evita jerga interna ('GEO'); escribe 'visibilidad en respuestas de IA'."),
@@ -231,10 +229,23 @@ class AntiSlopLinter:
     def _load_dynamic_brandbook(self) -> None:
         bb_paths, vert_paths = self._discover_brand_files()
         seen_terms: Set[str] = set()
+        public_allowlist: Set[str] = set()
+
+        for vf in vert_paths:
+            try:
+                vdata = json.loads(vf.read_text(encoding="utf-8"))
+                for t in vdata.get("public_brand_concepts", []) or []:
+                    if isinstance(t, str) and t.strip():
+                        public_allowlist.add(t.strip().lower())
+            except Exception:
+                pass
 
         for bb in bb_paths:
             try:
                 data = json.loads(bb.read_text(encoding="utf-8"))
+                for t in data.get("public_brand_concepts", []) or []:
+                    if isinstance(t, str) and t.strip():
+                        public_allowlist.add(t.strip().lower())
                 taboos: List[str] = []
                 lex = data.get("lexicon", {})
                 if isinstance(lex.get("forbidden_terms"), list):
@@ -243,7 +254,7 @@ class AntiSlopLinter:
                 if isinstance(vtm.get("forbidden_vocabulary"), list):
                     taboos.extend(vtm["forbidden_vocabulary"])
                 for term in taboos:
-                    if isinstance(term, str) and term.lower() not in seen_terms:
+                    if isinstance(term, str) and term.lower() not in seen_terms and term.lower() not in public_allowlist:
                         seen_terms.add(term.lower())
                         self._add_taboo(term, "dynamic_brandbook_taboo", "Brandbook taboo", f"Término prohibido en brandbook de {self.brand}.")
             except Exception:
@@ -256,7 +267,7 @@ class AntiSlopLinter:
                     cat = vdata.get("category_and_positioning", {})
                     for key in ("excluded_terms", "client_facing_jargon_ban"):
                         for term in cat.get(key, []) or []:
-                            if isinstance(term, str) and term.lower() not in seen_terms:
+                            if isinstance(term, str) and term.lower() not in seen_terms and term.lower() not in public_allowlist:
                                 seen_terms.add(term.lower())
                                 self._add_taboo(term, "vertical_jargon_ban", "Restricción vertical", f"Término vetado por {vf.name}.")
                 except Exception:
@@ -351,9 +362,10 @@ def run_unit_tests() -> int:
     assert len([v for v in v4 if v.rule_type == "spanish_orthography"]) >= 4
     print("✓ Test 4: Unaccented Spanish words detected accurately.")
 
-    v5 = linter.lint_text("Con nuestro modelo OPB y Order Bump con PWYW vas a ver BANT.")
-    assert len([v for v in v5 if v.rule_type == "internal_jargon_leak"]) >= 4
-    print("✓ Test 5: Leaked internal jargon acronyms detected accurately.")
+    v5 = linter.lint_text("Con nuestro Order Bump y PWYW vas a ver BANT.")
+    assert len([v for v in v5 if v.rule_type == "internal_jargon_leak"]) >= 3
+    assert len(linter.lint_text("Aprende el modelo OPB y CO1 con claridad.")) == 0, "Public strategic acronyms should not be universally banned!"
+    print("✓ Test 5: Backend jargon leaks caught while strategic category terms allowed.")
 
     v6 = linter.lint_text("Estado actual: READY_NOW_QUALIFIED en pantalla.")
     assert any(v.rule_type == "upper_snake_enum_leak" for v in v6)

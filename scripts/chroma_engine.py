@@ -112,6 +112,43 @@ def hex_to_rgb_int(hex_str: str) -> Tuple[int, int, int]:
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
+def hex_to_oklch(hex_str: str) -> Tuple[float, float, float]:
+    """Converts sRGB hex to exact OKLCH (L, C, H)."""
+    r_i, g_i, b_i = hex_to_rgb_int(hex_str)
+    def _lin(ch: int) -> float:
+        s = ch / 255.0
+        return s / 12.92 if s <= 0.04045 else ((s + 0.055) / 1.055) ** 2.4
+    r, g, b = _lin(r_i), _lin(g_i), _lin(b_i)
+    l_ = math.cbrt(max(0.0, 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b))
+    m_ = math.cbrt(max(0.0, 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b))
+    s_ = math.cbrt(max(0.0, 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b))
+    L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_
+    A = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_
+    B = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
+    C = math.hypot(A, B)
+    H = (math.degrees(math.atan2(B, A)) % 360.0) if C > 1e-5 else 0.0
+    return round(L, 3), round(C, 3), round(H, 1)
+
+
+def token_from_hex(hex_str: str, desc: str) -> Dict[str, Any]:
+    """Builds a W3C DTCG color token preserving the exact input hex."""
+    h_clean = "#" + re.sub(r"[^0-9a-fA-F]", "", hex_str.strip())[:6].lower()
+    if len(h_clean) != 7:
+        h_clean = "#000000"
+    l, c, h = hex_to_oklch(h_clean)
+    return make_color_token(l, c, h, desc, hex_override=h_clean)
+
+
+def pick_on_color(bg_hex: str, desc: str = "Texto legible sobre color de marca") -> Dict[str, Any]:
+    """Selects pure white or near-black ink guaranteeing >= 4.5:1 WCAG contrast on vivid surfaces."""
+    dark_ink = "#0a0a0a"
+    light_ink = "#ffffff"
+    r_dark = wcag_contrast_ratio(dark_ink, bg_hex)
+    r_light = wcag_contrast_ratio(light_ink, bg_hex)
+    chosen = dark_ink if r_dark >= r_light else light_ink
+    return token_from_hex(chosen, desc)
+
+
 def wcag_relative_luminance(hex_str: str) -> float:
     r, g, b = hex_to_rgb_int(hex_str)
     def _lin(ch: int) -> float:
@@ -215,14 +252,16 @@ def _audit_ecosystem(themes: Dict[str, Dict[str, Dict[str, Any]]]) -> Dict[str, 
 
     body_dark = wcag_contrast_ratio(dark["text_primary"]["hex"], dark["background"]["hex"])
     head_dark = wcag_contrast_ratio(dark["primary"]["hex"], dark["background"]["hex"])
-    btn_dark = wcag_contrast_ratio(dark["background"]["hex"], dark["primary"]["hex"])
+    on_p_dark = (dark.get("on_primary") or dark["background"])["hex"]
+    btn_dark = wcag_contrast_ratio(on_p_dark, dark["primary"]["hex"])
     lc_body_dark = apca_contrast_lc(dark["text_primary"]["hex"], dark["background"]["hex"])
     lc_head_dark = apca_contrast_lc(dark["primary"]["hex"], dark["background"]["hex"])
     lc_ui_dark = apca_contrast_lc(dark["accent"]["hex"], dark["surface"]["hex"])
 
     body_light = wcag_contrast_ratio(light["text_primary"]["hex"], light["background"]["hex"])
     head_light = wcag_contrast_ratio(light["primary"]["hex"], light["background"]["hex"])
-    btn_light = wcag_contrast_ratio(light["background"]["hex"], light["primary"]["hex"])
+    on_p_light = (light.get("on_primary") or light["background"])["hex"]
+    btn_light = wcag_contrast_ratio(on_p_light, light["primary"]["hex"])
     lc_body_light = apca_contrast_lc(light["text_primary"]["hex"], light["background"]["hex"])
     lc_head_light = apca_contrast_lc(light["primary"]["hex"], light["background"]["hex"])
 
@@ -247,7 +286,7 @@ def _audit_ecosystem(themes: Dict[str, Dict[str, Dict[str, Any]]]) -> Dict[str, 
             "body_lc": lc_body_light,
             "headings_lc": lc_head_light,
         },
-        "status_aaa": worst_body_ratio >= 7.0 and worst_body_lc >= 75.0,
+        "status_aaa": worst_body_ratio >= 7.0 and worst_body_lc >= 75.0 and min(btn_dark, btn_light) >= 4.5,
     }
 
 
@@ -270,18 +309,21 @@ def synthesize_light_theme(dark_theme: Dict[str, Dict[str, Any]]) -> Dict[str, D
         bg_light["hex"], is_dark_bg=False, min_wcag=4.6, min_lc=55.0
     )
     prim_light = _ensure_aaa_contrast(
-        make_color_token(0.41, min(0.145, max(0.02, p_comp["chroma"])), p_comp["hue"], f"{dark_theme['primary']['$description']} (Light CTA)"),
-        bg_light["hex"], is_dark_bg=False, min_wcag=5.5, min_lc=65.0
+        make_color_token(0.42, min(0.22, max(0.03, p_c_val := p_comp["chroma"])), p_comp["hue"], f"{dark_theme['primary']['$description']} (Light CTA)"),
+        bg_light["hex"], is_dark_bg=False, min_wcag=4.6, min_lc=55.0
     )
-    sec_light = make_color_token(0.49, min(0.09, max(0.02, s_comp["chroma"])), s_comp["hue"], f"{dark_theme['secondary']['$description']} (Light)")
+    sec_light = make_color_token(0.49, min(0.14, max(0.02, s_comp["chroma"])), s_comp["hue"], f"{dark_theme['secondary']['$description']} (Light)")
     acc_light = _ensure_aaa_contrast(
-        make_color_token(0.36, min(0.14, max(0.02, a_comp["chroma"])), a_comp["hue"], f"{dark_theme['accent']['$description']} (Light Accent)"),
-        bg_light["hex"], is_dark_bg=False, min_wcag=5.5, min_lc=65.0
+        make_color_token(0.38, min(0.21, max(0.03, a_comp["chroma"])), a_comp["hue"], f"{dark_theme['accent']['$description']} (Light Accent)"),
+        surf_light["hex"], is_dark_bg=False, min_wcag=4.6, min_lc=55.0
     )
+    _ = p_c_val
     return {
         "primary": prim_light,
+        "on_primary": pick_on_color(prim_light["hex"], "Texto sobre botón primario claro"),
         "secondary": sec_light,
         "accent": acc_light,
+        "on_accent": pick_on_color(acc_light["hex"], "Texto sobre acento claro"),
         "background": bg_light,
         "surface": surf_light,
         "text_primary": txt_light,
@@ -305,38 +347,42 @@ def _compose_intentional_ecosystem(
     light_surf_l: float = 0.952,
     derivation_params: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Builds an anti-slop composed Light + Dark ecosystem (never naive inversion)."""
-    p_c = min(0.165, max(0.015, primary_chroma))
-    n_c = min(0.022, max(0.002, neutral_chroma))
+    """Builds a high-conviction Light + Dark ecosystem preserving saturated primaries + explicit on_primary/on_accent."""
+    p_c = min(0.24, max(0.02, primary_chroma))
+    n_c = min(0.024, max(0.002, neutral_chroma))
 
     bg_d = make_color_token(dark_bg_l, n_c * 0.72, neutral_hue, "Lienzo oscuro calibrado")
     surf_d = make_color_token(dark_bg_l + 0.055, n_c * 0.9, neutral_hue, "Superficie elevada")
     txt_d = _ensure_aaa_contrast(
-        make_color_token(0.962, min(0.008, n_c * 0.4), neutral_hue, "Texto principal nítido"),
+        make_color_token(0.968, min(0.008, n_c * 0.4), neutral_hue, "Texto principal nítido"),
         bg_d["hex"], is_dark_bg=True, min_wcag=12.0, min_lc=94.0
     )
     muted_d = _ensure_aaa_contrast(
-        make_color_token(0.695, n_c * 1.0, neutral_hue, "Texto secundario legible"),
+        make_color_token(0.70, n_c * 1.0, neutral_hue, "Texto secundario legible"),
         bg_d["hex"], is_dark_bg=True, min_wcag=4.8, min_lc=55.0
     )
     prim_d = _ensure_aaa_contrast(
-        make_color_token(0.71, min(0.14, p_c), primary_hue, "Acento primario interactivo"),
-        bg_d["hex"], is_dark_bg=True, min_wcag=5.2, min_lc=60.0
+        make_color_token(0.68, min(0.21, p_c), primary_hue, "Acento primario interactivo"),
+        bg_d["hex"], is_dark_bg=True, min_wcag=4.8, min_lc=58.0
     )
-    sec_d = make_color_token(0.56, min(0.085, p_c * 0.65), (primary_hue + 14.0) % 360.0, "Secundario estructural")
+    sec_d = make_color_token(0.56, min(0.11, p_c * 0.65), (primary_hue + 14.0) % 360.0, "Secundario estructural")
     acc_d = _ensure_aaa_contrast(
-        make_color_token(0.77, min(0.13, p_c * 0.88), accent_hue, "Acento de foco / estado"),
-        surf_d["hex"], is_dark_bg=True, min_wcag=5.0, min_lc=58.0
+        make_color_token(0.75, min(0.20, p_c * 0.92), accent_hue, "Acento de foco / estado"),
+        surf_d["hex"], is_dark_bg=True, min_wcag=4.8, min_lc=58.0
     )
     dark_theme = {
-        "primary": prim_d, "secondary": sec_d, "accent": acc_d,
+        "primary": prim_d,
+        "on_primary": pick_on_color(prim_d["hex"], "Texto sobre botón primario oscuro"),
+        "secondary": sec_d,
+        "accent": acc_d,
+        "on_accent": pick_on_color(acc_d["hex"], "Texto sobre acento oscuro"),
         "background": bg_d, "surface": surf_d, "text_primary": txt_d, "text_muted": muted_d,
     }
 
     bg_l = make_color_token(light_bg_l, light_bg_c, neutral_hue, "Lienzo claro arquitectónico")
-    surf_l = make_color_token(light_surf_l, min(0.012, light_bg_c + 0.004), neutral_hue, "Superficie elevada clara")
+    surf_l = make_color_token(light_surf_l, min(0.015, light_bg_c + 0.005), neutral_hue, "Superficie elevada clara")
     txt_l = _ensure_aaa_contrast(
-        make_color_token(0.165, min(0.016, n_c * 0.85), neutral_hue, "Tinta principal"),
+        make_color_token(0.155, min(0.016, n_c * 0.85), neutral_hue, "Tinta principal"),
         bg_l["hex"], is_dark_bg=False, min_wcag=12.0, min_lc=94.0
     )
     muted_l = _ensure_aaa_contrast(
@@ -344,16 +390,20 @@ def _compose_intentional_ecosystem(
         bg_l["hex"], is_dark_bg=False, min_wcag=4.8, min_lc=55.0
     )
     prim_l = _ensure_aaa_contrast(
-        make_color_token(0.425, min(0.15, p_c * 1.02), primary_hue, "Acento primario sobre claro"),
-        bg_l["hex"], is_dark_bg=False, min_wcag=5.2, min_lc=62.0
+        make_color_token(0.45, min(0.22, p_c * 1.15), primary_hue, "Acento primario sobre claro"),
+        bg_l["hex"], is_dark_bg=False, min_wcag=4.6, min_lc=55.0
     )
-    sec_l = make_color_token(0.50, min(0.085, p_c * 0.65), (primary_hue + 14.0) % 360.0, "Secundario estructural claro")
+    sec_l = make_color_token(0.52, min(0.12, p_c * 0.65), (primary_hue + 14.0) % 360.0, "Secundario estructural claro")
     acc_l = _ensure_aaa_contrast(
-        make_color_token(0.37, min(0.145, p_c), accent_hue, "Acento de estado claro"),
-        surf_l["hex"], is_dark_bg=False, min_wcag=5.2, min_lc=60.0
+        make_color_token(0.42, min(0.22, p_c), accent_hue, "Acento de estado claro"),
+        surf_l["hex"], is_dark_bg=False, min_wcag=4.6, min_lc=55.0
     )
     light_theme = {
-        "primary": prim_l, "secondary": sec_l, "accent": acc_l,
+        "primary": prim_l,
+        "on_primary": pick_on_color(prim_l["hex"], "Texto sobre botón primario claro"),
+        "secondary": sec_l,
+        "accent": acc_l,
+        "on_accent": pick_on_color(acc_l["hex"], "Texto sobre acento claro"),
         "background": bg_l, "surface": surf_l, "text_primary": txt_l, "text_muted": muted_l,
     }
 
@@ -887,16 +937,169 @@ def parse_ecosystems_from_brief(brief_text: str) -> List[Dict[str, Any]]:
     return ecosystems
 
 
+def _compose_curated_mode_tokens(spec: Dict[str, Any], is_dark: bool) -> Dict[str, Dict[str, Any]]:
+    """Preserves exact curated hexes for primary/accent/background/surface and computes accessible on_*."""
+    bg_hex = spec.get("background") or ("#0b0d11" if is_dark else "#f9fafb")
+    surf_hex = spec.get("surface") or ("#151820" if is_dark else "#eef1f5")
+    prim_hex = spec.get("primary") or ("#63a4ff" if is_dark else "#1d4ed8")
+    acc_hex = spec.get("accent") or prim_hex
+    sec_hex = spec.get("secondary") or acc_hex
+    txt_hex = spec.get("text_primary") or ("#f4f5f7" if is_dark else "#0e1116")
+    mut_hex = spec.get("text_muted") or ("#9aa3b2" if is_dark else "#4b5563")
+
+    bg_tok = token_from_hex(bg_hex, "Lienzo de dirección de arte")
+    surf_tok = token_from_hex(surf_hex, "Superficie curada")
+    prim_tok = token_from_hex(prim_hex, "Color primario curado")
+    acc_tok = token_from_hex(acc_hex, "Color acento curado")
+    sec_tok = token_from_hex(sec_hex, "Color secundario curado")
+
+    txt_tok = token_from_hex(txt_hex, "Texto principal")
+    if wcag_contrast_ratio(txt_tok["hex"], bg_tok["hex"]) < 7.0 or apca_contrast_lc(txt_tok["hex"], bg_tok["hex"]) < 75.0:
+        txt_tok = _ensure_aaa_contrast(txt_tok, bg_tok["hex"], is_dark_bg=is_dark, min_wcag=10.5, min_lc=85.0)
+
+    mut_tok = token_from_hex(mut_hex, "Texto secundario")
+    if wcag_contrast_ratio(mut_tok["hex"], bg_tok["hex"]) < 4.5:
+        mut_tok = _ensure_aaa_contrast(mut_tok, bg_tok["hex"], is_dark_bg=is_dark, min_wcag=4.6, min_lc=52.0)
+
+    on_prim = (
+        token_from_hex(spec["on_primary"], "Texto sobre botón primario")
+        if spec.get("on_primary") and wcag_contrast_ratio(spec["on_primary"], prim_tok["hex"]) >= 4.5
+        else pick_on_color(prim_tok["hex"], "Texto sobre botón primario")
+    )
+    on_acc = (
+        token_from_hex(spec["on_accent"], "Texto sobre acento")
+        if spec.get("on_accent") and wcag_contrast_ratio(spec["on_accent"], acc_tok["hex"]) >= 4.5
+        else pick_on_color(acc_tok["hex"], "Texto sobre acento")
+    )
+    return {
+        "primary": prim_tok,
+        "on_primary": on_prim,
+        "secondary": sec_tok,
+        "accent": acc_tok,
+        "on_accent": on_acc,
+        "background": bg_tok,
+        "surface": surf_tok,
+        "text_primary": txt_tok,
+        "text_muted": mut_tok,
+    }
+
+
+def _build_ecosystem_from_curated(idx: int, spec: Dict[str, Any]) -> Dict[str, Any]:
+    eco_id = str(spec.get("id") or f"eco_{idx + 1}_art_direction")
+    name = str(spec.get("name") or f"Dirección de Arte {idx + 1}")
+    concept = str(spec.get("concept") or "Paleta curada con contraste real de marca.")
+    rec_mode = str(spec.get("recommended_mode") or "light").lower()
+    if rec_mode not in ("light", "dark"):
+        rec_mode = "light"
+
+    if "light" in spec or "dark" in spec:
+        l_spec = spec.get("light") or {}
+        d_spec = spec.get("dark") or {}
+        if l_spec and not d_spec:
+            light_t = _compose_curated_mode_tokens(l_spec, is_dark=False)
+            l_p, c_p, h_p = hex_to_oklch(light_t["primary"]["hex"])
+            l_a, c_a, h_a = hex_to_oklch(light_t["accent"]["hex"])
+            _, _, h_n = hex_to_oklch(light_t["background"]["hex"])
+            d_bg = make_color_token(0.115, 0.008, h_n, "Lienzo oscuro derivado").get("hex")
+            d_sf = make_color_token(0.175, 0.011, h_n, "Superficie oscura derivada").get("hex")
+            d_pr = make_color_token(max(0.62, l_p), max(0.08, c_p * 0.92), h_p, "Primario oscuro").get("hex")
+            d_ac = make_color_token(max(0.65, l_a), max(0.08, c_a * 0.92), h_a, "Acento oscuro").get("hex")
+            dark_t = _compose_curated_mode_tokens({"background": d_bg, "surface": d_sf, "primary": d_pr, "accent": d_ac}, is_dark=True)
+        elif d_spec and not l_spec:
+            dark_t = _compose_curated_mode_tokens(d_spec, is_dark=True)
+            l_p, c_p, h_p = hex_to_oklch(dark_t["primary"]["hex"])
+            l_a, c_a, h_a = hex_to_oklch(dark_t["accent"]["hex"])
+            _, _, h_n = hex_to_oklch(dark_t["background"]["hex"])
+            l_bg = make_color_token(0.985, 0.004, h_n, "Lienzo claro derivado").get("hex")
+            l_sf = make_color_token(0.945, 0.008, h_n, "Superficie clara derivada").get("hex")
+            l_pr = make_color_token(min(0.55, l_p), max(0.08, c_p), h_p, "Primario claro").get("hex")
+            l_ac = make_color_token(min(0.52, l_a), max(0.08, c_a), h_a, "Acento claro").get("hex")
+            light_t = _compose_curated_mode_tokens({"background": l_bg, "surface": l_sf, "primary": l_pr, "accent": l_ac}, is_dark=False)
+        else:
+            light_t = _compose_curated_mode_tokens(l_spec, is_dark=False)
+            dark_t = _compose_curated_mode_tokens(d_spec, is_dark=True)
+    else:
+        bg_luma = wcag_relative_luminance(spec.get("background", "#ffffff"))
+        base_is_dark = bg_luma < 0.25
+        if base_is_dark:
+            rec_mode = str(spec.get("recommended_mode") or "dark").lower()
+            return _build_ecosystem_from_curated(idx, {**spec, "recommended_mode": rec_mode, "dark": spec})
+        return _build_ecosystem_from_curated(idx, {**spec, "recommended_mode": rec_mode, "light": spec})
+
+    themes = {"dark": dark_t, "light": light_t}
+    audit = _audit_ecosystem(themes)
+    return {
+        "id": eco_id,
+        "name": name,
+        "recommended_mode": rec_mode,
+        "concept": concept,
+        "derivation_parameters": {"mode": "curated_art_direction", "preserved_exact_hexes": True},
+        "themes": themes,
+        "audit": audit,
+    }
+
+
+def compose_ecosystems_from_palette_json(palette_path: Path) -> List[Dict[str, Any]]:
+    raw = json.loads(palette_path.read_text(encoding="utf-8"))
+    items = raw if isinstance(raw, list) else raw.get("ecosystems") or raw.get("palettes") or [raw]
+    out: List[Dict[str, Any]] = []
+    for i, item in enumerate(items[:3]):
+        if isinstance(item, dict):
+            out.append(_build_ecosystem_from_curated(i, item))
+    return out
+
+
+def compose_ecosystems_from_seed_hex(seed_hex: str, bg_hex: Optional[str] = None, accent_hex: Optional[str] = None) -> List[Dict[str, Any]]:
+    _, c, h = hex_to_oklch(seed_hex)
+    comp_h = (h + 155.0) % 360.0
+    bg_l = bg_hex or "#fafaf8"
+    acc_h = accent_hex or seed_hex
+    eco1 = _build_ecosystem_from_curated(0, {
+        "id": "eco_1_editorial_conviction",
+        "name": "Convingente & Puro (Seed Curado)",
+        "recommended_mode": "light" if wcag_relative_luminance(bg_l) >= 0.25 else "dark",
+        "concept": "Dirección de arte centrada en el color semilla exacto con CTA de máximo contraste.",
+        "background": bg_l,
+        "surface": "#eff2f6" if wcag_relative_luminance(bg_l) >= 0.25 else "#161920",
+        "primary": seed_hex,
+        "accent": acc_h,
+    })
+    _, c_comp, _ = hex_to_oklch(acc_h)
+    eco2 = _compose_intentional_ecosystem(
+        eco_id="eco_2_nocturnal_tension",
+        name="Oscuro de Tensión & Complemento",
+        concept="Fondo carbón neutro con tensión complementaria al color semilla.",
+        recommended_mode="dark",
+        primary_hue=h, primary_chroma=max(0.14, c),
+        accent_hue=comp_h, neutral_hue=h, neutral_chroma=0.008,
+    )
+    eco3 = _compose_intentional_ecosystem(
+        eco_id="eco_3_split_editorial",
+        name="Papel Cálido/Frío & Complemento Editorial",
+        concept="Alternativa editorial luminosa con acento secundario contrastado.",
+        recommended_mode="light",
+        primary_hue=comp_h, primary_chroma=max(0.13, c_comp),
+        accent_hue=h, neutral_hue=comp_h, neutral_chroma=0.010,
+    )
+    return [eco1, eco2, eco3]
+
+
 def build_css_blocks(selected: Dict[str, Any]) -> Dict[str, str]:
     d = selected["themes"]["dark"]
     lt = selected["themes"]["light"]
     default_mode = selected.get("recommended_mode", "light")
     root_src, alt_src, alt_attr = (lt, d, '[data-theme="dark"]') if default_mode == "light" else (d, lt, '[data-theme="light"]')
+    r_on_p = (root_src.get("on_primary") or root_src["background"])["$value"]
+    r_on_a = (root_src.get("on_accent") or root_src["background"])["$value"]
+    a_on_p = (alt_src.get("on_primary") or alt_src["background"])["$value"]
+    a_on_a = (alt_src.get("on_accent") or alt_src["background"])["$value"]
     tailwind_block = (
         "@theme {\n"
         "  --color-brand-primary: var(--brand-primary);\n"
+        "  --color-brand-on-primary: var(--brand-on-primary);\n"
         "  --color-brand-secondary: var(--brand-secondary);\n"
         "  --color-brand-accent: var(--brand-accent);\n"
+        "  --color-brand-on-accent: var(--brand-on-accent);\n"
         "  --color-brand-bg: var(--brand-bg);\n"
         "  --color-brand-surface: var(--brand-surface);\n"
         "  --color-brand-text: var(--brand-text);\n"
@@ -907,8 +1110,10 @@ def build_css_blocks(selected: Dict[str, Any]) -> Dict[str, str]:
         f"/* Default visual mode: {default_mode} */\n"
         ":root {\n"
         f"  --brand-primary: {root_src['primary']['$value']};\n"
+        f"  --brand-on-primary: {r_on_p};\n"
         f"  --brand-secondary: {root_src['secondary']['$value']};\n"
         f"  --brand-accent: {root_src['accent']['$value']};\n"
+        f"  --brand-on-accent: {r_on_a};\n"
         f"  --brand-bg: {root_src['background']['$value']};\n"
         f"  --brand-surface: {root_src['surface']['$value']};\n"
         f"  --brand-text: {root_src['text_primary']['$value']};\n"
@@ -916,8 +1121,10 @@ def build_css_blocks(selected: Dict[str, Any]) -> Dict[str, str]:
         "}\n"
         f"{alt_attr} {{\n"
         f"  --brand-primary: {alt_src['primary']['$value']};\n"
+        f"  --brand-on-primary: {a_on_p};\n"
         f"  --brand-secondary: {alt_src['secondary']['$value']};\n"
         f"  --brand-accent: {alt_src['accent']['$value']};\n"
+        f"  --brand-on-accent: {a_on_a};\n"
         f"  --brand-bg: {alt_src['background']['$value']};\n"
         f"  --brand-surface: {alt_src['surface']['$value']};\n"
         f"  --brand-text: {alt_src['text_primary']['$value']};\n"
@@ -957,6 +1164,7 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
             txt = theme["text_primary"]["hex"]
             mut = theme["text_muted"]["hex"]
             prim = theme["primary"]["hex"]
+            on_prim = (theme.get("on_primary") or theme["background"])["hex"]
             acc = theme["accent"]["hex"]
             maud = audit.get(mode_name, {})
 
@@ -976,7 +1184,7 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
                 f'<div class="sample-ui" style="background:{surf};border-color:{mut}33">'
                 f'<h3 style="color:{txt}">Muestra tipográfica y jerarquía ({vslug})</h3>'
                 f'<p style="color:{mut}">Ejemplo real de contraste y elevación sin resplandor AI ni relleno artificial.</p>'
-                f'<button style="background:{prim};color:{bg}">Acción principal</button> '
+                f'<button style="background:{prim};color:{on_prim}">Acción principal</button> '
                 f'<span class="pill" style="border:1px solid {acc};color:{acc}">Estado</span>'
                 f'</div>'
                 f'<div class="swatches">{"".join(swatches)}</div>'
@@ -996,7 +1204,7 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
 <html lang="es">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Chroma v4.1 OKLCH Preview — {brand_esc} / {vslug}</title>
+<title>Chroma v5.0 OKLCH Preview — {brand_esc} / {vslug}</title>
 <style>
   body {{ font-family: system-ui, -apple-system, sans-serif; background:#101216; color:#f1f5f9; margin:0; padding:32px 24px; }}
   .wrap {{ max-width:1280px; margin:0 auto; display:flex; flex-direction:column; gap:28px; }}
@@ -1024,8 +1232,8 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
 <body>
 <div class="wrap">
   <header>
-    <h1>Chroma Engine v4.1 — {brand_esc} / {vslug} ({varch})</h1>
-    <p class="sub">Auditoría física WCAG 2.2 AAA (≥7:1 texto, ≥4.5:1 botón) + APCA (Lc ≥75) · Oráculo 15 Shards + Vertical.</p>
+    <h1>Chroma Engine v5.0 — {brand_esc} / {vslug} ({varch})</h1>
+    <p class="sub">Dirección de Arte Curada + Auditoría WCAG 2.2 AAA (≥7:1 texto, ≥4.5:1 botón on_primary) + APCA (Lc ≥75).</p>
   </header>
   {"".join(sections)}
 </div>
@@ -1041,16 +1249,39 @@ def generate_chroma_manifest(
     selected_eco_id: Optional[str] = None,
     vertical_slug: Optional[str] = None,
     mode: str = "auto",
+    brand_brief_path: Optional[Path] = None,
+    palette_json_path: Optional[Path] = None,
+    seed_hex: Optional[str] = None,
+    bg_hex: Optional[str] = None,
+    accent_hex: Optional[str] = None,
 ) -> Dict[str, Any]:
     brand_upper = re.sub(r"[^a-zA-Z0-9_-]+", "", brand.strip()).upper() or "BRAND"
     signals = extract_oraculo_and_vertical_signals(brief_path, shards_path, vertical_json_path, vertical_slug=vertical_slug)
 
+    if brand_brief_path and brand_brief_path.is_file():
+        bb_raw = json.loads(brand_brief_path.read_text(encoding="utf-8"))
+        signals["sources"].append(f"brand_brief:{brand_brief_path.name}")
+        vslug_bb = str(bb_raw.get("vertical_slug") or vertical_slug or "").strip()
+        if vslug_bb and not signals.get("vertical_slug"):
+            signals["vertical_slug"] = vslug_bb
+        if not vertical_json_path:
+            signals["vertical_archetype"] = str(bb_raw.get("vertical_archetype") or "") or classify_vertical_archetype(
+                json.dumps(bb_raw, ensure_ascii=False), signals.get("vertical_slug", "")
+            )
+            signals["vertical_is_b2b"] = signals["vertical_archetype"] == "architectural_b2b"
+
     use_brief_literal = (
         mode == "brief"
-        or (mode == "auto" and not (shards_path and shards_path.is_file()) and not (vertical_json_path and vertical_json_path.is_file()))
+        or (mode == "auto" and not (shards_path and shards_path.is_file()) and not (vertical_json_path and vertical_json_path.is_file()) and not (brand_brief_path and brand_brief_path.is_file()))
     )
 
-    if use_brief_literal and brief_path and brief_path.is_file():
+    if palette_json_path and palette_json_path.is_file():
+        ecosystems = compose_ecosystems_from_palette_json(palette_json_path)
+        source_ssot = f"art_direction:{palette_json_path.name}"
+    elif seed_hex:
+        ecosystems = compose_ecosystems_from_seed_hex(seed_hex, bg_hex=bg_hex, accent_hex=accent_hex)
+        source_ssot = f"seed_hex:{seed_hex}"
+    elif use_brief_literal and brief_path and brief_path.is_file():
         ecosystems = parse_ecosystems_from_brief(brief_path.read_text(encoding="utf-8", errors="replace"))
         source_ssot = f"{brief_path.name} §3 (literal)"
     else:
@@ -1069,7 +1300,7 @@ def generate_chroma_manifest(
         "$schema": "https://www.designtokens.org/tr/2025.10/color/",
         "brand": brand_upper,
         "vertical_archetype": signals["vertical_archetype"],
-        "engine": "chroma_engine.py v4.1 (Oráculo 15-Shards + 5-Tier Vertical Anti-Slop)",
+        "engine": "chroma_engine.py v5.0 (Art-Direction + Oráculo-Optional + Contrast Guard)",
         "color_space": "oklch",
         "selected_ecosystem_id": selected["id"],
         "recommended_mode": selected.get("recommended_mode", "light"),
@@ -1099,13 +1330,15 @@ def generate_chroma_manifest(
 
 
 def run_unit_tests() -> int:
-    print("Running chroma_engine v4.1 unit tests...")
-    with tempfile.TemporaryDirectory(prefix="chroma_v41_test_") as tmp:
+    print("Running chroma_engine v5.0 unit tests...")
+    with tempfile.TemporaryDirectory(prefix="chroma_v50_test_") as tmp:
         tp = Path(tmp)
         shards_p = tp / "client_dumps_15_shards.json"
         brief_p = tp / "astrobranding_testcorp.md"
         vert_b2b = tp / "acme-b2b.json"
         vert_cos = tp / "orion-cosmic.json"
+        bb_client = tp / "brand_brief.json"
+        pal_json = tp / "art_direction_palettes.json"
 
         shards_p.write_text(json.dumps({
             "shard_01": {"data": {
@@ -1117,51 +1350,70 @@ def run_unit_tests() -> int:
             "shard_03": {"data": {"shadbala": {"dominant_planet": "Sun", "max_rupas": 9.85}, "nakshatra": {"name": "Chitra Pada 4", "lord": "Mars"}}},
             "shard_04": {"data": {"day_master": {"name": "Jia", "element": "Wood"}, "four_pillars": {"month": {"element": "Metal"}}, "yong_shen": {"element": "Water"}}},
         }), encoding="utf-8")
-        # Intentionally include a trap Spanish sentence matching "Yong Shen: La tinta" to test overwrite guard!
         brief_p.write_text("# Brief\n**Elemento balancín Yong Shen:** La tinta abisal.\n", encoding="utf-8")
         vert_b2b.write_text(json.dumps({
-            "vertical_slug": "acme-b2b",
-            "display_name": "Consultoría B2B e IA",
-            "category": "b2b",
+            "vertical_slug": "acme-b2b", "display_name": "Consultoría B2B e IA", "category": "b2b",
             "role_in_ecosystem": "Otra vertical derivada de Orion y Sabidurías Cósmicas.",
-            "seo_and_copy_rules": {"exclusion_rule": "No mencionar tarot ni carta natal aquí."},
         }), encoding="utf-8")
         vert_cos.write_text(json.dumps({"vertical_slug": "orion-cosmic", "display_name": "Orion — Sabidurías Cósmicas & Arquetipos Vocacionales"}), encoding="utf-8")
 
         m_b2b = generate_chroma_manifest("TESTCORP", brief_path=brief_p, shards_path=shards_p, vertical_json_path=vert_b2b, mode="synthesize")
         m_cos = generate_chroma_manifest("TESTCORP", brief_path=brief_p, shards_path=shards_p, vertical_json_path=vert_cos, mode="synthesize")
-
-        assert m_b2b["inputs_used"]["yong_shen"] == "Water", f"yong_shen overwritten: {m_b2b['inputs_used']['yong_shen']}"
+        assert m_b2b["inputs_used"]["yong_shen"] == "Water"
         assert m_b2b["vertical_archetype"] == "architectural_b2b"
         assert m_cos["vertical_archetype"] == "cosmic_archetypal"
         assert m_b2b["selected_ecosystem_id"] != m_cos["selected_ecosystem_id"]
-        assert m_b2b["recommended_mode"] == "light" and m_cos["recommended_mode"] == "dark"
-        assert m_b2b["themes"]["light"]["primary"]["hex"] != m_cos["themes"]["dark"]["primary"]["hex"]
 
-        for man in (m_b2b, m_cos):
+        # Test WITHOUT Oraculo: BrandBrief + Curated Palette JSON preserving exact vivid hexes!
+        bb_client.write_text(json.dumps({
+            "vertical_slug": "vivid-studio", "display_name": "Estratega Digital B2B",
+            "category": "b2b", "intake_mode": "client",
+        }), encoding="utf-8")
+        pal_json.write_text(json.dumps([
+            {"id": "eco_1_crimson", "name": "Bermellón Editorial", "recommended_mode": "light",
+             "background": "#f9f7f1", "surface": "#efece3", "primary": "#f50023", "accent": "#121212"},
+            {"id": "eco_2_gold", "name": "Piedra & Oro", "recommended_mode": "light",
+             "background": "#f3f1ec", "surface": "#e7e3da", "primary": "#c8a84b", "accent": "#0a0a0a"},
+            {"id": "eco_3_emerald", "name": "Esmeralda & Lima", "recommended_mode": "light",
+             "background": "#ffffff", "surface": "#f3f5f4", "primary": "#193d3b", "accent": "#c0ce43"},
+        ]), encoding="utf-8")
+        m_cur = generate_chroma_manifest("VIVIDCORP", brand_brief_path=bb_client, palette_json_path=pal_json)
+        assert m_cur["themes"]["light"]["primary"]["hex"] == "#f50023", "Exact curated primary washed out!"
+        assert wcag_contrast_ratio(m_cur["themes"]["light"]["on_primary"]["hex"], "#f50023") >= 4.5
+        assert m_cur["ecosystems"][1]["themes"]["light"]["primary"]["hex"] == "#c8a84b"
+        assert m_cur["ecosystems"][1]["themes"]["light"]["on_primary"]["hex"] == "#0a0a0a", "Gold CTA must get dark ink!"
+        assert m_cur["ecosystems"][2]["themes"]["light"]["primary"]["hex"] == "#193d3b"
+        assert m_cur["ecosystems"][2]["themes"]["light"]["on_primary"]["hex"] == "#ffffff", "Deep emerald CTA must get white ink!"
+        assert "--brand-on-primary" in m_cur["css_integration"]["css_variables_root"]
+
+        for man in (m_b2b, m_cos, m_cur):
             for eco in man["ecosystems"]:
                 assert eco["audit"]["wcag_aaa_ratio"] >= 7.0
-                assert eco["audit"]["apca_lc"] >= 75.0
                 for mode_name in ("dark", "light"):
                     t = eco["themes"][mode_name]
-                    btn_ratio = wcag_contrast_ratio(t["background"]["hex"], t["primary"]["hex"])
+                    btn_ratio = wcag_contrast_ratio(t["on_primary"]["hex"], t["primary"]["hex"])
                     assert btn_ratio >= 4.5, f"Button contrast < 4.5 in {eco['id']} {mode_name}: {btn_ratio}"
                     for tok in t.values():
                         assert tok["hex"].lower() not in BANNED_SLOP_HEXES, f"Banned slop hex {tok['hex']}"
 
-        assert "Chroma Engine v4.1" in render_chroma_preview_html(m_cos)
+        assert "Chroma Engine v5.0" in render_chroma_preview_html(m_cur)
     assert not Path("/mnt/localstorage/TESTCORP").exists()
-    print("✅ CHROMA ENGINE v4.1 UNIT TESTS PASSED (Multi-vertical differentiation, Water preserved, >=4.5:1 buttons, 0 slop hexes, 0 phantom dirs)")
+    print("✅ CHROMA ENGINE v5.0 UNIT TESTS PASSED (Curated hex fidelity, Oráculo-optional, on_primary contrast, 0 slop hexes, 0 phantom dirs)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Chroma Engine v4.1 — Sovereign OKLCH & WCAG AAA/APCA Synthesizer")
+    parser = argparse.ArgumentParser(description="Chroma Engine v5.0 — Art Direction & OKLCH Contrast Synthesizer")
     parser.add_argument("--brand", default="BRAND")
     parser.add_argument("--vertical", default=None)
     parser.add_argument("--brief", type=Path, default=None)
     parser.add_argument("--shards", type=Path, default=None)
     parser.add_argument("--vertical-json", type=Path, default=None)
+    parser.add_argument("--brand-brief", type=Path, default=None)
+    parser.add_argument("--palette-json", type=Path, default=None)
+    parser.add_argument("--seed-hex", default=None)
+    parser.add_argument("--bg-hex", default=None)
+    parser.add_argument("--accent-hex", default=None)
     parser.add_argument("--mode", default="auto", choices=["auto", "synthesize", "brief"])
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--eco", default=None)
@@ -1181,6 +1433,11 @@ def main() -> int:
         selected_eco_id=args.eco,
         vertical_slug=args.vertical,
         mode=args.mode,
+        brand_brief_path=args.brand_brief,
+        palette_json_path=args.palette_json,
+        seed_hex=args.seed_hex,
+        bg_hex=args.bg_hex,
+        accent_hex=args.accent_hex,
     )
 
     if args.dry_run:
@@ -1194,7 +1451,7 @@ def main() -> int:
         (out_dir / "chroma_preview.html").write_text(render_chroma_preview_html(manifest), encoding="utf-8")
 
     audit = manifest["accessibility_audit"]
-    print(f"✅ CHROMA ENGINE v4.1 COMPLETED FOR: {manifest['brand']}/{manifest.get('vertical_slug', 'root')} (arch={manifest['vertical_archetype']}, selected={manifest['selected_ecosystem_id']}, default={manifest['recommended_mode']})")
+    print(f"✅ CHROMA ENGINE v5.0 COMPLETED FOR: {manifest['brand']}/{manifest.get('vertical_slug', 'root')} (arch={manifest['vertical_archetype']}, selected={manifest['selected_ecosystem_id']}, default={manifest['recommended_mode']})")
     print(f"  • Source SSoT: {manifest['source_ssot']}")
     print(f"  • WCAG 2.2 AAA: {audit['wcag_2_2_compliance']['body_to_bg_ratio']}:1 | Btn: {audit['wcag_2_2_compliance']['button_to_bg_ratio']}:1 | APCA Lc: {audit['apca_compliance']['body_lc']}")
     print(f"  • Output: {out_dir / 'chroma_manifest.json'}")

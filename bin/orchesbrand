@@ -260,6 +260,12 @@ def run_pipeline(
     sort_mode: str = "hybrid",
     include_shortlist: bool = True,
     seed: int = 0,
+    brand_brief_path: Optional[Path] = None,
+    palette_json_path: Optional[Path] = None,
+    seed_hex: Optional[str] = None,
+    bg_hex: Optional[str] = None,
+    accent_hex: Optional[str] = None,
+    envato_urls: str = "",
 ) -> Dict[str, Any]:
     target_dir.mkdir(parents=True, exist_ok=True)
     results: Dict[str, Any] = {"brand": brand, "vertical": vertical, "target_dir": str(target_dir), "generated": []}
@@ -278,6 +284,16 @@ def run_pipeline(
             cmd.extend(["--shards", str(shards_path)])
         if vertical_json_path:
             cmd.extend(["--vertical-json", str(vertical_json_path)])
+        if brand_brief_path:
+            cmd.extend(["--brand-brief", str(brand_brief_path)])
+        if palette_json_path:
+            cmd.extend(["--palette-json", str(palette_json_path)])
+        if seed_hex:
+            cmd.extend(["--seed-hex", seed_hex])
+        if bg_hex:
+            cmd.extend(["--bg-hex", bg_hex])
+        if accent_hex:
+            cmd.extend(["--accent-hex", accent_hex])
         subprocess.run(cmd, check=True)
         results["generated"].extend(["chroma_manifest.json", "chroma_preview.html"])
 
@@ -301,15 +317,18 @@ def run_pipeline(
         fg_name = f"fontgen_{(vertical or brand).lower()}.md"
         results["generated"].extend(["font_manifest.json", fg_name])
 
-    if (run_all or "previews" in phases) and not no_live and (target_dir / "font_manifest.json").exists():
+    if (run_all or "previews" in phases) and not no_live and ((target_dir / "font_manifest.json").exists() or envato_urls.strip()):
         texts = preview_texts.strip() or ",".join([brand.upper(), (vertical or brand).replace("-", " ").upper()])
         cmd = [
             sys.executable, "-B", str(resolve_script("envato_font_preview.py")),
-            "--from-manifest", str(target_dir / "font_manifest.json"),
             "--texts", texts,
             "--out", str(target_dir / "previews"),
-            "--title", f"Galería Vanguardia Envato + Google Fonts — {brand.upper()}" + (f" ({vertical})" if vertical else ""),
+            "--title", f"Galería Full-Color Envato + Google Fonts — {brand.upper()}" + (f" ({vertical})" if vertical else ""),
         ]
+        if (target_dir / "font_manifest.json").exists():
+            cmd.extend(["--from-manifest", str(target_dir / "font_manifest.json")])
+        if envato_urls.strip():
+            cmd.extend(["--envato-urls", envato_urls.strip()])
         if include_shortlist:
             cmd.append("--include-shortlist")
         if (target_dir / "chroma_manifest.json").exists():
@@ -402,13 +421,26 @@ def run_unit_tests() -> int:
         assert bb_cos["vertical_context"]["vertical_slug"] == "orion-cosmic"
         assert bb_b2b["design_system"]["colors"]["selected_ecosystem_id"] != bb_cos["design_system"]["colors"]["selected_ecosystem_id"]
         assert bb_b2b["design_system"]["typography"]["display_primary"]["$value"] != bb_cos["design_system"]["typography"]["display_primary"]["$value"]
+
+        # Test WITHOUT Oraculo (--brand-brief + --palette-json preserving vivid hexes)
+        ws_noor = proj_dev / "workspaces" / "vivid-client" / "brand"
+        ws_noor.mkdir(parents=True, exist_ok=True)
+        bb_client = proj_dev / "brand_brief.json"
+        pal_p = proj_dev / "palettes.json"
+        bb_client.write_text(json.dumps({"vertical_slug": "vivid-client", "display_name": "Consultoría Estratégica B2B"}), encoding="utf-8")
+        pal_p.write_text(json.dumps([{"id": "eco_1_vivid", "name": "Bermellón Editorial", "recommended_mode": "light", "background": "#f9f7f1", "surface": "#efece3", "primary": "#f50023", "accent": "#121212"}]), encoding="utf-8")
+        run_pipeline("VIVID", ws_noor, ["chroma", "fontgen", "brandbook"], project_dir=proj_dev, vertical="vivid-client", no_live=True, brand_brief_path=bb_client, palette_json_path=pal_p)
+        cm_noor = json.loads((ws_noor / "chroma_manifest.json").read_text(encoding="utf-8"))
+        css_noor = (ws_noor / "brandbook-theme.css").read_text(encoding="utf-8")
+        assert cm_noor["themes"]["light"]["primary"]["hex"] == "#f50023"
+        assert "--brand-on-primary" in css_noor
     assert not Path("/mnt/localstorage/TESTCORP").exists()
-    print("✅ ORCHESBRAND v3.2 UNIT TESTS PASSED (multi-vertical umbrella isolation, non-destructive merge, 0 phantom dirs)")
+    print("✅ ORCHESBRAND v4.0 UNIT TESTS PASSED (With & Without Oráculo, vivid hexes preserved, 0 phantom dirs)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="orchesbrand", description="Sovereign Agnostic Brand Pipeline CLI (v3.2)")
+    parser = argparse.ArgumentParser(prog="orchesbrand", description="Sovereign Agnostic Brand Pipeline CLI (v4.0)")
     parser.add_argument("--brand", default=None, help="Umbrella brand slug (e.g. AURELIUS)")
     parser.add_argument("--vertical", default=None, help="Vertical slug inside workspaces/<vertical>/brand")
     parser.add_argument("--project-dir", type=Path, default=None, help="Project dev root (e.g. /mnt/localstorage/<Project>/dev)")
@@ -416,6 +448,12 @@ def main() -> int:
     parser.add_argument("--brief", type=Path, default=None, help="Explicit astrobranding_<brand>.md path")
     parser.add_argument("--shards", type=Path, default=None, help="Explicit client_dumps_15_shards.json path")
     parser.add_argument("--vertical-json", type=Path, default=None, help="Explicit verticals/<vertical>.json path")
+    parser.add_argument("--brand-brief", type=Path, default=None, help="Oráculo-optional client brand_brief.json")
+    parser.add_argument("--palette-json", type=Path, default=None, help="Art-direction curated palettes JSON")
+    parser.add_argument("--seed-hex", default=None, help="Exact primary seed hex (e.g. #F50023)")
+    parser.add_argument("--bg-hex", default=None, help="Optional canvas background hex")
+    parser.add_argument("--accent-hex", default=None, help="Optional accent hex")
+    parser.add_argument("--envato-urls", default="", help="Comma-separated user Envato Elements URLs/UUIDs")
     parser.add_argument("--chroma-mode", default="auto", choices=["auto", "synthesize", "brief"])
     parser.add_argument("--style-profile", default="auto", choices=["auto", "architectural_b2b", "cosmic_archetypal", "design_system_atelier", "editorial_manifesto", "editorial_brand"])
     parser.add_argument("--sort", default="hybrid", choices=["hybrid", "latest", "popular"], help="Envato Elements discovery sort order")
@@ -480,6 +518,8 @@ def main() -> int:
             preview_texts=args.preview_texts, no_live=args.no_live,
             chroma_mode=args.chroma_mode, style_profile=args.style_profile,
             sort_mode=args.sort, include_shortlist=args.include_shortlist or True, seed=args.seed,
+            brand_brief_path=args.brand_brief, palette_json_path=args.palette_json,
+            seed_hex=args.seed_hex, bg_hex=args.bg_hex, accent_hex=args.accent_hex, envato_urls=args.envato_urls,
         )
         if args.audit:
             ok, errs = audit_target(tdir, phases)

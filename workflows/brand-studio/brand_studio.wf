@@ -1,0 +1,171 @@
+"""
+brand_studio.wf — Portable Antigravity `run_workflow` 5-Phase Playbook-First Brand Pipeline.
+Compiled with Python top-level await (`ast.PyCF_ALLOW_TOP_LEVEL_AWAIT`) via `run_workflow(ScriptPath=..., Args=...)`.
+Hermes/CrewAI remain strictly reserved for post-launch 24/7 monitoring & ops.
+"""
+PLAYBOOKS_DIR = "/mnt/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"
+
+project = args["project"]
+vertical = args["vertical"]
+ws_dir = args["workspace_dir"].rstrip("/")
+intake_mode = args.get("intake_mode", "auto")
+target_country = args.get("target_country", "Colombia y Latinoamérica")
+reference_urls = args.get("reference_urls", [])
+envato_urls = args.get("envato_urls", [])
+stop_after = args.get("stop_after_phase", "phase_2_art_direction")
+
+log(f"Starting brand-studio workflow for {project}/{vertical} (intake={intake_mode}, stop_after={stop_after})")
+
+# PHASE 1: Positioning + Live SERP Keyword Research (PB00 + PB06 + PB16)
+phase("Phase 1: Posicionamiento & Keyword Research SERP (PB00, PB06, PB16)")
+seo_schema = {
+    "type": "object",
+    "required": ["positioning_roles", "public_brand_concepts", "multi_domain_bridge", "topic_clusters", "files_written"],
+    "properties": {
+        "positioning_roles": {"type": "array", "items": {"type": "string"}},
+        "public_brand_concepts": {"type": "array", "items": {"type": "string"}},
+        "multi_domain_bridge": {"type": "string"},
+        "topic_clusters": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["cluster_id", "search_intent", "primary_keyword", "landing_route", "funnel_stage"],
+                "properties": {
+                    "cluster_id": {"type": "string"},
+                    "search_intent": {"type": "string"},
+                    "primary_keyword": {"type": "string"},
+                    "landing_route": {"type": "string"},
+                    "funnel_stage": {"type": "string"}
+                }
+            }
+        },
+        "files_written": {"type": "array", "items": {"type": "string"}}
+    }
+}
+seo_res = await agent(
+    f"""Fase 1 Strategist: Lee obligatoriamente los módulos clave de:
+- {PLAYBOOKS_DIR}/00_category_of_one.md
+- {PLAYBOOKS_DIR}/06_seo_aeo_geo_and_organic_content.md (Módulo 0 y Módulo 2 Keyword Research)
+- {PLAYBOOKS_DIR}/16_personal_branding_authority_and_communities.md
+Inspecciona el contexto real en {ws_dir} y /mnt/localstorage/{project}/dev/ (vertical JSON, brand_brief.json o briefs Oráculo si intake_mode='{intake_mode}' es 'auto' u 'oraculo').
+Usa búsqueda web en vivo (exa / tavily / brave) orientada a '{target_country}' para validar demanda e intención real SERP en las palabras clave del cliente (NO inventes keywords).
+Aplica la regla de oro de PB06: 1 intención = 1 URL única (Topic Clusters pilar + satélites), respetando los roles y términos públicos del fundador y cualquier puente multi-dominio futuro.
+Guarda {ws_dir}/strategy/seo_clusters.json y actualiza {ws_dir}/strategy/seo.md con fuentes verificadas y devuelve el JSON estructurado.""",
+    schema=seo_schema,
+    role="SEO & Positioning Strategist",
+    model="pro",
+)
+log("Phase 1 SEO clusters:", seo_res["topic_clusters"])
+
+if stop_after != "phase_1_seo":
+    # PHASE 2: Art Direction + Full-Color Orchesbrand v4.0 + Human Approval Gate
+    phase("Phase 2: Dirección de Arte (taste-skill + impeccable + Orchesbrand v4.0)")
+    art_schema = {
+        "type": "object",
+        "required": ["palette_json_path", "gallery_html_path", "chromatic_directions", "font_candidates"],
+        "properties": {
+            "palette_json_path": {"type": "string"},
+            "gallery_html_path": {"type": "string"},
+            "chromatic_directions": {"type": "array", "items": {"type": "string"}},
+            "font_candidates": {"type": "array", "items": {"type": "string"}}
+        }
+    }
+    envato_flag = f' --envato-urls "{",".join(envato_urls)}"' if envato_urls else ""
+    art_res = await agent(
+        f"""Fase 2 Art Director: Lee design-taste-frontend y impeccable.
+Si hay URLs de referencia ({reference_urls}), inspecciónalas con firecrawl_scrape(formats=['branding', 'markdown']) para extraer psicología visual, saturación, radio de botones y jerarquía SIN copiar su identidad.
+Diseña 3 ecosistemas cromáticos de alta convicción (sin pasteles lavados ni clichés AI) en {ws_dir}/brand/art_direction_palettes.json (cada uno con light/dark, background, surface, primary, accent, text_primary).
+Luego ejecuta: `orchesbrand --brand "{project}" --vertical "{vertical}" --output-dir "{ws_dir}/brand" --palette-json "{ws_dir}/brand/art_direction_palettes.json"{envato_flag} --include-shortlist --audit`
+Verifica que `chroma_preview.html` y `previews/preview_gallery.html` muestran los colores reales (`--primary`, `--accent`, `--on-primary` + Mini Hero CTA). No escribas copy en esta fase.""",
+        schema=art_schema,
+        role="Art Director",
+        model="pro",
+    )
+    log("Phase 2 Art Direction ready for human approval:", art_res["gallery_html_path"])
+
+    if stop_after != "phase_2_art_direction":
+        # PHASE 3: Reverse-Causality Concatenation Matrix
+        phase("Phase 3: Matriz de Concatenación Total & Validación Apotelos")
+        concat_schema = {
+            "type": "object",
+            "required": ["matrix_path", "apotelos_valid", "links_count"],
+            "properties": {
+                "matrix_path": {"type": "string"},
+                "apotelos_valid": {"type": "boolean"},
+                "links_count": {"type": "integer"}
+            }
+        }
+        concat_res = await agent(
+            f"""Fase 3 Conversion & Telemetry Architect: Lee las secciones aplicables de PB01, PB03, PB04, PB05, PB07, PB13, PB14 y la skill ad-telemetry.
+Construye {ws_dir}/strategy/concatenation_matrix.json cumpliendo MasterConcatenationMatrix (topic_clusters únicos + links uniendo cluster_id -> ad_angle -> UTM externo con allow_on_internal_links=false -> landing_route -> offer_hook -> pixel_events con host_env_prefix y shared_event_id=true -> remarketing_audience -> followup_flow).
+Valida físicamente ejecutando: `apotelos validate-chain {ws_dir}/strategy/concatenation_matrix.json`. No retornes hasta Exit 0.""",
+            schema=concat_schema,
+            role="Conversion & Telemetry Architect",
+            model="pro",
+        )
+        log("Phase 3 Concatenation validated:", concat_res)
+
+        if stop_after != "phase_3_concatenation":
+            # PHASE 4: Parallel Playbook-First Copy Squad + Sync Copy SSoT
+            phase("Phase 4: Escuadrón Paralelo de Copy (Playbooks Íntegros -> copy/*.md -> JSON)")
+            copy_units = [
+                {"id": "landing_funnel_offer", "playbooks": "02_copywriting_and_neurosales.md, 03_irresistible_offers_and_pricing.md, 04_funnels_vsl_webinars_and_challenges.md, 05_web_cro_landings_and_ecommerce.md", "targets": "copy/01..04 + copy/07"},
+                {"id": "lifecycle_email_wa_sales", "playbooks": "09_whatsapp_and_conversational_automation.md, 12_email_marketing_and_lifecycle_automation.md, 15_consultative_sales_and_high_ticket_closing.md", "targets": "copy/05..06"},
+                {"id": "ads_social_utm", "playbooks": "08_instagram_growth_reels_and_funnels.md, 10_tiktok_and_shortform_video.md, 11_linkedin_b2b_authority_and_ads.md, 13_meta_ads_media_buying_and_scaling.md, 14_google_ads_and_youtube_growth.md", "targets": "copy/08_ads_social_and_acquisition_plan.md"},
+                {"id": "geo_schema_web_dict", "playbooks": "06_seo_aeo_geo_and_organic_content.md, 07_ad_telemetry_ga4_gtm_and_metrics.md", "targets": "web/copy_strings.es.json, web/llms_blueprint.md, web/schema_graph.json"},
+            ]
+            copy_unit_schema = {
+                "type": "object",
+                "required": ["unit_id", "files_written", "anti_slop_passed"],
+                "properties": {
+                    "unit_id": {"type": "string"},
+                    "files_written": {"type": "array", "items": {"type": "string"}},
+                    "anti_slop_passed": {"type": "boolean"}
+                }
+            }
+            copy_results = await parallel(
+                copy_units,
+                lambda u: agent(
+                    f"""Especialista Copy/SEO ({u['id']}): Lee capítulos reales completos de {u['playbooks']} en {PLAYBOOKS_DIR} (PROHIBIDO truncar a 4000 caracteres).
+Redacta {u['targets']} dentro de {ws_dir} consumiendo {ws_dir}/brand/brandbook.json, {ws_dir}/strategy/seo_clusters.json y {ws_dir}/strategy/concatenation_matrix.json.
+Respeta ortografía española completa (tildes, ñ, ¿, ¡), permite public_brand_concepts declarados y prohíbe jerga interna de backend (BANT/PWYW/Order Bump/UPPER_SNAKE_CASE).
+Valida los archivos públicos con `anti-slop-linter --file <ruta>` y devuelve el resultado.""",
+                    schema=copy_unit_schema,
+                    role=f"Copy Specialist: {u['id']}",
+                    model="pro",
+                ),
+            )
+            sync_ok = await agent(
+                f"Ejecuta `brand-play sync-copy --workspace {ws_dir}` para reconciliar checksums SHA-256 de copy/*.md -> web/copy_strings.es.json y confirma exit 0.",
+                schema={"type": "boolean"},
+                role="Copy SSoT Reconciler",
+                model="flash",
+            )
+            log("Phase 4 Copy Squad completed; sync-copy:", sync_ok)
+
+            if stop_after != "phase_4_copy":
+                # PHASE 5: Blind Adversarial Business & Craft Critic
+                phase("Phase 5: Juez Adversario Ciego (Negocio, Artesanía, SEO Real y Trazabilidad)")
+                critic_schema = {
+                    "type": "object",
+                    "required": ["verdict", "visual_punch_score", "positioning_fidelity", "critical_gaps", "actionable_fixes"],
+                    "properties": {
+                        "verdict": {"type": "string", "enum": ["APPROVED", "NEEDS_REVISION"]},
+                        "visual_punch_score": {"type": "integer"},
+                        "positioning_fidelity": {"type": "boolean"},
+                        "critical_gaps": {"type": "array", "items": {"type": "string"}},
+                        "actionable_fixes": {"type": "array", "items": {"type": "string"}}
+                    }
+                }
+                critic = await agent(
+                    f"""Juez Adversario Ciego (solo lectura, mentalidad crítica senior): Audita SIN complacencia todos los artefactos de {ws_dir}:
+1. ¿Los colores en chroma_manifest.json y preview_gallery.html tienen tensión e identidad real sin pasteles lavados ni blanco/negro plano?
+2. ¿Las rutas en seo_clusters.json reflejan roles, conceptos públicos e intención SERP real sin canibalización?
+3. ¿Cada ángulo en copy/08 y concatenation_matrix.json tiene UTM externo válido, evento Pixel/CAPI deduplicado, audiencia de remarketing y secuencia Email/WA congruente?
+4. ¿Están copy/*.md íntegros (sin plantillas genéricas ni jerga backend)?
+Reporta honestamente APPROVED o NEEDS_REVISION con brechas concretas.""",
+                    schema=critic_schema,
+                    role="Blind Adversarial Critic",
+                    model="pro",
+                )
+                log("Phase 5 Blind Critic verdict:", critic)

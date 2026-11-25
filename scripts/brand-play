@@ -13,12 +13,15 @@ Features:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -559,8 +562,59 @@ def run_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_sync_copy(args: argparse.Namespace) -> int:
+    """Checks or reconciles _ssot_policy.source_checksums in web/copy_strings.es.json against editable copy/*.md."""
+    ws = Path(args.workspace).resolve()
+    copy_dir = ws / "copy"
+    json_path = ws / "web" / "copy_strings.es.json"
+    if not copy_dir.is_dir() or not json_path.is_file():
+        print(f"❌ Falta copy/ o web/copy_strings.es.json en {ws}", file=sys.stderr)
+        return 1
+
+    md_files = sorted(
+        f for f in copy_dir.glob("*.md")
+        if args.all_files or not (f.name.startswith("00_") or f.name.startswith("08_"))
+    )
+    current_hashes: Dict[str, str] = {
+        f.name: hashlib.sha256(f.read_bytes()).hexdigest()
+        for f in md_files
+    }
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    policy = data.get("_ssot_policy") or {}
+    saved_hashes = policy.get("source_checksums") or {}
+
+    changed = [name for name, h in current_hashes.items() if saved_hashes.get(name) != h]
+    removed = [name for name in saved_hashes if name not in current_hashes]
+
+    if not args.skip_lint and md_files:
+        linter = "/var/www/zerops-astrobranding/scripts/anti_slop_linter.py"
+        if Path(linter).is_file():
+            for f in md_files:
+                r = subprocess.run(
+                    [sys.executable, "-B", linter, "--file", str(f), "--quiet"],
+                    capture_output=True, text=True,
+                )
+                if r.returncode != 0:
+                    print(f"⚠️ Anti-slop alerta en {f.name} (ejecutá anti-slop-linter --file {f} para ver detalle)")
+
+    if args.check:
+        if changed or removed:
+            print(f"⚠️ NEEDS_RECONCILIATION: cambios humanos en copy/*.md -> changed={changed}, removed={removed}")
+            return 2
+        print(f"✅ copy/*.md y web/copy_strings.es.json sincronizados ({len(current_hashes)} archivos).")
+        return 0
+
+    policy["authoritative_source"] = "copy/*.md (el fundador edita copy/*.md; web/copy_strings.es.json es diccionario derivado)"
+    policy["source_checksums"] = current_hashes
+    policy["last_synced_at"] = datetime.now(timezone.utc).isoformat()
+    data["_ssot_policy"] = policy
+    json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"✅ _ssot_policy actualizado ({len(current_hashes)} checksums SHA-256). Cambios registrados: {changed or ['ninguno']}")
+    return 0
+
+
 def run_test() -> int:
-    print("Testing brand-play v2.1 deterministic slot hydration & zero-jargon gate...")
+    print("Testing brand-play v3.0 slot helpers, zero-jargon gate & sync-copy...")
     test_obj = {
         "brand": {"name": {"$value": "Aura Studio Demo"}, "category": "Estudio Editorial"},
         "color": {"primary": {"$value": "#0f172a"}},
@@ -594,7 +648,19 @@ def run_test() -> int:
             "primary_offer": {"pricing": {"currency": "COP", "pwyw_default_cop": 30000}},
         }), encoding="utf-8")
         (ws / "brand").mkdir(parents=True, exist_ok=True)
+        (ws / "copy").mkdir(parents=True, exist_ok=True)
+        (ws / "web").mkdir(parents=True, exist_ok=True)
         (ws / "brand" / "brandbook.json").write_text(json.dumps({"metadata": {"brand_name": "Aurelius Studio"}}), encoding="utf-8")
+        (ws / "copy" / "01_landing.md").write_text("# Titular humano editado\n", encoding="utf-8")
+        (ws / "web" / "copy_strings.es.json").write_text(json.dumps({"_ssot_policy": {"source_checksums": {}}}), encoding="utf-8")
+
+        sync_args = argparse.Namespace(workspace=str(ws), check=True, all_files=False, skip_lint=True)
+        assert run_sync_copy(sync_args) == 2, "Expected drift detection code 2"
+        sync_args.check = False
+        assert run_sync_copy(sync_args) == 0
+        sync_args.check = True
+        assert run_sync_copy(sync_args) == 0
+
         bundle, _ = load_brandbook_bundle("alpha-line", vertical_json=vfile, explicit_ws=ws)
         assert bundle["brand"]["signature_mechanism"] == "Sistema Alpha"
         assert "$30.000 COP" in bundle["brand"]["paid_discovery"]["price"]
@@ -605,15 +671,15 @@ def run_test() -> int:
             assert not VOSEO_CLIENT_RE.search(txt), f"Voseo leak in {f.name}"
             assert "USD 150" not in txt, f"Hardcoded price leak in {f.name}"
 
-    print("✅ ALL BRAND-PLAY v2.1 UNIT TESTS PASSED (exit 0)")
+    print("✅ ALL BRAND-PLAY v3.0 UNIT TESTS PASSED (sync-copy + drift guard, exit 0)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="brand-play v2.1: Sovereign Downstream Playbook Transmutation Engine")
+    parser = argparse.ArgumentParser(description="brand-play v3.0: Copy SSoT Sync & Legacy Slot Engine")
     sub = parser.add_subparsers(dest="subcommand")
 
-    t_p = sub.add_parser("transmute", help="Hidrata playbooks universales con tokens de marca")
+    t_p = sub.add_parser("transmute", help="[Legacy regex] Para Playbook-First real usa el workflow brand-studio")
     t_p.add_argument("--brand", "-b", required=True)
     t_p.add_argument("--playbook", "-p")
     t_p.add_argument("--all", "-a", action="store_true")
@@ -624,6 +690,12 @@ def main() -> int:
     t_p.add_argument("--dry-run", action="store_true")
     t_p.add_argument("--force", action="store_true")
 
+    s_p = sub.add_parser("sync-copy", help="Verifica o reconcilia ediciones manuales de copy/*.md contra web/copy_strings.es.json")
+    s_p.add_argument("--workspace", "-w", required=True, help="Ruta a workspaces/<vertical>")
+    s_p.add_argument("--check", action="store_true", help="Solo verificar si hay cambios sin escribir (exit 2 si falta sincronizar)")
+    s_p.add_argument("--all-files", action="store_true", help="Incluir también 00_* y 08_*")
+    s_p.add_argument("--skip-lint", action="store_true", help="Omitir ejecución de anti-slop-linter")
+
     l_p = sub.add_parser("list", help="Lista playbooks o marcas/workspaces")
     l_p.add_argument("--playbooks", action="store_true")
     l_p.add_argument("--brands", action="store_true")
@@ -633,6 +705,8 @@ def main() -> int:
 
     if args.subcommand == "transmute":
         return run_transmute(args)
+    if args.subcommand == "sync-copy":
+        return run_sync_copy(args)
     if args.subcommand == "list":
         return run_list(args)
     if args.subcommand == "test":

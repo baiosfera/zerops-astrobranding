@@ -218,16 +218,12 @@ Bifrost expone 5 Virtual Keys desacopladas de nombres de clientes:
 
 Todo producto construido bajo esta plantilla debe orquestar el ecosistema de 141 skills divididas en 4 dimensiones operativas:
 
-### A. Arte, Vibe-Craft & Experiencia Sensorial (Contrato Two-Layer + Zero-Jargon)
-- **`orchesbrand` (v3.2 agnóstico, multimarca/vertical):** Orquesta `chroma-engine` (`v4.1` Oráculo 15-shards + 5 arquetipos verticales) + `fontgen-engine` (`v4.1` dual-sort Envato vanguardista `sort-by-latest`/`sort-by-popular` + shortlist) + `envato-font-preview` (`v3.2` galería SVG multipaleta con reintentos y test de tildes) + merge no destructivo de `brandbook.json` y `brandbook-theme.css` dentro de `dev/workspaces/<vertical>/brand/` bajo un único `astrobranding_<brand>.md` sin mezclar ni pisar verticales hermanas.
-- **`fontgen` + `envato-font-preview`:** Dirección tipográfica arquitectónica o editorial (cero `Fraunces` o caligrafía nupcial por defecto en B2B; `web_ready_bridge` para Astro 5 `experimental.fonts` + galería SVG interactiva previa a `.woff2`).
+### A. Arte, Vibe-Craft & Estudio de Marca (`brand-studio` + `orchesbrand v4.0` + `apotelos v2.0`)
+- **`brand-studio` (`workflows/brand-studio/brand_studio.wf` vía `run_workflow` · guía en `MANUAL_BRAND_STUDIO.md`):** Flujo Playbook-First de 5 Fases nativo en ZCP (**con Oráculo o sin Oráculo vía `brand_brief.json`**): 1) Keyword Research SERP en vivo (`PB00`/`06`/`16`), 2) Dirección de Arte + Pausa Humana (`taste-skill`/`impeccable` + `firecrawl`), 3) Matriz de Concatenación Total (`apotelos validate-chain`), 4) Escuadrón Paralelo de Copy leyendo capítulos íntegros `00..17`, 5) Juez Adversario Ciego. Hermes/CrewAI quedan reservados para operación 24/7 post-lanzamiento.
+- **`orchesbrand` (`v4.0` · `chroma v5.0` + `envato-font-preview v4.0`):** Preserva hexes curados (`--palette-json`/`--seed-hex`), calcula `on_primary`/`on_accent` ($\ge 4.5:1$), soporta `--envato-urls` directas y renderiza 4 lockups full-color en `preview_gallery.html` (`--primary`, `--accent`, tarjeta invertida y Mini Hero CTA).
 - **`kinetic`**: Microinteracciones a 60fps con GSAP, curvas `cubic-bezier(0.16, 1, 0.3, 1)` y SFX procedurales.
-- **`chroma` (`chroma-engine` v4.1):** Modelado matemático en **OKLCH** (3 mundos visuales distintos × Dark/Light Mode), contraste físico WCAG 2.2 AAA (`>= 7:1` texto, `>= 4.5:1` botón) y APCA `Lc >= 75` con `chroma_preview.html`.
-- **`brand-play` + `astro-web` + `anti-slop-linter` (Prioridad de Copy Manual SSoT & Zero-Jargon):** Todo copy orientado al cliente en `dev/workspaces/<vertical>/copy/*.md` usa los 18 playbooks (`INDEX.json`) con tildes/`ñ` completas y cero siglas técnicas (`OPB`, `CO1`, `BANT`, `AEO`, `GEO`, `PWYW`, `Order Bump`, `Context Vault`) ni enums `UPPER_SNAKE_CASE`. **Invariante SSoT:** si el operador edita `copy/*.md`, esos archivos Markdown prevalecen sobre cualquier caché `web/copy_strings.es.json` (la sesión `astro-web` debe conciliarlos antes de compilar).
-- **`taste-skill` e `impeccable`**: Calibración estricta de los 3 Diales:
-  * `DESIGN_VARIANCE: 8` — Asimetría intencional y grillas editoriales dinámicas.
-  * `MOTION_INTENSITY: 6` — Entradas físicas suaves con aceleración natural.
-  * `VISUAL_DENSITY: 4` — Espaciado amplio y respiro visual de alta gama.
+- **`brand-play sync-copy` + `anti-slop-linter v2.1` + `astro-web`:** `copy/*.md` prevalecen sobre `web/copy_strings.es.json`; permite términos estratégicos declarados en `public_brand_concepts` mientras bloquea jerga interna técnica (`BANT`, `PWYW`, `Order Bump`, `Context Vault`, `Break-Even CPA`, `UPPER_SNAKE_CASE`) y omisiones de tildes/`ñ`.
+- **`taste-skill` e `impeccable`**: Calibración estricta de los 3 Diales (`VARIANCE: 8`, `MOTION: 6`, `DENSITY: 4`).
 
 ### B. Frontend Reactivo & Arquitectura de Componentes
 - **`tailwind-4`**: Tokens transpilados directamente a `@theme` CSS-first sin sobrecarga de runtime.

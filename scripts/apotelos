@@ -168,6 +168,75 @@ class ApotelosManifest(BaseModel):
     dossier_path: Optional[str] = Field(default=None, description="Canonical path to Markdown dossier SSoT")
 
 
+class UtmContract(BaseModel):
+    utm_source: str = Field(..., min_length=2)
+    utm_medium: str = Field(..., min_length=2)
+    utm_campaign: str = Field(..., min_length=2)
+    utm_content: str = Field(..., min_length=2)
+    utm_term: Optional[str] = None
+    allow_on_internal_links: bool = Field(default=False, description="MUST remain false; never put UTMs on internal navigation")
+
+
+class TopicClusterSpec(BaseModel):
+    cluster_id: str = Field(..., min_length=2)
+    search_intent: str = Field(..., min_length=3)
+    primary_keyword: str = Field(..., min_length=2)
+    landing_route: str = Field(..., min_length=1)
+    funnel_stage: str = Field(..., pattern="^(tofu|mofu|bofu)$")
+
+
+class PixelEventContract(BaseModel):
+    event_name: str = Field(..., min_length=2)
+    trigger_condition: str = Field(..., min_length=3)
+    host_env_prefix: str = Field(..., min_length=2)
+    shared_event_id: bool = Field(default=True)
+
+
+class ConcatenationLink(BaseModel):
+    link_id: str = Field(..., min_length=2)
+    cluster_id: str = Field(..., min_length=2)
+    ad_angle: str = Field(..., min_length=3)
+    utm: UtmContract
+    landing_route: str = Field(..., min_length=1)
+    offer_hook: str = Field(..., min_length=3)
+    pixel_events: List[PixelEventContract] = Field(..., min_length=1)
+    remarketing_audience: str = Field(..., min_length=3)
+    followup_flow: str = Field(..., min_length=3)
+
+
+class MasterConcatenationMatrix(BaseModel):
+    brand_slug: str = Field(..., min_length=2)
+    canonical_domain: str = Field(..., min_length=4)
+    topic_clusters: List[TopicClusterSpec] = Field(..., min_length=1)
+    links: List[ConcatenationLink] = Field(..., min_length=1)
+
+
+def validate_concatenation_matrix(raw: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    errors: List[str] = []
+    try:
+        m = MasterConcatenationMatrix.model_validate(raw)
+    except Exception as ex:
+        return False, [str(ex)]
+
+    routes_seen: Dict[str, str] = {}
+    cluster_ids: set[str] = set()
+    for c in m.topic_clusters:
+        cluster_ids.add(c.cluster_id)
+        if c.landing_route in routes_seen:
+            errors.append(f"Canibalización SEO: ruta '{c.landing_route}' repetida entre '{routes_seen[c.landing_route]}' y '{c.cluster_id}' (1 intención = 1 URL).")
+        routes_seen[c.landing_route] = c.cluster_id
+
+    for lk in m.links:
+        if lk.cluster_id not in cluster_ids:
+            errors.append(f"Link '{lk.link_id}' apunta a cluster inexistente '{lk.cluster_id}'.")
+        if lk.utm.allow_on_internal_links:
+            errors.append(f"Link '{lk.link_id}' permite UTMs en enlaces internos (prohibido: borra atribución real).")
+        for ev in lk.pixel_events:
+            if not ev.shared_event_id:
+                errors.append(f"Link '{lk.link_id}' evento '{ev.event_name}' sin event_id compartido Browser↔CAPI.")
+    return len(errors) == 0, errors
+
+
 # =====================================================================
 # 2. STRING & SLUG HELPERS
 # =====================================================================
@@ -2186,13 +2255,47 @@ def cmd_test(args):
             if cs.custom_domain != "cloudsphere.io":
                 errors.append(f"Dominio incorrecto para cloudsphere: {cs.custom_domain}")
 
+        ok_chain, chain_errs = validate_concatenation_matrix({
+            "brand_slug": "aurelius-vance",
+            "canonical_domain": "aureliusvance.com",
+            "topic_clusters": [
+                {"cluster_id": "c1", "search_intent": "auditoria cloud b2b", "primary_keyword": "auditoria cloud", "landing_route": "/", "funnel_stage": "bofu"}
+            ],
+            "links": [{
+                "link_id": "l1", "cluster_id": "c1", "ad_angle": "latencia y sobrecosto",
+                "utm": {"utm_source": "meta", "utm_medium": "paid_social", "utm_campaign": "cloud_q4", "utm_content": "video_v1"},
+                "landing_route": "/", "offer_hook": "Diagnóstico sin costo",
+                "pixel_events": [{"event_name": "Lead", "trigger_condition": "qualified === true", "host_env_prefix": "AURELIUS_", "shared_event_id": True}],
+                "remarketing_audience": "Visitantes / sin Agenda 14d", "followup_flow": "WA T+0 + Email 3 pasos"
+            }]
+        })
+        if not ok_chain:
+            errors.extend(chain_errs)
+
+        bad_chain_ok, _ = validate_concatenation_matrix({
+            "brand_slug": "aurelius-vance", "canonical_domain": "aureliusvance.com",
+            "topic_clusters": [
+                {"cluster_id": "c1", "search_intent": "i1", "primary_keyword": "k1", "landing_route": "/", "funnel_stage": "tofu"},
+                {"cluster_id": "c2", "search_intent": "i2", "primary_keyword": "k2", "landing_route": "/", "funnel_stage": "bofu"},
+            ],
+            "links": [{
+                "link_id": "l1", "cluster_id": "missing", "ad_angle": "x",
+                "utm": {"utm_source": "meta", "utm_medium": "cpc", "utm_campaign": "c", "utm_content": "v", "allow_on_internal_links": True},
+                "landing_route": "/", "offer_hook": "offer",
+                "pixel_events": [{"event_name": "Lead", "trigger_condition": "always", "host_env_prefix": "X_", "shared_event_id": False}],
+                "remarketing_audience": "all", "followup_flow": "wa"
+            }]
+        })
+        if bad_chain_ok:
+            errors.append("validate_concatenation_matrix debe rechazar canibalización, cluster roto, UTM interno y shared_event_id=False")
+
         if errors:
             print("❌ APOTELOS AGNOSTIC INTEGRITY SENSOR FAILED:")
             for e in errors:
                 print(f"  • {e}")
             sys.exit(1)
 
-        print("✅ APOTELOS AGNOSTIC INTEGRITY SENSOR PASSED: 100% universal domain compliance.")
+        print("✅ APOTELOS AGNOSTIC INTEGRITY SENSOR PASSED: 100% universal domain + concatenation chain compliance.")
         print(f"  • Superficies verificadas ({len(eco.verticals)}): {', '.join(eco.verticals.keys())}")
         print(f"  • Subtemas extraídos dinámicamente: {', '.join(av.subthemes)}")
         sys.exit(0)
@@ -2562,6 +2665,21 @@ def main():
     p_dossier.add_argument("--brand", help="Slug de la marca (opcional)")
     p_dossier.add_argument("--output", "-o", help="Ruta de destino del archivo Markdown")
     p_dossier.set_defaults(func=cmd_dossier)
+
+    # validate-chain
+    p_vc = subparsers.add_parser("validate-chain", help="Valida la matriz de concatenación Keyword/UTM/Funnel/Pixel/Remarketing")
+    p_vc.add_argument("matrix_path", help="Ruta a concatenation_matrix.json")
+    def _cmd_validate_chain(a):
+        raw = json.loads(Path(a.matrix_path).read_text(encoding="utf-8"))
+        ok, errs = validate_concatenation_matrix(raw)
+        if ok:
+            print(f"✅ Matriz de concatenación válida: {a.matrix_path}")
+            sys.exit(0)
+        print(f"❌ Fallas de concatenación en {a.matrix_path}:")
+        for e in errs:
+            print(f"  • {e}")
+        sys.exit(1)
+    p_vc.set_defaults(func=_cmd_validate_chain)
 
     # test
     p_test = subparsers.add_parser("test", help="Ejecuta el sensor físico de verificación funcional de Apotelos")

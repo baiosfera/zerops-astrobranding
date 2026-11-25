@@ -120,9 +120,18 @@ def fetch_svg_preview(item_uuid: str, text: str, variant_id: Optional[str], refe
     return ""
 
 
+def _fallback_on_hex(hex_str: str) -> str:
+    h = hex_str.strip().lstrip("#")
+    if len(h) != 6:
+        return "#ffffff"
+    r, g, b = int(h[0:2], 16) / 255.0, int(h[2:4], 16) / 255.0, int(h[4:6], 16) / 255.0
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return "#0a0a0a" if lum > 0.42 else "#ffffff"
+
+
 def _extract_chroma_palettes(chroma_path: Optional[Path]) -> Tuple[str, str, Dict[str, Any], str, str]:
-    dark_vars = "--bg:#0a0b0e;--surface:#14161c;--border:#262b36;--text:#f2f4f7;--muted:#94a0b2;--accent:#a3b8ff;"
-    light_vars = "--bg:#f8f9fb;--surface:#eef1f6;--border:#d4dbe6;--text:#121621;--muted:#525c70;--accent:#23449e;"
+    dark_vars = "--bg:#0d1016;--surface:#161a23;--border:rgba(255,255,255,.12);--text:#f3f5f8;--muted:#9aa3b2;--primary:#3b82f6;--on-primary:#ffffff;--accent:#f59e0b;--on-accent:#0a0a0a;--secondary:#64748b;"
+    light_vars = "--bg:#fafaf8;--surface:#eff1f5;--border:rgba(15,23,42,.12);--text:#0f1419;--muted:#4b5563;--primary:#1d4ed8;--on-primary:#ffffff;--accent:#d97706;--on-accent:#ffffff;--secondary:#475569;"
     palettes: Dict[str, Any] = {}
     default_eco = "default"
     default_mode = "light"
@@ -133,6 +142,23 @@ def _extract_chroma_palettes(chroma_path: Optional[Path]) -> Tuple[str, str, Dic
         sel_id = cdata.get("selected_ecosystem_id")
         default_mode = cdata.get("recommended_mode", "light")
         ecos = cdata.get("ecosystems", [])
+
+        def _pack_mode(m: Dict[str, Any]) -> Dict[str, str]:
+            p_hex = m["primary"]["hex"]
+            a_hex = (m.get("accent") or m["primary"])["hex"]
+            return {
+                "--bg": m["background"]["hex"],
+                "--surface": m["surface"]["hex"],
+                "--border": f"{m['text_muted']['hex']}44",
+                "--text": m["text_primary"]["hex"],
+                "--muted": m["text_muted"]["hex"],
+                "--primary": p_hex,
+                "--on-primary": (m.get("on_primary") or {}).get("hex") or _fallback_on_hex(p_hex),
+                "--accent": a_hex,
+                "--on-accent": (m.get("on_accent") or {}).get("hex") or _fallback_on_hex(a_hex),
+                "--secondary": (m.get("secondary") or m["text_muted"])["hex"],
+            }
+
         for idx, eco in enumerate(ecos):
             eid = eco.get("id") or f"eco_{idx + 1}"
             d = eco.get("themes", {}).get("dark", {})
@@ -140,32 +166,16 @@ def _extract_chroma_palettes(chroma_path: Optional[Path]) -> Tuple[str, str, Dic
             palettes[eid] = {
                 "name": eco.get("name", eid),
                 "recommended_mode": eco.get("recommended_mode", default_mode),
-                "dark": {
-                    "--bg": d["background"]["hex"],
-                    "--surface": d["surface"]["hex"],
-                    "--border": f"{d['text_muted']['hex']}44",
-                    "--text": d["text_primary"]["hex"],
-                    "--muted": d["text_muted"]["hex"],
-                    "--accent": d["primary"]["hex"],
-                } if d else {},
-                "light": {
-                    "--bg": lt["background"]["hex"],
-                    "--surface": lt["surface"]["hex"],
-                    "--border": f"{lt['text_muted']['hex']}44",
-                    "--text": lt["text_primary"]["hex"],
-                    "--muted": lt["text_muted"]["hex"],
-                    "--accent": lt["primary"]["hex"],
-                } if lt else {},
+                "dark": _pack_mode(d) if d else {},
+                "light": _pack_mode(lt) if lt else {},
             }
         eco = next((e for e in ecos if e.get("id") == sel_id), ecos[0] if ecos else None)
         if eco:
             default_eco = eco.get("id") or default_eco
             default_mode = eco.get("recommended_mode", default_mode)
-            d = eco.get("themes", {}).get("dark", {})
-            lt = eco.get("themes", {}).get("light", {})
-            if d:
+            if palettes[default_eco]["dark"]:
                 dark_vars = "".join(f"{k}:{v};" for k, v in palettes[default_eco]["dark"].items())
-            if lt:
+            if palettes[default_eco]["light"]:
                 light_vars = "".join(f"{k}:{v};" for k, v in palettes[default_eco]["light"].items())
     except Exception:
         pass
@@ -220,8 +230,26 @@ def generate_gallery_html(
                         <a href="{svg_url}" target="_blank" class="btn-external">SVG Envato</a>
                     </div>
                 </div>
-                <div class="svg-container" data-uuid="{item_uuid}" data-variant="{variant_id}">
-                    {svg_content}
+                <div class="brand-lockup-grid">
+                    <div class="lockup lockup-primary">
+                        <small>1. Primario sobre Fondo</small>
+                        <div class="svg-container svg-primary" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="primary">{svg_content}</div>
+                    </div>
+                    <div class="lockup lockup-accent">
+                        <small>2. Acento sobre Superficie</small>
+                        <div class="svg-container svg-accent" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="accent">{svg_content}</div>
+                    </div>
+                    <div class="lockup lockup-card">
+                        <small>3. Tarjeta Invertida de Marca</small>
+                        <div class="svg-container svg-on-primary" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="on-primary">{svg_content}</div>
+                    </div>
+                    <div class="lockup lockup-hero">
+                        <small>4. Mini Hero + Botón CTA Real ({body_fam})</small>
+                        <div class="mini-hero" style="font-family:'{body_fam}', system-ui, sans-serif">
+                            <p>Sistemas comerciales con identidad propia, sin fórmulas genéricas.</p>
+                            <span class="cta-sample">Agendar sesión →</span>
+                        </div>
+                    </div>
                 </div>
             </div>"""
             variant_cards.append(card)
@@ -257,39 +285,54 @@ def generate_gallery_html(
 <title>{html.escape(gallery_title)}</title>
 {''.join(google_links)}
 <style>
-  :root {{ --preview-h: 84px; {light_vars if default_mode == "light" else dark_vars} }}
+  :root {{ --preview-h: 72px; {light_vars if default_mode == "light" else dark_vars} }}
   [data-theme="dark"] {{ {dark_vars} }}
   [data-theme="light"] {{ {light_vars} }}
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{ background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 32px 24px; transition: background .2s, color .2s; }}
-  .header {{ max-width: 1200px; margin: 0 auto 28px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }}
+  .header {{ max-width: 1260px; margin: 0 auto 28px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }}
   .header h1 {{ font-size: 22px; font-weight: 700; }}
   .header p {{ color: var(--muted); font-size: 14px; margin-top: 4px; }}
   .controls {{ display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }}
   .live-input, .eco-select {{ background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }}
   .live-input {{ min-width: 220px; }}
   .btn {{ background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }}
-  .btn-primary {{ background: var(--accent); color: var(--bg); border-color: var(--accent); }}
-  .container {{ max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }}
+  .btn-primary {{ background: var(--primary); color: var(--on-primary); border-color: var(--primary); }}
+  .container {{ max-width: 1260px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }}
   .font-section {{ background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }}
   .badges {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
-  .eco-pill, .role-pill {{ font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--accent); }}
+  .eco-pill, .role-pill {{ font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--primary); }}
   .font-meta {{ margin-bottom: 16px; }}
   .font-meta h2 {{ font-size: 19px; font-weight: 600; }}
-  .font-meta a {{ color: var(--accent); text-decoration: none; }}
+  .font-meta a {{ color: var(--primary); text-decoration: none; }}
   .brand-preview {{ color: var(--muted); font-size: 13px; margin-top: 4px; }}
-  .variants-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }}
+  .variants-grid {{ display: flex; flex-direction: column; gap: 16px; }}
   .variant-card {{ background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }}
   .variant-header {{ display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }}
   .actions {{ display: flex; gap: 6px; }}
   .style-badge {{ color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }}
   .btn-download, .btn-external {{ font-size: 12px; color: var(--muted); text-decoration: none; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); }}
-  .btn-download:hover, .btn-external:hover {{ color: var(--text); border-color: var(--accent); }}
-  .svg-container {{ min-height: 110px; display: flex; align-items: center; justify-content: center; padding: 14px; background: var(--surface); border-radius: 8px; border: 1px dashed var(--border); overflow-x: auto; }}
+  .btn-download:hover, .btn-external:hover {{ color: var(--text); border-color: var(--primary); }}
+  .brand-lockup-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }}
+  .lockup {{ border-radius: 10px; padding: 12px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }}
+  .lockup small {{ font-size: 11px; font-weight: 700; opacity: .78; }}
+  .lockup-primary {{ background: var(--bg); }}
+  .lockup-accent {{ background: var(--surface); }}
+  .lockup-card {{ background: var(--primary); color: var(--on-primary); border-color: var(--primary); }}
+  .lockup-hero {{ background: var(--surface); justify-content: space-between; }}
+  .mini-hero p {{ font-size: 13px; line-height: 1.45; margin-bottom: 10px; color: var(--text); }}
+  .cta-sample {{ display: inline-block; background: var(--primary); color: var(--on-primary); padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; }}
+  .svg-container {{ min-height: 88px; display: flex; align-items: center; justify-content: center; padding: 10px; overflow-x: auto; }}
   .svg-container svg {{ max-width: 100%; height: auto; max-height: var(--preview-h); display: block; }}
-  .svg-container svg path {{ fill: var(--text) !important; }}
-  .live-img {{ max-width: 100%; max-height: var(--preview-h); filter: invert(0); }}
-  [data-theme="dark"] .live-img {{ filter: invert(1); }}
+  .svg-primary svg, .svg-primary svg * {{ fill: var(--primary) !important; stroke: none; }}
+  .svg-accent svg, .svg-accent svg * {{ fill: var(--accent) !important; stroke: none; }}
+  .svg-on-primary svg, .svg-on-primary svg * {{ fill: var(--on-primary) !important; stroke: none; }}
+  .tone-neutral .svg-primary svg, .tone-neutral .svg-primary svg * {{ fill: var(--text) !important; }}
+  .live-mask {{ width: 100%; height: var(--preview-h); -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; -webkit-mask-size: contain; mask-size: contain; }}
+  .svg-primary .live-mask {{ background-color: var(--primary); }}
+  .svg-accent .live-mask {{ background-color: var(--accent); }}
+  .svg-on-primary .live-mask {{ background-color: var(--on-primary); }}
+  .tone-neutral .svg-primary .live-mask {{ background-color: var(--text); }}
   .body-pair {{ margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text); }}
   .body-pair small {{ color: var(--muted); display: block; margin-bottom: 4px; }}
   .body-pair p {{ font-size: 15px; line-height: 1.55; max-width: 72ch; }}
@@ -299,12 +342,16 @@ def generate_gallery_html(
   <div class="header">
     <div>
       <h1>{html.escape(gallery_title)}</h1>
-      <p>Vectores SVG reales de Envato Elements + Paletas Chroma OKLCH · Prueba cualquier texto o cambia entre los 3 ecosistemas cromáticos.</p>
+      <p>Vectores SVG Envato + Colores Reales de Marca (`--primary`, `--accent`, `--on-primary`) · Prueba la fuente aplicada en lockups reales.</p>
     </div>
     <div class="controls">
       {f'<select id="ecoSelect" class="eco-select" onchange="applyChromaPalette()">{eco_options}</select>' if eco_options else ''}
-      <input id="liveText" class="live-input" type="text" placeholder="Probar texto en vivo (ej. Método Unipolio)..." />
-      <label style="font-size:12px;color:var(--muted)">Tamaño <input id="sizeRange" type="range" min="48" max="130" value="84" oninput="document.documentElement.style.setProperty('--preview-h', this.value + 'px')" /></label>
+      <select id="brandToneSelect" class="eco-select" onchange="applyBrandTone()">
+        <option value="brand">Modo Lockup: Colores de Marca</option>
+        <option value="neutral">Modo Lockup: Tinta Neutra (Lectura)</option>
+      </select>
+      <input id="liveText" class="live-input" type="text" placeholder="Probar tu nombre de marca o frase..." />
+      <label style="font-size:12px;color:var(--muted)">Tamaño <input id="sizeRange" type="range" min="48" max="130" value="72" oninput="document.documentElement.style.setProperty('--preview-h', this.value + 'px')" /></label>
       <button class="btn btn-primary" onclick="updateLivePreviews()">Probar en vivo</button>
       <button class="btn" onclick="document.getElementById('liveText').value='DISEÑO MÉTODO ÑÁÉ ¿¡';updateLivePreviews()">Probar Tildes ES</button>
       <button class="btn" onclick="toggleTheme()">Modo Oscuro / Claro</button>
@@ -321,6 +368,10 @@ def generate_gallery_html(
       if (!vars) return;
       Object.entries(vars).forEach(([k, v]) => document.body.style.setProperty(k, v));
     }}
+    function applyBrandTone() {{
+      const val = document.getElementById('brandToneSelect')?.value || 'brand';
+      document.body.classList.toggle('tone-neutral', val === 'neutral');
+    }}
     function toggleTheme() {{
       const next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
       document.body.setAttribute('data-theme', next);
@@ -335,7 +386,8 @@ def generate_gallery_html(
         const variant = el.getAttribute('data-variant');
         const params = new URLSearchParams({{ itemUuid: uuid, text: txt, typed: '1' }});
         if (variant) params.set('variant', variant);
-        el.innerHTML = '<img class="live-img" alt="' + txt + '" src="https://elements.envato.com/font-preview.svg?' + params.toString() + '" />';
+        const u = 'https://elements.envato.com/font-preview.svg?' + params.toString();
+        el.innerHTML = '<div class="live-mask" role="img" aria-label="' + txt.replace(/"/g, '&quot;') + '" style="-webkit-mask-image:url(\'' + u + '\');mask-image:url(\'' + u + '\');"></div>';
       }});
     }}
     applyChromaPalette();
@@ -343,6 +395,26 @@ def generate_gallery_html(
 </body>
 </html>"""
     Path(output_file).write_text(full_html, encoding="utf-8")
+
+
+def entries_from_urls(raw_urls: List[str], texts: List[str]) -> List[Dict[str, Any]]:
+    """Builds batch entries directly from user-provided Envato Elements URLs or UUIDs."""
+    entries: List[Dict[str, Any]] = []
+    for i, u in enumerate(raw_urls):
+        clean_u = u.strip()
+        if not clean_u:
+            continue
+        for t in (texts or ["MARCA"]):
+            entries.append({
+                "url": clean_u,
+                "text": t,
+                "title_hint": "",
+                "ecosystem_label": "Selección Directa del Fundador",
+                "role_label": f"Fuente Curada #{i + 1}",
+                "body_family": "Plus Jakarta Sans",
+                "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap",
+            })
+    return entries
 
 
 def entries_from_manifest(manifest_path: Path, texts: List[str], include_shortlist: bool = False) -> List[Dict[str, Any]]:
@@ -464,7 +536,7 @@ def process_batch(
 
 
 def run_unit_tests() -> int:
-    print("Running envato_font_preview v3.0 offline unit tests...")
+    print("Running envato_font_preview v4.0 offline unit tests...")
     with tempfile.TemporaryDirectory(prefix="envato_preview_test_") as tmp:
         tp = Path(tmp)
         fm_path = tp / "font_manifest.json"
@@ -485,17 +557,19 @@ def run_unit_tests() -> int:
         }), encoding="utf-8")
         cm_path.write_text(json.dumps({
             "selected_ecosystem_id": "eco_1",
+            "recommended_mode": "light",
             "ecosystems": [{
                 "id": "eco_1",
                 "themes": {
-                    "dark": {"background": {"hex": "#080c14"}, "surface": {"hex": "#121824"}, "primary": {"hex": "#38b6ff"}, "text_primary": {"hex": "#f2f6fa"}, "text_muted": {"hex": "#8e9cb0"}},
-                    "light": {"background": {"hex": "#f7f9fc"}, "surface": {"hex": "#ebf0f7"}, "primary": {"hex": "#0c4f88"}, "text_primary": {"hex": "#090e17"}, "text_muted": {"hex": "#566273"}},
+                    "dark": {"background": {"hex": "#0d1016"}, "surface": {"hex": "#161a23"}, "primary": {"hex": "#f50023"}, "on_primary": {"hex": "#ffffff"}, "accent": {"hex": "#c8a84b"}, "on_accent": {"hex": "#0a0a0a"}, "text_primary": {"hex": "#f2f6fa"}, "text_muted": {"hex": "#8e9cb0"}},
+                    "light": {"background": {"hex": "#f9f7f1"}, "surface": {"hex": "#efece3"}, "primary": {"hex": "#f50023"}, "on_primary": {"hex": "#ffffff"}, "accent": {"hex": "#c8a84b"}, "on_accent": {"hex": "#0a0a0a"}, "text_primary": {"hex": "#121212"}, "text_muted": {"hex": "#566273"}},
                 }
             }]
         }), encoding="utf-8")
 
         entries = entries_from_manifest(fm_path, ["AURELIUS", "NEXUS"])
-        assert len(entries) == 4
+        custom_entries = entries_from_urls(["https://app.envato.com/fonts/1de94cfa-3ac9-4fd1-b5b2-113405506be3"], ["AURELIUS"])
+        assert len(entries) == 4 and len(custom_entries) == 1
 
         mock_page = lambda url, title_hint="": {
             "title": title_hint or "Mock Font",
@@ -507,23 +581,25 @@ def run_unit_tests() -> int:
         gal = process_batch(entries, str(out_dir), chroma_path=cm_path, svg_fetcher=mock_svg, page_fetcher=mock_page)
         assert gal.exists()
         html_out = gal.read_text(encoding="utf-8")
-        assert "#38b6ff" in html_out and "Manrope" in html_out and "AURELIUS" in html_out
+        assert "#f50023" in html_out and "--on-primary" in html_out and "brand-lockup-grid" in html_out
+        assert "live-mask" in html_out and "filter: invert(1)" not in html_out
         assert (out_dir / "manifest.json").exists()
-    print("✅ ENVATO FONT PREVIEW v3.0 UNIT TESTS PASSED (manifest + chroma + live SVG widget)")
+    print("✅ ENVATO FONT PREVIEW v4.0 UNIT TESTS PASSED (4-color brand lockups, --envato-urls, CSS mask tint, 0 B/W invert)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Envato Elements Font Previewer & SVG Extractor v3.0")
+    parser = argparse.ArgumentParser(description="Envato Elements Full-Color Brand Previewer v4.0")
     parser.add_argument("url", nargs="?", help="URL de fuente Envato (app.envato.com o elements.envato.com) o UUID")
     parser.add_argument("text", nargs="?", help="Texto a previsualizar")
     parser.add_argument("--out", "-o", default="./font_previews", help="Carpeta de salida")
     parser.add_argument("--batch", "-b", help="Archivo JSON con [{url, text}]")
     parser.add_argument("--from-manifest", type=Path, help="Leer fuentes Envato desde font_manifest.json")
-    parser.add_argument("--chroma", type=Path, default=None, help="Chroma manifest JSON para ambientar Dark/Light")
-    parser.add_argument("--texts", default="BRAND,MARCA", help="Textos separados por coma para --from-manifest")
+    parser.add_argument("--envato-urls", default="", help="URLs/UUIDs directas de Envato separadas por coma")
+    parser.add_argument("--chroma", type=Path, default=None, help="Chroma manifest JSON para aplicar colores reales de marca")
+    parser.add_argument("--texts", default="BRAND,MARCA", help="Textos separados por coma para --from-manifest o --envato-urls")
     parser.add_argument("--include-shortlist", action="store_true", help="Incluir alternativas vanguardia de shortlist_candidates")
-    parser.add_argument("--title", default="Visualizador de Fuentes Envato + Google Fonts", help="Título HTML de la galería")
+    parser.add_argument("--title", default="Visualizador Full-Color Envato + Google Fonts", help="Título HTML de la galería")
     parser.add_argument("--test", action="store_true", help="Ejecutar pruebas unitarias offline")
     args = parser.parse_args()
 
@@ -531,19 +607,22 @@ def main() -> int:
         return run_unit_tests()
 
     items: List[Dict[str, Any]] = []
+    texts = [t.strip() for t in args.texts.split(",") if t.strip()] or ["MARCA"]
     if args.from_manifest:
-        texts = [t.strip() for t in args.texts.split(",") if t.strip()]
-        items = entries_from_manifest(args.from_manifest, texts or ["BRAND"], include_shortlist=args.include_shortlist)
-    elif args.batch:
+        items.extend(entries_from_manifest(args.from_manifest, texts, include_shortlist=args.include_shortlist))
+    if args.envato_urls:
+        raw_urls = [u.strip() for u in args.envato_urls.split(",") if u.strip()]
+        items.extend(entries_from_urls(raw_urls, texts))
+    if not items and args.batch:
         items = json.loads(Path(args.batch).read_text(encoding="utf-8"))
-    elif args.url and args.text:
+    elif not items and args.url and args.text:
         items = [{"url": args.url, "text": args.text}]
-    else:
+    elif not items:
         parser.print_help()
         return 1
 
     gal = process_batch(items, args.out, chroma_path=args.chroma, gallery_title=args.title)
-    print(f"✅ Galería HTML Envato generada en: {gal}")
+    print(f"✅ Galería HTML Full-Color Envato v4.0 generada en: {gal}")
     return 0
 
 
