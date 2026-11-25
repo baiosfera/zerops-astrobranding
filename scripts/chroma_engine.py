@@ -466,7 +466,13 @@ def extract_oraculo_and_vertical_signals(
             sig["bazi_month_element"] = str(fp["month"]["element"])
         ys = s4.get("yong_shen", {})
         if ys.get("element"):
-            sig["yong_shen"] = str(ys["element"]).split()[0]
+            ys_text = str(ys["element"]).lower()
+            for token, norm in (("water", "Water"), ("agua", "Water"), ("wood", "Wood"), ("madera", "Wood"), ("fire", "Fire"), ("fuego", "Fire"), ("earth", "Earth"), ("tierra", "Earth"), ("metal", "Metal")):
+                if re.search(rf"\b{token}\b", ys_text):
+                    sig["yong_shen"] = norm
+                    break
+            else:
+                sig["yong_shen"] = str(ys["element"]).split()[0].title()
 
     if brief_path and brief_path.is_file():
         sig["sources"].append(f"brief:{brief_path.name}")
