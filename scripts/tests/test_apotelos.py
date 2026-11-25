@@ -376,6 +376,9 @@ class TestDynamicZeropsDiscovery(unittest.TestCase):
         msg = apotelos.build_default_messaging_spec(fn, currency="COP")
         self.assertEqual(msg.currency, "COP")
         self.assertEqual(msg.tofu[0].template_ref, "lead_magnet_calculator_delivery")
+        self.assertEqual(len(msg.tofu), 2)
+        self.assertEqual(msg.tofu[1].channel, "whatsapp")
+        self.assertTrue(msg.tofu[1].is_transactional)
         self.assertEqual(len(msg.mofu), 2)
 
         v = apotelos.DynamicVerticalSpec(
@@ -389,6 +392,15 @@ class TestDynamicZeropsDiscovery(unittest.TestCase):
         manifest = apotelos.compile_blackboard_manifest(eco, v)
         self.assertIn("iionpay", manifest.deployment_spec["gateways"])
         self.assertIn("dlocalgo", manifest.deployment_spec["gateways"])
+        self.assertEqual(manifest.seo_aeo_spec["schema_org"]["@type"], "ProfessionalService")
+        self.assertNotIn("Descubrí", manifest.copy_manifest["hook_3s"])
+
+        out_astro = self.temp_path / "bifurcated.astro" if hasattr(self, "temp_path") else Path(tempfile.mkdtemp()) / "bifurcated.astro"
+        apotelos.scaffold_astro_page(manifest, out_astro)
+        rendered = out_astro.read_text(encoding="utf-8")
+        self.assertNotIn("El Primer Dominó (τε-0)", rendered)
+        self.assertNotIn("Oferta de Conversión Inversa", rendered)
+        self.assertIn("--brand-primary", rendered)
 
 
 if __name__ == "__main__":

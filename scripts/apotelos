@@ -70,6 +70,7 @@ class MessagingSequenceStep(BaseModel):
     priority: str = Field(default=MessagePriority.P2_LIFECYCLE.value, description="Message priority")
     template_ref: str = Field(..., description="Semantic template identifier (e.g. welcome_email, cart_recovery)")
     condition: Optional[str] = Field(default=None, description="Optional condition rule (e.g. unconverted, opt_in)")
+    is_transactional: bool = Field(default=False, description="Bypass quiet-hours/caps for immediate T+0 delivery")
 
 
 class AntiCollisionPolicy(BaseModel):
@@ -1522,7 +1523,14 @@ def build_default_messaging_spec(funnel_type: str, currency: str = "USD") -> Mes
                 MessagingSequenceStep(
                     step_order=1, channel="email", delay_minutes=0,
                     priority=MessagePriority.P1_TRANSACTIONAL.value,
-                    template_ref="lead_magnet_calculator_delivery"
+                    template_ref="lead_magnet_calculator_delivery",
+                    is_transactional=True
+                ),
+                MessagingSequenceStep(
+                    step_order=2, channel="whatsapp", delay_minutes=0,
+                    priority=MessagePriority.P1_TRANSACTIONAL.value,
+                    template_ref="lead_magnet_calculator_whatsapp_delivery",
+                    is_transactional=True
                 )
             ],
             mofu=[
@@ -1635,15 +1643,20 @@ def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerti
     }
 
     # Domino 2 (τε-2): Descubrimiento AI-First & SEO
+    schema_type = (
+        "Product"
+        if vert.funnel_type == CommercialFunnelType.DIRECT_CHECKOUT
+        else ("LocalBusiness" if vert.funnel_type == CommercialFunnelType.LOCAL_SERVICE else "ProfessionalService")
+    )
     seo_aeo = {
         "llms_txt": {
             "entity_name": vert.display_name,
-            "category": "Ecosistema de Conversión Soberana",
+            "category": "Servicios Profesionales y Sistemas Digitales",
             "url_slug": f"/{vert.vertical_slug}"
         },
         "schema_org": {
             "@context": "https://schema.org",
-            "@type": "Product" if vert.funnel_type == CommercialFunnelType.DIRECT_CHECKOUT else "LocalBusiness",
+            "@type": schema_type,
             "name": vert.display_name,
             "description": vert.unique_mechanism.get("name", f"Metodología {vert.display_name}")
         }
@@ -1652,7 +1665,7 @@ def compile_blackboard_manifest(eco: UniversalBrandEcosystem, vert: DynamicVerti
     # Domino 1 (τε-3): Copywriting & Oferta Irresistible
     avatar_pain = vert.target_avatar.get("pain_points", ["Frustración con alternativas genéricas"])[0]
     copy_m = {
-        "hook_3s": f"¿Cansado de {avatar_pain.lower()}? Descubrí cómo resolverlo sin intermediarios.",
+        "hook_3s": f"¿Cansado de {avatar_pain.lower()}? Descubre cómo resolverlo con sistemas propios.",
         "hormozi_equation": {
             "dream_outcome": f"Dominio absoluto y transformación con {vert.display_name}",
             "perceived_likelihood": "Validado con metodología de categoría única",
@@ -1825,20 +1838,18 @@ def generate_markdown_dossier(eco: UniversalBrandEcosystem, output_path: Optiona
 # 5b. ASTRO 5 SSR CODE SCAFFOLDING & MATERIALIZATION (No Bare Skeletons)
 # =====================================================================
 
-def resolve_scaffold_target_dir(brand_slug: str, custom_output_dir: Optional[str] = None) -> Path:
+def resolve_scaffold_target_dir(brand_slug: str, custom_output_dir: Optional[str] = None, vertical_slug: Optional[str] = None) -> Path:
     """
     Resolve the target directory for Astro 5 SSR scaffolding.
-    CRITICAL ARCHITECTURAL INVARIANT: NEVER write brand pages into the upstream
-    chassis repository (/var/www/zerops-astrobranding). Brand apps live in dedicated
-    runtime mounts (/var/www/webdev, /var/www/web), brand app repos (/var/www/apps/<brand>),
-    or explicitly provided output directories.
+    Never writes into upstream chassis (/var/www/zerops-astrobranding) or creates
+    unrequested global apps/ folders when a workspace web/ folder exists.
     """
     if custom_output_dir:
         p = Path(custom_output_dir)
         p.mkdir(parents=True, exist_ok=True)
         return p
 
-    # 1. Active application runtime mount in Zerops (standard dev workspace)
+    # 1. Active application runtime mount in Zerops
     for runtime_cand in [
         Path("/var/www/webdev/src/pages"),
         Path("/var/www/web/src/pages"),
@@ -1848,14 +1859,26 @@ def resolve_scaffold_target_dir(brand_slug: str, custom_output_dir: Optional[str
         if runtime_cand.exists() and runtime_cand.is_dir():
             return runtime_cand
 
-    # 2. Dedicated brand app workspace outside chassis
+    # 2. Workspace web scaffold folder if project dev/workspaces/<vertical> exists
+    ls_root = get_local_storage_path()
+    proj = (os.getenv("PROJECT_NAME") or brand_slug).strip()
+    if ls_root.exists():
+        for ch in ls_root.iterdir():
+            if ch.is_dir() and ch.name.lower() in (proj.lower(), brand_slug.lower()):
+                vslug = (vertical_slug or brand_slug).lower()
+                ws_web = ch / "dev" / "workspaces" / vslug / "web" / "scaffold" / "src" / "pages"
+                if (ch / "dev" / "workspaces" / vslug).is_dir():
+                    ws_web.mkdir(parents=True, exist_ok=True)
+                    return ws_web
+
+    # 3. Dedicated brand app workspace outside chassis
     brand_app_pages = Path(f"/var/www/apps/{brand_slug}/src/pages")
     if brand_app_pages.parent.exists():
         brand_app_pages.mkdir(parents=True, exist_ok=True)
         return brand_app_pages
 
-    # 3. Persistent LocalStorage brand app workspace (outside git chassis)
-    ls_pages = get_local_storage_path() / "apps" / brand_slug / "src" / "pages"
+    # 4. Persistent LocalStorage fallback (outside git chassis)
+    ls_pages = ls_root / "apps" / brand_slug / "src" / "pages"
     ls_pages.mkdir(parents=True, exist_ok=True)
     return ls_pages
 
@@ -1934,7 +1957,7 @@ def scaffold_astro_page(
     offer_struct = manifest.deployment_spec.get("offer_structure", f"Oferta {vert_title}")
     guarantee = manifest.copy_manifest.get("risk_reversal_guarantee", "Garantía de satisfacción incondicional")
     dream_outcome = manifest.copy_manifest.get("hormozi_equation", {}).get("dream_outcome", f"Transformación completa con {vert_title}")
-    hook_3s = manifest.copy_manifest.get("hook_3s", f"Descubrí la solución definitiva con {vert_title}")
+    hook_3s = manifest.copy_manifest.get("hook_3s", f"Descubre la solución definitiva con {vert_title}")
 
     cta_primary = "Comprar Ahora (Pago Seguro)" if funnel == CommercialFunnelType.DIRECT_CHECKOUT else ("Agendar Cita en Calendario" if funnel == CommercialFunnelType.BOOKING_CALENDAR else "Iniciar Consulta por WhatsApp")
     checkout_url = f"/checkout?vertical={manifest.vertical_slug}" if funnel == CommercialFunnelType.DIRECT_CHECKOUT else ("#agendar" if funnel == CommercialFunnelType.BOOKING_CALENDAR else "#whatsapp")
@@ -1978,27 +2001,27 @@ const schemaData = {schema_json};
     }})();
   </script>
 
-  <div class="relative overflow-hidden min-h-screen bg-neutral-950 text-neutral-100">
+  <div class="relative overflow-hidden min-h-screen bg-[var(--brand-bg,#090d14)] text-[var(--brand-text,#f8fafc)]">
     <!-- Navbar -->
-    <nav class="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between border-b border-neutral-800/80">
+    <nav class="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between border-b border-white/10">
       <div class="flex items-center gap-3">
-        <a href="/" class="font-extrabold text-lg tracking-tight hover:text-indigo-400 transition-colors">
+        <a href="/" class="font-extrabold text-lg tracking-tight hover:text-[var(--brand-primary,#38b6ff)] transition-colors">
           {brand_title}
         </a>
-        <span class="text-neutral-600">/</span>
-        <span class="text-indigo-400 text-sm font-semibold">{manifest.vertical_slug}</span>
+        <span class="opacity-40">/</span>
+        <span class="text-[var(--brand-primary,#38b6ff)] text-sm font-semibold">{vert_title}</span>
       </div>
       <div class="flex items-center gap-4">
-        <a href="#conversion" class="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 transition-all">
+        <a href="#conversion" class="px-4 py-2 text-xs font-semibold rounded-lg bg-[var(--brand-primary,#38b6ff)] text-[var(--brand-bg,#090d14)] transition-all">
           {cta_primary}
         </a>
       </div>
     </nav>
 
-    <!-- Hero Section: Domino 1 (3s Hook + Hormozi Dream Outcome) -->
+    <!-- Hero Section -->
     <section class="max-w-5xl mx-auto px-6 pt-20 pb-20 text-center">
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-950/60 border border-indigo-800/50 text-indigo-300 text-xs font-semibold mb-6">
-        <span class="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--brand-surface,#121824)] border border-white/15 text-[var(--brand-primary,#38b6ff)] text-xs font-semibold mb-6">
+        <span class="w-2 h-2 rounded-full bg-[var(--brand-accent,#7be5ff)]"></span>
         {mechanism}
       </div>
 
@@ -2006,45 +2029,45 @@ const schemaData = {schema_json};
         {hook_3s}
       </h1>
 
-      <p class="mt-6 text-lg sm:text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed">
+      <p class="mt-6 text-lg sm:text-xl opacity-80 max-w-3xl mx-auto leading-relaxed">
         {dream_outcome}
       </p>
 
       <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-        <a href="#conversion" class="w-full sm:w-auto px-8 py-4 text-base font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/25 transition-all transform hover:-translate-y-0.5">
+        <a href="#conversion" class="w-full sm:w-auto px-8 py-4 text-base font-bold rounded-xl bg-[var(--brand-primary,#38b6ff)] text-[var(--brand-bg,#090d14)] transition-all">
           {cta_primary}
         </a>
-        <a href="#mecanismo" class="w-full sm:w-auto px-6 py-4 text-base font-medium rounded-xl border border-neutral-800 hover:border-neutral-700 text-neutral-300 hover:text-white transition-all">
-          Ver Mecanismo Único
+        <a href="#mecanismo" class="w-full sm:w-auto px-6 py-4 text-base font-medium rounded-xl border border-white/15 opacity-90 hover:opacity-100 transition-all">
+          Cómo funciona
         </a>
       </div>
     </section>
 
-    <!-- Domino 0: Mecanismo Único Monopolístico (Category of One) -->
-    <section id="mecanismo" class="max-w-5xl mx-auto px-6 py-20 border-t border-neutral-900">
+    <!-- Propuesta Diferenciada -->
+    <section id="mecanismo" class="max-w-5xl mx-auto px-6 py-20 border-t border-white/10">
       <div class="text-center max-w-3xl mx-auto">
-        <span class="text-xs font-bold uppercase tracking-widest text-indigo-400">El Primer Dominó (τε-0)</span>
-        <h2 class="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+        <span class="text-xs font-bold uppercase tracking-widest text-[var(--brand-primary,#38b6ff)]">Método de trabajo</span>
+        <h2 class="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight">
           {mechanism}
         </h2>
-        <p class="mt-4 text-base sm:text-lg text-neutral-400 leading-relaxed">
+        <p class="mt-4 text-base sm:text-lg opacity-80 leading-relaxed">
           {contrast}
         </p>
       </div>
     </section>
 
-    <!-- Domino 4: Oferta & Conversión (τε-Final) -->
-    <section id="conversion" class="max-w-4xl mx-auto px-6 py-20 border-t border-neutral-900">
-      <div class="rounded-2xl bg-neutral-900/70 border border-neutral-800 p-8 sm:p-12 text-center shadow-2xl shadow-black/50">
-        <span class="text-xs font-bold uppercase tracking-widest text-emerald-400">Oferta de Conversión Inversa</span>
-        <h3 class="mt-2 text-3xl font-bold text-white tracking-tight">
+    <!-- Oferta y Siguiente Paso -->
+    <section id="conversion" class="max-w-4xl mx-auto px-6 py-20 border-t border-white/10">
+      <div class="rounded-2xl bg-[var(--brand-surface,#121824)] border border-white/15 p-8 sm:p-12 text-center shadow-2xl">
+        <span class="text-xs font-bold uppercase tracking-widest text-[var(--brand-accent,#7be5ff)]">Siguiente paso</span>
+        <h3 class="mt-2 text-3xl font-bold tracking-tight">
           {offer_struct}
         </h3>
-        <p class="mt-4 text-sm text-neutral-400 max-w-xl mx-auto">
-          🛡️ {guarantee}
+        <p class="mt-4 text-sm opacity-80 max-w-xl mx-auto">
+          {guarantee}
         </p>
         <div class="mt-8">
-          <a href="{checkout_url}" class="inline-block w-full sm:w-auto px-10 py-5 text-lg font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5">
+          <a href="{checkout_url}" class="inline-block w-full sm:w-auto px-10 py-5 text-lg font-bold rounded-xl bg-[var(--brand-primary,#38b6ff)] text-[var(--brand-bg,#090d14)] transition-all">
             {cta_primary}
           </a>
         </div>

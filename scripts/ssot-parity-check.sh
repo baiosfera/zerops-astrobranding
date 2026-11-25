@@ -186,6 +186,9 @@ LINK_PAIRS=(
     "brand-play:$CATALOG_REPO/scripts/brand-play"
     "orchesbrand:$CATALOG_REPO/bin/orchesbrand"
     "anti-slop-linter:$CATALOG_REPO/scripts/anti_slop_linter.py"
+    "chroma-engine:$CATALOG_REPO/scripts/chroma_engine.py"
+    "fontgen-engine:$CATALOG_REPO/scripts/fontgen_engine.py"
+    "envato-font-preview:$CATALOG_REPO/scripts/envato_font_preview.py"
     "mega-downloader:$CATALOG_REPO/scripts/mega_downloader.py"
     "engram-sync:$CATALOG_REPO/scripts/engram-sync"
     "engram-mcp:$CATALOG_REPO/scripts/engram-mcp"
@@ -199,6 +202,7 @@ for pair in "${LINK_PAIRS[@]}"; do
     target="${pair#*:}"
     bin_link="$LOCAL_BASE/.bin/$name"
     local_link="${HOME:-/home/zerops}/.local/bin/$name"
+    usr_link="/usr/local/bin/$name"
     if [ ! -f "$target" ]; then
         echo "❌ Missing SSoT script: $target"
         ERRORS=$((ERRORS + 1))
@@ -217,6 +221,34 @@ for pair in "${LINK_PAIRS[@]}"; do
     else
         echo "✓ CLI symlink exact: $name"
     fi
+    if [ -e "$usr_link" ] || [ -L "$usr_link" ]; then
+        if [ "$(readlink -f "$usr_link")" != "$(readlink -f "$target")" ]; then
+            if [ "$AUTO_FIX_MODE" = true ]; then
+                sudo ln -sfn "$bin_link" "$usr_link" 2>/dev/null || true
+                echo "⚡ Fixed /usr/local/bin/$name -> $bin_link"
+            else
+                echo "❌ /usr/local/bin/$name points to $(readlink -f "$usr_link"), expected $target"
+                ERRORS=$((ERRORS + 1))
+            fi
+        fi
+    fi
+done
+
+if [ -d "$SKILLS_REPO/fontgen/scripts" ] && [ -f "$CATALOG_REPO/scripts/fontgen_engine.py" ]; then
+    compare_files "fontgen_engine.py (repo <-> skill)" "$CATALOG_REPO/scripts/fontgen_engine.py" "$SKILLS_REPO/fontgen/scripts/fontgen_engine.py"
+fi
+for art_dir in blueprints templates; do
+    if [ -d "$CATALOG_REPO/$art_dir" ] && [ -d "$LOCAL_BASE/artifacts/$art_dir" ]; then
+        if diff -rq "$CATALOG_REPO/$art_dir" "$LOCAL_BASE/artifacts/$art_dir" >/dev/null 2>&1; then
+            echo "✓ Parity verified: artifacts/$art_dir"
+        elif [ "$AUTO_FIX_MODE" = true ]; then
+            rsync -a --delete "$CATALOG_REPO/$art_dir/" "$LOCAL_BASE/artifacts/$art_dir/"
+            echo "⚡ Synced (--fix): artifacts/$art_dir"
+        else
+            echo "❌ DRIFT detected in $LOCAL_BASE/artifacts/$art_dir vs $CATALOG_REPO/$art_dir"
+            ERRORS=$((ERRORS + 1))
+        fi
+    fi
 done
 
 if [ -d "$CATALOG_REPO/scripts/__pycache__" ]; then
@@ -228,7 +260,7 @@ fi
 
 if [ "$WITH_TESTS" = true ]; then
     echo "--- [Optional] Behavioral CLI Self-Tests (--with-tests) ---"
-    for cli_cmd in "apotelos test" "brand-play test" "mega-downloader --test"; do
+    for cli_cmd in "apotelos test" "brand-play test" "anti-slop-linter --test" "chroma-engine --test" "fontgen-engine --test" "envato-font-preview --test" "orchesbrand --test" "mega-downloader --test"; do
         bin_name="${cli_cmd%% *}"
         if command -v "$bin_name" >/dev/null; then
             if out=$(PYTHONDONTWRITEBYTECODE=1 $cli_cmd 2>&1); then

@@ -31,6 +31,9 @@ for core_cli in \
     "skills-suite-validate:skills-suite-validate.sh" \
     "skills-sync:skills-sync.sh" \
     "anti-slop-linter:anti_slop_linter.py" \
+    "chroma-engine:chroma_engine.py" \
+    "fontgen-engine:fontgen_engine.py" \
+    "envato-font-preview:envato_font_preview.py" \
     "zcp-mount:zcp-mount"; do
     cli_name="${core_cli%%:*}"
     cli_src_file="${core_cli#*:}"

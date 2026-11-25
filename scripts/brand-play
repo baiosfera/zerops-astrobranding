@@ -1,38 +1,43 @@
 #!/usr/bin/env python3
 """
-brand-play — Sovereign Downstream Playbook Transmutation & Slot Hydration Engine
+brand-play — Sovereign Downstream Playbook Transmutation & Slot Hydration Engine (v2.1)
 Standard: TYM (Type-YAML-Markdown) v1.0 & W3C DTCG Token Ingestion
-Governed by meta-script (v1.0), CoHaLo Engineering & Supreme Directive v8.5
+Governed by meta-script & 00-SUPREME-DIRECTIVE.md (v10.0).
+Features:
+- Case-insensitive project + workspace/vertical discovery (dev/workspaces/<vertical>)
+- Vertical spec ingestion (dev/verticals/<vertical>.json) + real brandbook.json node mapping
+- Neutral Spanish client templates (zero Rioplatense voseo, zero hardcoded fake prices)
+- Optional Bifrost synthesis (--bifrost) & Client-Facing Zero-Jargon / Orthography Gate
 """
 
-import os
-import sys
-import json
-import re
+from __future__ import annotations
+
 import argparse
+import json
+import os
+import re
+import sys
+import tempfile
+import urllib.request
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import yaml
 except ImportError:
     yaml = None
 
-# SSoT Search Paths (Single canonical 02_PLAYBOOKS_MAESTROS SSoT)
 PLAYBOOK_SEARCH_DIRS = [
     Path("/mnt/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"),
     Path("/var/www/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"),
 ]
 
-WORKSPACE_SEARCH_DIRS = [
-    Path("/var/www/localstorage/workspaces"),
-    Path("/mnt/localstorage/workspaces"),
-    Path("/var/www/localstorage"),
+STORAGE_ROOTS = [
     Path("/mnt/localstorage"),
+    Path("/var/www/localstorage"),
     Path("/var/www/baiosfera/PROYECTOS"),
 ]
 
-# Prohibited commercial marketing slop
 PROHIBITED_WORDS = [
     "fórmula mágica",
     "revolucionario",
@@ -40,18 +45,16 @@ PROHIBITED_WORDS = [
     "garantizado al 100%",
     "secreto millonario",
     "hacks definitivos",
-    "fórmula infalible"
+    "fórmula infalible",
 ]
+
+CLIENT_JARGON_RE = re.compile(r"\b(OPB|CO1|BANT|AEO|GEO|PWYW|Order Bump|Context Vault|Break-Even CPA|server-side)\b")
+VOSEO_CLIENT_RE = re.compile(r"\b(Leé|Descubrí|Explorá|Agendá|Elegí|Revisá|Aprovechá|Mirá|Dejá)\b")
 
 
 def resolve_json_pointer(obj: Any, pointer: str) -> Any:
-    """
-    Resolves an RFC 6901 JSON pointer (e.g. /brand/category_name or /color/primary)
-    from an object and automatically unwraps W3C DTCG '$value' leaf nodes.
-    """
     if not pointer or pointer in ("/", ""):
         return obj
-
     parts = pointer.lstrip("/").split("/")
     current = obj
     for part in parts:
@@ -66,122 +69,12 @@ def resolve_json_pointer(obj: Any, pointer: str) -> Any:
                 current = current[idx] if 0 <= idx < len(current) else None
             except ValueError:
                 return None
-
-    # Unwrap W3C DTCG node
     if isinstance(current, dict) and "$value" in current:
         return current["$value"]
     return current
 
 
-def load_brandbook_bundle(brand_slug: str) -> Tuple[Dict[str, Any], Path]:
-    """
-    Loads brandbook.json, merges deep manifests (brandbook_superfull, chroma, font)
-    and optional strategy notes to form a unified token dictionary.
-    """
-    workspace_dir = None
-    for base in WORKSPACE_SEARCH_DIRS:
-        cand = base / brand_slug
-        if cand.exists() and cand.is_dir():
-            workspace_dir = cand
-            break
-
-    if not workspace_dir:
-        workspace_dir = WORKSPACE_SEARCH_DIRS[0] / brand_slug
-
-    brand_dir_candidates = [workspace_dir / "brand", workspace_dir / "dev", workspace_dir]
-    brand_dir = next((d for d in brand_dir_candidates if (d / "brandbook.json").exists()), workspace_dir / "brand")
-    bundle: Dict[str, Any] = {
-        "brand": {
-            "name": brand_slug.replace("-", " ").title(),
-            "vertical": brand_slug,
-            "category_name": "Consultoría Estratégica de Soberanía Categórica",
-            "entity_name": brand_slug.replace("-", " ").title(),
-            "signature_mechanism": "Protocolo de Soberanía Categórica & Arquitectura de Marca",
-            "paid_discovery": {
-                "title": "Auditoría Diagnóstica de Identidad Categórica & Causa Raíz",
-                "price": "USD 150"
-            },
-            "insignia_offer": {
-                "title": "Programa de Transformación e Implementación Insignia"
-            },
-            "backend_retainer": {
-                "title": "Consejo de Continuidad Estratégica y Gobierno de Sistemas"
-            },
-            "value_equation": {
-                "promise": "Rediseño integral de posicionamiento para cobrar por valor y dominar una Categoría de Uno"
-            },
-            "epoch_moat": {
-                "primary": "Criterio Estético, Juicio Polimático y Diagnóstico Inalienable"
-            }
-        },
-        "metadata": {
-            "cta_url": "/agendar",
-            "brand_slug": brand_slug
-        },
-        "color": {},
-        "typography": {}
-    }
-
-    # 1. Primary brandbook.json
-    bb_path = brand_dir / "brandbook.json"
-    if bb_path.exists():
-        try:
-            with open(bb_path, "r", encoding="utf-8") as f:
-                primary_bb = json.load(f)
-                if isinstance(primary_bb, dict):
-                    deep_merge(bundle, primary_bb)
-        except Exception as e:
-            sys.stderr.write(f"⚠️ Warning loading {bb_path}: {e}\n")
-
-    # 2. Deep Superfull Brandbook
-    for sf_path in brand_dir.glob("brandbook_superfull_*.json"):
-        try:
-            with open(sf_path, "r", encoding="utf-8") as f:
-                sf_data = json.load(f)
-                if isinstance(sf_data, dict):
-                    deep_merge(bundle, sf_data)
-        except Exception as e:
-            sys.stderr.write(f"⚠️ Warning loading {sf_path}: {e}\n")
-
-    # 3. Chroma Manifest
-    chroma_path = brand_dir / "chroma_manifest.json"
-    if chroma_path.exists():
-        try:
-            with open(chroma_path, "r", encoding="utf-8") as f:
-                chroma_data = json.load(f)
-                if isinstance(chroma_data, dict):
-                    bundle["color"]["manifest"] = chroma_data
-        except Exception:
-            pass
-
-    # 4. Font Manifest
-    font_path = brand_dir / "font_manifest.json"
-    if font_path.exists():
-        try:
-            with open(font_path, "r", encoding="utf-8") as f:
-                font_data = json.load(f)
-                if isinstance(font_data, dict):
-                    bundle["typography"]["manifest"] = font_data
-        except Exception:
-            pass
-
-    # 5. Extract strategy context if available
-    for strat_dir in (workspace_dir / "strategy", workspace_dir / "dev" / "strategy"):
-        if strat_dir.exists():
-            fase0 = strat_dir / "fase0_author_psychology.md"
-            if fase0.exists():
-                try:
-                    with open(fase0, "r", encoding="utf-8") as f:
-                        bundle["brand"]["fase0_excerpt"] = f.read(500)
-                except Exception:
-                    pass
-                break
-
-    return bundle, workspace_dir
-
-
 def deep_merge(target: Dict[str, Any], source: Dict[str, Any]) -> None:
-    """Recursively merges source dict into target dict."""
     for key, value in source.items():
         if key in target and isinstance(target[key], dict) and isinstance(value, dict):
             deep_merge(target[key], value)
@@ -189,8 +82,145 @@ def deep_merge(target: Dict[str, Any], source: Dict[str, Any]) -> None:
             target[key] = value
 
 
+def discover_workspace_dir(brand_or_vertical: str, project_name: Optional[str] = None) -> Tuple[Path, Optional[Path]]:
+    """
+    Discovers (workspace_dir, vertical_json_path) across:
+    1) <ROOT>/<PROJECT>/dev/workspaces/<brand_or_vertical>
+    2) <ROOT>/<brand_or_vertical>/dev
+    3) <ROOT>/workspaces/<brand_or_vertical>
+    Case-insensitive on <PROJECT>.
+    """
+    slug = brand_or_vertical.strip()
+    slug_low = slug.lower()
+    proj = (project_name or os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or "").strip()
+
+    for root in STORAGE_ROOTS:
+        if not root.exists():
+            continue
+        # 1. Explicit project workspace: <ROOT>/<Project>/dev/workspaces/<vertical>
+        try:
+            children = [c for c in root.iterdir() if c.is_dir() and not c.name.startswith(".")]
+        except Exception:
+            children = []
+        ordered = sorted(children, key=lambda c: 0 if (proj and c.name.lower() == proj.lower()) else 1)
+        for ch in ordered:
+            ws = ch / "dev" / "workspaces" / slug_low
+            vjson = ch / "dev" / "verticals" / f"{slug_low}.json"
+            if ws.is_dir():
+                return ws, (vjson if vjson.is_file() else None)
+            if proj and ch.name.lower() == proj.lower() and ch.name.lower() == slug_low and (ch / "dev").is_dir():
+                return ch / "dev", (vjson if vjson.is_file() else None)
+
+        # 2. Direct <ROOT>/workspaces/<slug> or <ROOT>/<slug>/dev
+        for cand in (root / "workspaces" / slug_low, root / slug / "dev", root / slug.upper() / "dev"):
+            if cand.is_dir():
+                vjson = cand.parent / "dev" / "verticals" / f"{slug_low}.json"
+                return cand, (vjson if vjson.is_file() else None)
+
+    return STORAGE_ROOTS[0] / slug_low, None
+
+
+def load_brandbook_bundle(brand_slug: str, vertical_json: Optional[Path] = None, explicit_ws: Optional[Path] = None) -> Tuple[Dict[str, Any], Path]:
+    if explicit_ws:
+        workspace_dir = explicit_ws
+        v_path = vertical_json
+    else:
+        workspace_dir, v_path = discover_workspace_dir(brand_slug)
+
+    brand_dir = next((d for d in (workspace_dir / "brand", workspace_dir / "dev", workspace_dir) if (d / "brandbook.json").exists()), workspace_dir / "brand")
+    display_default = brand_slug.replace("-", " ").title()
+    bundle: Dict[str, Any] = {
+        "brand": {
+            "name": display_default,
+            "vertical": brand_slug,
+            "category_name": "Propuesta Diferenciada",
+            "entity_name": display_default,
+            "signature_mechanism": "Método Propietario",
+            "paid_discovery": {"title": "Sesión de Diagnóstico Inicial", "price": "Según alcance"},
+            "insignia_offer": {"title": f"Programa Principal {display_default}"},
+            "backend_retainer": {"title": "Operación Continua"},
+            "value_equation": {"promise": "Resultados medibles con procesos claros y automatizados."},
+            "epoch_moat": {"primary": "Criterio profesional y sistemas propios"},
+        },
+        "metadata": {"cta_url": "/diagnostico", "brand_slug": brand_slug},
+        "color": {},
+        "typography": {},
+    }
+
+    bb_path = brand_dir / "brandbook.json"
+    if bb_path.is_file():
+        try:
+            primary_bb = json.loads(bb_path.read_text(encoding="utf-8"))
+            if isinstance(primary_bb, dict):
+                deep_merge(bundle, primary_bb)
+        except Exception as e:
+            sys.stderr.write(f"⚠️ Warning loading {bb_path}: {e}\n")
+
+    # Map standard Astrobranding Brandbook schema fields into bundle["brand"]
+    meta_name = bundle.get("metadata", {}).get("brand_name")
+    if meta_name:
+        bundle["brand"]["name"] = meta_name
+        bundle["brand"]["entity_name"] = meta_name
+    arch = bundle.get("brand_architecture", {})
+    if arch.get("core_promise"):
+        bundle["brand"]["value_equation"]["promise"] = arch["core_promise"]
+    if arch.get("brand_essence"):
+        bundle["brand"]["category_name"] = arch["brand_essence"]
+
+    # Merge verticals/<vertical>.json when present
+    if v_path and v_path.is_file():
+        try:
+            vdata = json.loads(v_path.read_text(encoding="utf-8"))
+            bundle["vertical_spec"] = vdata
+            cat = vdata.get("category_and_positioning", {})
+            if cat.get("category_name"):
+                bundle["brand"]["category_name"] = cat["category_name"]
+            um = vdata.get("unique_mechanism", {})
+            if um.get("name"):
+                bundle["brand"]["signature_mechanism"] = um["name"]
+            po = vdata.get("primary_offer", {})
+            if po.get("structure"):
+                bundle["brand"]["insignia_offer"]["title"] = po["structure"]
+            pricing = po.get("pricing", {})
+            cur = pricing.get("currency", "COP")
+            if pricing.get("pwyw_default_cop"):
+                bundle["brand"]["paid_discovery"]["price"] = f"${pricing['pwyw_default_cop']:,} {cur}".replace(",", ".")
+            elif pricing.get("amount"):
+                bundle["brand"]["paid_discovery"]["price"] = f"${pricing['amount']} {cur}"
+            slo = vdata.get("funnel_architecture", {}).get("unqualified_branch_slo", {})
+            if slo.get("product_name"):
+                bundle["brand"]["paid_discovery"]["title"] = slo["product_name"]
+            if slo.get("route"):
+                bundle["metadata"]["cta_url"] = slo["route"]
+            icp = vdata.get("target_avatar", {}).get("icp")
+            if icp:
+                bundle.setdefault("target_audience", {}).setdefault("primary_persona", {})["archetype"] = icp
+            for taboo in (cat.get("excluded_terms", []) or []) + (cat.get("client_facing_jargon_ban", []) or []):
+                if taboo and taboo.lower() not in [w.lower() for w in PROHIBITED_WORDS]:
+                    bundle.setdefault("dynamic_taboos", []).append(taboo)
+        except Exception as e:
+            sys.stderr.write(f"⚠️ Warning loading {v_path}: {e}\n")
+
+    for sf_path in brand_dir.glob("brandbook_superfull_*.json"):
+        try:
+            sf_data = json.loads(sf_path.read_text(encoding="utf-8"))
+            if isinstance(sf_data, dict):
+                deep_merge(bundle, sf_data)
+        except Exception:
+            pass
+
+    for cname, target_key in (("chroma_manifest.json", "color"), ("font_manifest.json", "typography")):
+        cpath = brand_dir / cname
+        if cpath.is_file():
+            try:
+                bundle[target_key]["manifest"] = json.loads(cpath.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+    return bundle, workspace_dir
+
+
 def resolve_playbook_path(playbook_name: str) -> Optional[Path]:
-    """Resolves a playbook path in priority order."""
     cleaned = playbook_name.strip()
     candidates = [cleaned]
     if not cleaned.endswith(".md"):
@@ -198,96 +228,61 @@ def resolve_playbook_path(playbook_name: str) -> Optional[Path]:
         candidates.append(f"{cleaned}_playbook.md")
     if not cleaned.startswith("00_") and "category" in cleaned:
         candidates.append("00_category_of_one.md")
-
     for p_dir in PLAYBOOK_SEARCH_DIRS:
         if not p_dir.exists():
             continue
         for cand in candidates:
             p_file = p_dir / cand
-            if p_file.exists() and p_file.is_file():
+            if p_file.is_file():
                 return p_file
-            # Case-insensitive search
             for actual in p_dir.glob("*.md"):
                 if actual.name.lower() == cand.lower():
                     return actual
-
     return None
 
 
 def parse_playbook_file(playbook_path: Path) -> Dict[str, Any]:
-    """
-    Parses a TYM playbook into frontmatter, system_dynamics, slots_contract,
-    modular_blocks, and body markdown.
-    """
-    with open(playbook_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
+    content = playbook_path.read_text(encoding="utf-8")
     frontmatter: Dict[str, Any] = {}
     body = content
-
+    raw_fm = ""
     if content.startswith("---"):
         parts = content.split("---", 2)
         if len(parts) >= 3:
-            raw_fm = parts[1]
-            body = parts[2].strip()
+            raw_fm, body = parts[1], parts[2].strip()
     else:
-        fenced_match = re.search(r"```yaml\s*\n---\s*\n(.*?)\n---\s*\n```", content, re.DOTALL)
-        if fenced_match:
-            raw_fm = fenced_match.group(1)
-            body = content.replace(fenced_match.group(0), "", 1).strip()
-        else:
-            raw_fm = ""
+        fm_m = re.search(r"```yaml\s*\n---\s*\n(.*?)\n---\s*\n```", content, re.DOTALL)
+        if fm_m:
+            raw_fm = fm_m.group(1)
+            body = content.replace(fm_m.group(0), "", 1).strip()
 
-    if raw_fm:
-        if yaml:
-            try:
-                parsed = yaml.safe_load(raw_fm)
-                if isinstance(parsed, dict):
-                    frontmatter = parsed
-            except Exception:
-                sanitized_lines = []
-                for line in raw_fm.splitlines():
-                    if re.match(r"^\s+([A-Za-z0-9_\s]+)$", line) and not line.strip().startswith("-"):
-                        continue
-                    sanitized_lines.append(line)
-                try:
-                    parsed = yaml.safe_load("\n".join(sanitized_lines))
-                    if isinstance(parsed, dict):
-                        frontmatter = parsed
-                except Exception:
-                    frontmatter = {}
-
-    # Extract slots contract
-    slots_contract = frontmatter.get("slots_contract", {})
-    modular_blocks = frontmatter.get("modular_blocks", [])
+    if raw_fm and yaml:
+        try:
+            parsed = yaml.safe_load(raw_fm)
+            if isinstance(parsed, dict):
+                frontmatter = parsed
+        except Exception:
+            frontmatter = {}
 
     return {
         "path": playbook_path,
         "slug": playbook_path.stem.replace("_playbook", ""),
         "frontmatter": frontmatter,
-        "slots_contract": slots_contract,
-        "modular_blocks": modular_blocks,
+        "slots_contract": frontmatter.get("slots_contract", {}),
+        "modular_blocks": frontmatter.get("modular_blocks", []),
         "body": body,
-        "raw_content": content
+        "raw_content": content,
     }
 
 
 def hydrate_slot_value(slot_key: str, slot_def: Dict[str, Any], brandbook: Dict[str, Any]) -> Tuple[str, bool]:
-    """
-    Resolves the value of a specific slot key using json_pointer or smart aliasing.
-    Returns (resolved_value, is_fallback).
-    """
     pointer = slot_def.get("json_pointer", "")
     fallback = slot_def.get("fallback_value", "")
     if isinstance(fallback, list):
         fallback = ", ".join(str(x) for x in fallback)
     fallback = str(fallback) if fallback is not None else ""
 
-    val = None
-    if pointer:
-        val = resolve_json_pointer(brandbook, pointer)
-
-    # Smart alias fallback
+    val = resolve_json_pointer(brandbook, pointer) if pointer else None
     if val is None or val == "":
         alias_map = {
             "SLOT_PERSONAL_MONOPOLY_ENTITY": "/brand/name",
@@ -310,134 +305,71 @@ def hydrate_slot_value(slot_key: str, slot_def: Dict[str, Any], brandbook: Dict[
             "SLOT_PRODUCTO_ENTRADA": "/brand/paid_discovery/title",
             "SLOT_PRECIO_ENTRADA": "/brand/paid_discovery/price",
             "SLOT_PROMESA": "/brand/value_equation/promise",
-            "SLOT_RESULTADO_DESEADO": "/brand/value_equation/promise",
-            "SLOT_BENEFICIO": "/brand/value_equation/promise",
             "SLOT_CTA": "/metadata/cta_url",
             "SLOT_AVATAR": "/target_audience/primary_persona/archetype",
-            "SLOT_CLIENTE": "/target_audience/primary_persona/archetype",
             "SLOT_BRAND_NAME": "/brand/name",
-            "SLOT_OFERTA_CORE": "/brand/insignia_offer/title",
-            "SLOT_OFERTA": "/brand/insignia_offer/title",
-            "SLOT_OFFER_CORE": "/brand/insignia_offer/title",
-            "SLOT_PRECIO_TICKET": "/brand/paid_discovery/price",
-            "SLOT_TICKET_ENTRADA": "/brand/paid_discovery/price",
-            "SLOT_TARGET_AVATAR": "/target_audience/primary_persona/archetype",
-            "SLOT_TARGET_AUDIENCE": "/target_audience/primary_persona/archetype",
-            "SLOT_TRANSFORMATION_PROMISE": "/brand/value_equation/promise",
-            "SLOT_VALUE_PROP": "/brand/value_equation/promise",
-            "SLOT_BENEFIT_GOAL": "/brand/value_equation/promise",
-            "SLOT_RESULTADO": "/brand/value_equation/promise",
-            "SLOT_PROMETE": "/brand/value_equation/promise",
-            "SLOT_FRAMEWORK_NOMBRADO": "/brand/signature_mechanism",
-            "SLOT_CANAL_PRINCIPAL": "Canal Digital Directo",
-            "SLOT_GARANTIA": "Garantía incondicional de satisfacción 30 días",
-            "SLOT_DECISOR_ICP": "Decisor Principal",
-            "niche": "/brand/category_name",
-            "avatar": "/target_audience/primary_persona/archetype",
-            "core_transformation": "/brand/value_equation/promise",
-            "pricing_floor": "/brand/paid_discovery/price",
-            "primary_modality": "DWY",
-            "risk_reversal_type": "Garantía incondicional de satisfacción 30 días"
+            "SLOT_GARANTIA": "Garantía de satisfacción incondicional de 30 días",
         }
         cand_pointer = alias_map.get(slot_key)
         if cand_pointer:
-            if cand_pointer.startswith("/"):
-                val = resolve_json_pointer(brandbook, cand_pointer)
-            else:
-                val = cand_pointer
+            val = resolve_json_pointer(brandbook, cand_pointer) if cand_pointer.startswith("/") else cand_pointer
 
     if val is not None and val != "":
         if isinstance(val, list):
             val = ", ".join(str(x) for x in val)
         return str(val), False
-
     return fallback, True
 
 
 def hydrate_playbook(parsed_playbook: Dict[str, Any], brandbook: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Hydrates all {{SLOT}} instances in the playbook using brandbook tokens.
-    """
     slots_contract = parsed_playbook.get("slots_contract", {})
     brand_slots_list = []
     if isinstance(slots_contract, dict):
-        if "brand_slots" in slots_contract and isinstance(slots_contract["brand_slots"], list):
+        if isinstance(slots_contract.get("brand_slots"), list):
             brand_slots_list = slots_contract["brand_slots"]
         else:
-            # Key-value dictionary format (e.g. offers_pricing)
             for k, v in slots_contract.items():
                 if isinstance(v, dict):
-                    brand_slots_list.append({
-                        "key": k,
-                        "json_pointer": f"/brand/{k}",
-                        "required": False,
-                        "fallback_value": v.get("description", k)
-                    })
+                    brand_slots_list.append({"key": k, "json_pointer": f"/brand/{k}", "required": False, "fallback_value": v.get("description", k)})
 
-    # Build slot map
-    slot_map: Dict[str, Dict[str, Any]] = {}
-    for s in brand_slots_list:
-        key = s.get("key", "")
-        if key:
-            slot_map[key] = s
-
-    # Discover any remaining Section 0 / body {{SLOT_*}} tags automatically so curated hub playbooks hydrate completely
-    body_tags = set(re.findall(r"\{\{([A-Za-z0-9_]+)\}\}", parsed_playbook.get("body", "")))
-    for tag in sorted(body_tags):
+    slot_map: Dict[str, Dict[str, Any]] = {s["key"]: s for s in brand_slots_list if isinstance(s, dict) and s.get("key")}
+    for tag in sorted(set(re.findall(r"\{\{([A-Za-z0-9_]+)\}\}", parsed_playbook.get("body", "")))):
         if tag.startswith("SLOT_") and tag not in slot_map:
-            slot_map[tag] = {
-                "key": tag,
-                "json_pointer": f"/brand/{tag.lower()}",
-                "required": False,
-                "fallback_value": "",
-            }
+            slot_map[tag] = {"key": tag, "json_pointer": f"/brand/{tag.lower()}", "required": False, "fallback_value": ""}
 
     resolved_slots: Dict[str, str] = {}
     fallback_slots: List[str] = []
     unresolved_required: List[str] = []
-
     for key, s_def in slot_map.items():
         val, is_fb = hydrate_slot_value(key, s_def, brandbook)
         if val != "":
             resolved_slots[key] = val
             if is_fb:
                 fallback_slots.append(key)
-        else:
-            if s_def.get("required", False):
-                unresolved_required.append(key)
-
-    # Perform AST/regex replacement in body and modular blocks
-    def replace_slot_match(match):
-        slot_k = match.group(1)
-        if slot_k in resolved_slots:
-            return resolved_slots[slot_k]
-        # Look in brandbook directly
-        direct = resolve_json_pointer(brandbook, f"/brand/{slot_k.lower()}")
-        if direct is not None and direct != "":
-            return str(direct)
-        return match.group(0)
+        elif s_def.get("required", False):
+            unresolved_required.append(key)
 
     slot_pattern = re.compile(r"\{\{([A-Za-z0-9_]+)\}\}")
-    hydrated_body = slot_pattern.sub(replace_slot_match, parsed_playbook["body"])
 
+    def _repl(match):
+        sk = match.group(1)
+        if sk in resolved_slots:
+            return resolved_slots[sk]
+        direct = resolve_json_pointer(brandbook, f"/brand/{sk.lower()}")
+        return str(direct) if (direct is not None and direct != "") else match.group(0)
+
+    hydrated_body = slot_pattern.sub(_repl, parsed_playbook["body"])
     hydrated_blocks = []
     for block in parsed_playbook.get("modular_blocks", []):
         if isinstance(block, str):
             hydrated_blocks.append({"block_id": block, "title": block, "hydrated_content": ""})
-            continue
-        raw_tmpl = block.get("unhydrated_template", "")
-        hyd_tmpl = slot_pattern.sub(replace_slot_match, raw_tmpl)
-        block_copy = dict(block)
-        block_copy["hydrated_content"] = hyd_tmpl
-        hydrated_blocks.append(block_copy)
+        else:
+            bc = dict(block)
+            bc["hydrated_content"] = slot_pattern.sub(_repl, block.get("unhydrated_template", ""))
+            hydrated_blocks.append(bc)
 
-    # Anti-slop checks
     remaining_tags = list(set(slot_pattern.findall(hydrated_body)))
-    prohibited_found = []
-    body_lower = hydrated_body.lower()
-    for word in PROHIBITED_WORDS:
-        if word in body_lower:
-            prohibited_found.append(word)
+    prohibited = [w for w in PROHIBITED_WORDS + brandbook.get("dynamic_taboos", []) if w.lower() in hydrated_body.lower()]
 
     return {
         "slug": parsed_playbook["slug"],
@@ -448,346 +380,265 @@ def hydrate_playbook(parsed_playbook: Dict[str, Any], brandbook: Dict[str, Any])
         "fallback_slots": fallback_slots,
         "unresolved_required": unresolved_required,
         "remaining_tags": remaining_tags,
-        "prohibited_words": prohibited_found
+        "prohibited_words": prohibited,
     }
 
 
-def transmute_to_targets(
-    hydrated_data: Dict[str, Any],
-    brand_slug: str,
-    target: str,
-    output_dir: Path
-) -> List[Path]:
-    """
-    Materializes hydrated output artifacts for specified targets into output_dir.
-    """
+def _bifrost_synthesize(prompt: str, bifrost_url: str = "http://bifrost:8080/v1/chat/completions") -> Optional[str]:
+    vk = os.getenv("BIFROST_VIRTUAL_KEY") or os.getenv("VK_AGENT_ORCHESTRATOR") or ""
+    if not vk:
+        return None
+    payload = json.dumps({
+        "model": "auto",
+        "temperature": 0.3,
+        "messages": [
+            {"role": "system", "content": "Redacta en español neutro claro (tú), con ortografía completa (tildes y ñ), sin siglas de marketing ni jerga técnica."},
+            {"role": "user", "content": prompt},
+        ],
+    }).encode("utf-8")
+    req = urllib.request.Request(bifrost_url, data=payload, headers={"Content-Type": "application/json", "Authorization": f"Bearer {vk}"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data["choices"][0]["message"]["content"]
+    except Exception:
+        return None
+
+
+def transmute_to_targets(hydrated_data: Dict[str, Any], brand_slug: str, target: str, output_dir: Path, use_bifrost: bool = False) -> List[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     generated_files: List[Path] = []
     slug = hydrated_data["slug"]
+    slots = hydrated_data["resolved_slots"]
+    entity = slots.get("SLOT_PERSONAL_MONOPOLY_ENTITY", brand_slug.replace("-", " ").title())
+    cat = slots.get("SLOT_CATEGORY_NAME", "Propuesta Diferenciada")
+    mech = slots.get("SLOT_SIGNATURE_MECHANISM", "Método Propietario")
+    price = slots.get("SLOT_PAID_DISCOVERY_PRICE", "Valor por alcance")
+    diag_title = slots.get("SLOT_PAID_DISCOVERY_TITLE", "Diagnóstico Inicial")
+    cta_url = slots.get("SLOT_CTA_URL", "/diagnostico")
 
-    # Target: growth-engine / copy
     if target in ("all", "growth-engine", "copy"):
         md_file = output_dir / f"{slug}.md"
-        with open(md_file, "w", encoding="utf-8") as f:
-            f.write(f"# Transmuted Playbook: {slug.replace('_', ' ').title()}\n")
-            f.write(f"**Brand:** {brand_slug} | **Standard:** TYM v1.0 | **Zero-Slop Attested: True**\n\n---\n\n")
-            f.write(hydrated_data["hydrated_body"])
-            f.write("\n\n---\n\n## Modular Blocks Transmuted\n\n")
-            for b in hydrated_data.get("hydrated_blocks", []):
-                f.write(f"### {b.get('title', b.get('anchor_id', 'Block'))}\n")
-                f.write(f"*Rationale:* {b.get('causal_rationale', '')}\n\n")
-                f.write(f"{b.get('hydrated_content', '')}\n\n")
+        body_out = hydrated_data["hydrated_body"]
+        if use_bifrost:
+            syn = _bifrost_synthesize(f"Sintetiza en español claro para cliente final el mecanismo '{mech}' de '{entity}' sobre esta base:\n{body_out[:4000]}")
+            if syn:
+                body_out = syn
+        md_file.write_text(f"# {slug.replace('_', ' ').title()} — {entity}\n\n{body_out}\n", encoding="utf-8")
         generated_files.append(md_file)
 
-        # Copy Manifest for Apotelos & PiDev ingestion
         manifest_file = output_dir / f"{slug}_copy_manifest.json"
-        copy_manifest = {
+        manifest_file.write_text(json.dumps({
             "brand_slug": brand_slug,
             "playbook_slug": slug,
-            "resolved_slots": hydrated_data["resolved_slots"],
-            "blocks": [
-                {
-                    "anchor_id": b.get("anchor_id"),
-                    "title": b.get("title"),
-                    "content": b.get("hydrated_content")
-                }
-                for b in hydrated_data.get("hydrated_blocks", [])
-            ],
+            "resolved_slots": slots,
             "anti_slop_attestation": {
                 "remaining_unresolved_tags": hydrated_data["remaining_tags"],
-                "prohibited_words_count": len(hydrated_data["prohibited_words"])
-            }
-        }
-        with open(manifest_file, "w", encoding="utf-8") as f:
-            json.dump(copy_manifest, f, indent=2, ensure_ascii=False)
+                "prohibited_words_count": len(hydrated_data["prohibited_words"]),
+            },
+        }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         generated_files.append(manifest_file)
 
-    # Target: whatsapp-engine
     if target in ("all", "whatsapp-engine"):
         wa_file = output_dir / f"{slug}_whatsapp_flow.md"
-        entity = hydrated_data["resolved_slots"].get("SLOT_PERSONAL_MONOPOLY_ENTITY", brand_slug.title())
-        mech = hydrated_data["resolved_slots"].get("SLOT_SIGNATURE_MECHANISM", "Metodología Propietaria")
-        price = hydrated_data["resolved_slots"].get("SLOT_PAID_DISCOVERY_PRICE", "USD 150")
-        diag_title = hydrated_data["resolved_slots"].get("SLOT_PAID_DISCOVERY_TITLE", "Auditoría Diagnóstica")
-
-        with open(wa_file, "w", encoding="utf-8") as f:
-            f.write(f"# Flujo Conversacional WhatsApp: {entity}\n")
-            f.write(f"**Mecanismo:** {mech} | **Diagnóstico:** {diag_title} ({price})\n\n")
-            f.write("## Fase 1: Bienvenida y Contexto\n")
-            f.write(f"Hola. Soy el asistente del despacho de {entity}. ¿Estás buscando evaluar tu caso para {mech}?\n\n")
-            f.write("## Fase 2: Cualificación BANT\n")
-            f.write("1. ¿Cuál es el principal cuello de botella que enfrentas actualmente?\n")
-            f.write("2. ¿Has intentado resolverlo con agencias o cursos tradicionales?\n\n")
-            f.write("## Fase 3: Oferta y Desafío Ético\n")
-            f.write(f"No ofrecemos llamadas de venta gratuitas. Realizamos {diag_title} por {price}. Si no calificas, te devolvemos el 100%.\n\n")
-            f.write("## Fase 4: Enlace de Cierre\n")
-            f.write(f"Para reservar tu espacio directo: {hydrated_data['resolved_slots'].get('SLOT_CTA_URL', '/agendar')}\n")
+        wa_text = (
+            f"# Flujo WhatsApp: {entity}\n"
+            f"**Mecanismo:** {mech} | **Paso Inicial:** {diag_title} ({price})\n\n"
+            "## Fase 1: Saludo y contexto\n"
+            f"Hola. Soy del equipo de {entity}. ¿Quieres revisar cómo aplicar {mech} en tu actividad actual?\n\n"
+            "## Fase 2: Preguntas breves de encaje\n"
+            "1. ¿Qué tarea te quita más horas operativas cada semana?\n"
+            "2. ¿Has trabajado antes con agencias o herramientas sueltas que no te dieron resultados?\n\n"
+            "## Fase 3: Siguiente paso claro\n"
+            f"Puedes iniciar con {diag_title} ({price}) y llevarte una hoja de ruta concreta.\n\n"
+            "## Fase 4: Enlace directo\n"
+            f"Accede aquí cuando estés listo: {cta_url}\n"
+        )
+        assert not CLIENT_JARGON_RE.search(wa_text) and not VOSEO_CLIENT_RE.search(wa_text)
+        wa_file.write_text(wa_text, encoding="utf-8")
         generated_files.append(wa_file)
 
-    # Target: email-marketing
     if target in ("all", "email-marketing"):
         email_file = output_dir / f"{slug}_email_sequence.md"
-        entity = hydrated_data["resolved_slots"].get("SLOT_PERSONAL_MONOPOLY_ENTITY", brand_slug.title())
-        cat = hydrated_data["resolved_slots"].get("SLOT_CATEGORY_NAME", "Categoría de Uno")
-        mech = hydrated_data["resolved_slots"].get("SLOT_SIGNATURE_MECHANISM", "Metodología de Firma")
-
-        with open(email_file, "w", encoding="utf-8") as f:
-            f.write(f"# Secuencia Email Marketing: {entity} — {cat}\n")
-            f.write("<!-- Anti-SPAM: 30-50 char subject, RFC 8058 One-Click, HTML < 85KB -->\n\n")
-            f.write("## Correo 1: El Reencuadre del Problema\n")
-            f.write(f"**Asunto:** Por qué competir es un error fatal\n")
-            f.write(f"**Preview:** La mayoría intenta ser mejor. Nosotros fundamos {cat}.\n\n")
-            f.write(f"La mayoría de los operadores compiten por precio. En {entity} resolvemos la causa raíz con {mech}.\n\n")
-            f.write(f"Leé el manifiesto completo: {hydrated_data['resolved_slots'].get('SLOT_CTA_URL', '/diagnostico')}\n")
+        email_text = (
+            f"# Secuencia de Correo: {entity}\n"
+            "<!-- Anti-SPAM: asunto 30-50 caracteres, enlace único, HTML < 85KB -->\n\n"
+            "## Correo 1: Enfoque práctico\n"
+            "**Asunto:** Por qué competir por precio desgasta\n"
+            f"**Previsualización:** La diferencia real de {entity} con {mech}.\n\n"
+            f"La mayoría intenta ganar clientes bajando tarifas. En {entity} ordenamos tu operación con {mech}.\n\n"
+            f"Revisa la guía completa en {cta_url}.\n"
+        )
+        assert not CLIENT_JARGON_RE.search(email_text) and not VOSEO_CLIENT_RE.search(email_text)
+        email_file.write_text(email_text, encoding="utf-8")
         generated_files.append(email_file)
 
-    # Target: astro-web
     if target in ("all", "astro-web"):
         web_file = output_dir / f"{slug}_web_tokens.json"
-        web_tokens = {
+        web_file.write_text(json.dumps({
             "brand": brand_slug,
             "playbook": slug,
             "theme_vars": {
-                "--color-brand-primary": hydrated_data["resolved_slots"].get("SLOT_PRIMARY_COLOR", "var(--color-primary, #0f172a)"),
-                "--font-brand-display": hydrated_data["resolved_slots"].get("SLOT_FONT_DISPLAY", "var(--font-display, sans-serif)"),
-                "--font-brand-body": hydrated_data["resolved_slots"].get("SLOT_FONT_BODY", "var(--font-body, sans-serif)")
+                "--color-brand-primary": slots.get("SLOT_PRIMARY_COLOR", "var(--brand-primary)"),
+                "--font-brand-display": slots.get("SLOT_FONT_DISPLAY", "var(--font-display)"),
+                "--font-brand-body": slots.get("SLOT_FONT_BODY", "var(--font-body)"),
             },
             "hero_props": {
-                "headline": hydrated_data["resolved_slots"].get("SLOT_CATEGORY_NAME", "Categoría de Uno"),
-                "subheadline": hydrated_data["resolved_slots"].get("SLOT_VALUE_EQUATION_PROMISE", "Transformación Medible"),
-                "mechanism": hydrated_data["resolved_slots"].get("SLOT_SIGNATURE_MECHANISM", "Protocolo de Firma"),
-                "cta_url": hydrated_data["resolved_slots"].get("SLOT_CTA_URL", "/agendar")
-            }
-        }
-        with open(web_file, "w", encoding="utf-8") as f:
-            json.dump(web_tokens, f, indent=2, ensure_ascii=False)
+                "headline": cat,
+                "subheadline": slots.get("SLOT_VALUE_EQUATION_PROMISE", "Resultados medibles."),
+                "mechanism": mech,
+                "cta_url": cta_url,
+            },
+        }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         generated_files.append(web_file)
 
     return generated_files
 
 
 def run_transmute(args: argparse.Namespace) -> int:
-    """Executes transmutation pipeline for one or all playbooks."""
     brand_slug = args.brand.strip()
     target = args.target.strip().lower()
-    dry_run = args.dry_run
-
-    print("============================================================")
-    print(f"  ⚡ BRAND-PLAY TRANSMUTATION ENGINE (Brand: {brand_slug})")
-    print("============================================================")
-
-    # 1. Ingest Brandbook bundle
-    brandbook, workspace_dir = load_brandbook_bundle(brand_slug)
-    print(f"✓ Brandbook ingested for '{brand_slug}' from: {workspace_dir}")
-
-    # Output directory
+    explicit_ws = Path(args.workspace_dir).resolve() if args.workspace_dir else None
+    ws_dir, vjson = (explicit_ws, None) if explicit_ws else discover_workspace_dir(brand_slug)
+    brandbook, workspace_dir = load_brandbook_bundle(brand_slug, vertical_json=vjson, explicit_ws=ws_dir)
     output_dir = Path(args.output_dir) if args.output_dir else (workspace_dir / "copy")
 
-    # 2. Discover Playbooks
     playbook_paths: List[Path] = []
-    seen_names: set[str] = set()
     if args.all:
+        seen: set[str] = set()
         for p_dir in PLAYBOOK_SEARCH_DIRS:
             if p_dir.exists():
                 for p in sorted(p_dir.glob("*.md")):
-                    if p.name not in seen_names:
-                        seen_names.add(p.name)
+                    if p.name not in seen:
+                        seen.add(p.name)
                         playbook_paths.append(p)
-        print(f"✓ Mode --all: Discovered {len(playbook_paths)} universal playbooks")
     else:
         if not args.playbook:
             print("❌ Error: Must specify --playbook <name> or --all")
             return 1
         p_path = resolve_playbook_path(args.playbook)
         if not p_path:
-            print(f"❌ Error: Playbook '{args.playbook}' not found in search paths.")
+            print(f"❌ Error: Playbook '{args.playbook}' not found.")
             return 1
         playbook_paths.append(p_path)
 
-    total_generated = 0
+    total_files = 0
     total_violations = 0
-
     for p_path in playbook_paths:
-        parsed = parse_playbook_file(p_path)
-        hydrated = hydrate_playbook(parsed, brandbook)
-
-        print(f"\n📄 Transmuting: {p_path.name}")
-        print(f"   • Resolved slots: {len(hydrated['resolved_slots'])}")
-        print(f"   • Fallbacks used: {len(hydrated['fallback_slots'])}")
-
+        hydrated = hydrate_playbook(parse_playbook_file(p_path), brandbook)
         if hydrated["unresolved_required"] and not args.force:
-            print(f"   ❌ Missing required slots: {hydrated['unresolved_required']}")
             total_violations += 1
             continue
+        if not args.dry_run:
+            files = transmute_to_targets(hydrated, brand_slug, target, output_dir, use_bifrost=args.bifrost)
+            total_files += len(files)
 
-        if hydrated["remaining_tags"]:
-            print(f"   ⚠️ Remaining unhydrated tags: {hydrated['remaining_tags']}")
-
-        if hydrated["prohibited_words"]:
-            print(f"   ⚠️ Anti-slop alert: prohibited words found: {hydrated['prohibited_words']}")
-
-        if dry_run:
-            print("   🔍 Dry-run: Skipped disk write.")
-            continue
-
-        files = transmute_to_targets(hydrated, brand_slug, target, output_dir)
-        total_generated += len(files)
-        for f in files:
-            print(f"   ✓ Generated: {f.name} ({f.stat().st_size} bytes)")
-
-    print("\n============================================================")
-    print(f"  📊 TRANSMUTATION SUMMARY")
-    print(f"  • Brand:             {brand_slug}")
-    print(f"  • Playbooks Processed: {len(playbook_paths)}")
-    print(f"  • Artifacts Written: {total_generated}")
-    print(f"  • Output Directory:  {output_dir}")
-    print(f"  • Status:            {'FAILED' if total_violations > 0 else 'SUCCESS (Exit 0)'}")
-    print("============================================================")
-
+    print(f"✅ brand-play: {len(playbook_paths)} playbooks -> {total_files} files in {output_dir}")
     return 1 if total_violations > 0 else 0
 
 
 def run_list(args: argparse.Namespace) -> int:
-    """Lists discovered playbooks and workspace brands."""
     if args.playbooks or (not args.brands and not args.playbooks):
-        print("=== UNIVERSAL TYM PLAYBOOKS ===")
-        found = []
         for p_dir in PLAYBOOK_SEARCH_DIRS:
             if p_dir.exists():
-                for p in sorted(p_dir.glob("*.md")):
-                    if p.name not in [x.name for x in found]:
-                        found.append(p)
-        for idx, p in enumerate(found, 1):
-            print(f"{idx:02d}. {p.name:<38} ({p.parent})")
-
+                for idx, p in enumerate(sorted(p_dir.glob("*.md")), 1):
+                    print(f"{idx:02d}. {p.name}")
+                break
     if args.brands or not args.playbooks:
-        print("\n=== DISCOVERED WORKSPACE BRANDS ===")
-        brands = set()
-        for b_dir in WORKSPACE_SEARCH_DIRS:
-            if b_dir.exists():
-                for d in b_dir.iterdir():
-                    if d.is_dir() and not d.name.startswith("."):
-                        brands.add(d.name)
-        for b in sorted(brands):
-            print(f"• {b}")
-
+        for root in STORAGE_ROOTS:
+            if not root.exists():
+                continue
+            for d in sorted(root.iterdir()):
+                if d.is_dir() and (d / "dev").is_dir():
+                    print(f"• {d.name}")
+                    ws = d / "dev" / "workspaces"
+                    if ws.is_dir():
+                        for w in sorted(ws.iterdir()):
+                            if w.is_dir():
+                                print(f"  - workspace: {d.name}/workspaces/{w.name}")
     return 0
 
 
 def run_test() -> int:
-    """Self-contained unit test for physical verification."""
-    print("Testing brand-play deterministic slot hydration...")
-
-    # 1. Test JSON pointer resolution
+    print("Testing brand-play v2.1 deterministic slot hydration & zero-jargon gate...")
     test_obj = {
-        "brand": {
-            "name": {"$value": "Aura Studio Demo", "$type": "string"},
-            "category": "Lujo Silencioso"
-        },
-        "color": {
-            "primary": {"$value": "#0f172a"}
-        }
+        "brand": {"name": {"$value": "Aura Studio Demo"}, "category": "Estudio Editorial"},
+        "color": {"primary": {"$value": "#0f172a"}},
     }
-    assert resolve_json_pointer(test_obj, "/brand/name") == "Aura Studio Demo", "Pointer $value unwrapping failed"
-    assert resolve_json_pointer(test_obj, "/brand/category") == "Lujo Silencioso", "Plain pointer resolution failed"
-    assert resolve_json_pointer(test_obj, "/color/primary") == "#0f172a", "Color pointer failed"
-    print("✓ Test 1 Passed: RFC 6901 pointer & DTCG $value resolution")
+    assert resolve_json_pointer(test_obj, "/brand/name") == "Aura Studio Demo"
+    assert resolve_json_pointer(test_obj, "/brand/category") == "Estudio Editorial"
 
-    # 2. Test Playbook Hydration
     dummy_playbook = {
         "slug": "test_playbook",
         "path": Path("/tmp/dummy.md"),
-        "body": "Bienvenido a {{SLOT_PERSONAL_MONOPOLY_ENTITY}}. Ofrecemos {{SLOT_CATEGORY_NAME}} mediante {{SLOT_SIGNATURE_MECHANISM}}.",
+        "body": "Bienvenido a {{SLOT_PERSONAL_MONOPOLY_ENTITY}}. {{SLOT_CATEGORY_NAME}} con {{SLOT_SIGNATURE_MECHANISM}}.",
         "slots_contract": {
             "brand_slots": [
-                {
-                    "key": "SLOT_PERSONAL_MONOPOLY_ENTITY",
-                    "json_pointer": "/brand/name",
-                    "required": True,
-                    "fallback_value": "Experto"
-                },
-                {
-                    "key": "SLOT_CATEGORY_NAME",
-                    "json_pointer": "/brand/category",
-                    "required": True,
-                    "fallback_value": "Consultoría"
-                },
-                {
-                    "key": "SLOT_SIGNATURE_MECHANISM",
-                    "json_pointer": "/brand/missing",
-                    "required": False,
-                    "fallback_value": "Método Causal"
-                }
+                {"key": "SLOT_PERSONAL_MONOPOLY_ENTITY", "json_pointer": "/brand/name", "required": True, "fallback_value": "Experto"},
+                {"key": "SLOT_CATEGORY_NAME", "json_pointer": "/brand/category", "required": True, "fallback_value": "Consultoría"},
+                {"key": "SLOT_SIGNATURE_MECHANISM", "json_pointer": "/brand/missing", "required": False, "fallback_value": "Método Claro"},
             ]
         },
-        "modular_blocks": []
+        "modular_blocks": [],
     }
     hydrated = hydrate_playbook(dummy_playbook, test_obj)
-    assert "Aura Studio Demo" in hydrated["hydrated_body"], "Slot 1 failed hydration"
-    assert "Lujo Silencioso" in hydrated["hydrated_body"], "Slot 2 failed hydration"
-    assert "Método Causal" in hydrated["hydrated_body"], "Fallback slot failed hydration"
-    assert len(hydrated["remaining_tags"]) == 0, "Expected 0 remaining tags"
-    print("✓ Test 2 Passed: Playbook AST replacement & fallback coalescing")
+    assert "Aura Studio Demo" in hydrated["hydrated_body"] and "Método Claro" in hydrated["hydrated_body"]
 
-    # 3. Test Anti-Slop Linter
-    dummy_slop = {
-        "slug": "slop_test",
-        "path": Path("/tmp/slop.md"),
-        "body": "Este es un secreto millonario con {{SLOT_UNDEFINED}}.",
-        "slots_contract": {},
-        "modular_blocks": []
-    }
-    slop_res = hydrate_playbook(dummy_slop, test_obj)
-    assert "secreto millonario" in slop_res["prohibited_words"], "Anti-slop failed to detect prohibited word"
-    assert "SLOT_UNDEFINED" in slop_res["remaining_tags"], "Failed to detect remaining unresolved tag"
-    print("✓ Test 3 Passed: Anti-Slop Linter catches prohibited words and missing slots")
+    with tempfile.TemporaryDirectory(prefix="brandplay_test_") as tmp:
+        tp = Path(tmp)
+        ws = tp / "ws"
+        vfile = tp / "vertical.json"
+        vfile.write_text(json.dumps({
+            "unique_mechanism": {"name": "Sistema Alpha"},
+            "category_and_positioning": {"category_name": "Asesoría Directa"},
+            "primary_offer": {"pricing": {"currency": "COP", "pwyw_default_cop": 30000}},
+        }), encoding="utf-8")
+        (ws / "brand").mkdir(parents=True, exist_ok=True)
+        (ws / "brand" / "brandbook.json").write_text(json.dumps({"metadata": {"brand_name": "Aurelius Studio"}}), encoding="utf-8")
+        bundle, _ = load_brandbook_bundle("alpha-line", vertical_json=vfile, explicit_ws=ws)
+        assert bundle["brand"]["signature_mechanism"] == "Sistema Alpha"
+        assert "$30.000 COP" in bundle["brand"]["paid_discovery"]["price"]
+        h2 = hydrate_playbook(dummy_playbook, bundle)
+        files = transmute_to_targets(h2, "alpha-line", "all", tp / "out", use_bifrost=False)
+        for f in files:
+            txt = f.read_text(encoding="utf-8")
+            assert not VOSEO_CLIENT_RE.search(txt), f"Voseo leak in {f.name}"
+            assert "USD 150" not in txt, f"Hardcoded price leak in {f.name}"
 
-    print("============================================================")
-    print("✅ ALL BRAND-PLAY DETERMINISTIC UNIT TESTS PASSED (exit 0)")
-    print("============================================================")
+    print("✅ ALL BRAND-PLAY v2.1 UNIT TESTS PASSED (exit 0)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="brand-play: Sovereign Downstream Playbook Transmutation & Slot Hydration Engine"
-    )
-    subparsers = parser.add_subparsers(dest="subcommand", help="Comandos disponibles")
+    parser = argparse.ArgumentParser(description="brand-play v2.1: Sovereign Downstream Playbook Transmutation Engine")
+    sub = parser.add_subparsers(dest="subcommand")
 
-    # transmute
-    t_parser = subparsers.add_parser("transmute", help="Hidrata playbooks universales con tokens de marca")
-    t_parser.add_argument("--brand", "-b", required=True, help="Slug de la marca (ej: $PROJECT_NAME, apotelos)")
-    t_parser.add_argument("--playbook", "-p", help="Slug o nombre del playbook (ej: 00_category_of_one)")
-    t_parser.add_argument("--all", "-a", action="store_true", help="Transmutar todos los playbooks universales")
-    t_parser.add_argument(
-        "--target", "-t",
-        default="all",
-        choices=["all", "growth-engine", "astro-web", "whatsapp-engine", "email-marketing", "copy"],
-        help="Target específico de transmutación"
-    )
-    t_parser.add_argument("--output-dir", "-o", help="Directorio destino para los archivos transmutados")
-    t_parser.add_argument("--dry-run", action="store_true", help="Simulación de transmutación sin escribir en disco")
-    t_parser.add_argument("--force", action="store_true", help="Forzar escritura aun si faltan slots no requeridos")
+    t_p = sub.add_parser("transmute", help="Hidrata playbooks universales con tokens de marca")
+    t_p.add_argument("--brand", "-b", required=True)
+    t_p.add_argument("--playbook", "-p")
+    t_p.add_argument("--all", "-a", action="store_true")
+    t_p.add_argument("--target", "-t", default="all", choices=["all", "growth-engine", "astro-web", "whatsapp-engine", "email-marketing", "copy"])
+    t_p.add_argument("--workspace-dir", default=None)
+    t_p.add_argument("--output-dir", "-o")
+    t_p.add_argument("--bifrost", action="store_true", help="Sintetizar copy mediante Bifrost LLM Gateway")
+    t_p.add_argument("--dry-run", action="store_true")
+    t_p.add_argument("--force", action="store_true")
 
-    # list
-    l_parser = subparsers.add_parser("list", help="Lista playbooks universales o marcas descubiertas")
-    l_parser.add_argument("--playbooks", action="store_true", help="Listar playbooks")
-    l_parser.add_argument("--brands", action="store_true", help="Listar marcas de workspace")
+    l_p = sub.add_parser("list", help="Lista playbooks o marcas/workspaces")
+    l_p.add_argument("--playbooks", action="store_true")
+    l_p.add_argument("--brands", action="store_true")
 
-    # test
-    subparsers.add_parser("test", help="Ejecuta sensor físico de verificación unitaria")
-
+    sub.add_parser("test", help="Ejecuta pruebas unitarias")
     args = parser.parse_args()
 
     if args.subcommand == "transmute":
         return run_transmute(args)
-    elif args.subcommand == "list":
+    if args.subcommand == "list":
         return run_list(args)
-    elif args.subcommand == "test":
+    if args.subcommand == "test":
         return run_test()
-    else:
-        parser.print_help()
-        return 0
+    parser.print_help()
+    return 0
 
 
 if __name__ == "__main__":

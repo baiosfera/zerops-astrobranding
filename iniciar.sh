@@ -253,20 +253,28 @@ link_bin() {
       [ -e "$HOME/.local/bin/$bin_name" ] && [ ! -L "$HOME/.local/bin/$bin_name" ] && rm -f "$HOME/.local/bin/$bin_name"
       ln -sfn "$CATALOG_DIR/scripts/$s" "$LOCAL_BIN/$bin_name"
       ln -sfn "$CATALOG_DIR/scripts/$s" "$HOME/.local/bin/$bin_name"
+      sudo ln -sfn "$LOCAL_BIN/$bin_name" "/usr/local/bin/$bin_name" 2>/dev/null || true
     fi
   done
   if [ -f "$CATALOG_DIR/bin/orchesbrand" ]; then
     chmod +x "$CATALOG_DIR/bin/orchesbrand"
     ln -sfn "$CATALOG_DIR/bin/orchesbrand" "$LOCAL_BIN/orchesbrand"
     ln -sfn "$CATALOG_DIR/bin/orchesbrand" "$HOME/.local/bin/orchesbrand"
+    sudo ln -sfn "$LOCAL_BIN/orchesbrand" "/usr/local/bin/orchesbrand" 2>/dev/null || true
   fi
-  for pair in "anti-slop-linter:anti_slop_linter.py" "mega-downloader:mega_downloader.py"; do
+  for pair in \
+    "anti-slop-linter:anti_slop_linter.py" \
+    "mega-downloader:mega_downloader.py" \
+    "chroma-engine:chroma_engine.py" \
+    "fontgen-engine:fontgen_engine.py" \
+    "envato-font-preview:envato_font_preview.py"; do
     local bin_name="${pair%%:*}"
     local script_name="${pair#*:}"
     if [ -f "$CATALOG_DIR/scripts/$script_name" ]; then
       chmod +x "$CATALOG_DIR/scripts/$script_name"
       ln -sfn "$CATALOG_DIR/scripts/$script_name" "$LOCAL_BIN/$bin_name"
       ln -sfn "$CATALOG_DIR/scripts/$script_name" "$HOME/.local/bin/$bin_name"
+      sudo ln -sfn "$LOCAL_BIN/$bin_name" "/usr/local/bin/$bin_name" 2>/dev/null || true
     fi
   done
   for h in tool-guard.py test_tool_guard.py; do
@@ -376,9 +384,17 @@ EOF_ENGRAM_SINGLETON
       if command -v rsync >/dev/null 2>&1; then
         mkdir -p "$BASE_DIR/artifacts/$dir_name"
         rsync -a --delete "$CATALOG_DIR/$dir_name/" "$BASE_DIR/artifacts/$dir_name/"
+        if [ -d "$BASE_DIR/localstorage" ]; then
+          mkdir -p "$BASE_DIR/localstorage/$dir_name"
+          rsync -a --delete "$CATALOG_DIR/$dir_name/" "$BASE_DIR/localstorage/$dir_name/"
+        fi
       else
         rm -rf "$BASE_DIR/artifacts/$dir_name"
         cp -a "$CATALOG_DIR/$dir_name" "$BASE_DIR/artifacts/$dir_name"
+        if [ -d "$BASE_DIR/localstorage" ]; then
+          rm -rf "$BASE_DIR/localstorage/$dir_name"
+          cp -a "$CATALOG_DIR/$dir_name" "$BASE_DIR/localstorage/$dir_name"
+        fi
       fi
     fi
   done

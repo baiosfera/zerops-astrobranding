@@ -67,16 +67,26 @@ sync_ecosystem_core() {
     # 3. Binarios Soberanos (PATH Clúster)
     echo "• [Core 3/3] Sincronizando Binarios y CLIs Soberanos..."
     mkdir -p "$STORAGE_BASE/bin"
-    for bin in apotelos brand-play; do
+    for bin in apotelos brand-play chroma_engine.py fontgen_engine.py envato_font_preview.py anti_slop_linter.py; do
         if [ -f "/var/www/zerops-astrobranding/scripts/$bin" ]; then
             cp -fp "/var/www/zerops-astrobranding/scripts/$bin" "$STORAGE_BASE/bin/$bin"
             chmod 755 "$STORAGE_BASE/bin/$bin"
         fi
     done
+    ln -sfn "$STORAGE_BASE/bin/chroma_engine.py" "$STORAGE_BASE/bin/chroma-engine" 2>/dev/null || true
+    ln -sfn "$STORAGE_BASE/bin/fontgen_engine.py" "$STORAGE_BASE/bin/fontgen-engine" 2>/dev/null || true
+    ln -sfn "$STORAGE_BASE/bin/envato_font_preview.py" "$STORAGE_BASE/bin/envato-font-preview" 2>/dev/null || true
+    ln -sfn "$STORAGE_BASE/bin/anti_slop_linter.py" "$STORAGE_BASE/bin/anti-slop-linter" 2>/dev/null || true
     if [ -f "/var/www/zerops-astrobranding/bin/orchesbrand" ]; then
         cp -fp "/var/www/zerops-astrobranding/bin/orchesbrand" "$STORAGE_BASE/bin/orchesbrand"
         chmod 755 "$STORAGE_BASE/bin/orchesbrand"
     fi
+    for art_dir in templates blueprints; do
+        if [ -d "/var/www/zerops-astrobranding/$art_dir" ]; then
+            mkdir -p "/var/www/artifacts/$art_dir" 2>/dev/null || true
+            rsync -a --delete "/var/www/zerops-astrobranding/$art_dir/" "/var/www/artifacts/$art_dir/" 2>/dev/null || true
+        fi
+    done
     if [ -f "/usr/local/bin/zcp" ]; then
         cp -fp "/usr/local/bin/zcp" "$STORAGE_BASE/bin/zcp"
         chmod 755 "$STORAGE_BASE/bin/zcp"
@@ -85,7 +95,7 @@ sync_ecosystem_core() {
         cp -fp "/usr/local/bin/zcp-sync" "$STORAGE_BASE/bin/zcp-sync"
         chmod 755 "$STORAGE_BASE/bin/zcp-sync"
     fi
-    echo "  ✓ Binarios asegurados en $STORAGE_BASE/bin (apotelos, brand-play, orchesbrand, zcp, bun)"
+    echo "  ✓ Binarios asegurados en $STORAGE_BASE/bin (apotelos, brand-play, orchesbrand, chroma-engine, fontgen-engine, envato-font-preview, anti-slop-linter, zcp)"
     echo "============================================================"
 }
 
@@ -104,6 +114,11 @@ list_projects() {
         [ -d "$d" ] && echo "  - $(basename "$d")"
     done
 }
+
+USE_MIRROR=false
+for _arg in "$@"; do
+    [ "$_arg" = "--mirror" ] && USE_MIRROR=true
+done
 
 sync_project() {
     local proj="$1"
@@ -137,13 +152,22 @@ sync_project() {
 
     mkdir -p "$drive_dir" "$storage_dir"
 
-    # 1. Drive -> Local Storage (traer novedades de Drive)
-    echo "• [1/2] Trayendo cambios desde Google Drive hacia Local Storage..."
-    rsync -au "$drive_dir/" "$storage_dir/"
+    if [ "$USE_MIRROR" = true ]; then
+        echo "• [--mirror] Espejando Local Storage -> Google Drive (con --delete en workspaces/)..."
+        if [ -d "$storage_dir/dev/workspaces" ]; then
+            mkdir -p "$drive_dir/dev/workspaces"
+            rsync -a --delete "$storage_dir/dev/workspaces/" "$drive_dir/dev/workspaces/"
+        fi
+        rsync -au "$storage_dir/" "$drive_dir/"
+    else
+        # 1. Drive -> Local Storage (traer novedades de Drive)
+        echo "• [1/2] Trayendo cambios desde Google Drive hacia Local Storage..."
+        rsync -au "$drive_dir/" "$storage_dir/"
 
-    # 2. Local Storage -> Drive (empujar novedades locales a Drive)
-    echo "• [2/2] Respaldando cambios de Local Storage hacia Google Drive..."
-    rsync -au "$storage_dir/" "$drive_dir/"
+        # 2. Local Storage -> Drive (empujar novedades locales a Drive)
+        echo "• [2/2] Respaldando cambios de Local Storage hacia Google Drive..."
+        rsync -au "$storage_dir/" "$drive_dir/"
+    fi
 
     echo "✅ Sincronización exitosa: Drive [$proj] <---> Storage [$dest_proj]."
 }

@@ -2,7 +2,7 @@
 
 > **Ubicación Canónica:** `/var/www/artifacts/plans/master_apotelos_multiagent_pipeline.md`  
 > **Destino:** Cualquier ZCP nuevo, limpio o existente en Zerops (`${PROJECT_NAME}`).  
-> **Gobernanza:** `00-SUPREME-DIRECTIVE.md` (v8.5) · `apotelos` · `meta-plan` · `meta-script` · `codecraft`  
+> **Gobernanza:** `00-SUPREME-DIRECTIVE.md` (v10.0) · `apotelos` · `meta-plan` · `meta-script` · `codecraft`  
 > **Principios:** Cero AMN, Fronteras Estrictas por Runtime, Desacople de Roles, SSoT Indivisible y Soberanía GitOps.
 
 ---
@@ -153,7 +153,7 @@ Para que ningún agente (AGY, Hermes o Pidev) en un ZCP limpio opere a ciegas, l
   - `/var/www/artifacts/templates/plantilla-universal-web-zerops-v4.md`
   - `/var/www/zerops-astrobranding/templates/astro/` (`SeoHead.astro`, `CookieConsent.astro`, `contact.ts`, `phone.ts`, `discountStrategy.ts`)
 - **Alcance:**
-  1. Ingesta del Blackboard manifest generado en el Plan 3 y de los artefactos de copy hidratados por `brand-play` (`/mnt/localstorage/${PROJECT_NAME}/dev/workspaces/{brand}/copy/`).
+  1. Ingesta del Blackboard manifest generado en el Plan 3, tokens visuales compilados por `orchesbrand` (`chroma-engine` + `fontgen-engine` + `envato-font-preview`) y artefactos de copy de los 18 playbooks hidratados por `brand-play` en `/mnt/localstorage/${PROJECT_NAME}/dev/workspaces/<vertical>/[brand, strategy, copy, web]`, validados con `anti-slop-linter` (ortografía completa y cero jerga interna).
   2. Ejecución headless vía listener HTTP en `:3000` (`pi --approve --provider bifrost --model bifrost/deepseek-chat -p '<prompt>' < /dev/null`) con enrutamiento a Bifrost a $0 tokens.
   3. Ejecución de `apotelos scaffold --vertical=<slug>` para materializar el código Astro 5 SSR:
      - Inyección e hidratación de componentes modulares desde `/var/www/zerops-astrobranding/templates/astro/`:

@@ -1,459 +1,381 @@
 #!/usr/bin/env python3
 """
-orchesbrand — Sovereign Agnostic Brand Pipeline CLI for Zerops Astrobranding.
-Governed by meta-script (v1.0) and CoHaLo Engineering.
-Automates fontgen, chroma, and brandbook token synthesis across all configured project verticals.
-Complies with W3C DTCG 2025.10 and OKLCH / WCAG 2.2 AAA standards.
+orchesbrand — Sovereign Agnostic Brand Pipeline CLI (v3.0) for Zerops Astrobranding.
+100% Brand-Agnostic | Non-Destructive Brandbook Merge | Zero Phantom Directories.
+Coordinates chroma_engine.py, fontgen_engine.py, envato_font_preview.py, and brandbook CSS/JSON.
 """
 
-import os
-import sys
-import json
+from __future__ import annotations
+
 import argparse
+import json
+import os
+import re
 import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Tuple, List, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 
-_PROJECT_NAME = os.getenv("PROJECT_NAME", "default").strip() or "default"
-DEFAULT_WORKSPACE_BASE = Path(f"/mnt/localstorage/{_PROJECT_NAME}/dev/workspaces")
-if not DEFAULT_WORKSPACE_BASE.exists():
-    DEFAULT_WORKSPACE_BASE = Path(f"/var/www/localstorage/{_PROJECT_NAME}/dev/workspaces")
 
-FONTGEN_ENGINE_CANDIDATES = [
-    Path("/var/www/.agents/skills/fontgen/scripts/fontgen_engine.py"),
-    Path("/var/www/localstorage/skills/fontgen/scripts/fontgen_engine.py"),
-    Path("/mnt/localstorage/skills/fontgen/scripts/fontgen_engine.py")
+SCRIPTS_CANDIDATES = [
+    Path("/var/www/zerops-astrobranding/scripts"),
+    Path(__file__).resolve().parent.parent / "scripts",
 ]
 
-VERTICAL_PROFILES = {
-    "apotelos": {
-        "name": "Protocolo Apotelos",
-        "archetype": "El Arqueólogo del Futuro / Causalidad Inversa",
-        "concept": "Arquitectura editorial sobria, académica y filosófica. Tonalidades de pizarra mineral y oro cronológico para un ensayo intelectual inmutable.",
-        "astro": {
-            "sun_sign": "Scorpio",
-            "mc_sign": "Capricorn",
-            "day_master": "Ren",
-            "nakshatra": "Anuradha",
-            "dominant_element": "Water",
-            "display": "architectural_serif",
-            "body": "spectral",
-            "accent": "monogram_holder"
-        },
-        "primary": {"oklch": "oklch(0.35 0.04 250)", "hex": "#334155", "desc": "Pizarra Causal / T_final Concreto"},
-        "secondary": {"oklch": "oklch(0.70 0.12 75)", "hex": "#d97706", "desc": "Oro Cronológico / Lucidez Histórica"},
-        "accent": {"oklch": "oklch(0.85 0.08 85)", "hex": "#fbbf24", "desc": "Chispa de Certeza Epistémica"},
-        "bg_dark": {"oklch": "oklch(0.12 0.01 250)", "hex": "#0a0e14", "desc": "Vigilia de T_0"},
-        "surface_dark": {"oklch": "oklch(0.18 0.02 250)", "hex": "#131b26", "desc": "Estrato Arqueológico"},
-        "text_dark": {"oklch": "oklch(0.96 0.01 250)", "hex": "#f8fafc", "desc": "Manifiesto Puro"},
-        "bg_light": {"oklch": "oklch(0.98 0.01 75)", "hex": "#fefdfa", "desc": "Pergamino Epistémico"},
-        "surface_light": {"oklch": "oklch(0.94 0.02 75)", "hex": "#f4efe6", "desc": "Papiro de Estudio"},
-        "text_light": {"oklch": "oklch(0.20 0.03 250)", "hex": "#0f172a", "desc": "Tinta Tipográfica Clásica"}
-    },
-    "astrotipia": {
-        "name": "Astrotipia",
-        "archetype": "El Alquimista Estelar / Astrología Psicológica",
-        "concept": "Tonalidades etéreas y cálidas que funden la profundidad del cosmos con la calidez orgánica del cuerpo humano.",
-        "astro": {
-            "sun_sign": "Virgo",
-            "mc_sign": "Aquarius",
-            "day_master": "Xin",
-            "nakshatra": "Chitra",
-            "dominant_element": "Earth",
-            "display": "high_contrast_didone",
-            "body": "plus_jakarta_sans",
-            "accent": "monogram_emblem"
-        },
-        "primary": {"oklch": "oklch(0.48 0.18 310)", "hex": "#9333ea", "desc": "Amatista Celestial / Resonancia Natal"},
-        "secondary": {"oklch": "oklch(0.68 0.15 35)", "hex": "#ea580c", "desc": "Fuego Primordial / Ascendente Activo"},
-        "accent": {"oklch": "oklch(0.82 0.14 340)", "hex": "#f472b6", "desc": "Destello de Sinastría"},
-        "bg_dark": {"oklch": "oklch(0.11 0.02 310)", "hex": "#0f0817", "desc": "Noche Estelar Profunda"},
-        "surface_dark": {"oklch": "oklch(0.17 0.03 310)", "hex": "#1c102b", "desc": "Cámara de Consulta"},
-        "text_dark": {"oklch": "oklch(0.96 0.01 310)", "hex": "#faf5ff", "desc": "Luz Astral"},
-        "bg_light": {"oklch": "oklch(0.98 0.01 35)", "hex": "#fffaf5", "desc": "Lienzo de Efemérides"},
-        "surface_light": {"oklch": "oklch(0.94 0.02 35)", "hex": "#ffedd5", "desc": "Alba Cálida"},
-        "text_light": {"oklch": "oklch(0.20 0.04 310)", "hex": "#2e1065", "desc": "Tinta Índigo Cósmica"}
-    },
-    "baiosfera": {
-        "name": "Baiosfera",
-        "archetype": "El Arquitecto Fractal / Ecosistema Madre",
-        "concept": "Verde esmeralda y oro alquímico sobre matrices oscuras de alta tecnología biológica.",
-        "astro": {
-            "sun_sign": "Taurus",
-            "mc_sign": "Gemini",
-            "day_master": "Yi",
-            "nakshatra": "Rohini",
-            "dominant_element": "Earth",
-            "display": "modern_luxury_serif",
-            "body": "manrope",
-            "accent": "clarissa_monogram"
-        },
-        "primary": {"oklch": "oklch(0.55 0.18 150)", "hex": "#059669", "desc": "Esmeralda Fractal / Matriz Viva"},
-        "secondary": {"oklch": "oklch(0.72 0.14 80)", "hex": "#d97706", "desc": "Oro Solar Alquímico"},
-        "accent": {"oklch": "oklch(0.85 0.16 130)", "hex": "#84cc16", "desc": "Brote Biológico / Salto Cuántico"},
-        "bg_dark": {"oklch": "oklch(0.10 0.02 150)", "hex": "#06120b", "desc": "Suelo Biológico"},
-        "surface_dark": {"oklch": "oklch(0.16 0.03 150)", "hex": "#0e2418", "desc": "Canopia Protectora"},
-        "text_dark": {"oklch": "oklch(0.96 0.01 150)", "hex": "#f0fdf4", "desc": "Savia Luminosa"},
-        "bg_light": {"oklch": "oklch(0.98 0.01 150)", "hex": "#fcfdfc", "desc": "Invernadero Cristalino"},
-        "surface_light": {"oklch": "oklch(0.94 0.02 150)", "hex": "#dcfce7", "desc": "Suelo Nutricio"},
-        "text_light": {"oklch": "oklch(0.18 0.04 150)", "hex": "#064e3b", "desc": "Follaje Maduro"}
-    },
-    "quiet-luxury": {
-        "name": "Quiet Luxury Archetype",
-        "archetype": "El Maestro de Marca / Lujo Silencioso",
-        "concept": "Elegancia atemporal, negro obsidiana, blanco platino y acentos de latón bruñido.",
-        "astro": {
-            "sun_sign": "Gemini",
-            "mc_sign": "Pisces",
-            "day_master": "Jia",
-            "nakshatra": "Mrigashira",
-            "dominant_element": "Air",
-            "display": "luxury_editorial_serif",
-            "body": "newsreader",
-            "accent": "monogram_holder"
-        },
-        "primary": {"oklch": "oklch(0.30 0.02 260)", "hex": "#1e293b", "desc": "Obsidiana Sastorial"},
-        "secondary": {"oklch": "oklch(0.75 0.10 70)", "hex": "#b45309", "desc": "Latón Bruñido"},
-        "accent": {"oklch": "oklch(0.88 0.06 75)", "hex": "#fde68a", "desc": "Firma de Oro Blanco"},
-        "bg_dark": {"oklch": "oklch(0.10 0.01 260)", "hex": "#080c14", "desc": "Atelier Privado"},
-        "surface_dark": {"oklch": "oklch(0.15 0.02 260)", "hex": "#111827", "desc": "Mesa de Corte"},
-        "text_dark": {"oklch": "oklch(0.98 0.00 0)", "hex": "#ffffff", "desc": "Monograma Puro"},
-        "bg_light": {"oklch": "oklch(0.98 0.00 0)", "hex": "#ffffff", "desc": "Lienzo de Seda"},
-        "surface_light": {"oklch": "oklch(0.93 0.01 260)", "hex": "#f1f5f9", "desc": "Papel Algodón 300g"},
-        "text_light": {"oklch": "oklch(0.15 0.02 260)", "hex": "#0f172a", "desc": "Tinta Japonesa"}
-    },
-    "seo-maps": {
-        "name": "SEO Maps",
-        "archetype": "El Navegador Territorial / Autoridad Geográfica",
-        "concept": "Alta legibilidad, contraste clínico y dinamismo comercial. Diseñado para dominar búsquedas locales en Google Maps y conversión física.",
-        "astro": {
-            "sun_sign": "Aries",
-            "mc_sign": "Sagittarius",
-            "day_master": "Bing",
-            "nakshatra": "Krittika",
-            "dominant_element": "Fire",
-            "display": "romanesque_display",
-            "body": "instrument_sans",
-            "accent": "clarissa_monogram"
-        },
-        "primary": {"oklch": "oklch(0.45 0.18 240)", "hex": "#1d4ed8", "desc": "Azul Radar / Geocodificación Exacta"},
-        "secondary": {"oklch": "oklch(0.65 0.17 145)", "hex": "#16a34a", "desc": "Verde Conversión / Llamada Directa"},
-        "accent": {"oklch": "oklch(0.75 0.16 65)", "hex": "#f59e0b", "desc": "Pin Geográfico / 5 Estrellas"},
-        "bg_dark": {"oklch": "oklch(0.12 0.01 240)", "hex": "#090d14", "desc": "Vista Satelital Nocturna"},
-        "surface_dark": {"oklch": "oklch(0.18 0.02 240)", "hex": "#111827", "desc": "Panel de Telemetría Local"},
-        "text_dark": {"oklch": "oklch(0.98 0.00 0)", "hex": "#ffffff", "desc": "Señalética Pura"},
-        "bg_light": {"oklch": "oklch(0.98 0.00 0)", "hex": "#f9fafb", "desc": "Cartografía Diurna"},
-        "surface_light": {"oklch": "oklch(0.93 0.01 240)", "hex": "#e5e7eb", "desc": "Ruta Urbana"},
-        "text_light": {"oklch": "oklch(0.18 0.02 240)", "hex": "#111827", "desc": "Contraste de Tráfico"}
-    },
-    "synthemika": {
-        "name": "Synthemika",
-        "archetype": "El Sintetizador Generativo / Laboratorio de IA",
-        "concept": "Estética ciber-física, gradientes no-euclidianos y vibración técnica de alta precisión para micro-SaaS y agentes autónomos.",
-        "astro": {
-            "sun_sign": "Aquarius",
-            "mc_sign": "Scorpio",
-            "day_master": "Gui",
-            "nakshatra": "Shatabhisha",
-            "dominant_element": "Air",
-            "display": "clean_geometric_sans",
-            "body": "urbanist",
-            "accent": "modern_grotesk_stencil"
-        },
-        "primary": {"oklch": "oklch(0.55 0.22 280)", "hex": "#7c3aed", "desc": "Voltaje Cuántico / Inferencia de Red"},
-        "secondary": {"oklch": "oklch(0.65 0.18 190)", "hex": "#06b6d4", "desc": "Flujo de Datos / Mesh NATS"},
-        "accent": {"oklch": "oklch(0.85 0.16 130)", "hex": "#84cc16", "desc": "Pulso Activo de Contenedor"},
-        "bg_dark": {"oklch": "oklch(0.10 0.02 280)", "hex": "#0b0614", "desc": "Kernel Espacial"},
-        "surface_dark": {"oklch": "oklch(0.16 0.03 280)", "hex": "#160d29", "desc": "Bastidor de Cómputo"},
-        "text_dark": {"oklch": "oklch(0.96 0.01 190)", "hex": "#ecfeff", "desc": "Fósforo Sintético"},
-        "bg_light": {"oklch": "oklch(0.98 0.01 190)", "hex": "#f8fafc", "desc": "Salas Blancas de Chipset"},
-        "surface_light": {"oklch": "oklch(0.94 0.02 280)", "hex": "#ede9fe", "desc": "Memoria Caché"},
-        "text_light": {"oklch": "oklch(0.18 0.04 280)", "hex": "#1e1b4b", "desc": "Instrucción Binaria"}
-    }
-}
 
-def resolve_fontgen_engine() -> Path:
-    for candidate in FONTGEN_ENGINE_CANDIDATES:
-        if candidate.exists():
-            return candidate
-    return Path("/var/www/.agents/skills/fontgen/scripts/fontgen_engine.py")
+def resolve_script(name: str) -> Path:
+    for d in SCRIPTS_CANDIDATES:
+        cand = d / name
+        if cand.exists():
+            return cand
+    return SCRIPTS_CANDIDATES[0] / name
 
-def generate_chroma_manifest(vertical: str, output_dir: Path) -> Path:
-    profile = VERTICAL_PROFILES.get(vertical)
-    if not profile:
-        profile = {
-            "name": vertical.capitalize(),
-            "archetype": "Sovereign Vertical Node",
-            "concept": "Ecosistema cromático derivado soberanamente de la marca sombrilla.",
-            "primary": {"oklch": "oklch(0.50 0.15 220)", "hex": "#2563eb", "desc": "Primario Soberano"},
-            "secondary": {"oklch": "oklch(0.65 0.12 160)", "hex": "#10b981", "desc": "Secundario Operativo"},
-            "accent": {"oklch": "oklch(0.80 0.14 70)", "hex": "#f59e0b", "desc": "Acento de Acción"},
-            "bg_dark": {"oklch": "oklch(0.12 0.01 220)", "hex": "#0a0e17", "desc": "Fondo Oscuro"},
-            "surface_dark": {"oklch": "oklch(0.18 0.02 220)", "hex": "#131b2b", "desc": "Superficie Oscura"},
-            "text_dark": {"oklch": "oklch(0.96 0.01 220)", "hex": "#f8fafc", "desc": "Texto Claro"},
-            "bg_light": {"oklch": "oklch(0.98 0.01 220)", "hex": "#f8fafc", "desc": "Fondo Claro"},
-            "surface_light": {"oklch": "oklch(0.94 0.02 220)", "hex": "#e2e8f0", "desc": "Superficie Clara"},
-            "text_light": {"oklch": "oklch(0.18 0.03 220)", "hex": "#0f172a", "desc": "Texto Oscuro"}
-        }
 
-    manifest = {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "brand": profile["name"],
-        "vertical_slug": vertical,
-        "color_space": "oklch",
-        "selected_ecosystem_id": f"eco_{vertical}_primary",
-        "ecosystems": [
-            {
-                "id": f"eco_{vertical}_primary",
-                "name": f"{profile['name']} — Rector",
-                "concept": profile["concept"],
-                "archetype": profile["archetype"],
-                "themes": {
-                    "dark": {
-                        "primary": {"$value": profile["primary"]["oklch"], "$type": "color", "$description": profile["primary"]["desc"], "hex": profile["primary"]["hex"]},
-                        "secondary": {"$value": profile["secondary"]["oklch"], "$type": "color", "$description": profile["secondary"]["desc"], "hex": profile["secondary"]["hex"]},
-                        "accent": {"$value": profile["accent"]["oklch"], "$type": "color", "$description": profile["accent"]["desc"], "hex": profile["accent"]["hex"]},
-                        "background": {"$value": profile["bg_dark"]["oklch"], "$type": "color", "$description": profile["bg_dark"]["desc"], "hex": profile["bg_dark"]["hex"]},
-                        "surface": {"$value": profile["surface_dark"]["oklch"], "$type": "color", "$description": profile["surface_dark"]["desc"], "hex": profile["surface_dark"]["hex"]},
-                        "text": {"$value": profile["text_dark"]["oklch"], "$type": "color", "$description": profile["text_dark"]["desc"], "hex": profile["text_dark"]["hex"]}
-                    },
-                    "light": {
-                        "primary": {"$value": profile["primary"]["oklch"], "$type": "color", "$description": profile["primary"]["desc"], "hex": profile["primary"]["hex"]},
-                        "secondary": {"$value": profile["secondary"]["oklch"], "$type": "color", "$description": profile["secondary"]["desc"], "hex": profile["secondary"]["hex"]},
-                        "accent": {"$value": profile["accent"]["oklch"], "$type": "color", "$description": profile["accent"]["desc"], "hex": profile["accent"]["hex"]},
-                        "background": {"$value": profile["bg_light"]["oklch"], "$type": "color", "$description": profile["bg_light"]["desc"], "hex": profile["bg_light"]["hex"]},
-                        "surface": {"$value": profile["surface_light"]["oklch"], "$type": "color", "$description": profile["surface_light"]["desc"], "hex": profile["surface_light"]["hex"]},
-                        "text": {"$value": profile["text_light"]["oklch"], "$type": "color", "$description": profile["text_light"]["desc"], "hex": profile["text_light"]["hex"]}
-                    }
-                },
-                "accessibility": {
-                    "standard": "WCAG 2.2 AAA / APCA",
-                    "text_contrast_ratio_dark": "13.4:1",
-                    "text_contrast_ratio_light": "14.1:1",
-                    "compliance": "AAA"
-                }
-            }
-        ]
-    }
+def find_project_dev_dir(project_name: Optional[str] = None) -> Optional[Path]:
+    pname = (project_name or os.getenv("PROJECT_NAME") or os.getenv("ENGRAM_PROJECT") or "").strip()
+    if not pname:
+        return None
+    for root in (Path("/mnt/localstorage"), Path("/var/www/localstorage"), Path("/var/www/baiosfera/PROYECTOS")):
+        if not root.exists():
+            continue
+        direct = root / pname / "dev"
+        if direct.exists():
+            return direct
+        try:
+            for ch in root.iterdir():
+                if ch.is_dir() and ch.name.lower() == pname.lower() and (ch / "dev").exists():
+                    return ch / "dev"
+        except Exception:
+            pass
+    return None
 
-    out_file = output_dir / "chroma_manifest.json"
-    with open(out_file, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
-    return out_file
 
-def generate_brandbook_tokens(vertical: str, output_dir: Path) -> Tuple[Path, Path]:
-    chroma_file = output_dir / "chroma_manifest.json"
-    font_file = output_dir / "font_manifest.json"
-    
-    colors = {}
-    if chroma_file.exists():
-        with open(chroma_file, "r", encoding="utf-8") as f:
-            c_data = json.load(f)
-            eco = c_data["ecosystems"][0]["themes"]["dark"]
-            for k, v in eco.items():
-                colors[k] = v["$value"]
-    
-    fonts = {"display": "Serif Luxury Logo", "body": "Newsreader", "accent": "Dellina Monogram"}
-    if font_file.exists():
-        with open(font_file, "r", encoding="utf-8") as f:
-            f_data = json.load(f)
-            tokens = f_data.get("tokens", {})
-            fonts["display"] = tokens.get("display_primary", {}).get("family", fonts["display"])
-            fonts["body"] = tokens.get("ui_secondary", {}).get("family", fonts["body"])
-            fonts["accent"] = tokens.get("accent_brand", {}).get("family", fonts["accent"])
+def resolve_brief_and_brand(brand: Optional[str], project_dir: Optional[Path], vertical: Optional[str]) -> Tuple[str, Optional[Path]]:
+    """Discovers umbrella astrobranding_*.md and brand name dynamically without inventing data."""
+    candidates: List[Path] = []
+    if project_dir and project_dir.exists():
+        if brand:
+            candidates.append(project_dir / f"astrobranding_{brand.lower()}.md")
+        candidates.extend(sorted(project_dir.glob("astrobranding_*.md")))
+        if vertical:
+            candidates.extend(sorted((project_dir / "workspaces" / vertical / "brand").glob("astrobranding_*.md")))
 
-    profile = VERTICAL_PROFILES.get(vertical, {"name": vertical.capitalize(), "archetype": "Sovereign Node"})
+    if brand:
+        b_up = re.sub(r"[^a-zA-Z0-9_-]+", "", brand).upper()
+        candidates.append(Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{b_up}/astrobranding_{brand.lower()}.md"))
 
-    brandbook = {
-        "$schema": "https://design-tokens.github.io/community-group/format/",
-        "brand": {
-            "name": {"$value": profile["name"], "$type": "string"},
-            "vertical": {"$value": vertical, "$type": "string"},
-            "archetype": {"$value": profile["archetype"], "$type": "string"}
-        },
-        "color": {
-            "primary": {"$value": colors.get("primary", "oklch(0.5 0.15 220)"), "$type": "color"},
-            "secondary": {"$value": colors.get("secondary", "oklch(0.6 0.12 160)"), "$type": "color"},
-            "accent": {"$value": colors.get("accent", "oklch(0.8 0.14 70)"), "$type": "color"},
-            "background": {"$value": colors.get("background", "oklch(0.12 0.01 220)"), "$type": "color"},
-            "surface": {"$value": colors.get("surface", "oklch(0.18 0.02 220)"), "$type": "color"},
-            "text": {"$value": colors.get("text", "oklch(0.96 0.01 220)"), "$type": "color"}
-        },
-        "typography": {
-            "font_display": {"$value": fonts["display"], "$type": "fontFamily"},
-            "font_body": {"$value": fonts["body"], "$type": "fontFamily"},
-            "font_accent": {"$value": fonts["accent"], "$type": "fontFamily"}
-        }
-    }
-
-    bb_file = output_dir / "brandbook.json"
-    with open(bb_file, "w", encoding="utf-8") as f:
-        json.dump(brandbook, f, indent=2, ensure_ascii=False)
-
-    # Tailwind v4 theme CSS
-    css_content = f"""@theme {{
-  --color-primary: {colors.get("primary", "oklch(0.5 0.15 220)")};
-  --color-secondary: {colors.get("secondary", "oklch(0.6 0.12 160)")};
-  --color-accent: {colors.get("accent", "oklch(0.8 0.14 70)")};
-  --color-background: {colors.get("background", "oklch(0.12 0.01 220)")};
-  --color-surface: {colors.get("surface", "oklch(0.18 0.02 220)")};
-  --color-text: {colors.get("text", "oklch(0.96 0.01 220)")};
-
-  --font-display: "{fonts['display']}", serif;
-  --font-body: "{fonts['body']}", sans-serif;
-  --font-accent: "{fonts['accent']}", cursive;
-}}
-"""
-    css_file = output_dir / "brandbook-theme.css"
-    with open(css_file, "w", encoding="utf-8") as f:
-        f.write(css_content)
-
-    return bb_file, css_file
-
-def run_for_vertical(vertical: str, phases: List[str], base_dir: Path) -> Dict[str, Any]:
-    slug = vertical.strip().lower()
-    target_dir = base_dir / slug / "brand"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    
-    results: Dict[str, Any] = {"vertical": slug, "generated": [], "status": "ok"}
-    fontgen_script = resolve_fontgen_engine()
-
-    # 1. Fontgen
-    if "fontgen" in phases or "all" in phases:
-        if fontgen_script.exists():
-            cmd = [
-                sys.executable, str(fontgen_script),
-                "--brand", slug,
-                "--output-dir", str(target_dir),
-                "--no-live"
-            ]
-            prof = VERTICAL_PROFILES.get(slug, {})
-            astro = prof.get("astro", {})
-            if astro.get("sun_sign"):
-                cmd.extend(["--sun-sign", astro["sun_sign"]])
-            if astro.get("mc_sign"):
-                cmd.extend(["--mc-sign", astro["mc_sign"]])
-            if astro.get("day_master"):
-                cmd.extend(["--day-master", astro["day_master"]])
-            if astro.get("nakshatra"):
-                cmd.extend(["--nakshatra", astro["nakshatra"]])
-            if astro.get("dominant_element"):
-                cmd.extend(["--dominant-element", astro["dominant_element"]])
-            if astro.get("display"):
-                cmd.extend(["--display", astro["display"]])
-            if astro.get("body"):
-                cmd.extend(["--body", astro["body"]])
-            if astro.get("accent"):
-                cmd.extend(["--accent", astro["accent"]])
-            if not astro:
-                cmd.append("--allow-default")
-
+    brief = next((c for c in candidates if c.is_file()), None)
+    resolved_brand = brand
+    if not resolved_brand and brief:
+        resolved_brand = brief.stem.replace("astrobranding_", "").upper()
+    if not resolved_brand and project_dir:
+        eco_file = project_dir / "ecosystem.json"
+        if eco_file.exists():
             try:
-                subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=30)
-                results["generated"].append("font_manifest.json")
-            except Exception as e:
-                results["error_fontgen"] = str(e)
+                edata = json.loads(eco_file.read_text(encoding="utf-8"))
+                resolved_brand = (edata.get("umbrella_name") or edata.get("brand_slug") or project_dir.parent.name).upper()
+            except Exception:
+                pass
+    return (resolved_brand or "BRAND").upper(), brief
+
+
+def deep_merge_non_destructive(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(base)
+    for k, v in updates.items():
+        if k in out and isinstance(out[k], dict) and isinstance(v, dict):
+            out[k] = deep_merge_non_destructive(out[k], v)
         else:
-            results["error_fontgen"] = "fontgen_engine.py not found"
+            out[k] = v
+    return out
 
-    # 2. Chroma
-    if "chroma" in phases or "all" in phases:
-        c_path = generate_chroma_manifest(slug, target_dir)
-        results["generated"].append(c_path.name)
 
-    # 3. Brandbook
-    if "brandbook" in phases or "all" in phases:
-        bb, css = generate_brandbook_tokens(slug, target_dir)
+def merge_brandbook_non_destructive(target_dir: Path, project_dir: Optional[Path], brand: str, vertical: Optional[str]) -> Tuple[Path, Path]:
+    """
+    Merges verified Chroma & Fontgen design tokens into brandbook.json WITHOUT overwriting
+    metadata, brand_architecture, voice_tone_and_messaging, lexicon, or target_audience.
+    """
+    bb_path = target_dir / "brandbook.json"
+    existing: Dict[str, Any] = {}
+    for cand in (bb_path, project_dir / "brandbook.json" if project_dir else None):
+        if cand and cand.is_file():
+            try:
+                loaded = json.loads(cand.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict) and (len(loaded) > 3 or "brand_architecture" in loaded):
+                    existing = loaded
+                    break
+            except Exception:
+                pass
+
+    chroma_file = target_dir / "chroma_manifest.json"
+    font_file = target_dir / "font_manifest.json"
+
+    color_patch: Dict[str, Any] = {}
+    selected_color_eco = None
+    css_root = ""
+    tailwind_block = ""
+    if chroma_file.is_file():
+        cdata = json.loads(chroma_file.read_text(encoding="utf-8"))
+        selected_color_eco = cdata.get("selected_ecosystem_id")
+        themes = cdata.get("themes", {})
+        dark_t = themes.get("dark", {})
+        light_t = themes.get("light", {})
+        color_patch = {
+            "selected_ecosystem_id": selected_color_eco,
+            "dark": {k: {"$value": v["$value"], "$type": "color", "hex": v["hex"], "p3": v.get("p3", "")} for k, v in dark_t.items() if isinstance(v, dict) and "$value" in v},
+            "light": {k: {"$value": v["$value"], "$type": "color", "hex": v["hex"], "p3": v.get("p3", "")} for k, v in light_t.items() if isinstance(v, dict) and "$value" in v},
+            "accessibility": cdata.get("accessibility_audit", {}),
+        }
+        css_root = cdata.get("css_integration", {}).get("css_variables_root", "")
+        tailwind_block = cdata.get("css_integration", {}).get("tailwind_v4_theme_block", "")
+
+    font_patch: Dict[str, Any] = {}
+    selected_font_eco = None
+    disp_font, body_font, acc_font = "Newsreader", "Manrope", "Fraunces"
+    if font_file.is_file():
+        fdata = json.loads(font_file.read_text(encoding="utf-8"))
+        selected_font_eco = fdata.get("selected_ecosystem_id")
+        sel_eco = fdata.get("selected_ecosystem") or (fdata.get("candidate_ecosystems") or [{}])[0]
+        tokens = sel_eco.get("tokens", {})
+        disp_font = tokens.get("display_primary", {}).get("$value", disp_font)
+        body_font = tokens.get("ui_secondary", {}).get("$value", body_font)
+        acc_font = tokens.get("accent_brand", {}).get("$value", acc_font)
+        bridge = fdata.get("web_ready_bridge", {})
+        font_patch = {
+            "selected_ecosystem_id": selected_font_eco,
+            "display_primary": {"$value": disp_font, "$type": "fontFamily", "url": tokens.get("display_primary", {}).get("url", "")},
+            "ui_secondary": {"$value": body_font, "$type": "fontFamily", "url": tokens.get("ui_secondary", {}).get("url", "")},
+            "accent_brand": {"$value": acc_font, "$type": "fontFamily", "url": tokens.get("accent_brand", {}).get("url", "")},
+            "web_ready_bridge": bridge,
+            "inheritance": fdata.get("inheritance", {}),
+        }
+
+    patch = {
+        "metadata": {
+            "brand_name": existing.get("metadata", {}).get("brand_name") or brand,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            **({"vertical_slug": vertical} if vertical else {}),
+        },
+        "design_system": {
+            "colors": color_patch,
+            "typography": font_patch,
+        },
+    }
+    merged = deep_merge_non_destructive(existing, patch)
+    if "$schema" not in merged:
+        merged["$schema"] = "https://www.designtokens.org/tr/2025.10/format/"
+
+    bb_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    css_lines = [
+        f"/* Tailwind CSS v4 Brand Theme Tokens — {brand}" + (f" / {vertical}" if vertical else "") + " */",
+        '@import "tailwindcss";',
+        "",
+        tailwind_block or "@theme {\n  --color-brand-primary: var(--brand-primary);\n}",
+        "",
+        f"  /* Typography variables merged cleanly */",
+        css_root or "",
+        "",
+        ":root {",
+        f'  --font-display: "{disp_font}", serif;',
+        f'  --font-body: "{body_font}", system-ui, sans-serif;',
+        f'  --font-accent: "{acc_font}", cursive;',
+        "}",
+    ]
+    css_path = target_dir / "brandbook-theme.css"
+    css_path.write_text("\n".join(css_lines).strip() + "\n", encoding="utf-8")
+    return bb_path, css_path
+
+
+def run_pipeline(
+    brand: str,
+    target_dir: Path,
+    phases: List[str],
+    brief_path: Optional[Path] = None,
+    shards_path: Optional[Path] = None,
+    project_dir: Optional[Path] = None,
+    vertical: Optional[str] = None,
+    preview_texts: str = "",
+    no_live: bool = False,
+) -> Dict[str, Any]:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    results: Dict[str, Any] = {"brand": brand, "vertical": vertical, "target_dir": str(target_dir), "generated": []}
+
+    run_all = "all" in phases
+    if run_all or "chroma" in phases:
+        cmd = [sys.executable, "-B", str(resolve_script("chroma_engine.py")), "--brand", brand, "--output-dir", str(target_dir)]
+        if vertical:
+            cmd.extend(["--vertical", vertical])
+        if brief_path:
+            cmd.extend(["--brief", str(brief_path)])
+        if shards_path:
+            cmd.extend(["--shards", str(shards_path)])
+        subprocess.run(cmd, check=True)
+        results["generated"].extend(["chroma_manifest.json", "chroma_preview.html"])
+
+    if run_all or "fontgen" in phases:
+        cmd = [sys.executable, "-B", str(resolve_script("fontgen_engine.py")), "--brand", brand, "--output-dir", str(target_dir)]
+        if brief_path:
+            cmd.extend(["--brief", str(brief_path)])
+        else:
+            cmd.append("--allow-default")
+        if shards_path:
+            cmd.extend(["--shards", str(shards_path)])
+        if no_live:
+            cmd.append("--no-live")
+        subprocess.run(cmd, check=True)
+        results["generated"].extend(["font_manifest.json", f"fontgen_{brand.lower()}.md"])
+
+    if (run_all or "previews" in phases) and not no_live and (target_dir / "font_manifest.json").exists():
+        texts = preview_texts.strip() or ",".join([brand.upper(), (vertical or brand).replace("-", " ").upper()])
+        cmd = [
+            sys.executable, "-B", str(resolve_script("envato_font_preview.py")),
+            "--from-manifest", str(target_dir / "font_manifest.json"),
+            "--texts", texts,
+            "--out", str(target_dir / "previews"),
+            "--title", f"Galería Envato + Google Fonts — {brand.upper()}" + (f" ({vertical})" if vertical else ""),
+        ]
+        if (target_dir / "chroma_manifest.json").exists():
+            cmd.extend(["--chroma", str(target_dir / "chroma_manifest.json")])
+        subprocess.run(cmd, check=True)
+        results["generated"].append("previews/preview_gallery.html")
+
+    if run_all or "brandbook" in phases:
+        bb, css = merge_brandbook_non_destructive(target_dir, project_dir, brand, vertical)
         results["generated"].extend([bb.name, css.name])
 
     return results
 
-def audit_vertical(vertical: str, base_dir: Path) -> Tuple[bool, List[str]]:
-    slug = vertical.strip().lower()
-    target_dir = base_dir / slug / "brand"
-    errors = []
-    
-    for f in ["font_manifest.json", "chroma_manifest.json", "brandbook.json", "brandbook-theme.css"]:
-        p = target_dir / f
-        if not p.exists():
+
+def audit_target(target_dir: Path, phases: List[str]) -> Tuple[bool, List[str]]:
+    errors: List[str] = []
+    checks = []
+    if "all" in phases or "chroma" in phases:
+        checks.append("chroma_manifest.json")
+    if "all" in phases or "fontgen" in phases:
+        checks.append("font_manifest.json")
+    if "all" in phases or "brandbook" in phases:
+        checks.extend(["brandbook.json", "brandbook-theme.css"])
+
+    for fname in checks:
+        p = target_dir / fname
+        if not p.is_file():
             errors.append(f"Missing required artifact: {p}")
-        elif p.suffix == ".json":
+            continue
+        if p.suffix == ".json":
             try:
-                with open(p, "r", encoding="utf-8") as jf:
-                    json.load(jf)
-            except Exception as je:
-                errors.append(f"Invalid JSON in {p}: {je}")
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if fname == "chroma_manifest.json":
+                    if len(data.get("ecosystems", [])) < 3:
+                        errors.append("chroma_manifest.json has < 3 ecosystems")
+                    if not data.get("accessibility_audit", {}).get("wcag_2_2_compliance", {}).get("status_aaa"):
+                        errors.append("chroma_manifest.json failed WCAG AAA status check")
+                elif fname == "font_manifest.json":
+                    if len(data.get("candidate_ecosystems", [])) < 3:
+                        errors.append("font_manifest.json has < 3 ecosystems")
+            except Exception as e:
+                errors.append(f"Invalid JSON in {p}: {e}")
     return len(errors) == 0, errors
 
-def main():
-    parser = argparse.ArgumentParser(
-        prog="orchesbrand",
-        description="Sovereign Brand Pipeline CLI (fontgen, chroma, brandbook DTCG)"
-    )
-    parser.add_argument(
-        "--vertical",
-        default="all",
-        help="Target vertical slug (or 'all' to discover from workspace/verticals). Default: all"
-    )
-    parser.add_argument(
-        "--phases",
-        default="fontgen,chroma,brandbook",
-        help="Comma-separated phases: fontgen,chroma,brandbook,all. Default: fontgen,chroma,brandbook"
-    )
-    parser.add_argument(
-        "--workspace-dir",
-        default=str(DEFAULT_WORKSPACE_BASE),
-        help=f"Target workspace base directory. Default: {DEFAULT_WORKSPACE_BASE}"
-    )
-    parser.add_argument(
-        "--audit",
-        action="store_true",
-        help="Perform strict physical verification of generated artifacts."
-    )
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Suppress human logs and emit JSON results only."
-    )
+
+def run_unit_tests() -> int:
+    print("Running orchesbrand v3.0 agnostic offline unit tests...")
+    with tempfile.TemporaryDirectory(prefix="orchesbrand_test_") as tmp:
+        tp = Path(tmp)
+        proj_dev = tp / "TestProj" / "dev"
+        ws_brand = proj_dev / "workspaces" / "alpha-line" / "brand"
+        ws_brand.mkdir(parents=True, exist_ok=True)
+        (proj_dev / "astrobranding_testcorp.md").write_text(
+            "# Master Brief TESTCORP\n| **Sol Natal** | **Géminis 10°** |\n| **Medio Cielo** | **Capricornio 14°** |\n"
+            "**Nakshatra:** Chitra\n**Day Master:** Jia\n",
+            encoding="utf-8",
+        )
+        # Seed rich existing brandbook to verify non-destructive merge
+        seed_bb = {
+            "metadata": {"brand_name": "TESTCORP"},
+            "brand_architecture": {"core_promise": "Preserved core architecture"},
+            "voice_tone_and_messaging": {"primary_tone": "Direct and calm"},
+            "lexicon": {"forbidden_terms": ["slop"]},
+        }
+        (ws_brand / "brandbook.json").write_text(json.dumps(seed_bb, indent=2), encoding="utf-8")
+
+        brand, brief = resolve_brief_and_brand("TESTCORP", proj_dev, "alpha-line")
+        assert brand == "TESTCORP" and brief is not None
+        run_pipeline(brand, ws_brand, ["chroma", "fontgen", "brandbook"], brief_path=brief, project_dir=proj_dev, vertical="alpha-line", no_live=True)
+        ok, errs = audit_target(ws_brand, ["chroma", "fontgen", "brandbook"])
+        assert ok, f"Audit failed: {errs}"
+
+        merged = json.loads((ws_brand / "brandbook.json").read_text(encoding="utf-8"))
+        assert merged["brand_architecture"]["core_promise"] == "Preserved core architecture", "Brandbook was clobbered!"
+        assert merged["voice_tone_and_messaging"]["primary_tone"] == "Direct and calm"
+        assert merged["design_system"]["typography"]["display_primary"]["$value"] != "Serif Luxury Logo" or merged["design_system"]["typography"]["display_primary"]["url"].startswith("https://")
+        assert merged["design_system"]["colors"]["dark"]["primary"]["$value"].startswith("oklch(")
+    assert not Path("/mnt/localstorage/TESTCORP").exists(), "Phantom folder created!"
+    print("✅ ORCHESBRAND v3.0 UNIT TESTS PASSED (agnostic, non-destructive merge, 0 phantom dirs)")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="orchesbrand", description="Sovereign Agnostic Brand Pipeline CLI (v3.0)")
+    parser.add_argument("--brand", default=None, help="Umbrella brand slug (e.g. AURELIUS)")
+    parser.add_argument("--vertical", default=None, help="Vertical slug inside workspaces/<vertical>/brand")
+    parser.add_argument("--project-dir", type=Path, default=None, help="Project dev root (e.g. /mnt/localstorage/<Project>/dev)")
+    parser.add_argument("--output-dir", type=Path, default=None, help="Explicit output directory")
+    parser.add_argument("--brief", type=Path, default=None, help="Explicit astrobranding_<brand>.md path")
+    parser.add_argument("--shards", type=Path, default=None, help="Explicit client_dumps_15_shards.json path")
+    parser.add_argument("--phases", default="chroma,fontgen,previews,brandbook", help="Comma-separated phases: chroma,fontgen,previews,brandbook,all")
+    parser.add_argument("--preview-texts", default="", help="Comma-separated preview strings for Envato SVG gallery")
+    parser.add_argument("--no-live", action="store_true", help="Offline mode (skip live Envato scraping/previews)")
+    parser.add_argument("--audit", action="store_true", help="Validate generated artifacts strictly")
+    parser.add_argument("--quiet", action="store_true", help="JSON output only")
+    parser.add_argument("--test", action="store_true", help="Run self-contained offline unit tests")
     args = parser.parse_args()
 
-    base_dir = Path(args.workspace_dir)
-    phases = [p.strip().lower() for p in args.phases.split(",") if p.strip()]
+    if args.test:
+        return run_unit_tests()
 
-    discovered = [p.name for p in sorted(base_dir.iterdir()) if p.is_dir()] if base_dir.exists() else []
-    env_verticals = [v.strip().lower() for v in os.getenv("VERTICAL_SLUGS", "").split(",") if v.strip()]
-    all_verticals = env_verticals or discovered or [os.getenv("BRAND_SLUG", _PROJECT_NAME.lower())]
-    if args.vertical.strip().lower() == "all":
-        targets = all_verticals
+    proj_dir = args.project_dir or find_project_dev_dir()
+    brand, brief = resolve_brief_and_brand(args.brand, proj_dir, args.vertical)
+    if args.brief:
+        brief = args.brief
+
+    if args.output_dir:
+        targets = [(args.vertical, args.output_dir)]
+    elif args.vertical and args.vertical.lower() != "all" and proj_dir:
+        targets = [(args.vertical.lower(), proj_dir / "workspaces" / args.vertical.lower() / "brand")]
+    elif proj_dir and (proj_dir / "workspaces").is_dir() and (args.vertical or "").lower() == "all":
+        targets = [(d.name, d / "brand") for d in sorted((proj_dir / "workspaces").iterdir()) if d.is_dir()]
+    elif proj_dir:
+        targets = [(None, proj_dir)]
     else:
-        v = args.vertical.strip().lower()
-        if v not in all_verticals:
-            targets = [v]
-        else:
-            targets = [v]
+        targets = [(args.vertical, Path.cwd())]
 
+    phases = [p.strip().lower() for p in args.phases.split(",") if p.strip()]
     all_res = []
-    has_errors = False
-    for t in targets:
-        res = run_for_vertical(t, phases, base_dir)
+    has_err = False
+    for vslug, tdir in targets:
+        res = run_pipeline(
+            brand=brand, target_dir=tdir, phases=phases, brief_path=brief,
+            shards_path=args.shards, project_dir=proj_dir, vertical=vslug,
+            preview_texts=args.preview_texts, no_live=args.no_live,
+        )
         if args.audit:
-            ok, audit_errs = audit_vertical(t, base_dir)
+            ok, errs = audit_target(tdir, phases)
             res["audit_passed"] = ok
             if not ok:
-                has_errors = True
-                res["audit_errors"] = audit_errs
+                has_err = True
+                res["audit_errors"] = errs
         all_res.append(res)
         if not args.quiet:
-            print(f"✅ [{t}] Artefactos en {base_dir / t / 'brand'}: {', '.join(res['generated'])}")
-            if args.audit and not res.get("audit_passed", True):
-                print(f"❌ [{t}] Falló auditoría: {res.get('audit_errors')}", file=sys.stderr)
+            print(f"✅ [{brand}" + (f"/{vslug}" if vslug else "") + f"] Artefactos en {tdir}: {', '.join(res['generated'])}")
+            if not res.get("audit_passed", True):
+                print(f"❌ Audit errors: {res.get('audit_errors')}", file=sys.stderr)
 
-    if not args.quiet:
-        print(f"\n🎉 Orchesbrand finalizado con éxito para {len(targets)} vertical(es).")
-    else:
-        print(json.dumps(all_res, indent=2))
+    if args.quiet:
+        print(json.dumps(all_res, indent=2, ensure_ascii=False))
+    return 1 if has_err else 0
 
-    sys.exit(1 if has_errors else 0)
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

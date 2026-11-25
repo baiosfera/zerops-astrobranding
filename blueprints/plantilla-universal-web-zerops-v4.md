@@ -218,10 +218,12 @@ Bifrost expone 5 Virtual Keys desacopladas de nombres de clientes:
 
 Todo producto construido bajo esta plantilla debe orquestar el ecosistema de 141 skills divididas en 4 dimensiones operativas:
 
-### A. Arte, Vibe-Craft & Experiencia Sensorial
-- **`fontgen`**: Dirección tipográfica con jerarquías Display + Grotesk en 6 capas funcionales.
+### A. Arte, Vibe-Craft & Experiencia Sensorial (Contrato Two-Layer + Zero-Jargon)
+- **`orchesbrand` (v3.0 agnóstico, no destructivo):** Orquesta `chroma-engine` + `fontgen-engine` + `envato-font-preview` + merge no destructivo de `brandbook.json` y `brandbook-theme.css` dentro de `dev/workspaces/<vertical>/brand/` sin crear carpetas fantasmas globales.
+- **`fontgen` + `envato-font-preview`:** Dirección tipográfica Display + Grotesk + Monospace tabular en 6 capas funcionales (`web_ready_bridge` para Astro 5 `experimental.fonts` + galería SVG interactiva de Envato Elements `app.envato.com/fonts/{uuid}` previa a descarga `.woff2`).
 - **`kinetic`**: Microinteracciones a 60fps con GSAP, curvas `cubic-bezier(0.16, 1, 0.3, 1)` y SFX procedurales.
-- **`chroma`**: Modelado matemático de paletas en **OKLCH**, contraste APCA Lc >= 82 y WCAG 2.2 AAA (>= 7:1).
+- **`chroma` (`chroma-engine`):** Modelado matemático real en **OKLCH** (3 ecosistemas × Dark/Light Mode), contraste físico APCA `Lc >= 75` y WCAG 2.2 AAA (`>= 7:1`) con `chroma_preview.html`.
+- **`brand-play` + `anti-slop-linter` (Puerta de Ortografía & Zero-Jargon):** Todo copy orientado al cliente en `dev/workspaces/<vertical>/copy/` y `web/` debe usar los 18 playbooks (`INDEX.json`) sintetizados en español natural con tildes/ñ completas y cero siglas técnicas internas (`OPB`, `CO1`, `BANT`, `AEO`, `GEO`, `PWYW`, `Order Bump`, `Context Vault`) ni enums `UPPER_SNAKE_CASE`.
 - **`taste-skill` e `impeccable`**: Calibración estricta de los 3 Diales:
   * `DESIGN_VARIANCE: 8` — Asimetría intencional y grillas editoriales dinámicas.
   * `MOTION_INTENSITY: 6` — Entradas físicas suaves con aceleración natural.
