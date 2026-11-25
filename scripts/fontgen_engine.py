@@ -50,7 +50,7 @@ NOISE_BLOCKLIST_BASE = {
 
 VANGUARD_CRAFT_TOKENS = {
     "inktrap", "grotesk", "grotesque", "groteks", "neo", "variable", "family", "pro",
-    "mono", "monospace", "condensed", "editorial", "geometric", "modern", "celestial",
+    "condensed", "editorial", "geometric", "modern", "celestial",
     "cinematic", "minimal", "minimalist", "sans", "didone", "brutalist", "technica",
 }
 
@@ -92,9 +92,9 @@ ENVATO_VERIFIED_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "lenia_mono": {
         "family": "Lenia Mono",
-        "item_uuid": "f23df0ad-bbed-4d5b-927d-3e57d35efc0c",
-        "url": "https://app.envato.com/fonts/f23df0ad-bbed-4d5b-927d-3e57d35efc0c",
-        "search_url": "https://elements.envato.com/fonts/sans-serif/sort-by-popular",
+        "item_uuid": "f23df0ad-bbed-4d5b-927d-3e57d35ef0c0",
+        "url": "https://app.envato.com/fonts/f23df0ad-bbed-4d5b-927d-3e57d35ef0c0",
+        "search_url": "https://elements.envato.com/fonts/monospace/sort-by-popular",
         "weights": ["400", "600", "700"],
         "category": "sans",
         "style": "Geometric Monospace Family",
@@ -321,15 +321,37 @@ def normalize_zodiac_sign(raw_sign: str) -> str:
     return SIGN_NORMALIZATION.get(s, str(raw_sign or "").strip().title())
 
 
+def _extract_vertical_identity_blob(vdata: Dict[str, Any]) -> str:
+    cap = vdata.get("category_and_positioning") or {}
+    parts: List[Any] = [
+        vdata.get("vertical_slug", ""),
+        vdata.get("display_name", ""),
+        vdata.get("name", ""),
+        vdata.get("title", ""),
+        vdata.get("funnel_type", ""),
+        vdata.get("category", ""),
+        vdata.get("tagline", ""),
+        vdata.get("aesthetic_direction", ""),
+        vdata.get("design_archetype", ""),
+        cap.get("category_name", ""),
+        cap.get("primary_positioning_terms", []),
+        vdata.get("ontological_foundation", {}),
+        vdata.get("unique_mechanism", {}),
+        vdata.get("subthemes", []),
+        vdata.get("target_avatar", {}),
+    ]
+    return json.dumps(parts, ensure_ascii=False)
+
+
 def classify_vertical_style_profile(vblob: str, vertical_slug: str = "") -> str:
     t = f"{vertical_slug} {vblob}".lower()
-    if any(k in t for k in ("astrotipia", "sabidurías cósmicas", "arquetipo vocacional", "kabbalah", "human design", "numerolog", "tarot", "autoconocimiento")):
+    if any(k in t for k in ("sabidurías cósmicas", "arquetipo vocacional", "astrolog", "kabbalah", "human design", "numerolog", "tarot", "autoconocimiento", "carta natal", "cósmic")):
         return "cosmic_archetypal"
-    if any(k in t for k in ("synthemika", "astrobranding aplicado", "tokens de diseño", "brandbook", "monogramas vectoriales", "tipografía curada", "tokens dtcg")):
+    if any(k in t for k in ("design system", "tokens de diseño", "brandbook", "monogramas vectoriales", "tipografía curada", "tokens dtcg", "astrobranding", "sistema de diseño", "identidad visual")):
         return "design_system_atelier"
-    if any(k in t for k in ("apotelos", "causalidad inversa", "arqueología del futuro", "saga editorial", "manifiesto conceptual", "book_waitlist")):
+    if any(k in t for k in ("causalidad inversa", "arqueología del futuro", "saga editorial", "manifiesto", "book_waitlist", "libro", "ensayo filosófico")):
         return "editorial_manifesto"
-    if any(k in t for k in ("consultor", "b2b", "financier", "abogado", "médico", "unipersonal", "agencia", "automatiz", "saas", "seo local", "google maps", "baiosfera")):
+    if any(k in t for k in ("consultor", "b2b", "financier", "abogado", "médico", "unipersonal", "agencia", "automatiz", "saas", "seo local", "google maps", "infraestructura", "captación", "independientes")):
         return "architectural_b2b"
     return "editorial_brand"
 
@@ -429,8 +451,10 @@ class FontgenEngine:
         first_part = re.split(r"\s*[-–—|:]\s*", raw_title)[0].strip()
         first_part = re.split(r",", first_part)[0].strip()
         first_part = html_lib.unescape(first_part)
+        first_part = re.sub(r"[®™©]+", "", first_part).strip()
+        first_part = re.sub(r"\s+A\s+(?:Geometric|Modern|Minimal|Experimental|Corporate|Editorial|Clean)\b.*$", "", first_part, flags=re.IGNORECASE).strip()
         cleaned = re.sub(
-            r"\b(Font|Typeface|Family|Display|Serif|Sans|Bold|Minimalist|Branding|Logo|Modern)\b",
+            r"\b(?:Clean\s+Minimal\s+Geometric|Geometric\s+Monospace|Font|Typeface|Family|Display|Serif|Sans|Bold|Minimalist|Minimal|Clean|Branding|Logo|Modern)\b",
             "", first_part, flags=re.IGNORECASE,
         ).strip()
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
@@ -440,7 +464,7 @@ class FontgenEngine:
         words = set(re.findall(r"[a-z0-9]+", raw_title.lower()))
         return bool(words.intersection(NOISE_BLOCKLIST_BASE))
 
-    def _score_candidate(self, title: str, is_new: bool, has_svg: bool, sort_label: str) -> int:
+    def _score_candidate(self, title: str, is_new: bool, has_svg: bool, sort_label: str, query_term: str = "") -> int:
         words = set(re.findall(r"[a-z0-9]+", title.lower()))
         score = 10
         if is_new or sort_label == "latest":
@@ -449,6 +473,10 @@ class FontgenEngine:
             score += 8
         craft_hits = len(words.intersection(VANGUARD_CRAFT_TOKENS))
         score += craft_hits * 10
+        wants_mono = "mono" in query_term.lower()
+        has_mono = bool(words.intersection({"mono", "monospace"}))
+        if has_mono:
+            score += 12 if wants_mono else -15
         if "logo" in words and craft_hits == 0:
             score -= 18
         if len(title) > 52:
@@ -460,7 +488,8 @@ class FontgenEngine:
             return False
         if not self.verify_svg_preview:
             return True
-        svg_url = f"https://elements.envato.com/font-preview.svg?itemUuid={urllib.parse.quote(item_uuid)}&text=DISEÑO+Ñ&typed=1"
+        txt = urllib.parse.quote_plus("DISEÑO Ñ")
+        svg_url = f"https://elements.envato.com/font-preview.svg?itemUuid={urllib.parse.quote(item_uuid)}&text={txt}&typed=1"
         try:
             req = urllib.request.Request(
                 svg_url,
@@ -580,7 +609,7 @@ class FontgenEngine:
             if family.lower() in [f.lower() for f in self.used_families] or family.lower() in seen_fams:
                 continue
             seen_fams.add(family.lower())
-            sc = self._score_candidate(title, cand["is_new"], cand["has_svg"], cand["sort_label"])
+            sc = self._score_candidate(title, cand["is_new"], cand["has_svg"], cand["sort_label"], elements_term)
             cand_copy = dict(cand)
             cand_copy["family"] = family
             cand_copy["score"] = sc
@@ -774,11 +803,11 @@ class FontgenEngine:
         if self.vertical_json_path and self.vertical_json_path.is_file():
             try:
                 vdata = json.loads(self.vertical_json_path.read_text(encoding="utf-8"))
-                vblob = json.dumps(vdata, ensure_ascii=False)
+                vblob = _extract_vertical_identity_blob(vdata)
                 data["vertical_slug"] = str(vdata.get("vertical_slug") or self.vertical_json_path.stem)
                 data["sources_used"].append(f"vertical:{self.vertical_json_path.name}")
                 if data["style_profile"] == "auto":
-                    data["style_profile"] = classify_vertical_style_profile(vblob, data["vertical_slug"])
+                    data["style_profile"] = str(vdata.get("style_profile") or "") or classify_vertical_style_profile(vblob, data["vertical_slug"])
             except Exception:
                 pass
 
@@ -1113,7 +1142,7 @@ def run_unit_tests() -> int:
         tp = Path(tmp)
         shards_p = tp / "client_dumps_15_shards.json"
         vert_b2b = tp / "acme-b2b.json"
-        vert_cos = tp / "astrotipia.json"
+        vert_cos = tp / "orion-cosmic.json"
         out_b2b = tp / "b2b"
         out_cos = tp / "cos"
         shards_p.write_text(json.dumps({
@@ -1122,8 +1151,12 @@ def run_unit_tests() -> int:
             "shard_03": {"data": {"shadbala": {"dominant_planet": "Sun"}, "nakshatra": {"name": "Chitra Pada 4", "lord": "Mars"}}},
             "shard_04": {"data": {"day_master": {"name": "Jia", "element": "Wood"}, "four_pillars": {"month": {"element": "Metal"}}}},
         }), encoding="utf-8")
-        vert_b2b.write_text(json.dumps({"vertical_slug": "acme-b2b", "display_name": "Consultoría B2B e IA"}), encoding="utf-8")
-        vert_cos.write_text(json.dumps({"vertical_slug": "astrotipia", "display_name": "Astrotipia — Sabidurías Cósmicas & Arquetipos Vocacionales"}), encoding="utf-8")
+        vert_b2b.write_text(json.dumps({
+            "vertical_slug": "acme-b2b",
+            "display_name": "Consultoría B2B e IA",
+            "role_in_ecosystem": "Otra vertical derivada de Orion y Sabidurías Cósmicas.",
+        }), encoding="utf-8")
+        vert_cos.write_text(json.dumps({"vertical_slug": "orion-cosmic", "display_name": "Orion — Sabidurías Cósmicas & Arquetipos Vocacionales"}), encoding="utf-8")
 
         m_b2b, _ = FontgenEngine("TESTCORP", shards_path=shards_p, vertical_json_path=vert_b2b, output_dir=out_b2b, use_live_search=False).run()
         m_cos, _ = FontgenEngine("TESTCORP", shards_path=shards_p, vertical_json_path=vert_cos, output_dir=out_cos, use_live_search=False).run()

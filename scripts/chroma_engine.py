@@ -390,16 +390,39 @@ def _norm_element(raw: str, default: str = "Water") -> str:
     return default
 
 
+def _extract_vertical_identity_blob(vdata: Dict[str, Any]) -> str:
+    """Extract only primary vertical identity fields; exclude cross-vertical exclusion disclaimers."""
+    cap = vdata.get("category_and_positioning") or {}
+    parts: List[Any] = [
+        vdata.get("vertical_slug", ""),
+        vdata.get("display_name", ""),
+        vdata.get("name", ""),
+        vdata.get("title", ""),
+        vdata.get("funnel_type", ""),
+        vdata.get("category", ""),
+        vdata.get("tagline", ""),
+        vdata.get("aesthetic_direction", ""),
+        vdata.get("design_archetype", ""),
+        cap.get("category_name", ""),
+        cap.get("primary_positioning_terms", []),
+        vdata.get("ontological_foundation", {}),
+        vdata.get("unique_mechanism", {}),
+        vdata.get("subthemes", []),
+        vdata.get("target_avatar", {}),
+    ]
+    return json.dumps(parts, ensure_ascii=False)
+
+
 def classify_vertical_archetype(vblob: str, vertical_slug: str = "") -> str:
     """5-tier brand-agnostic classifier driving distinct aesthetics under one umbrella chart."""
     t = f"{vertical_slug} {vblob}".lower()
-    if any(k in t for k in ("astrotipia", "sabidurías cósmicas", "arquetipo vocacional", "kabbalah", "human design", "numerolog", "tarot", "autoconocimiento")):
+    if any(k in t for k in ("sabidurías cósmicas", "arquetipo vocacional", "astrolog", "kabbalah", "human design", "numerolog", "tarot", "autoconocimiento", "carta natal", "cósmic")):
         return "cosmic_archetypal"
-    if any(k in t for k in ("synthemika", "astrobranding aplicado", "tokens de diseño", "brandbook", "monogramas vectoriales", "tipografía curada", "tokens dtcg")):
+    if any(k in t for k in ("design system", "tokens de diseño", "brandbook", "monogramas vectoriales", "tipografía curada", "tokens dtcg", "astrobranding", "sistema de diseño", "identidad visual")):
         return "design_system_atelier"
-    if any(k in t for k in ("apotelos", "causalidad inversa", "arqueología del futuro", "saga editorial", "manifiesto conceptual", "book_waitlist")):
+    if any(k in t for k in ("causalidad inversa", "arqueología del futuro", "saga editorial", "manifiesto", "book_waitlist", "libro", "ensayo filosófico")):
         return "editorial_manifesto"
-    if any(k in t for k in ("consultor", "b2b", "financier", "abogado", "médico", "unipersonal", "agencia", "automatiz", "saas", "seo local", "google maps", "baiosfera")):
+    if any(k in t for k in ("consultor", "b2b", "financier", "abogado", "médico", "unipersonal", "agencia", "automatiz", "saas", "seo local", "google maps", "infraestructura", "captación", "independientes")):
         return "architectural_b2b"
     return "editorial_brand"
 
@@ -528,11 +551,11 @@ def extract_oraculo_and_vertical_signals(
     if vertical_json_path and vertical_json_path.is_file():
         sig["sources"].append(f"vertical:{vertical_json_path.name}")
         vdata = json.loads(vertical_json_path.read_text(encoding="utf-8"))
-        vblob = json.dumps(vdata, ensure_ascii=False)
+        vblob = _extract_vertical_identity_blob(vdata)
         sig["vertical_display_name"] = str(vdata.get("display_name") or "")
         sig["vertical_slug"] = str(vdata.get("vertical_slug") or vertical_slug or vertical_json_path.stem)
-        sig["vertical_category"] = str(vdata.get("category") or vdata.get("role_in_ecosystem") or "")
-        arch = classify_vertical_archetype(vblob, sig["vertical_slug"])
+        sig["vertical_category"] = str(vdata.get("category") or vdata.get("category_and_positioning", {}).get("category_name") or "")
+        arch = str(vdata.get("vertical_archetype") or "") or classify_vertical_archetype(vblob, sig["vertical_slug"])
         sig["vertical_archetype"] = arch
         sig["vertical_is_b2b"] = arch == "architectural_b2b"
     elif vertical_slug:
@@ -1081,8 +1104,8 @@ def run_unit_tests() -> int:
         tp = Path(tmp)
         shards_p = tp / "client_dumps_15_shards.json"
         brief_p = tp / "astrobranding_testcorp.md"
-        vert_b2b = tp / "juan-damaren.json"
-        vert_cos = tp / "astrotipia.json"
+        vert_b2b = tp / "acme-b2b.json"
+        vert_cos = tp / "orion-cosmic.json"
 
         shards_p.write_text(json.dumps({
             "shard_01": {"data": {
@@ -1096,8 +1119,14 @@ def run_unit_tests() -> int:
         }), encoding="utf-8")
         # Intentionally include a trap Spanish sentence matching "Yong Shen: La tinta" to test overwrite guard!
         brief_p.write_text("# Brief\n**Elemento balancín Yong Shen:** La tinta abisal.\n", encoding="utf-8")
-        vert_b2b.write_text(json.dumps({"vertical_slug": "acme-b2b", "display_name": "Consultoría B2B e IA", "category": "b2b"}), encoding="utf-8")
-        vert_cos.write_text(json.dumps({"vertical_slug": "astrotipia", "display_name": "Astrotipia — Sabidurías Cósmicas & Arquetipos Vocacionales"}), encoding="utf-8")
+        vert_b2b.write_text(json.dumps({
+            "vertical_slug": "acme-b2b",
+            "display_name": "Consultoría B2B e IA",
+            "category": "b2b",
+            "role_in_ecosystem": "Otra vertical derivada de Orion y Sabidurías Cósmicas.",
+            "seo_and_copy_rules": {"exclusion_rule": "No mencionar tarot ni carta natal aquí."},
+        }), encoding="utf-8")
+        vert_cos.write_text(json.dumps({"vertical_slug": "orion-cosmic", "display_name": "Orion — Sabidurías Cósmicas & Arquetipos Vocacionales"}), encoding="utf-8")
 
         m_b2b = generate_chroma_manifest("TESTCORP", brief_path=brief_p, shards_path=shards_p, vertical_json_path=vert_b2b, mode="synthesize")
         m_cos = generate_chroma_manifest("TESTCORP", brief_path=brief_p, shards_path=shards_p, vertical_json_path=vert_cos, mode="synthesize")

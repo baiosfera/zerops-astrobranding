@@ -362,7 +362,7 @@ def run_unit_tests() -> int:
         proj_dev = tp / "TestProj" / "dev"
         vert_dir = proj_dev / "verticals"
         ws_b2b = proj_dev / "workspaces" / "alpha-b2b" / "brand"
-        ws_cos = proj_dev / "workspaces" / "astrotipia" / "brand"
+        ws_cos = proj_dev / "workspaces" / "orion-cosmic" / "brand"
         vert_dir.mkdir(parents=True, exist_ok=True)
         ws_b2b.mkdir(parents=True, exist_ok=True)
         ws_cos.mkdir(parents=True, exist_ok=True)
@@ -384,12 +384,12 @@ def run_unit_tests() -> int:
         }
         (proj_dev / "brandbook.json").write_text(json.dumps(seed_bb, indent=2), encoding="utf-8")
         v_b2b = vert_dir / "alpha-b2b.json"
-        v_cos = vert_dir / "astrotipia.json"
+        v_cos = vert_dir / "orion-cosmic.json"
         v_b2b.write_text(json.dumps({"vertical_slug": "alpha-b2b", "display_name": "Consultoría B2B e IA", "unique_mechanism": {"name": "M1"}}), encoding="utf-8")
-        v_cos.write_text(json.dumps({"vertical_slug": "astrotipia", "display_name": "Astrotipia — Sabidurías Cósmicas & Arquetipos Vocacionales", "unique_mechanism": {"name": "M2"}}), encoding="utf-8")
+        v_cos.write_text(json.dumps({"vertical_slug": "orion-cosmic", "display_name": "Orion — Sabidurías Cósmicas & Arquetipos Vocacionales", "unique_mechanism": {"name": "M2"}}), encoding="utf-8")
 
         run_pipeline("TESTCORP", ws_b2b, ["chroma", "fontgen", "brandbook"], brief_path=brief_p, shards_path=shards_p, vertical_json_path=v_b2b, project_dir=proj_dev, vertical="alpha-b2b", no_live=True)
-        run_pipeline("TESTCORP", ws_cos, ["chroma", "fontgen", "brandbook"], brief_path=brief_p, shards_path=shards_p, vertical_json_path=v_cos, project_dir=proj_dev, vertical="astrotipia", no_live=True)
+        run_pipeline("TESTCORP", ws_cos, ["chroma", "fontgen", "brandbook"], brief_path=brief_p, shards_path=shards_p, vertical_json_path=v_cos, project_dir=proj_dev, vertical="orion-cosmic", no_live=True)
         for ws in (ws_b2b, ws_cos):
             ok, errs = audit_target(ws, ["chroma", "fontgen", "brandbook"])
             assert ok, f"Audit failed for {ws}: {errs}"
@@ -399,7 +399,7 @@ def run_unit_tests() -> int:
         assert bb_b2b["brand_architecture"]["core_promise"] == "Preserved umbrella architecture"
         assert bb_cos["brand_architecture"]["core_promise"] == "Preserved umbrella architecture"
         assert bb_b2b["vertical_context"]["vertical_slug"] == "alpha-b2b"
-        assert bb_cos["vertical_context"]["vertical_slug"] == "astrotipia"
+        assert bb_cos["vertical_context"]["vertical_slug"] == "orion-cosmic"
         assert bb_b2b["design_system"]["colors"]["selected_ecosystem_id"] != bb_cos["design_system"]["colors"]["selected_ecosystem_id"]
         assert bb_b2b["design_system"]["typography"]["display_primary"]["$value"] != bb_cos["design_system"]["typography"]["display_primary"]["$value"]
     assert not Path("/mnt/localstorage/TESTCORP").exists()
