@@ -236,6 +236,27 @@ class CrossDomainBridgeContract(BaseModel):
     checkout_email_precheck: bool = Field(default=True)
 
 
+class CrossFunnelBridgeContract(BaseModel):
+    bridge_id: str = Field(..., min_length=2)
+    source_branch: str = Field(..., min_length=2)
+    target_branch: str = Field(..., min_length=2)
+    trigger_stage: str = Field(
+        ..., pattern="^(bottom_section|post_conversion_thank_you|non_buyer_downsell|lifecycle_nurture)$"
+    )
+    placement_rule: str = Field(..., min_length=3)
+    channels: List[str] = Field(default_factory=lambda: ["web", "email", "whatsapp"])
+    delay_days: int = Field(default=0, ge=0)
+    narrative_bridge: str = Field(..., min_length=5)
+    carry_attribution: bool = Field(default=True)
+
+
+class OmnichannelInterlacePolicy(BaseModel):
+    primary_focus_lock_days: int = Field(default=7, ge=0)
+    max_active_bridge_sequences: int = Field(default=1, ge=1)
+    cross_channel_suppression_hours: int = Field(default=24, ge=0)
+    state_tags_required: bool = Field(default=True)
+
+
 class MasterConcatenationMatrix(BaseModel):
     brand_slug: str = Field(..., min_length=2)
     canonical_domain: str = Field(..., min_length=4)
@@ -244,6 +265,8 @@ class MasterConcatenationMatrix(BaseModel):
     hub_branches: List[HubBranchRoute] = Field(default_factory=list)
     affiliate_program: Optional[AffiliateProgramContract] = None
     cross_domain_bridge: Optional[CrossDomainBridgeContract] = None
+    cross_funnel_bridges: List[CrossFunnelBridgeContract] = Field(default_factory=list)
+    omnichannel_anti_collision: Optional[OmnichannelInterlacePolicy] = None
 
 
 def validate_concatenation_matrix(raw: Dict[str, Any]) -> Tuple[bool, List[str]]:
@@ -299,6 +322,28 @@ def validate_concatenation_matrix(raw: Dict[str, Any]) -> Tuple[bool, List[str]]
             errors.append("Cross-domain CAPI bridge requiere 'fbp' en forward_params.")
         if "event_source_url" not in cb.forward_params and "src" not in cb.forward_params:
             errors.append("Cross-domain CAPI bridge requiere 'event_source_url' o 'src' en forward_params.")
+
+    bridges_seen: set[Tuple[str, str, str]] = set()
+    for br in m.cross_funnel_bridges:
+        if br.source_branch == br.target_branch:
+            errors.append(f"Cross-funnel bridge '{br.bridge_id}' tiene self-loop ('{br.source_branch}' -> '{br.target_branch}').")
+        key = (br.source_branch, br.target_branch, br.trigger_stage)
+        if key in bridges_seen:
+            errors.append(f"Cross-funnel bridge duplicado para {br.source_branch} -> {br.target_branch} ({br.trigger_stage}).")
+        bridges_seen.add(key)
+        if br.trigger_stage == "lifecycle_nurture" and br.delay_days < 7:
+            errors.append(f"Cross-funnel bridge '{br.bridge_id}' en lifecycle_nurture requiere delay_days >= 7 (días 0-6 son exclusivos de la oferta principal).")
+
+    if m.omnichannel_anti_collision:
+        op = m.omnichannel_anti_collision
+        if op.primary_focus_lock_days < 5:
+            errors.append("OmnichannelInterlacePolicy requiere primary_focus_lock_days >= 5.")
+        if op.max_active_bridge_sequences != 1:
+            errors.append("OmnichannelInterlacePolicy requiere max_active_bridge_sequences == 1 para no saturar al contacto.")
+        if op.cross_channel_suppression_hours < 12:
+            errors.append("OmnichannelInterlacePolicy requiere cross_channel_suppression_hours >= 12.")
+        if not op.state_tags_required:
+            errors.append("OmnichannelInterlacePolicy requiere state_tags_required == True.")
 
     return len(errors) == 0, errors
 
@@ -2349,6 +2394,25 @@ def cmd_test(args):
                 "forward_params": ["fbp", "fbc", "src", "event_source_url", "ref", "utm_source", "utm_medium", "utm_campaign", "utm_content"],
                 "inapp_browser_escape": True,
                 "checkout_email_precheck": True
+            },
+            "cross_funnel_bridges": [
+                {
+                    "bridge_id": "br_core_to_academy_downsell",
+                    "source_branch": "core",
+                    "target_branch": "academy",
+                    "trigger_stage": "lifecycle_nurture",
+                    "placement_rule": "Solo tras Día 7 para no compradores o cierre inferior tras FAQ",
+                    "channels": ["email", "whatsapp"],
+                    "delay_days": 8,
+                    "narrative_bridge": "Si prefieres construir las bases por tu cuenta antes de delegar, empieza por la academia.",
+                    "carry_attribution": True
+                }
+            ],
+            "omnichannel_anti_collision": {
+                "primary_focus_lock_days": 7,
+                "max_active_bridge_sequences": 1,
+                "cross_channel_suppression_hours": 24,
+                "state_tags_required": True
             }
         })
         if not ok_chain:
@@ -2410,6 +2474,29 @@ def cmd_test(args):
         })
         if bad_bridge_ok:
             errors.append("validate_concatenation_matrix debe rechazar cross_domain_bridge sin target_domains o sin fbp/event_source_url")
+
+        bad_interlace_ok, _ = validate_concatenation_matrix({
+            "brand_slug": "aurelius-vance", "canonical_domain": "aureliusvance.com",
+            "topic_clusters": [{"cluster_id": "c1", "search_intent": "i1", "primary_keyword": "k1", "landing_route": "/", "funnel_stage": "bofu"}],
+            "links": [{
+                "link_id": "l1", "cluster_id": "c1", "ad_angle": "x",
+                "utm": {"utm_source": "meta", "utm_medium": "cpc", "utm_campaign": "c", "utm_content": "v"},
+                "landing_route": "/", "offer_hook": "offer",
+                "pixel_events": [{"event_name": "Lead", "trigger_condition": "always", "host_env_prefix": "X_", "shared_event_id": True}],
+                "remarketing_audience": "all", "followup_flow": "wa"
+            }],
+            "cross_funnel_bridges": [{
+                "bridge_id": "bad_br", "source_branch": "core", "target_branch": "core",
+                "trigger_stage": "lifecycle_nurture", "placement_rule": "bad",
+                "delay_days": 2, "narrative_bridge": "self loop too early"
+            }],
+            "omnichannel_anti_collision": {
+                "primary_focus_lock_days": 2, "max_active_bridge_sequences": 3,
+                "cross_channel_suppression_hours": 1, "state_tags_required": False
+            }
+        })
+        if bad_interlace_ok:
+            errors.append("validate_concatenation_matrix debe rechazar self-loop, delay_days < 7 en lifecycle_nurture y omnichannel_anti_collision laxo")
 
         if errors:
             print("❌ APOTELOS AGNOSTIC INTEGRITY SENSOR FAILED:")

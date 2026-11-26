@@ -1,5 +1,5 @@
 """
-brand_studio.wf — Portable Antigravity `run_workflow` 5-Phase Playbook-First Brand Pipeline (v1.2).
+brand_studio.wf — Portable Antigravity `run_workflow` 5-Phase Playbook-First Brand Pipeline (v1.3).
 Compiled with Python top-level await (`ast.PyCF_ALLOW_TOP_LEVEL_AWAIT`) via `run_workflow(ScriptPath=..., Args=...)`.
 Hermes/CrewAI remain strictly reserved for post-launch 24/7 monitoring & ops.
 """
@@ -14,11 +14,12 @@ reference_urls = args.get("reference_urls", [])
 envato_urls = args.get("envato_urls", [])
 hub_branches = args.get("hub_branches", [])
 enable_affiliate_layer = args.get("enable_affiliate_layer", True)
+enable_cross_funnel_mesh = args.get("enable_cross_funnel_mesh", True)
 vsl_mode = args.get("vsl_mode", "hybrid_smart_vsl")
 offer_archetype = args.get("offer_archetype", "auto")
 stop_after = args.get("stop_after_phase", "phase_2_art_direction")
 
-log(f"Starting brand-studio v1.2 for {project}/{vertical} (intake={intake_mode}, archetype={offer_archetype}, vsl={vsl_mode}, affiliates={enable_affiliate_layer}, stop_after={stop_after})")
+log(f"Starting brand-studio v1.3 for {project}/{vertical} (intake={intake_mode}, archetype={offer_archetype}, vsl={vsl_mode}, mesh={enable_cross_funnel_mesh}, affiliates={enable_affiliate_layer}, stop_after={stop_after})")
 
 # PHASE 1: Positioning + Live SERP Keyword Research (PB00 + PB06 + PB16)
 phase("Phase 1: Posicionamiento, Hub Multirrama & Keyword Research SERP (PB00, PB06, PB16)")
@@ -53,7 +54,7 @@ seo_res = await agent(
 - {PLAYBOOKS_DIR}/16_personal_branding_authority_and_communities.md
 Inspecciona el contexto real en {ws_dir} y /mnt/localstorage/{project}/dev/ (ecosystem.json como ÚNICA SSoT — nunca _shared/ecosystem.json —, vertical JSON, brand_brief.json o briefs Oráculo si intake_mode='{intake_mode}' es 'auto' u 'oraculo').
 Si hay ramas en hub_branches ({hub_branches}), modela la arquitectura de Hub multimarca asignando 1 intención SERP por ruta y documentando el puente hacia dominios futuros sin canibalización.
-Reglas SEO técnicas obligatorias (superando fallos comunes de constructores): toda landing de adquisición debe declarar `robots: index,follow` (PROHIBIDO `noindex` accidental), `<html lang>` coincidente con el idioma real del copy, jerarquía tipográfica estricta `H1 > H2 > body` y planificación explícita de `JSON-LD @graph` + `/llms.txt`.
+Reglas SEO y accesibilidad obligatorias: toda landing pública declara `robots: index, follow` (PROHIBIDO `noindex` accidental), `<html lang>` coincidente con el copy, enlace `Skip to content`, jerarquía `H1 > H2 > body`, y `JSON-LD @graph` rico (`Service`/`SoftwareApplication` + `Organization` + `Offer` + `FAQPage`) + `/llms.txt`.
 Usa búsqueda web en vivo (exa / tavily / brave) orientada a '{target_country}' para validar demanda e intención real SERP en las palabras clave del cliente (NO inventes keywords).
 Cortafuegos terminológico obligatorio: NUNCA expongas al público jerga interna ('verticales', 'DIY', 'DWY', 'DFY', 'BANT', 'PWYW', 'Order Bump', 'AEO/GEO'), y respeta únicamente los roles del fundador y conceptos públicos declarados en public_brand_concepts.
 Guarda {ws_dir}/strategy/seo_clusters.json y actualiza {ws_dir}/strategy/seo.md con fuentes verificadas y devuelve el JSON estructurado.""",
@@ -90,8 +91,8 @@ Verifica que `chroma_preview.html` y `previews/preview_gallery.html` muestran lo
     log("Phase 2 Art Direction ready for human approval:", art_res["gallery_html_path"])
 
     if stop_after != "phase_2_art_direction":
-        # PHASE 3: Reverse-Causality Concatenation Matrix
-        phase("Phase 3: Matriz de Concatenación Total, CAPI Cross-Domain, VSL & Afiliados")
+        # PHASE 3: Reverse-Causality Concatenation Matrix + Sequential Cross-Funnel Interlacing
+        phase("Phase 3: Matriz de Concatenación Total, Entrelazado Secuencial, CAPI & Afiliados")
         concat_schema = {
             "type": "object",
             "required": ["matrix_path", "apotelos_valid", "links_count"],
@@ -102,17 +103,16 @@ Verifica que `chroma_preview.html` y `previews/preview_gallery.html` muestran lo
             }
         }
         concat_res = await agent(
-            f"""Fase 3 Conversion & Telemetry Architect: Lee las secciones aplicables de PB01, PB03, PB04 (VSL/Funnels), PB05, PB07, PB13, PB14, PB16 (Módulo 6 Afiliados) y la skill ad-telemetry.
+            f"""Fase 3 Conversion & Telemetry Architect: Lee las secciones aplicables de PB01, PB03, PB04, PB05, PB07, PB09, PB12, PB13, PB14, PB16 (Módulo 6) y la skill ad-telemetry.
 Construye {ws_dir}/strategy/concatenation_matrix.json cumpliendo MasterConcatenationMatrix (offer_archetype='{offer_archetype}', vsl_mode='{vsl_mode}'):
-- topic_clusters únicos + links uniendo cluster_id -> ad_angle -> UTM externo (`allow_on_internal_links=false`, capturando `utm_source/medium/campaign/content/term`, `utm_adset`, `utm_ad`, `fbclid/gclid/wbraid/gbraid`) -> landing_route -> offer_hook -> pixel_events con host_env_prefix y shared_event_id=true -> remarketing_audience -> followup_flow.
-- Modo de video: si usa `hybrid_smart_vsl`, modela autoplay silenciado + toque para sonido + barra rápida + compuerta "¿Ya viste el video?" + evento custom `VslWatched90s`; si usa `lazy_facade_video`, modela fachada WebP con duración visible (`Ver video · M:SS`) que carga el reproductor solo al clic + telemetría declarativa `data-track`.
-- Arquitectura holística de oferta y garantía según oferta:
-  * High-ticket / mentoría: barra de autoridad + calendario/evaluación pre-encuadrado + Garantía condicional de extensión por aplicación real.
-  * Membresía / plataforma / academia: 3 planes con paridad de módulos (plan central destacado / paga 2 lleva 3) + prueba sin riesgo `$0 hoy`.
-  * Producto/kit transformacional: 3 objeciones resueltas arriba + stack 10x con ancla en moneda local.
-  * Hub multimarca (`hub_branches` no vacío): widget orientador flotante ("¿Te ayudo a elegir?") y rutas únicas en `hub_branches`.
-- `cross_domain_bridge`: siempre que un enlace apunte a subdominio/dominio distinto de pago o app, decóralo con `fbp`, `fbc`, `src`, `event_source_url`, `utms` + `ref_code` en checkout + validación previa de correo y escape de navegador in-app IG/FB ("Abrir en Chrome/Safari" con fallback a 6s).
-- Si enable_affiliate_layer={enable_affiliate_layer}: incluye `affiliate_program` (`enabled: true`, `ref_param: "ref"` paralelo a UTMs, ventana 90d, retención 30d, `self_referral_blocked: true`, `min_epc_usd >= 1.0`, `min_epl_usd >= 2.0` y `commission_tiers`).
+- topic_clusters únicos + links uniendo cluster_id -> ad_angle -> UTM externo (`allow_on_internal_links=false`, capturando `utm_*`, `utm_id`, `utm_adset`, `utm_ad`, `fbclid/gclid/wbraid/gbraid/ttclid/msclkid/li_fat_id`, con reenvío limpio en CTA hacia checkout interno sin fabricar UTMs falsos) -> landing_route -> offer_hook -> pixel_events con `host_env_prefix` y `shared_event_id=true` -> remarketing_audience -> followup_flow.
+- Regla crítica de telemetría: `ViewContent` se dispara ÚNICAMENTE en la landing de captación (NUNCA en `/checkout`, `/app`, `/admin`, `/gracias`). Configura analítica con perfiles solo identificados y saneamiento de tokens/PII (`sanitize_properties`), más atribución viral de tarjetas compartidas (`?via=...&utm_source=share_card&utm_medium=referral`) si aplica diagnóstico compartible.
+- Modo de video y captación: `hybrid_smart_vsl` (`VslWatched90s` + compuerta "¿Ya viste el video?") o `lazy_facade_video` (portada WebP con carga al clic + `data-track`); escalera progresiva de 3 CTAs o diagnóstico interactivo sin registro previo; rescate de abandono en formulario por WhatsApp; micro-prueba de pago simbólico (`$1 / 1 EUR`) o trial `$0 hoy` / 3 planes paritarios / garantía condicional de extensión / stack 10x según arquetipo.
+- `cross_domain_bridge`: cuando un enlace apunte a subdominio/dominio distinto de pago o app, decóralo con `fbp`, `fbc`, `src`, `event_source_url`, UTMs + `ref_code` + pre-check de correo y escape IG/FB ("Abrir en Chrome/Safari" con fallback a 6s).
+- Si enable_affiliate_layer={enable_affiliate_layer}: incluye `affiliate_program` (`enabled: true`, `ref_param: "ref"`, 90d, retención 30d, `self_referral_blocked: true`, `min_epc_usd >= 1.0`, `min_epl_usd >= 2.0`, `commission_tiers`).
+- Si enable_cross_funnel_mesh={enable_cross_funnel_mesh}: modela `cross_funnel_bridges` + `omnichannel_anti_collision` entrelazando lógicamente las líneas presentes y futuras SIN distraer el hero ni mezclar dos ventas a la vez:
+  * Momentos válidos únicamente: `bottom_section` (bloque editorial DESPUÉS de la oferta principal y FAQ), `post_conversion_thank_you`, `non_buyer_downsell` y `lifecycle_nurture` (`delay_days >= 7` obligatorio).
+  * Políticas anti-colisión Email + WhatsApp: `primary_focus_lock_days >= 7` (Días 0-6 exclusivos a la oferta de entrada), `max_active_bridge_sequences = 1`, `cross_channel_suppression_hours >= 24`, `state_tags_required = True` (`entered:<rama>`, `bought:<rama>`, `disqualified:<rama>`, `bridged_to:<rama>`).
 Valida físicamente ejecutando: `apotelos validate-chain {ws_dir}/strategy/concatenation_matrix.json`. No retornes hasta Exit 0.""",
             schema=concat_schema,
             role="Conversion & Telemetry Architect",
@@ -124,10 +124,10 @@ Valida físicamente ejecutando: `apotelos validate-chain {ws_dir}/strategy/conca
             # PHASE 4: Parallel Playbook-First Copy Squad + Sync Copy SSoT
             phase("Phase 4: Escuadrón Paralelo de Copy (Playbooks Íntegros -> copy/*.md -> JSON)")
             copy_units = [
-                {"id": "landing_funnel_offer", "playbooks": "02_copywriting_and_neurosales.md, 03_irresistible_offers_and_pricing.md, 04_funnels_vsl_webinars_and_challenges.md, 05_web_cro_landings_and_ecommerce.md", "targets": "copy/01..04 + copy/07 (adaptado a offer_archetype: narrativa dolor día a día, disclaimer anti-hype realista, guion VSL/fachada, simulador 3 pestañas o muro de capturas reales, matriz 'Para quién sí/no', garantía condicional/trial, guía flotante en Hub, formulario 3 pasos y FAQ honesto)"},
-                {"id": "lifecycle_email_wa_sales", "playbooks": "09_whatsapp_and_conversational_automation.md, 12_email_marketing_and_lifecycle_automation.md, 15_consultative_sales_and_high_ticket_closing.md", "targets": "copy/05..06"},
+                {"id": "landing_funnel_offer", "playbooks": "02_copywriting_and_neurosales.md, 03_irresistible_offers_and_pricing.md, 04_funnels_vsl_webinars_and_challenges.md, 05_web_cro_landings_and_ecommerce.md", "targets": "copy/01..04 + copy/07 (incl. narrativa dolor día a día, testimonios por objeción '5 historias/1 método', FAQ incómodo sin rodeos, diagnóstico cero-fricción/simulador, popup rescate WA en formulario, micro-prueba/garantía condicional, disclaimer anti-hype y bloque editorial de entrelazado secuencial SOLO al cierre tras FAQ)"},
+                {"id": "lifecycle_email_wa_sales", "playbooks": "09_whatsapp_and_conversational_automation.md, 12_email_marketing_and_lifecycle_automation.md, 15_consultative_sales_and_high_ticket_closing.md", "targets": "copy/05..06 (diseñando secuencia omnicanal Email + WhatsApp por fases: Días 0-7 foco único en oferta de entrada; Días 8-14 downsell/pivote no compradores; Días 15-30+ puente lógico a líneas complementarias/ascenso con máx. 1 puente activo, supresión 24h y etiquetas de estado)"},
                 {"id": "ads_social_utm_affiliates", "playbooks": "08_instagram_growth_reels_and_funnels.md, 10_tiktok_and_shortform_video.md, 11_linkedin_b2b_authority_and_ads.md, 13_meta_ads_media_buying_and_scaling.md, 14_google_ads_and_youtube_growth.md, 16_personal_branding_authority_and_communities.md (Módulo 6)", "targets": "copy/08_ads_social_and_acquisition_plan.md + copy/09_affiliate_partner_kit.md (si enable_affiliate_layer=True)"},
-                {"id": "geo_schema_web_dict", "playbooks": "06_seo_aeo_geo_and_organic_content.md, 07_ad_telemetry_ga4_gtm_and_metrics.md", "targets": "web/copy_strings.es.json, web/llms_blueprint.md, web/schema_graph.json (con @graph JSON-LD real + presupuesto WebP/AVIF)"},
+                {"id": "geo_schema_web_dict", "playbooks": "06_seo_aeo_geo_and_organic_content.md, 07_ad_telemetry_ga4_gtm_and_metrics.md", "targets": "web/copy_strings.es.json, web/llms_blueprint.md, web/schema_graph.json (con @graph JSON-LD completo incl. FAQPage+Offer, guardas route-scoped ViewContent y presupuesto 100% WebP/AVIF)"},
             ]
             copy_unit_schema = {
                 "type": "object",
@@ -160,7 +160,7 @@ Valida cada archivo público con `anti-slop-linter --file <ruta>` y devuelve el 
 
             if stop_after != "phase_4_copy":
                 # PHASE 5: Blind Adversarial Business & Craft Critic
-                phase("Phase 5: Juez Adversario Ciego (Negocio, Artesanía, SEO Real y Trazabilidad)")
+                phase("Phase 5: Juez Adversario Ciego (Negocio, Artesanía, SEO Real y Entrelazado)")
                 critic_schema = {
                     "type": "object",
                     "required": ["verdict", "visual_punch_score", "positioning_fidelity", "critical_gaps", "actionable_fixes"],
@@ -174,10 +174,11 @@ Valida cada archivo público con `anti-slop-linter --file <ruta>` y devuelve el 
                 }
                 critic = await agent(
                     f"""Juez Adversario Ciego (solo lectura, mentalidad crítica senior): Audita SIN complacencia todos los artefactos de {ws_dir}:
-1. Arte & UX: ¿Contraste botón primario WCAG >= 4.5:1 en chroma_manifest.json? ¿Sin pasteles lavados ni blanco/negro plano? ¿Especificación media exige 100% WebP/AVIF?
-2. SEO Técnico & SERP: ¿Cero `noindex` en landings públicas? ¿Jerarquía H1 > H2 > body? ¿`web/schema_graph.json` no vacío y `seo_clusters.json` sin canibalización?
-3. Trazabilidad & Cross-Domain: ¿UTMs externos + `ref_code` preservados hasta checkout? ¿Puente CAPI `cross_domain_bridge` (`fbp`, `fbc`, `src`, `event_source_url`) y escape IG/FB definidos si hay dominio externo? ¿`VslWatched90s` o fachada `lazy_facade_video` congruentes?
-4. Copy & Lexicon: ¿Guion/oferta concretos para `{offer_archetype}` y CERO fugas de DIY/DWY/DFY/verticales/BANT/PWYW/Order Bump?
+1. Arte & UX: ¿Contraste botón primario WCAG >= 4.5:1? ¿Especificación exige 100% WebP/AVIF y enlace Skip-to-content?
+2. SEO Técnico & SERP: ¿Cero `noindex` en landings públicas? ¿Jerarquía H1 > H2 > body? ¿`web/schema_graph.json` no vacío con FAQPage/Offer?
+3. Telemetría & Cross-Domain: ¿`ViewContent` restringido solo a landing (nunca `/checkout` o `/app`)? ¿UTMs + `ref_code` + puente CAPI y escape IG/FB intactos?
+4. Entrelazado Secuencial Web + Email/WA: ¿Cero links distractores sobre el pliegue (solo en cierre tras FAQ, Thank-You, downsell o Días 8+ en mensajería)? ¿Política de 1 sola secuencia activa, bloqueo de compra previa y supresión 24h WA<->Email en copy/05?
+5. Copy & Lexicon: ¿Cero fugas de DIY/DWY/DFY/verticales/BANT/PWYW/Order Bump?
 Reporta honestamente APPROVED o NEEDS_REVISION con brechas concretas.""",
                     schema=critic_schema,
                     role="Blind Adversarial Critic",

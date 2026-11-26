@@ -127,7 +127,22 @@ Cuando un fundador agrupa varias líneas bajo un dominio paraguas (`/` $\to$ sub
 - `apotelos validate-chain` exige escalones de comisión claros, ventana `>= 30–90 días`, retención preventiva de pago (30 días) y pisos rentables (`EPC >= $1.00 USD` y `EPL >= $2.00 USD`).
 
 ### 6.5 Gates Automáticos contra Anti-Patrones Técnicos
-Al auditar URLs externas reales es común hallar errores graves que `brand-studio` bloquea desde la raíz: cero `noindex` accidental en landings de adquisición, idioma `<html lang>` coherente, jerarquía real `H1 > H2 > body`, **`JSON-LD @graph` no vacío**, imágenes **`100 % WebP/AVIF`** y contraste WCAG `>= 4.5:1` en botones.
+Al auditar URLs externas reales es común hallar errores graves que `brand-studio` bloquea desde la raíz: cero `noindex` accidental en landings de adquisición, idioma `<html lang>` coherente, jerarquía real `H1 > H2 > body`, **`JSON-LD @graph` completo (`FAQPage`, `Offer`, `Organization`)**, imágenes **`100 % WebP/AVIF`**, contraste WCAG `>= 4.5:1` en botones y **`ViewContent` restringido únicamente a la landing** (nunca en `/checkout` o `/app`, para no ensuciar la optimización de Meta/TikTok).
+
+### 6.6 Entrelazado Secuencial entre Embudos y Mensajería (`cross_funnel_bridges`)
+Cuando una marca tiene varias líneas o embudos presentes y futuros, **nunca** se mezclan todos los enlaces arriba del pliegue porque el visitante se confunde y no compra nada. En su lugar, `brand-studio` y `apotelos validate-chain` aplican cuatro momentos secuenciales y lógicos:
+1. **Cierre editorial inferior (tras el FAQ principal):** solo cuando el visitante terminó toda la página principal descubre la puerta amable hacia el enfoque hermano complementario (*"¿Buscas también acompañamiento personal profundo o implementación técnica?"*).
+2. **Página de Gracias inmediata (`post_conversion_thank_you`):** quien ya dio el primer paso recibe la invitación natural al siguiente eslabón de la escalera sin volver a ver lo que acaba de adquirir.
+3. **Desvío por ajuste (`non_buyer_downsell`):** si alguien no encaja hoy con una mentoría o servicio de alto valor, se le ofrece la academia o diagnóstico inicial acorde a su etapa.
+4. **Secuencia omnicanal Email + WhatsApp por fases (con anti-colisión):**
+   - **Días 0 a 6:** foco **100 % exclusivo** en la oferta o recurso por el que entró la persona.
+   - **Días 8 a 14 (no compradores):** pivote secuencial hacia el enfoque de menor fricción o diagnóstico complementario.
+   - **Días 15 a 30+ (compradores o maduros):** puente hacia la línea hermana o de ascenso, con **máximo 1 secuencia puente activa a la vez**, bloqueo automático de líneas ya compradas y **24 horas de silencio promocional en correo si hay chat activo por WhatsApp**.
+
+### 6.7 Mecanismos Adicionales de Captación de Baja Fricción
+- **Diagnóstico interactivo sin registro + Tarjeta viral:** prueba interactiva de 5–8 minutos sin pedir tarjeta ni correo al inicio, con tarjeta de resultado compartible (`?via=resultado&utm_source=share_card&utm_medium=referral`).
+- **Rescate de formulario por WhatsApp:** si el usuario duda en un formulario largo, un aviso amable pregunta *"¿Prefieres escribirme directo?"* con opción de volver al formulario o pasar al chat sin perder UTMs.
+- **Micro-prueba de `$1 / 1 €` vs Prueba `$0`:** según el filtro deseado, permite elegir entre prueba gratuita sin fricción o aporte simbólico de `1 USD / 1 €` con tarjeta para filtrar curiosos.
 
 ---
 
