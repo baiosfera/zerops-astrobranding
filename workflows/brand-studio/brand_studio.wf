@@ -1,5 +1,5 @@
 """
-brand_studio.wf — Portable Antigravity `run_workflow` 5-Phase Playbook-First Brand Pipeline (v1.3).
+brand_studio.wf — Portable Antigravity `run_workflow` 5-Phase Playbook-First Brand Pipeline (v1.4).
 Compiled with Python top-level await (`ast.PyCF_ALLOW_TOP_LEVEL_AWAIT`) via `run_workflow(ScriptPath=..., Args=...)`.
 Hermes/CrewAI remain strictly reserved for post-launch 24/7 monitoring & ops.
 """
@@ -17,38 +17,45 @@ enable_affiliate_layer = args.get("enable_affiliate_layer", True)
 enable_cross_funnel_mesh = args.get("enable_cross_funnel_mesh", True)
 vsl_mode = args.get("vsl_mode", "hybrid_smart_vsl")
 offer_archetype = args.get("offer_archetype", "auto")
+start_from = args.get("start_from_phase", "phase_1_seo")
 stop_after = args.get("stop_after_phase", "phase_2_art_direction")
 
-log(f"Starting brand-studio v1.3 for {project}/{vertical} (intake={intake_mode}, archetype={offer_archetype}, vsl={vsl_mode}, mesh={enable_cross_funnel_mesh}, affiliates={enable_affiliate_layer}, stop_after={stop_after})")
+phase_order = ["phase_1_seo", "phase_2_art_direction", "phase_3_concatenation", "phase_4_copy", "phase_5_critic"]
+start_idx = phase_order.index(start_from)
+stop_idx = phase_order.index(stop_after)
+should_run = lambda name: start_idx <= phase_order.index(name) <= stop_idx
+
+log(f"Starting brand-studio v1.4 for {project}/{vertical} (intake={intake_mode}, archetype={offer_archetype}, vsl={vsl_mode}, mesh={enable_cross_funnel_mesh}, affiliates={enable_affiliate_layer}, start_from={start_from}, stop_after={stop_after})")
 
 # PHASE 1: Positioning + Live SERP Keyword Research (PB00 + PB06 + PB16)
-phase("Phase 1: Posicionamiento, Hub Multirrama & Keyword Research SERP (PB00, PB06, PB16)")
-seo_schema = {
-    "type": "object",
-    "required": ["positioning_roles", "public_brand_concepts", "multi_domain_bridge", "topic_clusters", "files_written"],
-    "properties": {
-        "positioning_roles": {"type": "array", "items": {"type": "string"}},
-        "public_brand_concepts": {"type": "array", "items": {"type": "string"}},
-        "multi_domain_bridge": {"type": "string"},
-        "topic_clusters": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["cluster_id", "search_intent", "primary_keyword", "landing_route", "funnel_stage"],
-                "properties": {
-                    "cluster_id": {"type": "string"},
-                    "search_intent": {"type": "string"},
-                    "primary_keyword": {"type": "string"},
-                    "landing_route": {"type": "string"},
-                    "funnel_stage": {"type": "string"}
+if should_run("phase_1_seo"):
+    phase("Phase 1: Posicionamiento, Hub Multirrama & Keyword Research SERP (PB00, PB06, PB16)")
+    seo_schema = {
+        "type": "object",
+        "required": ["positioning_roles", "public_brand_concepts", "multi_domain_bridge", "topic_clusters", "files_written"],
+        "properties": {
+            "positioning_roles": {"type": "array", "items": {"type": "string"}},
+            "public_brand_concepts": {"type": "array", "items": {"type": "string"}},
+            "multi_domain_bridge": {"type": "string"},
+            "topic_clusters": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["cluster_id", "search_intent", "primary_keyword", "landing_route", "funnel_stage"],
+                    "properties": {
+                        "cluster_id": {"type": "string"},
+                        "search_intent": {"type": "string"},
+                        "primary_keyword": {"type": "string"},
+                        "landing_route": {"type": "string"},
+                        "funnel_stage": {"type": "string"}
+                    }
                 }
-            }
-        },
-        "files_written": {"type": "array", "items": {"type": "string"}}
+            },
+            "files_written": {"type": "array", "items": {"type": "string"}}
+        }
     }
-}
-seo_res = await agent(
-    f"""Fase 1 Strategist: Lee obligatoriamente los módulos clave de:
+    seo_res = await agent(
+        f"""Fase 1 Strategist: Lee obligatoriamente los módulos clave de:
 - {PLAYBOOKS_DIR}/00_category_of_one.md
 - {PLAYBOOKS_DIR}/06_seo_aeo_geo_and_organic_content.md (Módulo 0 y Módulo 2 Keyword Research)
 - {PLAYBOOKS_DIR}/16_personal_branding_authority_and_communities.md
@@ -58,15 +65,15 @@ Reglas SEO y accesibilidad obligatorias: toda landing pública declara `robots: 
 Usa búsqueda web en vivo (exa / tavily / brave) orientada a '{target_country}' para validar demanda e intención real SERP en las palabras clave del cliente (NO inventes keywords).
 Cortafuegos terminológico obligatorio: NUNCA expongas al público jerga interna ('verticales', 'DIY', 'DWY', 'DFY', 'BANT', 'PWYW', 'Order Bump', 'AEO/GEO'), y respeta únicamente los roles del fundador y conceptos públicos declarados en public_brand_concepts.
 Guarda {ws_dir}/strategy/seo_clusters.json y actualiza {ws_dir}/strategy/seo.md con fuentes verificadas y devuelve el JSON estructurado.""",
-    schema=seo_schema,
-    role="SEO & Positioning Strategist",
-    model="pro",
-)
-log("Phase 1 SEO clusters:", seo_res["topic_clusters"])
+        schema=seo_schema,
+        role="SEO & Positioning Strategist",
+        model="pro",
+    )
+    log("Phase 1 SEO clusters:", seo_res["topic_clusters"])
 
-if stop_after != "phase_1_seo":
-    # PHASE 2: Art Direction + Full-Color Orchesbrand v4.0 + Human Approval Gate
-    phase("Phase 2: Dirección de Arte (taste-skill + impeccable + Orchesbrand v4.0)")
+if should_run("phase_2_art_direction"):
+    # PHASE 2: Art Direction + Full-Color Orchesbrand v4.1 + Human Approval Gate
+    phase("Phase 2: Dirección de Arte (taste-skill + impeccable + Orchesbrand v4.1)")
     art_schema = {
         "type": "object",
         "required": ["palette_json_path", "gallery_html_path", "chromatic_directions", "font_candidates"],
@@ -81,107 +88,111 @@ if stop_after != "phase_1_seo":
     art_res = await agent(
         f"""Fase 2 Art Director: Lee design-taste-frontend y impeccable.
 Si hay URLs de referencia ({reference_urls}), inspecciónalas con firecrawl_scrape(formats=['branding', 'markdown']) para extraer psicología visual, contraste de temperatura (editorial claro, oscuro inmersivo o brutalista cálido sin sombras), geometría intencional (`0px` nítido vs `999px` píldora), acentos tipográficos (titulares display/poster + serif itálica puntual en 2–3 palabras + monoespaciado para cifras/badges) y formato media `100% WebP/AVIF` SIN copiar la identidad de ninguna referencia.
+Inspecciona también `/mnt/localstorage/{project}/dev/ecosystem.json` y los workspaces hermanos en `/mnt/localstorage/{project}/dev/workspaces/*/brand` para asegurar diferenciación real de paletas y tipografías entre ramas.
+Si intake_mode ('{intake_mode}') es 'auto' u 'oraculo', orchesbrand v4.1 resolverá automáticamente `brand_slug` desde `ecosystem.json` para cargar `client_dumps_15_shards.json` y `astrobranding_<brand_slug>.md` junto con tu `--palette-json`.
 Diseña 3 ecosistemas cromáticos de alta convicción (contraste botón primario WCAG >= 4.5:1 garantizado, cero pasteles lavados ni clichés AI) en {ws_dir}/brand/art_direction_palettes.json (cada uno con light/dark, background, surface, primary, accent, text_primary).
-Luego ejecuta: `orchesbrand --brand "{project}" --vertical "{vertical}" --output-dir "{ws_dir}/brand" --palette-json "{ws_dir}/brand/art_direction_palettes.json"{envato_flag} --include-shortlist --audit`
-Verifica que `chroma_preview.html` y `previews/preview_gallery.html` muestran los colores reales (`--primary`, `--accent`, `--on-primary` + Mini Hero CTA). No escribas copy en esta fase.""",
+Deriva `--preview-texts` desde el nombre público de la vertical o marca (PROHIBIDO imprimir el nombre interno del proyecto como texto de muestra SVG).
+Luego ejecuta: `orchesbrand --brand "{project}" --vertical "{vertical}" --project-dir "/mnt/localstorage/{project}/dev" --output-dir "{ws_dir}/brand" --palette-json "{ws_dir}/brand/art_direction_palettes.json" --preview-texts "<MARCA PUBLICA>,<MÉTODO>" {envato_flag} --audit`
+(Agrega `--include-shortlist` solo si el usuario pide ver alternativas adicionales además de los 3 ecosistemas principales).
+Verifica que `chroma_preview.html` y `previews/preview_gallery.html` muestran los colores reales (`--primary`, `--accent`, `--on-primary` + Mini Hero CTA) y permiten cambiar ecosistemas y modo claro/oscuro sin errores. No escribas copy en esta fase.""",
         schema=art_schema,
         role="Art Director",
         model="pro",
     )
     log("Phase 2 Art Direction ready for human approval:", art_res["gallery_html_path"])
 
-    if stop_after != "phase_2_art_direction":
-        # PHASE 3: Reverse-Causality Concatenation Matrix + Sequential Cross-Funnel Interlacing
-        phase("Phase 3: Matriz de Concatenación Total, Entrelazado Secuencial, CAPI & Afiliados")
-        concat_schema = {
-            "type": "object",
-            "required": ["matrix_path", "apotelos_valid", "links_count"],
-            "properties": {
-                "matrix_path": {"type": "string"},
-                "apotelos_valid": {"type": "boolean"},
-                "links_count": {"type": "integer"}
-            }
+if should_run("phase_3_concatenation"):
+    # PHASE 3: Reverse-Causality Concatenation Matrix + Sequential Cross-Funnel Interlacing
+    phase("Phase 3: Matriz de Concatenación Total, Entrelazado Secuencial, CAPI & Afiliados")
+    concat_schema = {
+        "type": "object",
+        "required": ["matrix_path", "apotelos_valid", "links_count"],
+        "properties": {
+            "matrix_path": {"type": "string"},
+            "apotelos_valid": {"type": "boolean"},
+            "links_count": {"type": "integer"}
         }
-        concat_res = await agent(
-            f"""Fase 3 Conversion & Telemetry Architect: Lee las secciones aplicables de PB01, PB03, PB04, PB05, PB07, PB09, PB12, PB13, PB14, PB16 (Módulo 6) y la skill ad-telemetry.
+    }
+    concat_res = await agent(
+        f"""Fase 3 Conversion & Telemetry Architect: Lee las secciones aplicables de PB01, PB03, PB04, PB05, PB07, PB09, PB12, PB13, PB14, PB16 (Módulo 6), {PLAYBOOKS_DIR}/18_affiliate_referral_and_partner_growth.md y la skill ad-telemetry.
 Construye {ws_dir}/strategy/concatenation_matrix.json cumpliendo MasterConcatenationMatrix (offer_archetype='{offer_archetype}', vsl_mode='{vsl_mode}'):
-- topic_clusters únicos + links uniendo cluster_id -> ad_angle -> UTM externo (`allow_on_internal_links=false`, capturando `utm_*`, `utm_id`, `utm_adset`, `utm_ad`, `fbclid/gclid/wbraid/gbraid/ttclid/msclkid/li_fat_id`, con reenvío limpio en CTA hacia checkout interno sin fabricar UTMs falsos) -> landing_route -> offer_hook -> pixel_events con `host_env_prefix` y `shared_event_id=true` -> remarketing_audience -> followup_flow.
+- topic_clusters únicos (incluyendo la ruta dedicada `/afiliados` si existe en `seo_clusters.json` o `ecosystem.json`) + links uniendo cluster_id -> ad_angle -> UTM externo (`allow_on_internal_links=false`, capturando `utm_*`, `utm_id`, `utm_adset`, `utm_ad`, `fbclid/gclid/wbraid/gbraid/ttclid/msclkid/li_fat_id`, con reenvío limpio en CTA hacia checkout interno sin fabricar UTMs falsos) -> landing_route -> offer_hook -> pixel_events con `host_env_prefix` y `shared_event_id=true` -> remarketing_audience -> followup_flow.
 - Regla crítica de telemetría: `ViewContent` se dispara ÚNICAMENTE en la landing de captación (NUNCA en `/checkout`, `/app`, `/admin`, `/gracias`). Configura analítica con perfiles solo identificados y saneamiento de tokens/PII (`sanitize_properties`), más atribución viral de tarjetas compartidas (`?via=...&utm_source=share_card&utm_medium=referral`) si aplica diagnóstico compartible.
 - Modo de video y captación: `hybrid_smart_vsl` (`VslWatched90s` + compuerta "¿Ya viste el video?") o `lazy_facade_video` (portada WebP con carga al clic + `data-track`); escalera progresiva de 3 CTAs o diagnóstico interactivo sin registro previo; rescate de abandono en formulario por WhatsApp; micro-prueba de pago simbólico (`$1 / 1 EUR`) o trial `$0 hoy` / 3 planes paritarios / garantía condicional de extensión / stack 10x según arquetipo.
 - `cross_domain_bridge`: cuando un enlace apunte a subdominio/dominio distinto de pago o app, decóralo con `fbp`, `fbc`, `src`, `event_source_url`, UTMs + `ref_code` + pre-check de correo y escape IG/FB ("Abrir en Chrome/Safari" con fallback a 6s).
-- Si enable_affiliate_layer={enable_affiliate_layer}: incluye `affiliate_program` (`enabled: true`, `ref_param: "ref"`, 90d, retención 30d, `self_referral_blocked: true`, `min_epc_usd >= 1.0`, `min_epl_usd >= 2.0`, `commission_tiers`).
+- Si enable_affiliate_layer={enable_affiliate_layer}: incluye `affiliate_program` (`enabled: true`, `ref_param: "ref"`, `dedicated_landing_route: "/afiliados"` si aplica, 90d, retención 30d, `self_referral_blocked: true`, `min_epc_usd >= 1.0`, `min_epl_usd >= 2.0`, `commission_tiers` y reglas anti-fraude para bucle viral «3 referidos = recompensa gratis» conforme a Playbook 18 Módulo 3).
 - Si enable_cross_funnel_mesh={enable_cross_funnel_mesh}: modela `cross_funnel_bridges` + `omnichannel_anti_collision` entrelazando lógicamente las líneas presentes y futuras SIN distraer el hero ni mezclar dos ventas a la vez:
   * Momentos válidos únicamente: `bottom_section` (bloque editorial DESPUÉS de la oferta principal y FAQ), `post_conversion_thank_you`, `non_buyer_downsell` y `lifecycle_nurture` (`delay_days >= 7` obligatorio).
   * Políticas anti-colisión Email + WhatsApp: `primary_focus_lock_days >= 7` (Días 0-6 exclusivos a la oferta de entrada), `max_active_bridge_sequences = 1`, `cross_channel_suppression_hours >= 24`, `state_tags_required = True` (`entered:<rama>`, `bought:<rama>`, `disqualified:<rama>`, `bridged_to:<rama>`).
 Valida físicamente ejecutando: `apotelos validate-chain {ws_dir}/strategy/concatenation_matrix.json`. No retornes hasta Exit 0.""",
-            schema=concat_schema,
-            role="Conversion & Telemetry Architect",
-            model="pro",
-        )
-        log("Phase 3 Concatenation validated:", concat_res)
+        schema=concat_schema,
+        role="Conversion & Telemetry Architect",
+        model="pro",
+    )
+    log("Phase 3 Concatenation validated:", concat_res)
 
-        if stop_after != "phase_3_concatenation":
-            # PHASE 4: Parallel Playbook-First Copy Squad + Sync Copy SSoT
-            phase("Phase 4: Escuadrón Paralelo de Copy (Playbooks Íntegros -> copy/*.md -> JSON)")
-            copy_units = [
-                {"id": "landing_funnel_offer", "playbooks": "02_copywriting_and_neurosales.md, 03_irresistible_offers_and_pricing.md, 04_funnels_vsl_webinars_and_challenges.md, 05_web_cro_landings_and_ecommerce.md", "targets": "copy/01..04 + copy/07 (incl. narrativa dolor día a día, testimonios por objeción '5 historias/1 método', FAQ incómodo sin rodeos, diagnóstico cero-fricción/simulador, popup rescate WA en formulario, micro-prueba/garantía condicional, disclaimer anti-hype y bloque editorial de entrelazado secuencial SOLO al cierre tras FAQ)"},
-                {"id": "lifecycle_email_wa_sales", "playbooks": "09_whatsapp_and_conversational_automation.md, 12_email_marketing_and_lifecycle_automation.md, 15_consultative_sales_and_high_ticket_closing.md", "targets": "copy/05..06 (diseñando secuencia omnicanal Email + WhatsApp por fases: Días 0-7 foco único en oferta de entrada; Días 8-14 downsell/pivote no compradores; Días 15-30+ puente lógico a líneas complementarias/ascenso con máx. 1 puente activo, supresión 24h y etiquetas de estado)"},
-                {"id": "ads_social_utm_affiliates", "playbooks": "08_instagram_growth_reels_and_funnels.md, 10_tiktok_and_shortform_video.md, 11_linkedin_b2b_authority_and_ads.md, 13_meta_ads_media_buying_and_scaling.md, 14_google_ads_and_youtube_growth.md, 16_personal_branding_authority_and_communities.md (Módulo 6)", "targets": "copy/08_ads_social_and_acquisition_plan.md + copy/09_affiliate_partner_kit.md (si enable_affiliate_layer=True)"},
-                {"id": "geo_schema_web_dict", "playbooks": "06_seo_aeo_geo_and_organic_content.md, 07_ad_telemetry_ga4_gtm_and_metrics.md", "targets": "web/copy_strings.es.json, web/llms_blueprint.md, web/schema_graph.json (con @graph JSON-LD completo incl. FAQPage+Offer, guardas route-scoped ViewContent y presupuesto 100% WebP/AVIF)"},
-            ]
-            copy_unit_schema = {
-                "type": "object",
-                "required": ["unit_id", "files_written", "anti_slop_passed"],
-                "properties": {
-                    "unit_id": {"type": "string"},
-                    "files_written": {"type": "array", "items": {"type": "string"}},
-                    "anti_slop_passed": {"type": "boolean"}
-                }
-            }
-            copy_results = await parallel(
-                copy_units,
-                lambda u: agent(
-                    f"""Especialista Copy/SEO ({u['id']}): Lee capítulos reales completos de {u['playbooks']} en {PLAYBOOKS_DIR} (PROHIBIDO truncar a 4000 caracteres).
+if should_run("phase_4_copy"):
+    # PHASE 4: Parallel Playbook-First Copy Squad + Sync Copy SSoT (use sequential batching on quota 429)
+    phase("Phase 4: Escuadrón Paralelo de Copy (Playbooks Íntegros 00..18 -> copy/*.md -> JSON)")
+    copy_units = [
+        {"id": "landing_funnel_offer", "playbooks": "02_copywriting_and_neurosales.md, 03_irresistible_offers_and_pricing.md, 04_funnels_vsl_webinars_and_challenges.md, 05_web_cro_landings_and_ecommerce.md", "targets": "copy/01..04 + copy/07 (incl. narrativa dolor día a día, testimonios por objeción '5 historias/1 método', FAQ incómodo sin rodeos, diagnóstico cero-fricción/simulador, popup rescate WA en formulario, micro-prueba/garantía condicional, disclaimer anti-hype y bloque editorial de entrelazado secuencial SOLO al cierre tras FAQ)"},
+        {"id": "lifecycle_email_wa_sales", "playbooks": "09_whatsapp_and_conversational_automation.md, 12_email_marketing_and_lifecycle_automation.md, 15_consultative_sales_and_high_ticket_closing.md", "targets": "copy/05..06 (diseñando secuencia omnicanal Email + WhatsApp por fases: Días 0-7 foco único en oferta de entrada; Días 8-14 downsell/pivote no compradores; Días 15-30+ puente lógico a líneas complementarias/ascenso con máx. 1 puente activo, supresión 24h y etiquetas de estado)"},
+        {"id": "ads_social_utm_affiliates", "playbooks": "08_instagram_growth_reels_and_funnels.md, 10_tiktok_and_shortform_video.md, 11_linkedin_b2b_authority_and_ads.md, 13_meta_ads_media_buying_and_scaling.md, 14_google_ads_and_youtube_growth.md, 16_personal_branding_authority_and_communities.md (Módulo 6), 18_affiliate_referral_and_partner_growth.md", "targets": "copy/08_ads_social_and_acquisition_plan.md + copy/09_affiliate_partner_kit.md (si enable_affiliate_layer=True: redactar la landing pública completa `/afiliados` con doble carril Cliente Embajador '3 referidos = recompensa verificada' vs Socio Profesional, calculadora de comisiones, tabla transparente de porcentajes, reglas anti-fraude, FAQ y kit promocional de emails/guiones para socios)"},
+        {"id": "geo_schema_web_dict", "playbooks": "06_seo_aeo_geo_and_organic_content.md, 07_ad_telemetry_ga4_gtm_and_metrics.md", "targets": "web/copy_strings.es.json, web/llms_txt_spec.md, web/schema_graph.json (con @graph JSON-LD completo incl. FAQPage+Offer para todas las rutas públicas incluyendo `/afiliados` si existe, guardas route-scoped ViewContent y presupuesto 100% WebP/AVIF)"},
+    ]
+    copy_unit_schema = {
+        "type": "object",
+        "required": ["unit_id", "files_written", "anti_slop_passed"],
+        "properties": {
+            "unit_id": {"type": "string"},
+            "files_written": {"type": "array", "items": {"type": "string"}},
+            "anti_slop_passed": {"type": "boolean"}
+        }
+    }
+    copy_results = await parallel(
+        copy_units,
+        lambda u: agent(
+            f"""Especialista Copy/SEO ({u['id']}): Lee capítulos reales completos de {u['playbooks']} en {PLAYBOOKS_DIR} (PROHIBIDO truncar a 4000 caracteres).
 Redacta {u['targets']} dentro de {ws_dir} consumiendo {ws_dir}/brand/brandbook.json, {ws_dir}/strategy/seo_clusters.json y {ws_dir}/strategy/concatenation_matrix.json.
 Respeta ortografía española completa (tildes, ñ, ¿, ¡), permite únicamente public_brand_concepts declarados y PROHÍBE terminantemente jerga interna hacia el usuario final (DIY, DWY, DFY, verticales, BANT, PWYW, Order Bump, UPPER_SNAKE_CASE).
-Valida cada archivo público con `anti-slop-linter --file <ruta>` y devuelve el resultado.""",
-                    schema=copy_unit_schema,
-                    role=f"Copy Specialist: {u['id']}",
-                    model="pro",
-                ),
-            )
-            sync_ok = await agent(
-                f"Ejecuta `brand-play sync-copy --workspace {ws_dir}` para reconciliar checksums SHA-256 de copy/*.md -> web/copy_strings.es.json y confirma exit 0.",
-                schema={"type": "boolean"},
-                role="Copy SSoT Reconciler",
-                model="flash",
-            )
-            log("Phase 4 Copy Squad completed; sync-copy:", sync_ok)
+Valida cada archivo público con `anti-slop-linter --brand "{project}" --vertical "{vertical}" --file <ruta>` y devuelve el resultado.""",
+            schema=copy_unit_schema,
+            role=f"Copy Specialist: {u['id']}",
+            model="pro",
+        ),
+    )
+    sync_ok = await agent(
+        f"Ejecuta `brand-play sync-copy --workspace {ws_dir}` para reconciliar checksums SHA-256 de copy/*.md -> web/copy_strings.es.json y confirma exit 0.",
+        schema={"type": "boolean"},
+        role="Copy SSoT Reconciler",
+        model="flash",
+    )
+    log("Phase 4 Copy Squad completed; sync-copy:", sync_ok)
 
-            if stop_after != "phase_4_copy":
-                # PHASE 5: Blind Adversarial Business & Craft Critic
-                phase("Phase 5: Juez Adversario Ciego (Negocio, Artesanía, SEO Real y Entrelazado)")
-                critic_schema = {
-                    "type": "object",
-                    "required": ["verdict", "visual_punch_score", "positioning_fidelity", "critical_gaps", "actionable_fixes"],
-                    "properties": {
-                        "verdict": {"type": "string", "enum": ["APPROVED", "NEEDS_REVISION"]},
-                        "visual_punch_score": {"type": "integer"},
-                        "positioning_fidelity": {"type": "boolean"},
-                        "critical_gaps": {"type": "array", "items": {"type": "string"}},
-                        "actionable_fixes": {"type": "array", "items": {"type": "string"}}
-                    }
-                }
-                critic = await agent(
-                    f"""Juez Adversario Ciego (solo lectura, mentalidad crítica senior): Audita SIN complacencia todos los artefactos de {ws_dir}:
+if should_run("phase_5_critic"):
+    # PHASE 5: Blind Adversarial Business & Craft Critic
+    phase("Phase 5: Juez Adversario Ciego (Negocio, Artesanía, SEO Real y Entrelazado)")
+    critic_schema = {
+        "type": "object",
+        "required": ["verdict", "visual_punch_score", "positioning_fidelity", "critical_gaps", "actionable_fixes"],
+        "properties": {
+            "verdict": {"type": "string", "enum": ["APPROVED", "NEEDS_REVISION"]},
+            "visual_punch_score": {"type": "integer"},
+            "positioning_fidelity": {"type": "boolean"},
+            "critical_gaps": {"type": "array", "items": {"type": "string"}},
+            "actionable_fixes": {"type": "array", "items": {"type": "string"}}
+        }
+    }
+    critic = await agent(
+        f"""Juez Adversario Ciego (solo lectura, mentalidad crítica senior): Audita SIN complacencia todos los artefactos de {ws_dir}:
 1. Arte & UX: ¿Contraste botón primario WCAG >= 4.5:1? ¿Especificación exige 100% WebP/AVIF y enlace Skip-to-content?
-2. SEO Técnico & SERP: ¿Cero `noindex` en landings públicas? ¿Jerarquía H1 > H2 > body? ¿`web/schema_graph.json` no vacío con FAQPage/Offer?
+2. SEO Técnico & SERP: ¿Cero `noindex` en landings públicas (incl. `/afiliados` si aplica)? ¿Jerarquía H1 > H2 > body? ¿`web/schema_graph.json` no vacío con FAQPage/Offer?
 3. Telemetría & Cross-Domain: ¿`ViewContent` restringido solo a landing (nunca `/checkout` o `/app`)? ¿UTMs + `ref_code` + puente CAPI y escape IG/FB intactos?
 4. Entrelazado Secuencial Web + Email/WA: ¿Cero links distractores sobre el pliegue (solo en cierre tras FAQ, Thank-You, downsell o Días 8+ en mensajería)? ¿Política de 1 sola secuencia activa, bloqueo de compra previa y supresión 24h WA<->Email en copy/05?
 5. Copy & Lexicon: ¿Cero fugas de DIY/DWY/DFY/verticales/BANT/PWYW/Order Bump?
 Reporta honestamente APPROVED o NEEDS_REVISION con brechas concretas.""",
-                    schema=critic_schema,
-                    role="Blind Adversarial Critic",
-                    model="pro",
-                )
-                log("Phase 5 Blind Critic verdict:", critic)
+        schema=critic_schema,
+        role="Blind Adversarial Critic",
+        model="pro",
+    )
+    log("Phase 5 Blind Critic verdict:", critic)

@@ -14,6 +14,8 @@ import html
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -29,6 +31,22 @@ UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 
 def sanitize_filename(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", name).strip("_") or "font"
+
+
+def sanitize_inline_svg(svg_content: str, prefix: str) -> str:
+    """Namespaces duplicate SVG IDs and strips inline fill overrides so brand CSS tokens apply cleanly."""
+    if not svg_content or "<svg" not in svg_content.lower():
+        return svg_content
+    ids = re.findall(r'\bid="([^"]+)"', svg_content)
+    out = svg_content
+    for old_id in set(ids):
+        new_id = f"{prefix}_{old_id}"
+        out = out.replace(f'id="{old_id}"', f'id="{new_id}"')
+        out = out.replace(f"url(#{old_id})", f"url(#{new_id})")
+        out = out.replace(f'href="#{old_id}"', f'href="#{new_id}"')
+    # Remove explicit inline fill colors inside style="" attributes on inline vectors
+    out = re.sub(r'(\bstyle="[^"]*?)\bfill\s*:[^;"]+;?', r"\1", out, flags=re.IGNORECASE)
+    return out
 
 
 def fetch_page_data(url_or_uuid: str, title_hint: str = "") -> Dict[str, Any]:
@@ -193,6 +211,12 @@ def generate_gallery_html(
         f'<option value="{html.escape(eid)}"{" selected" if eid == default_eco else ""}>{html.escape(pdata["name"])}</option>'
         for eid, pdata in palettes_map.items()
     )
+    palette_pills = "".join(
+        f'<button type="button" class="palette-pill-btn{" active" if eid == default_eco else ""}" data-eco-id="{html.escape(eid)}">'
+        f'<span class="dot" style="background:{html.escape((pdata.get(pdata.get("recommended_mode","light")) or {}).get("--primary","#3b82f6"))}"></span>'
+        f'{html.escape(pdata["name"])}</button>'
+        for eid, pdata in palettes_map.items()
+    )
     palettes_json = json.dumps(palettes_map, ensure_ascii=False)
 
     google_links: List[str] = []
@@ -203,6 +227,20 @@ def generate_gallery_html(
             seen_gf.add(gf_url)
             google_links.append(f'<link rel="stylesheet" href="{html.escape(gf_url)}">')
 
+    eco_ids_present: List[str] = []
+    has_shortlist = any(bool(it.get("is_shortlist")) for it in items)
+    for it in items:
+        eid_i = str(it.get("eco_id") or "").strip()
+        if eid_i and eid_i not in eco_ids_present:
+            eco_ids_present.append(eid_i)
+
+    eco_filter_tabs = '<button type="button" class="tab-btn active" data-eco-filter="all">Todas ({})</button>'.format(len(items))
+    for eid_i in eco_ids_present:
+        cnt = sum(1 for it in items if it.get("eco_id") == eid_i)
+        eco_filter_tabs += f'<button type="button" class="tab-btn" data-eco-filter="{html.escape(eid_i)}">{html.escape(eid_i.upper())} ({cnt})</button>'
+    if has_shortlist:
+        eco_filter_tabs += '<button type="button" class="tab-btn" id="shortlistToggleBtn" data-show-shortlist="1">Con Alternativas</button>'
+
     cards_html: List[str] = []
     for idx, item in enumerate(items):
         font_title = html.escape(item["title"])
@@ -210,16 +248,20 @@ def generate_gallery_html(
         font_url = html.escape(item["url"])
         eco_badge = html.escape(item.get("ecosystem_label") or "Envato Preview")
         role_badge = html.escape(item.get("role_label") or "Specimen")
+        eco_id_attr = html.escape(str(item.get("eco_id") or "all"))
+        short_attr = "1" if item.get("is_shortlist") else "0"
         item_uuid = html.escape(item.get("itemUuid") or "")
         body_fam = html.escape(item.get("body_family") or "system-ui")
 
         variant_cards: List[str] = []
-        for v in item["results"]:
+        for v_idx, v in enumerate(item["results"]):
             style_name = html.escape(v["styleName"])
-            svg_content = v["svgContent"]
             svg_url = html.escape(v["svgUrl"])
             rel_svg = html.escape(v.get("filename", ""))
             variant_id = html.escape(str(v.get("variantId") or ""))
+            svg_p1 = sanitize_inline_svg(v["svgContent"], f"svg_{idx}_{v_idx}_p")
+            svg_p2 = sanitize_inline_svg(v["svgContent"], f"svg_{idx}_{v_idx}_a")
+            svg_p3 = sanitize_inline_svg(v["svgContent"], f"svg_{idx}_{v_idx}_o")
 
             card = f"""
             <div class="variant-card">
@@ -233,15 +275,15 @@ def generate_gallery_html(
                 <div class="brand-lockup-grid">
                     <div class="lockup lockup-primary">
                         <small>1. Primario sobre Fondo</small>
-                        <div class="svg-container svg-primary" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="primary">{svg_content}</div>
+                        <div class="svg-container svg-primary" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="primary">{svg_p1}</div>
                     </div>
                     <div class="lockup lockup-accent">
                         <small>2. Acento sobre Superficie</small>
-                        <div class="svg-container svg-accent" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="accent">{svg_content}</div>
+                        <div class="svg-container svg-accent" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="accent">{svg_p2}</div>
                     </div>
                     <div class="lockup lockup-card">
                         <small>3. Tarjeta Invertida de Marca</small>
-                        <div class="svg-container svg-on-primary" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="on-primary">{svg_content}</div>
+                        <div class="svg-container svg-on-primary" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="on-primary">{svg_p3}</div>
                     </div>
                     <div class="lockup lockup-hero">
                         <small>4. Mini Hero + Botón CTA Real ({body_fam})</small>
@@ -264,7 +306,7 @@ def generate_gallery_html(
             )
 
         cards_html.append(f"""
-        <section class="font-section" id="font-{idx}">
+        <section class="font-section" id="font-{idx}" data-eco-id="{eco_id_attr}" data-shortlist="{short_attr}">
             <div class="font-meta">
                 <div class="badges">
                     <span class="eco-pill">{eco_badge}</span>
@@ -278,7 +320,7 @@ def generate_gallery_html(
         </section>""")
 
     full_html = f"""<!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="no-js" data-theme="{html.escape(default_mode)}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -286,20 +328,35 @@ def generate_gallery_html(
 {''.join(google_links)}
 <style>
   :root {{ --preview-h: 72px; {light_vars if default_mode == "light" else dark_vars} }}
-  [data-theme="dark"] {{ {dark_vars} }}
-  [data-theme="light"] {{ {light_vars} }}
+  html[data-theme="dark"] {{ {dark_vars} }}
+  html[data-theme="light"] {{ {light_vars} }}
+  /* Pure-CSS no-JS static mode fallback (e.g. Google Drive HTML viewer strips inline script tags) */
+  .no-js-toggle {{ display:none; }}
+  .no-js-bar {{ max-width:1260px; margin:0 auto 12px; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:var(--surface); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:13px; }}
+  .no-js-label {{ display:inline-block; padding:5px 10px; border-radius:6px; border:1px solid var(--border); cursor:pointer; font-weight:600; }}
+  #noscript-dark:checked ~ .gallery-shell {{ {dark_vars} background:var(--bg); color:var(--text); }}
+  #noscript-light:checked ~ .gallery-shell {{ {light_vars} background:var(--bg); color:var(--text); }}
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 32px 24px; transition: background .2s, color .2s; }}
-  .header {{ max-width: 1260px; margin: 0 auto 28px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }}
+  body {{ background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 28px 24px; }}
+  .gallery-shell {{ background: var(--bg); color: var(--text); }}
+  .header {{ max-width: 1260px; margin: 0 auto 20px; display: flex; flex-direction: column; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 18px; }}
+  .header-top {{ display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }}
   .header h1 {{ font-size: 22px; font-weight: 700; }}
   .header p {{ color: var(--muted); font-size: 14px; margin-top: 4px; }}
-  .controls {{ display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }}
+  .status-chips {{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }}
+  .mode-badge {{ font-size:11px; font-weight:800; padding:4px 10px; border-radius:999px; background:var(--primary); color:var(--on-primary); letter-spacing:.04em; }}
+  .hex-readout {{ font-size:11px; font-family:monospace; color:var(--muted); border:1px solid var(--border); padding:4px 10px; border-radius:999px; }}
+  .palette-pills, .filter-tabs, .controls {{ display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }}
+  .palette-pill-btn, .tab-btn {{ background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; display:inline-flex; align-items:center; gap:6px; }}
+  .palette-pill-btn.active, .tab-btn.active {{ background: var(--primary); color: var(--on-primary); border-color: var(--primary); }}
+  .palette-pill-btn .dot {{ width:10px; height:10px; border-radius:50%; border:1px solid rgba(255,255,255,.45); display:inline-block; }}
   .live-input, .eco-select {{ background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }}
   .live-input {{ min-width: 220px; }}
   .btn {{ background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }}
   .btn-primary {{ background: var(--primary); color: var(--on-primary); border-color: var(--primary); }}
-  .container {{ max-width: 1260px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }}
+  .container {{ max-width: 1260px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px; }}
   .font-section {{ background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }}
+  .font-section.is-hidden {{ display: none !important; }}
   .badges {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
   .eco-pill, .role-pill {{ font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--primary); }}
   .font-meta {{ margin-bottom: 16px; }}
@@ -328,57 +385,112 @@ def generate_gallery_html(
   .svg-accent svg, .svg-accent svg * {{ fill: var(--accent) !important; stroke: none; }}
   .svg-on-primary svg, .svg-on-primary svg * {{ fill: var(--on-primary) !important; stroke: none; }}
   .tone-neutral .svg-primary svg, .tone-neutral .svg-primary svg * {{ fill: var(--text) !important; }}
-  .live-mask {{ width: 100%; height: var(--preview-h); -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; -webkit-mask-size: contain; mask-size: contain; }}
-  .svg-primary .live-mask {{ background-color: var(--primary); }}
-  .svg-accent .live-mask {{ background-color: var(--accent); }}
-  .svg-on-primary .live-mask {{ background-color: var(--on-primary); }}
-  .tone-neutral .svg-primary .live-mask {{ background-color: var(--text); }}
+  .tone-neutral .svg-accent svg, .tone-neutral .svg-accent svg * {{ fill: var(--muted) !important; }}
+  .live-img {{ max-width: 100%; max-height: var(--preview-h); width: auto; height: auto; display: block; object-fit: contain; }}
+  [data-theme="dark"] .svg-primary .live-img, [data-theme="dark"] .svg-accent .live-img {{ filter: brightness(0) invert(0.95); }}
+  [data-on-primary-light="1"] .svg-on-primary .live-img {{ filter: brightness(0) invert(0.98); }}
   .body-pair {{ margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text); }}
   .body-pair small {{ color: var(--muted); display: block; margin-bottom: 4px; }}
   .body-pair p {{ font-size: 15px; line-height: 1.55; max-width: 72ch; }}
 </style>
 </head>
-<body data-theme="{html.escape(default_mode)}">
+<body>
+<input class="no-js-toggle" type="radio" name="noscript_mode" id="noscript-light">
+<input class="no-js-toggle" type="radio" name="noscript_mode" id="noscript-dark">
+<div class="gallery-shell">
+  <div id="jsStatusBanner" class="no-js-bar">
+    <span><strong>Vista estática sin JavaScript</strong> (si abriste en visor embebido de Drive, descarga y abre en Chrome/Firefox para selector de paletas y prueba en vivo):</span>
+    <span><label for="noscript-light" class="no-js-label">Fondo Claro</label> <label for="noscript-dark" class="no-js-label">Fondo Oscuro</label></span>
+  </div>
   <div class="header">
-    <div>
-      <h1>{html.escape(gallery_title)}</h1>
-      <p>Vectores SVG Envato + Colores Reales de Marca (`--primary`, `--accent`, `--on-primary`) · Prueba la fuente aplicada en lockups reales.</p>
+    <div class="header-top">
+      <div>
+        <h1>{html.escape(gallery_title)}</h1>
+        <p>Vectores SVG Envato + Colores Reales de Marca (<code>--primary</code>, <code>--accent</code>, <code>--on-primary</code>) · Ecosistemas deduplicados y aislados.</p>
+      </div>
+      <div class="status-chips">
+        <span id="modeStatusBadge" class="mode-badge">{'OSCURO' if default_mode == 'dark' else 'CLARO'}</span>
+        <span id="activeHexReadout" class="hex-readout"></span>
+      </div>
     </div>
+    {f'<div class="palette-pills" id="palettePills">{palette_pills}</div>' if palette_pills else ''}
     <div class="controls">
-      {f'<select id="ecoSelect" class="eco-select" onchange="applyChromaPalette()">{eco_options}</select>' if eco_options else ''}
-      <select id="brandToneSelect" class="eco-select" onchange="applyBrandTone()">
+      {f'<select id="ecoSelect" class="eco-select">{eco_options}</select>' if eco_options else ''}
+      <select id="brandToneSelect" class="eco-select">
         <option value="brand">Modo Lockup: Colores de Marca</option>
         <option value="neutral">Modo Lockup: Tinta Neutra (Lectura)</option>
       </select>
       <input id="liveText" class="live-input" type="text" placeholder="Probar tu nombre de marca o frase..." />
-      <label style="font-size:12px;color:var(--muted)">Tamaño <input id="sizeRange" type="range" min="48" max="130" value="72" oninput="document.documentElement.style.setProperty('--preview-h', this.value + 'px')" /></label>
-      <button class="btn btn-primary" onclick="updateLivePreviews()">Probar en vivo</button>
-      <button class="btn" onclick="document.getElementById('liveText').value='DISEÑO MÉTODO ÑÁÉ ¿¡';updateLivePreviews()">Probar Tildes ES</button>
-      <button class="btn" onclick="toggleTheme()">Modo Oscuro / Claro</button>
+      <label style="font-size:12px;color:var(--muted)">Tamaño <input id="sizeRange" type="range" min="48" max="130" value="72" /></label>
+      <button id="applyLiveBtn" class="btn btn-primary" type="button">Probar en vivo</button>
+      <button id="tildesBtn" class="btn" type="button">Probar Tildes ES</button>
+      <button id="resetLiveBtn" class="btn" type="button">Restaurar SVGs</button>
+      <button id="themeToggleBtn" class="btn" type="button">Modo Oscuro / Claro</button>
     </div>
+    <div class="filter-tabs" id="filterTabs">{eco_filter_tabs}</div>
   </div>
-  <div class="container">{''.join(cards_html)}</div>
+  <div class="container" id="galleryContainer">{''.join(cards_html)}</div>
+</div>
   <script>
     const CHROMA_PALETTES = {palettes_json};
-    function applyChromaPalette() {{
+    const ORIGINAL_SVGS = new Map();
+    let ACTIVE_ECO_FILTER = 'all';
+    let SHOW_SHORTLIST = true;
+    function isLightHex(hex) {{
+      const m = /^#?([0-9a-f]{{6}})$/i.exec((hex || '').trim());
+      if (!m) return false;
+      const n = parseInt(m[1], 16);
+      const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+      return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 150;
+    }}
+    function applyChromaPalette(useRecommended) {{
       const sel = document.getElementById('ecoSelect');
-      if (!sel || !CHROMA_PALETTES[sel.value]) return;
-      const mode = document.body.getAttribute('data-theme') || '{html.escape(default_mode)}';
-      const vars = CHROMA_PALETTES[sel.value][mode] || CHROMA_PALETTES[sel.value].light || CHROMA_PALETTES[sel.value].dark;
+      const ecoId = (sel && CHROMA_PALETTES[sel.value]) ? sel.value : Object.keys(CHROMA_PALETTES)[0];
+      const eco = ecoId ? CHROMA_PALETTES[ecoId] : null;
+      if (!eco) return;
+      if (useRecommended && (eco.recommended_mode === 'dark' || eco.recommended_mode === 'light')) {{
+        document.documentElement.setAttribute('data-theme', eco.recommended_mode);
+      }}
+      const mode = document.documentElement.getAttribute('data-theme') || '{html.escape(default_mode)}';
+      const vars = eco[mode] || eco.light || eco.dark;
       if (!vars) return;
-      Object.entries(vars).forEach(([k, v]) => document.body.style.setProperty(k, v));
+      const shell = document.querySelector('.gallery-shell');
+      Object.entries(vars).forEach(([k, v]) => {{
+        document.documentElement.style.setProperty(k, v);
+        if (shell) shell.style.setProperty(k, v);
+      }});
+      document.documentElement.setAttribute('data-on-primary-light', isLightHex(vars['--on-primary']) ? '1' : '0');
+      const tbtn = document.getElementById('themeToggleBtn');
+      if (tbtn) tbtn.textContent = mode === 'dark' ? 'Cambiar a Claro' : 'Cambiar a Oscuro';
+      const mbadge = document.getElementById('modeStatusBadge');
+      if (mbadge) mbadge.textContent = mode === 'dark' ? 'MODO OSCURO' : 'MODO CLARO';
+      const hchip = document.getElementById('activeHexReadout');
+      if (hchip) hchip.textContent = `bg:${{vars['--bg']}} · primary:${{vars['--primary']}} · accent:${{vars['--accent']}}`;
+      document.querySelectorAll('.palette-pill-btn').forEach(btn => {{
+        btn.classList.toggle('active', btn.getAttribute('data-eco-id') === ecoId);
+      }});
     }}
     function applyBrandTone() {{
       const val = document.getElementById('brandToneSelect')?.value || 'brand';
-      document.body.classList.toggle('tone-neutral', val === 'neutral');
+      document.documentElement.classList.toggle('tone-neutral', val === 'neutral');
     }}
     function toggleTheme() {{
-      const next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      document.body.setAttribute('data-theme', next);
-      applyChromaPalette();
+      const cur = document.documentElement.getAttribute('data-theme') || '{html.escape(default_mode)}';
+      const next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      applyChromaPalette(false);
+    }}
+    function applySectionFilters() {{
+      document.querySelectorAll('.font-section').forEach(sec => {{
+        const eid = sec.getAttribute('data-eco-id') || 'all';
+        const isShort = sec.getAttribute('data-shortlist') === '1';
+        const matchEco = ACTIVE_ECO_FILTER === 'all' || eid === ACTIVE_ECO_FILTER;
+        const matchShort = SHOW_SHORTLIST || !isShort;
+        sec.classList.toggle('is-hidden', !(matchEco && matchShort));
+      }});
     }}
     function updateLivePreviews() {{
-      const txt = document.getElementById('liveText').value.trim();
+      const txt = (document.getElementById('liveText')?.value || '').trim();
       if (!txt) return;
       document.querySelectorAll('.svg-container[data-uuid]').forEach(el => {{
         const uuid = el.getAttribute('data-uuid');
@@ -386,11 +498,65 @@ def generate_gallery_html(
         const variant = el.getAttribute('data-variant');
         const params = new URLSearchParams({{ itemUuid: uuid, text: txt, typed: '1' }});
         if (variant) params.set('variant', variant);
-        const u = 'https://elements.envato.com/font-preview.svg?' + params.toString();
-        el.innerHTML = '<div class="live-mask" role="img" aria-label="' + txt.replace(/"/g, '&quot;') + '" style="-webkit-mask-image:url(\'' + u + '\');mask-image:url(\'' + u + '\');"></div>';
+        const img = document.createElement('img');
+        img.className = 'live-img';
+        img.alt = txt;
+        img.loading = 'lazy';
+        img.src = 'https://elements.envato.com/font-preview.svg?' + params.toString();
+        el.replaceChildren(img);
       }});
     }}
-    applyChromaPalette();
+    function resetOriginalPreviews() {{
+      document.querySelectorAll('.svg-container[data-uuid]').forEach(el => {{
+        if (ORIGINAL_SVGS.has(el)) el.innerHTML = ORIGINAL_SVGS.get(el);
+      }});
+    }}
+    function initGalleryControls() {{
+      document.documentElement.classList.remove('no-js');
+      const banner = document.getElementById('jsStatusBanner');
+      if (banner) banner.style.display = 'none';
+      document.querySelectorAll('.svg-container[data-uuid]').forEach(el => ORIGINAL_SVGS.set(el, el.innerHTML));
+      const ecoSel = document.getElementById('ecoSelect');
+      if (ecoSel) ecoSel.addEventListener('change', () => applyChromaPalette(true));
+      document.querySelectorAll('.palette-pill-btn').forEach(btn => {{
+        btn.addEventListener('click', () => {{
+          const eid = btn.getAttribute('data-eco-id');
+          if (ecoSel && eid) ecoSel.value = eid;
+          applyChromaPalette(true);
+        }});
+      }});
+      const toneSel = document.getElementById('brandToneSelect');
+      if (toneSel) toneSel.addEventListener('change', applyBrandTone);
+      const liveIn = document.getElementById('liveText');
+      if (liveIn) liveIn.addEventListener('keydown', (e) => {{ if (e.key === 'Enter') updateLivePreviews(); }});
+      const sizeR = document.getElementById('sizeRange');
+      if (sizeR) sizeR.addEventListener('input', () => document.documentElement.style.setProperty('--preview-h', sizeR.value + 'px'));
+      const applyBtn = document.getElementById('applyLiveBtn');
+      if (applyBtn) applyBtn.addEventListener('click', updateLivePreviews);
+      const tildesBtn = document.getElementById('tildesBtn');
+      if (tildesBtn) tildesBtn.addEventListener('click', () => {{ if (liveIn) liveIn.value = 'DISEÑO MÉTODO ÑÁÉ ¿¡'; updateLivePreviews(); }});
+      const resetBtn = document.getElementById('resetLiveBtn');
+      if (resetBtn) resetBtn.addEventListener('click', resetOriginalPreviews);
+      const themeBtn = document.getElementById('themeToggleBtn');
+      if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+      document.querySelectorAll('.tab-btn[data-eco-filter]').forEach(btn => {{
+        btn.addEventListener('click', () => {{
+          ACTIVE_ECO_FILTER = btn.getAttribute('data-eco-filter') || 'all';
+          document.querySelectorAll('.tab-btn[data-eco-filter]').forEach(b => b.classList.toggle('active', b === btn));
+          applySectionFilters();
+        }});
+      }});
+      const slBtn = document.getElementById('shortlistToggleBtn');
+      if (slBtn) slBtn.addEventListener('click', () => {{
+        SHOW_SHORTLIST = !SHOW_SHORTLIST;
+        slBtn.classList.toggle('active', !SHOW_SHORTLIST);
+        slBtn.textContent = SHOW_SHORTLIST ? 'Con Alternativas' : 'Solo Principales';
+        applySectionFilters();
+      }});
+      applyChromaPalette(false);
+    }}
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initGalleryControls);
+    else initGalleryControls();
   </script>
 </body>
 </html>"""
@@ -421,7 +587,7 @@ def entries_from_manifest(manifest_path: Path, texts: List[str], include_shortli
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     ecos = data.get("candidate_ecosystems", [])
     entries: List[Dict[str, Any]] = []
-    seen_pairs: set[Tuple[str, str]] = set()
+    seen_uuid_text: set[Tuple[str, str]] = set()
     for eco in ecos:
         eco_id = eco.get("id", "eco")
         eco_name = eco.get("name", eco_id)
@@ -436,12 +602,18 @@ def entries_from_manifest(manifest_path: Path, texts: List[str], include_shortli
             url = tok.get("url") or ""
             if not url:
                 continue
+            m_u = UUID_RE.search(url)
+            canon = m_u.group(1).lower() if m_u else url.strip().lower()
             for t in texts:
-                seen_pairs.add((url, t))
+                if (canon, t.lower()) in seen_uuid_text:
+                    continue
+                seen_uuid_text.add((canon, t.lower()))
                 entries.append({
                     "url": url,
                     "text": t,
                     "title_hint": tok.get("$value", ""),
+                    "eco_id": eco_id,
+                    "is_shortlist": False,
                     "ecosystem_label": f"{eco_id}: {eco_name}",
                     "role_label": role_label,
                     "body_family": body_fam,
@@ -453,13 +625,19 @@ def entries_from_manifest(manifest_path: Path, texts: List[str], include_shortli
             for alt_key, alt_lbl in (("display_alternatives", "Alternativa Vanguardia (Display)"), ("accent_alternatives", "Alternativa Vanguardia (Acento)")):
                 for alt in sc.get(alt_key, [])[:2]:
                     aurl = alt.get("url") or ""
-                    if not aurl or (aurl, primary_text) in seen_pairs:
+                    if not aurl:
                         continue
-                    seen_pairs.add((aurl, primary_text))
+                    m_au = UUID_RE.search(aurl)
+                    canon_a = m_au.group(1).lower() if m_au else aurl.strip().lower()
+                    if (canon_a, primary_text.lower()) in seen_uuid_text:
+                        continue
+                    seen_uuid_text.add((canon_a, primary_text.lower()))
                     entries.append({
                         "url": aurl,
                         "text": primary_text,
                         "title_hint": alt.get("family", ""),
+                        "eco_id": eco_id,
+                        "is_shortlist": True,
                         "ecosystem_label": f"{eco_id}: {eco_name}",
                         "role_label": f"{alt_lbl} · {alt.get('sort_source', 'vanguard')}",
                         "body_family": body_fam,
@@ -476,7 +654,11 @@ def process_batch(
     page_fetcher=fetch_page_data,
     gallery_title: str = "Visualizador de Fuentes Envato + Google Fonts",
 ) -> Path:
-    os.makedirs(output_dir, exist_ok=True)
+    out_p = Path(output_dir)
+    out_p.mkdir(parents=True, exist_ok=True)
+    if (out_p / "preview_gallery.html").exists() or (out_p / "manifest.json").exists():
+        for old_svg in out_p.glob("*.svg"):
+            old_svg.unlink(missing_ok=True)
     all_gallery_items: List[Dict[str, Any]] = []
 
     for entry in items_to_process:
@@ -519,6 +701,8 @@ def process_batch(
                 "itemUuid": item_uuid,
                 "text": brand_text,
                 "url": url,
+                "eco_id": entry.get("eco_id", ""),
+                "is_shortlist": bool(entry.get("is_shortlist", False)),
                 "ecosystem_label": entry.get("ecosystem_label", ""),
                 "role_label": entry.get("role_label", ""),
                 "body_family": entry.get("body_family", ""),
@@ -536,7 +720,7 @@ def process_batch(
 
 
 def run_unit_tests() -> int:
-    print("Running envato_font_preview v4.0 offline unit tests...")
+    print("Running envato_font_preview v4.1 offline + headless Chrome unit tests...")
     with tempfile.TemporaryDirectory(prefix="envato_preview_test_") as tmp:
         tp = Path(tmp)
         fm_path = tp / "font_manifest.json"
@@ -545,31 +729,56 @@ def run_unit_tests() -> int:
 
         fm_path.write_text(json.dumps({
             "brand": "AURELIUS",
-            "candidate_ecosystems": [{
-                "id": "eco-1",
-                "name": "Test Editorial",
-                "tokens": {
-                    "display_primary": {"$value": "Domani", "source": "envato", "url": "https://app.envato.com/fonts/1de94cfa-3ac9-4fd1-b5b2-113405506be3"},
-                    "ui_secondary": {"$value": "Manrope", "source": "google_fonts", "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&display=swap"},
-                    "accent_brand": {"$value": "Monogram Holder", "source": "envato", "url": "https://app.envato.com/fonts/b072395d-990e-4637-a1ca-2c8b0355aed0"},
+            "candidate_ecosystems": [
+                {
+                    "id": "eco-1",
+                    "name": "Test Editorial",
+                    "tokens": {
+                        "display_primary": {"$value": "Domani", "source": "envato", "url": "https://app.envato.com/fonts/1de94cfa-3ac9-4fd1-b5b2-113405506be3"},
+                        "ui_secondary": {"$value": "Manrope", "source": "google_fonts", "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&display=swap"},
+                        "accent_brand": {"$value": "Monogram Holder", "source": "envato", "url": "https://app.envato.com/fonts/b072395d-990e-4637-a1ca-2c8b0355aed0"},
+                    }
+                },
+                {
+                    "id": "eco-2",
+                    "name": "Duplicate UUID Check",
+                    "tokens": {
+                        "display_primary": {"$value": "Domani", "source": "envato", "url": "https://elements.envato.com/fonts/domani-1de94cfa-3ac9-4fd1-b5b2-113405506be3"},
+                        "ui_secondary": {"$value": "Sora", "source": "google_fonts", "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Sora:wght@400..700&display=swap"},
+                        "accent_brand": {"$value": "Nority", "source": "envato", "url": "https://app.envato.com/fonts/2e9b3477-adbb-44cb-93eb-d7b94b2cc9c9"},
+                    }
                 }
-            }]
+            ]
         }), encoding="utf-8")
         cm_path.write_text(json.dumps({
             "selected_ecosystem_id": "eco_1",
             "recommended_mode": "light",
-            "ecosystems": [{
-                "id": "eco_1",
-                "themes": {
-                    "dark": {"background": {"hex": "#0d1016"}, "surface": {"hex": "#161a23"}, "primary": {"hex": "#f50023"}, "on_primary": {"hex": "#ffffff"}, "accent": {"hex": "#c8a84b"}, "on_accent": {"hex": "#0a0a0a"}, "text_primary": {"hex": "#f2f6fa"}, "text_muted": {"hex": "#8e9cb0"}},
-                    "light": {"background": {"hex": "#f9f7f1"}, "surface": {"hex": "#efece3"}, "primary": {"hex": "#f50023"}, "on_primary": {"hex": "#ffffff"}, "accent": {"hex": "#c8a84b"}, "on_accent": {"hex": "#0a0a0a"}, "text_primary": {"hex": "#121212"}, "text_muted": {"hex": "#566273"}},
+            "ecosystems": [
+                {
+                    "id": "eco_1",
+                    "name": "Crimson Light",
+                    "recommended_mode": "light",
+                    "themes": {
+                        "dark": {"background": {"hex": "#0d1016"}, "surface": {"hex": "#161a23"}, "primary": {"hex": "#f50023"}, "on_primary": {"hex": "#ffffff"}, "accent": {"hex": "#c8a84b"}, "on_accent": {"hex": "#0a0a0a"}, "text_primary": {"hex": "#f2f6fa"}, "text_muted": {"hex": "#8e9cb0"}},
+                        "light": {"background": {"hex": "#f9f7f1"}, "surface": {"hex": "#efece3"}, "primary": {"hex": "#f50023"}, "on_primary": {"hex": "#ffffff"}, "accent": {"hex": "#c8a84b"}, "on_accent": {"hex": "#0a0a0a"}, "text_primary": {"hex": "#121212"}, "text_muted": {"hex": "#566273"}},
+                    }
+                },
+                {
+                    "id": "eco_2",
+                    "name": "Obsidian Dark",
+                    "recommended_mode": "dark",
+                    "themes": {
+                        "dark": {"background": {"hex": "#101311"}, "surface": {"hex": "#191f1b"}, "primary": {"hex": "#38c990"}, "on_primary": {"hex": "#0a0a0a"}, "accent": {"hex": "#66deb0"}, "on_accent": {"hex": "#0a0a0a"}, "text_primary": {"hex": "#f2f5f3"}, "text_muted": {"hex": "#96a69e"}},
+                        "light": {"background": {"hex": "#f0ede5"}, "surface": {"hex": "#e3dfd4"}, "primary": {"hex": "#134d3a"}, "on_primary": {"hex": "#ffffff"}, "accent": {"hex": "#0b3628"}, "on_accent": {"hex": "#ffffff"}, "text_primary": {"hex": "#111312"}, "text_muted": {"hex": "#454a47"}},
+                    }
                 }
-            }]
+            ]
         }), encoding="utf-8")
 
         entries = entries_from_manifest(fm_path, ["AURELIUS", "NEXUS"])
         custom_entries = entries_from_urls(["https://app.envato.com/fonts/1de94cfa-3ac9-4fd1-b5b2-113405506be3"], ["AURELIUS"])
-        assert len(entries) == 4 and len(custom_entries) == 1
+        # eco-1: Domani(2), Monogram Holder(2); eco-2: Domani skipped (same UUID!), Nority(2) => 6 entries total
+        assert len(entries) == 6 and len(custom_entries) == 1, f"Expected deduplicated 6 entries, got {len(entries)}"
 
         mock_page = lambda url, title_hint="": {
             "title": title_hint or "Mock Font",
@@ -577,14 +786,73 @@ def run_unit_tests() -> int:
             "variants": [{"id": None, "styleName": "Regular"}],
             "url": url,
         }
-        mock_svg = lambda uuid, text, vid, ref: f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 30"><path d="M0 0h10v10"/></svg>'
+        mock_svg = lambda uuid, text, vid, ref: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 30"><defs><clipPath id="dupclip"><rect width="10" height="10"/></clipPath></defs><path clip-path="url(#dupclip)" style="fill:#111111" d="M0 0h10v10"/></svg>'
         gal = process_batch(entries, str(out_dir), chroma_path=cm_path, svg_fetcher=mock_svg, page_fetcher=mock_page)
         assert gal.exists()
         html_out = gal.read_text(encoding="utf-8")
         assert "#f50023" in html_out and "--on-primary" in html_out and "brand-lockup-grid" in html_out
-        assert "live-mask" in html_out and "filter: invert(1)" not in html_out
+        assert "live-img" in html_out and "url(''" not in html_out and "filter: invert(1)" not in html_out
+        assert 'id="dupclip"' not in html_out, "Duplicate raw SVG IDs must be namespaced!"
         assert (out_dir / "manifest.json").exists()
-    print("✅ ENVATO FONT PREVIEW v4.0 UNIT TESTS PASSED (4-color brand lockups, --envato-urls, CSS mask tint, 0 B/W invert)")
+        if shutil.which("node"):
+            for i, s_body in enumerate(re.findall(r"<script[^>]*>(.*?)</script>", html_out, re.S)):
+                js_tmp = tp / f"check_{i}.js"
+                js_tmp.write_text(s_body, encoding="utf-8")
+                res = subprocess.run(["node", "--check", str(js_tmp)], capture_output=True, text=True)
+                assert res.returncode == 0, f"JS syntax check failed in gallery script #{i}: {res.stderr}"
+
+        chrome_bin = shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chromium-browser")
+        if chrome_bin:
+            probe_js = """
+<script>
+window.addEventListener('error', e => { window.__TEST_ERRS = (window.__TEST_ERRS || []).concat([String(e.message)]); });
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const out = { errs: window.__TEST_ERRS || [] };
+    const snap = () => {
+      const p = document.querySelector('.svg-primary svg path');
+      return {
+        bodyBg: getComputedStyle(document.body).backgroundColor,
+        svgFill: p ? getComputedStyle(p).fill : null,
+        visibleSections: Array.from(document.querySelectorAll('.font-section')).filter(s => getComputedStyle(s).display !== 'none').length,
+      };
+    };
+    out.init = snap();
+    const sel = document.getElementById('ecoSelect');
+    sel.value = 'eco_2';
+    sel.dispatchEvent(new Event('change'));
+    out.afterEco2 = snap();
+    document.getElementById('themeToggleBtn').click();
+    out.afterTheme = snap();
+    const tone = document.getElementById('brandToneSelect');
+    tone.value = 'neutral';
+    tone.dispatchEvent(new Event('change'));
+    out.afterNeutral = snap();
+    document.querySelector('.tab-btn[data-eco-filter="eco-1"]').click();
+    out.afterFilterEco1 = snap();
+    const pre = document.createElement('pre');
+    pre.id = '__E2E__';
+    pre.textContent = JSON.stringify(out);
+    document.body.appendChild(pre);
+  }, 50);
+});
+</script>
+"""
+            e2e_file = tp / "e2e_gallery.html"
+            e2e_file.write_text(html_out.replace("</body>", probe_js + "</body>"), encoding="utf-8")
+            dom = subprocess.check_output(
+                [chrome_bin, "--headless=new", "--no-sandbox", "--disable-gpu", "--virtual-time-budget=2000", "--dump-dom", f"file://{e2e_file}"],
+                stderr=subprocess.PIPE, text=True, timeout=30,
+            )
+            m_res = re.search(r'<pre id="__E2E__">(.*?)</pre>', dom, re.S)
+            assert m_res, "Headless Chrome E2E probe missing output"
+            e2e = json.loads(html.unescape(m_res.group(1)))
+            assert e2e["errs"] == [], f"JS errors in headless Chrome: {e2e['errs']}"
+            assert e2e["init"]["bodyBg"] != e2e["afterEco2"]["bodyBg"], f"ecoSelect did not change bodyBg: {e2e}"
+            assert e2e["afterEco2"]["bodyBg"] != e2e["afterTheme"]["bodyBg"], f"themeToggleBtn did not change bodyBg: {e2e}"
+            assert e2e["afterTheme"]["svgFill"] != e2e["afterNeutral"]["svgFill"], f"brandToneSelect did not change SVG fill: {e2e}"
+            assert e2e["afterFilterEco1"]["visibleSections"] < e2e["init"]["visibleSections"], f"Eco filter tab did not reduce sections: {e2e}"
+    print("✅ ENVATO FONT PREVIEW v4.1 UNIT + HEADLESS CHROME E2E TESTS PASSED (deduped UUIDs, namespaced SVGs, live palette/theme/tone/filter view switches verified)")
     return 0
 
 

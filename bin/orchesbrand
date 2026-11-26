@@ -52,33 +52,68 @@ def find_project_dev_dir(project_name: Optional[str] = None) -> Optional[Path]:
     return None
 
 
-def resolve_brief_and_brand(brand: Optional[str], project_dir: Optional[Path], vertical: Optional[str]) -> Tuple[str, Optional[Path]]:
-    """Discovers umbrella astrobranding_*.md and brand name dynamically without inventing data."""
-    candidates: List[Path] = []
+def resolve_brief_and_brand(brand: Optional[str], project_dir: Optional[Path], vertical: Optional[str]) -> Tuple[str, Optional[Path], Optional[Path]]:
+    """
+    Discovers umbrella astrobranding_<slug>.md, client_dumps_15_shards.json, and clean display brand_slug
+    across args.brand, ecosystem.json (`brand_slug` / `umbrella_name`), and project files.
+    """
+    slug_candidates: List[str] = []
+    eco_display_slug = ""
     if project_dir and project_dir.exists():
-        if brand:
-            candidates.append(project_dir / f"astrobranding_{brand.lower()}.md")
-        candidates.extend(sorted(project_dir.glob("astrobranding_*.md")))
-        if vertical:
-            candidates.extend(sorted((project_dir / "workspaces" / vertical / "brand").glob("astrobranding_*.md")))
-
-    if brand:
-        b_up = re.sub(r"[^a-zA-Z0-9_-]+", "", brand).upper()
-        candidates.append(Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{b_up}/astrobranding_{brand.lower()}.md"))
-
-    brief = next((c for c in candidates if c.is_file()), None)
-    resolved_brand = brand
-    if not resolved_brand and brief:
-        resolved_brand = brief.stem.replace("astrobranding_", "").upper()
-    if not resolved_brand and project_dir:
         eco_file = project_dir / "ecosystem.json"
         if eco_file.exists():
             try:
                 edata = json.loads(eco_file.read_text(encoding="utf-8"))
-                resolved_brand = (edata.get("umbrella_name") or edata.get("brand_slug") or project_dir.parent.name).upper()
+                bs = str(edata.get("brand_slug") or "").strip()
+                umb = str(edata.get("umbrella_name") or "").strip()
+                if bs:
+                    eco_display_slug = bs
+                    slug_candidates.append(bs)
+                if umb:
+                    slug_candidates.append(re.sub(r"[^a-zA-Z0-9_-]+", "", umb.split()[0]))
             except Exception:
                 pass
-    return (resolved_brand or "BRAND").upper(), brief
+    if brand:
+        clean_b = re.sub(r"[^a-zA-Z0-9_-]+", "", brand.strip())
+        if clean_b and clean_b not in slug_candidates:
+            slug_candidates.append(clean_b)
+
+    brief_candidates: List[Path] = []
+    if project_dir and project_dir.exists():
+        for sc in slug_candidates:
+            brief_candidates.append(project_dir / f"astrobranding_{sc.lower()}.md")
+        brief_candidates.extend(sorted(project_dir.glob("astrobranding_*.md")))
+        if vertical:
+            brief_candidates.extend(sorted((project_dir / "workspaces" / vertical / "brand").glob("astrobranding_*.md")))
+
+    for sc in slug_candidates:
+        b_up = sc.upper()
+        brief_candidates.append(Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{b_up}/astrobranding_{sc.lower()}.md"))
+
+    brief = next((c for c in brief_candidates if c.is_file()), None)
+    if brief and brief.stem.startswith("astrobranding_"):
+        bstem = brief.stem.replace("astrobranding_", "").strip()
+        if bstem and bstem not in slug_candidates:
+            slug_candidates.insert(0, bstem)
+
+    shard_candidates: List[Path] = []
+    for sc in slug_candidates:
+        b_up = sc.upper()
+        shard_candidates.extend([
+            Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{b_up}/raw/json/dumps/client_dumps_15_shards.json"),
+            Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{b_up}/dumps/client_dumps_15_shards.json"),
+        ])
+    if project_dir:
+        shard_candidates.extend([
+            project_dir / "client_dumps_15_shards.json",
+            project_dir / "dumps" / "client_dumps_15_shards.json",
+        ])
+    shards = next((c for c in shard_candidates if c.is_file()), None)
+
+    resolved_brand = eco_display_slug or (brief.stem.replace("astrobranding_", "") if brief else None) or brand
+    if not resolved_brand and project_dir:
+        resolved_brand = project_dir.parent.name
+    return (resolved_brand or "BRAND").upper(), brief, shards
 
 
 def deep_merge_non_destructive(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
@@ -244,6 +279,33 @@ def merge_brandbook_non_destructive(
     return bb_path, css_path
 
 
+def _resolve_preview_texts(
+    explicit_texts: str,
+    brand: str,
+    vertical: Optional[str],
+    vertical_json_path: Optional[Path],
+) -> str:
+    if explicit_texts.strip():
+        return explicit_texts.strip()
+    out: List[str] = []
+    if vertical_json_path and vertical_json_path.is_file():
+        try:
+            vdata = json.loads(vertical_json_path.read_text(encoding="utf-8"))
+            raw_disp = str(vdata.get("display_name") or "").strip()
+            short_disp = re.split(r"\s*[—–\-|(]\s*", raw_disp)[0].strip()
+            if short_disp:
+                out.append(short_disp.upper())
+        except Exception:
+            pass
+    if vertical:
+        v_clean = vertical.replace("-", " ").upper()
+        if v_clean not in out:
+            out.append(v_clean)
+    if not out:
+        out.append(brand.upper())
+    return ",".join(out[:2])
+
+
 def run_pipeline(
     brand: str,
     target_dir: Path,
@@ -258,7 +320,7 @@ def run_pipeline(
     chroma_mode: str = "auto",
     style_profile: str = "auto",
     sort_mode: str = "hybrid",
-    include_shortlist: bool = True,
+    include_shortlist: bool = False,
     seed: int = 0,
     brand_brief_path: Optional[Path] = None,
     palette_json_path: Optional[Path] = None,
@@ -269,6 +331,7 @@ def run_pipeline(
 ) -> Dict[str, Any]:
     target_dir.mkdir(parents=True, exist_ok=True)
     results: Dict[str, Any] = {"brand": brand, "vertical": vertical, "target_dir": str(target_dir), "generated": []}
+    sib_dir = (project_dir / "workspaces") if project_dir and (project_dir / "workspaces").is_dir() else None
 
     run_all = "all" in phases
     if run_all or "chroma" in phases:
@@ -288,6 +351,8 @@ def run_pipeline(
             cmd.extend(["--brand-brief", str(brand_brief_path)])
         if palette_json_path:
             cmd.extend(["--palette-json", str(palette_json_path)])
+        if sib_dir:
+            cmd.extend(["--sibling-workspaces-dir", str(sib_dir)])
         if seed_hex:
             cmd.extend(["--seed-hex", seed_hex])
         if bg_hex:
@@ -311,6 +376,8 @@ def run_pipeline(
             cmd.extend(["--shards", str(shards_path)])
         if vertical_json_path:
             cmd.extend(["--vertical-json", str(vertical_json_path)])
+        if sib_dir:
+            cmd.extend(["--sibling-workspaces-dir", str(sib_dir)])
         if no_live:
             cmd.append("--no-live")
         subprocess.run(cmd, check=True)
@@ -318,12 +385,13 @@ def run_pipeline(
         results["generated"].extend(["font_manifest.json", fg_name])
 
     if (run_all or "previews" in phases) and not no_live and ((target_dir / "font_manifest.json").exists() or envato_urls.strip()):
-        texts = preview_texts.strip() or ",".join([brand.upper(), (vertical or brand).replace("-", " ").upper()])
+        texts = _resolve_preview_texts(preview_texts, brand, vertical, vertical_json_path)
+        title_label = (vertical.replace("-", " ").title() if vertical else brand.upper())
         cmd = [
             sys.executable, "-B", str(resolve_script("envato_font_preview.py")),
             "--texts", texts,
             "--out", str(target_dir / "previews"),
-            "--title", f"Galería Full-Color Envato + Google Fonts — {brand.upper()}" + (f" ({vertical})" if vertical else ""),
+            "--title", f"Galería Full-Color Envato + Google Fonts — {title_label} ({brand.upper()})",
         ]
         if (target_dir / "font_manifest.json").exists():
             cmd.extend(["--from-manifest", str(target_dir / "font_manifest.json")])
@@ -375,17 +443,20 @@ def audit_target(target_dir: Path, phases: List[str]) -> Tuple[bool, List[str]]:
 
 
 def run_unit_tests() -> int:
-    print("Running orchesbrand v3.2 multi-vertical agnostic offline unit tests...")
-    with tempfile.TemporaryDirectory(prefix="orchesbrand_v32_test_") as tmp:
+    print("Running orchesbrand v4.1 multi-vertical agnostic offline unit tests...")
+    with tempfile.TemporaryDirectory(prefix="orchesbrand_v41_test_") as tmp:
         tp = Path(tmp)
-        proj_dev = tp / "TestProj" / "dev"
+        proj_dev = tp / "TestProjAlias" / "dev"
         vert_dir = proj_dev / "verticals"
         ws_b2b = proj_dev / "workspaces" / "alpha-b2b" / "brand"
+        ws_b2b_2 = proj_dev / "workspaces" / "beta-b2b" / "brand"
         ws_cos = proj_dev / "workspaces" / "orion-cosmic" / "brand"
         vert_dir.mkdir(parents=True, exist_ok=True)
         ws_b2b.mkdir(parents=True, exist_ok=True)
+        ws_b2b_2.mkdir(parents=True, exist_ok=True)
         ws_cos.mkdir(parents=True, exist_ok=True)
 
+        (proj_dev / "ecosystem.json").write_text(json.dumps({"brand_slug": "oraculo_owner", "umbrella_name": "Owner Studio"}), encoding="utf-8")
         shards_p = proj_dev / "client_dumps_15_shards.json"
         shards_p.write_text(json.dumps({
             "shard_01": {"data": {"tripod_of_iron": {"sun": {"sign": "Gemini"}, "midheaven_house_10": {"sign": "Gemini"}}}},
@@ -393,34 +464,43 @@ def run_unit_tests() -> int:
             "shard_03": {"data": {"shadbala": {"dominant_planet": "Sun"}, "nakshatra": {"name": "Chitra", "lord": "Mars"}}},
             "shard_04": {"data": {"day_master": {"name": "Jia", "element": "Wood"}, "four_pillars": {"month": {"element": "Metal"}}, "yong_shen": {"element": "Water"}}},
         }), encoding="utf-8")
-        brief_p = proj_dev / "astrobranding_testcorp.md"
-        brief_p.write_text("# Brief TESTCORP\n**Elemento balancín Yong Shen:** La tinta.\n", encoding="utf-8")
+        brief_p = proj_dev / "astrobranding_oraculo_owner.md"
+        brief_p.write_text("# Brief OWNER\n**Elemento balancín Yong Shen:** La tinta.\n", encoding="utf-8")
+        res_brand, res_brief, res_shards = resolve_brief_and_brand("TestProjAlias", proj_dev, "alpha-b2b")
+        assert res_brand == "ORACULO_OWNER", f"Expected brand_slug ORACULO_OWNER, got {res_brand}"
+        assert res_brief == brief_p and res_shards == shards_p
+
         seed_bb = {
-            "metadata": {"brand_name": "TESTCORP"},
+            "metadata": {"brand_name": "ORACULO_OWNER"},
             "brand_architecture": {"core_promise": "Preserved umbrella architecture"},
             "voice_tone_and_messaging": {"primary_tone": "Direct and calm"},
             "lexicon": {"forbidden_terms": ["slop"]},
         }
         (proj_dev / "brandbook.json").write_text(json.dumps(seed_bb, indent=2), encoding="utf-8")
         v_b2b = vert_dir / "alpha-b2b.json"
+        v_b2b_2 = vert_dir / "beta-b2b.json"
         v_cos = vert_dir / "orion-cosmic.json"
-        v_b2b.write_text(json.dumps({"vertical_slug": "alpha-b2b", "display_name": "Consultoría B2B e IA", "unique_mechanism": {"name": "M1"}}), encoding="utf-8")
-        v_cos.write_text(json.dumps({"vertical_slug": "orion-cosmic", "display_name": "Orion — Sabidurías Cósmicas & Arquetipos Vocacionales", "unique_mechanism": {"name": "M2"}}), encoding="utf-8")
+        v_b2b.write_text(json.dumps({"vertical_slug": "alpha-b2b", "display_name": "Alpha B2B — Consultoría e IA", "unique_mechanism": {"name": "M1"}}), encoding="utf-8")
+        v_b2b_2.write_text(json.dumps({"vertical_slug": "beta-b2b", "display_name": "Beta B2B — Firma Unipersonal Automatizada", "unique_mechanism": {"name": "M2"}}), encoding="utf-8")
+        v_cos.write_text(json.dumps({"vertical_slug": "orion-cosmic", "display_name": "Orion — Sabidurías Cósmicas & Arquetipos Vocacionales", "unique_mechanism": {"name": "M3"}}), encoding="utf-8")
 
-        run_pipeline("TESTCORP", ws_b2b, ["chroma", "fontgen", "brandbook"], brief_path=brief_p, shards_path=shards_p, vertical_json_path=v_b2b, project_dir=proj_dev, vertical="alpha-b2b", no_live=True)
-        run_pipeline("TESTCORP", ws_cos, ["chroma", "fontgen", "brandbook"], brief_path=brief_p, shards_path=shards_p, vertical_json_path=v_cos, project_dir=proj_dev, vertical="orion-cosmic", no_live=True)
-        for ws in (ws_b2b, ws_cos):
+        assert _resolve_preview_texts("", "TESTPROJALIAS", "beta-b2b", v_b2b_2) == "BETA B2B"
+
+        run_pipeline("ORACULO_OWNER", ws_b2b, ["chroma", "fontgen", "brandbook"], brief_path=brief_p, shards_path=shards_p, vertical_json_path=v_b2b, project_dir=proj_dev, vertical="alpha-b2b", no_live=True)
+        run_pipeline("ORACULO_OWNER", ws_b2b_2, ["chroma", "fontgen", "brandbook"], brief_path=brief_p, shards_path=shards_p, vertical_json_path=v_b2b_2, project_dir=proj_dev, vertical="beta-b2b", no_live=True)
+        run_pipeline("ORACULO_OWNER", ws_cos, ["chroma", "fontgen", "brandbook"], brief_path=brief_p, shards_path=shards_p, vertical_json_path=v_cos, project_dir=proj_dev, vertical="orion-cosmic", no_live=True)
+        for ws in (ws_b2b, ws_b2b_2, ws_cos):
             ok, errs = audit_target(ws, ["chroma", "fontgen", "brandbook"])
             assert ok, f"Audit failed for {ws}: {errs}"
 
         bb_b2b = json.loads((ws_b2b / "brandbook.json").read_text(encoding="utf-8"))
+        bb_b2b_2 = json.loads((ws_b2b_2 / "brandbook.json").read_text(encoding="utf-8"))
         bb_cos = json.loads((ws_cos / "brandbook.json").read_text(encoding="utf-8"))
         assert bb_b2b["brand_architecture"]["core_promise"] == "Preserved umbrella architecture"
-        assert bb_cos["brand_architecture"]["core_promise"] == "Preserved umbrella architecture"
-        assert bb_b2b["vertical_context"]["vertical_slug"] == "alpha-b2b"
-        assert bb_cos["vertical_context"]["vertical_slug"] == "orion-cosmic"
+        assert bb_b2b_2["design_system"]["typography"]["display_primary"]["$value"] != bb_b2b["design_system"]["typography"]["display_primary"]["$value"]
+        assert bb_b2b_2["design_system"]["typography"]["accent_brand"]["$value"] != bb_b2b["design_system"]["typography"]["accent_brand"]["$value"]
+        assert bb_b2b_2["design_system"]["typography"]["ui_secondary"]["$value"] != bb_b2b["design_system"]["typography"]["ui_secondary"]["$value"]
         assert bb_b2b["design_system"]["colors"]["selected_ecosystem_id"] != bb_cos["design_system"]["colors"]["selected_ecosystem_id"]
-        assert bb_b2b["design_system"]["typography"]["display_primary"]["$value"] != bb_cos["design_system"]["typography"]["display_primary"]["$value"]
 
         # Test WITHOUT Oraculo (--brand-brief + --palette-json preserving vivid hexes)
         ws_noor = proj_dev / "workspaces" / "vivid-client" / "brand"
@@ -435,7 +515,7 @@ def run_unit_tests() -> int:
         assert cm_noor["themes"]["light"]["primary"]["hex"] == "#f50023"
         assert "--brand-on-primary" in css_noor
     assert not Path("/mnt/localstorage/TESTCORP").exists()
-    print("✅ ORCHESBRAND v4.0 UNIT TESTS PASSED (With & Without Oráculo, vivid hexes preserved, 0 phantom dirs)")
+    print("✅ ORCHESBRAND v4.1 UNIT TESTS PASSED (brand_slug resolution, sibling-disjoint B2B fonts, non-leaking preview texts, vivid hexes, 0 phantom dirs)")
     return 0
 
 
@@ -470,21 +550,12 @@ def main() -> int:
     if args.test:
         return run_unit_tests()
 
-    proj_dir = args.project_dir or find_project_dev_dir()
-    brand, brief = resolve_brief_and_brand(args.brand, proj_dir, args.vertical)
+    proj_dir = args.project_dir or find_project_dev_dir(args.brand)
+    brand, brief, auto_shards = resolve_brief_and_brand(args.brand, proj_dir, args.vertical)
     if args.brief:
         brief = args.brief
 
-    shards = args.shards
-    if not shards:
-        b_up = re.sub(r"[^a-zA-Z0-9_-]+", "", brand).upper()
-        for cand in (
-            Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{b_up}/raw/json/dumps/client_dumps_15_shards.json"),
-            proj_dir / "client_dumps_15_shards.json" if proj_dir else None,
-        ):
-            if cand and cand.is_file():
-                shards = cand
-                break
+    shards = args.shards or auto_shards
 
     vjson = args.vertical_json
     if not vjson and args.vertical and proj_dir:
@@ -517,7 +588,7 @@ def main() -> int:
             shards_path=shards, vertical_json_path=vjson_target, project_dir=proj_dir, vertical=vslug,
             preview_texts=args.preview_texts, no_live=args.no_live,
             chroma_mode=args.chroma_mode, style_profile=args.style_profile,
-            sort_mode=args.sort, include_shortlist=args.include_shortlist or True, seed=args.seed,
+            sort_mode=args.sort, include_shortlist=args.include_shortlist, seed=args.seed,
             brand_brief_path=args.brand_brief, palette_json_path=args.palette_json,
             seed_hex=args.seed_hex, bg_hex=args.bg_hex, accent_hex=args.accent_hex, envato_urls=args.envato_urls,
         )

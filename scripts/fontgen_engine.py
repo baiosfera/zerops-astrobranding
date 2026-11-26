@@ -20,6 +20,7 @@ Key Capabilities (v4.1):
 
 import argparse
 import base64
+import hashlib
 import html as html_lib
 import json
 import os
@@ -255,6 +256,114 @@ GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
         "category": "serif",
         "cls": {"fallback": "Times New Roman", "size_adjust": "99.5%", "ascent": "94.5%", "descent": "24.0%", "line_gap": "0%"}
     },
+    "sora": {
+        "family": "Sora",
+        "url": "https://fonts.google.com/specimen/Sora",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Sora:wght@200..800&display=swap",
+        "variable_axes": "wght@200..800",
+        "weights": ["200", "300", "400", "500", "600", "700", "800"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "97.8%", "ascent": "93.0%", "descent": "24.0%", "line_gap": "0%"}
+    },
+    "outfit": {
+        "family": "Outfit",
+        "url": "https://fonts.google.com/specimen/Outfit",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Outfit:wght@200..800&display=swap",
+        "variable_axes": "wght@200..800",
+        "weights": ["200", "300", "400", "500", "600", "700", "800"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "98.5%", "ascent": "93.5%", "descent": "23.5%", "line_gap": "0%"}
+    },
+    "onest": {
+        "family": "Onest",
+        "url": "https://fonts.google.com/specimen/Onest",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Onest:wght@200..800&display=swap",
+        "variable_axes": "wght@200..800",
+        "weights": ["200", "300", "400", "500", "600", "700", "800"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "98.8%", "ascent": "93.0%", "descent": "24.0%", "line_gap": "0%"}
+    },
+    "albert_sans": {
+        "family": "Albert Sans",
+        "url": "https://fonts.google.com/specimen/Albert+Sans",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,200..800;1,200..800&display=swap",
+        "variable_axes": "ital,wght@0..1,200..800",
+        "weights": ["200", "300", "400", "500", "600", "700", "800"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "99.0%", "ascent": "94.0%", "descent": "23.5%", "line_gap": "0%"}
+    },
+    "hanken_grotesk": {
+        "family": "Hanken Grotesk",
+        "url": "https://fonts.google.com/specimen/Hanken+Grotesk",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,200..800;1,200..800&display=swap",
+        "variable_axes": "ital,wght@0..1,200..800",
+        "weights": ["200", "300", "400", "500", "600", "700", "800"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "99.2%", "ascent": "94.0%", "descent": "24.0%", "line_gap": "0%"}
+    },
+    "figtree": {
+        "family": "Figtree",
+        "url": "https://fonts.google.com/specimen/Figtree",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..800;1,300..800&display=swap",
+        "variable_axes": "ital,wght@0..1,300..800",
+        "weights": ["300", "400", "500", "600", "700", "800"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "98.6%", "ascent": "93.5%", "descent": "23.5%", "line_gap": "0%"}
+    },
+    "red_hat_display": {
+        "family": "Red Hat Display",
+        "url": "https://fonts.google.com/specimen/Red+Hat+Display",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Red+Hat+Display:ital,wght@0,300..800;1,300..800&display=swap",
+        "variable_axes": "ital,wght@0..1,300..800",
+        "weights": ["300", "400", "500", "600", "700", "800"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "98.2%", "ascent": "93.0%", "descent": "24.0%", "line_gap": "0%"}
+    },
+    "archivo": {
+        "family": "Archivo",
+        "url": "https://fonts.google.com/specimen/Archivo",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,75..100,200..800;1,75..100,200..800&display=swap",
+        "variable_axes": "ital,wdth,wght@0..1,75..100,200..800",
+        "weights": ["200", "300", "400", "500", "600", "700", "800"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "98.4%", "ascent": "94.0%", "descent": "23.0%", "line_gap": "0%"}
+    },
+    "ibm_plex_sans": {
+        "family": "IBM Plex Sans",
+        "url": "https://fonts.google.com/specimen/IBM+Plex+Sans",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300..700;1,300..700&display=swap",
+        "variable_axes": "ital,wght@0..1,300..700",
+        "weights": ["300", "400", "500", "600", "700"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "98.5%", "ascent": "93.0%", "descent": "24.0%", "line_gap": "0%"}
+    },
+    "work_sans": {
+        "family": "Work Sans",
+        "url": "https://fonts.google.com/specimen/Work+Sans",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,300..800;1,300..800&display=swap",
+        "variable_axes": "ital,wght@0..1,300..800",
+        "weights": ["300", "400", "500", "600", "700", "800"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "98.0%", "ascent": "93.0%", "descent": "24.0%", "line_gap": "0%"}
+    },
+    "syne": {
+        "family": "Syne",
+        "url": "https://fonts.google.com/specimen/Syne",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Syne:wght@400..800&display=swap",
+        "variable_axes": "wght@400..800",
+        "weights": ["400", "500", "600", "700", "800"],
+        "category": "display",
+        "cls": {"fallback": "Arial", "size_adjust": "96.5%", "ascent": "92.0%", "descent": "24.0%", "line_gap": "0%"}
+    },
+    "literata": {
+        "family": "Literata",
+        "url": "https://fonts.google.com/specimen/Literata",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,200..800;1,7..72,200..800&display=swap",
+        "variable_axes": "ital,opsz,wght@0..1,7..72,200..800",
+        "weights": ["200", "300", "400", "500", "600", "700", "800"],
+        "category": "serif",
+        "cls": {"fallback": "Times New Roman", "size_adjust": "98.5%", "ascent": "93.5%", "descent": "24.5%", "line_gap": "0%"}
+    },
 }
 
 SIGN_NORMALIZATION: Dict[str, str] = {
@@ -375,8 +484,8 @@ def find_localstorage_roots() -> List[Path]:
 
 class FontgenEngine:
     """
-    Sovereign Agnostic Vanguard Typographic Engine (v4.1).
-    Dual-sort Envato Elements hydration + app.envato.com + Multi-vertical differentiation.
+    Sovereign Agnostic Vanguard Typographic Engine (v4.2).
+    Dual-sort Envato Elements hydration + app.envato.com + Multi-vertical sibling-disjoint differentiation.
     """
 
     def __init__(
@@ -394,6 +503,8 @@ class FontgenEngine:
         style_profile: str = "auto",
         sort_mode: str = "hybrid",
         seed: int = 0,
+        sibling_workspaces_dir: Optional[Path] = None,
+        exclude_fonts: Optional[List[str]] = None,
     ):
         self.brand_raw = brand.strip()
         self.brand_upper = self.brand_raw.upper()
@@ -410,11 +521,104 @@ class FontgenEngine:
         self.style_profile = style_profile
         self.sort_mode = sort_mode
         self.seed = max(0, int(seed))
+        self.sibling_workspaces_dir = Path(sibling_workspaces_dir).resolve() if sibling_workspaces_dir else None
+        if not self.sibling_workspaces_dir and self.output_dir:
+            if self.output_dir.name == "brand" and self.output_dir.parent.parent.name == "workspaces":
+                self.sibling_workspaces_dir = self.output_dir.parent.parent
+        self.explicit_exclude_fonts: Set[str] = {f.strip().lower() for f in (exclude_fonts or []) if f and f.strip()}
         self.used_families: Set[str] = set()
         self.used_uuids: Set[str] = set()
+        self.excluded_envato_families: Set[str] = set()
+        self.excluded_envato_uuids: Set[str] = set()
+        self.excluded_google_families: Set[str] = set()
+        self.hard_excluded_google_families: Set[str] = set()
 
         self.diag_dir = Path(f"/var/www/baiosfera/ASTROLOGÍA/DIAG/{self.brand_upper}")
         self.project_dev_dir = Path(f"/var/www/baiosfera/PROYECTOS/{self.brand_upper}/dev")
+        self._load_sibling_exclusions()
+
+    def _load_sibling_exclusions(self) -> None:
+        """Loads Envato + Google fonts already used in sibling workspaces to enforce disjoint typography."""
+        for f in self.explicit_exclude_fonts:
+            self.excluded_envato_families.add(f)
+            self.excluded_google_families.add(f)
+            self.hard_excluded_google_families.add(f)
+            self.used_families.add(f)
+
+        ws_root = self.sibling_workspaces_dir
+        if not ws_root or not ws_root.is_dir():
+            return
+        own_brand_dir = self.output_dir.resolve() if self.output_dir else None
+        for child in sorted(ws_root.iterdir()):
+            if not child.is_dir() or child.name.startswith("."):
+                continue
+            sib_brand = (child / "brand").resolve()
+            if own_brand_dir and sib_brand == own_brand_dir:
+                continue
+
+            bb_path = sib_brand / "brandbook.json"
+            if bb_path.is_file():
+                try:
+                    bb = json.loads(bb_path.read_text(encoding="utf-8"))
+                    typo = bb.get("design_system", {}).get("typography", {})
+                    for rk in ("display_primary", "accent_brand"):
+                        tok = typo.get(rk, {})
+                        if isinstance(tok, dict):
+                            fam = str(tok.get("$value") or "").strip().lower()
+                            uid = _extract_uuid(str(tok.get("url") or ""))
+                            if fam:
+                                self.excluded_envato_families.add(fam)
+                                self.used_families.add(fam)
+                            if uid:
+                                self.excluded_envato_uuids.add(uid)
+                                self.used_uuids.add(uid)
+                    ui_tok = typo.get("ui_secondary", {})
+                    if isinstance(ui_tok, dict):
+                        gf = str(ui_tok.get("$value") or "").strip().lower()
+                        if gf:
+                            self.excluded_google_families.add(gf)
+                            self.hard_excluded_google_families.add(gf)
+                except Exception:
+                    pass
+
+            fm_path = sib_brand / "font_manifest.json"
+            if fm_path.is_file():
+                try:
+                    fm = json.loads(fm_path.read_text(encoding="utf-8"))
+                    sel_eco = fm.get("selected_ecosystem") or {}
+                    sel_tokens = sel_eco.get("tokens", {})
+                    for rk in ("display_primary", "accent_brand"):
+                        tok = sel_tokens.get(rk, {})
+                        fam = str(tok.get("$value") or "").strip().lower()
+                        uid = str(tok.get("item_uuid") or _extract_uuid(str(tok.get("url") or ""))).lower()
+                        if fam:
+                            self.excluded_envato_families.add(fam)
+                            self.used_families.add(fam)
+                        if uid:
+                            self.excluded_envato_uuids.add(uid)
+                            self.used_uuids.add(uid)
+                    gf_sel = str(sel_tokens.get("ui_secondary", {}).get("$value") or "").strip().lower()
+                    if gf_sel:
+                        self.excluded_google_families.add(gf_sel)
+                        self.hard_excluded_google_families.add(gf_sel)
+
+                    for eco in fm.get("candidate_ecosystems", []):
+                        toks = eco.get("tokens", {})
+                        for rk in ("display_primary", "accent_brand"):
+                            tok = toks.get(rk, {})
+                            fam = str(tok.get("$value") or "").strip().lower()
+                            uid = str(tok.get("item_uuid") or _extract_uuid(str(tok.get("url") or ""))).lower()
+                            if fam:
+                                self.excluded_envato_families.add(fam)
+                                self.used_families.add(fam)
+                            if uid:
+                                self.excluded_envato_uuids.add(uid)
+                                self.used_uuids.add(uid)
+                        gf_c = str(toks.get("ui_secondary", {}).get("$value") or "").strip().lower()
+                        if gf_c:
+                            self.excluded_google_families.add(gf_c)
+                except Exception:
+                    pass
 
     def _discover_search_dirs(self) -> List[Path]:
         dirs: List[Path] = []
@@ -575,6 +779,7 @@ class FontgenEngine:
         category_slug: str = "sans-serif",
         category_label: str = "sans",
         default_weights: Optional[List[str]] = None,
+        seed_override: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
         if not self.use_live_search:
             return None
@@ -617,7 +822,7 @@ class FontgenEngine:
 
         scored.sort(key=lambda x: (-x[0], x[1]["family"]))
         verified: List[Dict[str, Any]] = []
-        for sc, c in scored[:12]:
+        for sc, c in scored[:16]:
             if not self._is_previewable_uuid(c["uuid"]):
                 continue
             verified.append({
@@ -640,7 +845,8 @@ class FontgenEngine:
         if not verified:
             return None
 
-        idx = self.seed % len(verified)
+        eff = self.seed if seed_override is None else seed_override
+        idx = eff % len(verified)
         pick = dict(verified[idx])
         shortlist = [
             {
@@ -656,24 +862,26 @@ class FontgenEngine:
             for i, v in enumerate(verified) if i != idx
         ][:3]
         pick["shortlist"] = shortlist
-        self.used_families.add(pick["family"])
-        self.used_uuids.add(pick["item_uuid"])
+        self.used_families.add(pick["family"].lower())
+        self.used_uuids.add(pick["item_uuid"].lower())
         return pick
 
     def _get_fallback_envato_font(self, catalog_key: str, backup_keys: Tuple[str, ...] = ()) -> Dict[str, Any]:
         shortlist_pool: List[Dict[str, Any]] = []
         pick: Optional[Dict[str, Any]] = None
+        used_fam_lower = {f.lower() for f in self.used_families}
         for key in (catalog_key,) + backup_keys + tuple(ENVATO_VERIFIED_CATALOG.keys()):
             c = ENVATO_VERIFIED_CATALOG.get(key)
             if not c:
                 continue
-            if c["family"].lower() in [f.lower() for f in self.used_families]:
+            if c["family"].lower() in used_fam_lower or c["item_uuid"].lower() in self.used_uuids:
                 continue
             if pick is None:
                 pick = dict(c)
                 pick["shortlist"] = []
-                self.used_families.add(pick["family"])
-                self.used_uuids.add(pick["item_uuid"])
+                self.used_families.add(pick["family"].lower())
+                self.used_uuids.add(pick["item_uuid"].lower())
+                used_fam_lower.add(pick["family"].lower())
             else:
                 shortlist_pool.append({
                     "family": c["family"],
@@ -688,10 +896,27 @@ class FontgenEngine:
             if len(shortlist_pool) >= 2 and pick is not None:
                 break
         if pick is None:
-            pick = dict(ENVATO_VERIFIED_CATALOG["xenon_nue"])
-            pick["shortlist"] = []
-        else:
-            pick["shortlist"] = shortlist_pool
+            keys_all = list(ENVATO_VERIFIED_CATALOG.keys())
+            rot_key = keys_all[(self.seed + len(self.used_families)) % len(keys_all)]
+            pick = dict(ENVATO_VERIFIED_CATALOG.get(catalog_key) or ENVATO_VERIFIED_CATALOG[rot_key])
+            self.used_families.add(pick["family"].lower())
+            self.used_uuids.add(pick["item_uuid"].lower())
+        if not shortlist_pool:
+            for c in ENVATO_VERIFIED_CATALOG.values():
+                if c["item_uuid"].lower() != pick["item_uuid"].lower():
+                    shortlist_pool.append({
+                        "family": c["family"],
+                        "item_uuid": c["item_uuid"],
+                        "url": c["url"],
+                        "elements_url": c["url"],
+                        "score": 25,
+                        "is_new": False,
+                        "sort_source": "curated_catalog",
+                        "description": c["description"],
+                    })
+                if len(shortlist_pool) >= 2:
+                    break
+        pick["shortlist"] = shortlist_pool
         return pick
 
     def resolve_inputs(self) -> Dict[str, Any]:
@@ -827,6 +1052,67 @@ class FontgenEngine:
         data["nakshatra"] = data["nakshatra"] or "Ashwini"
         return data
 
+    def _compute_effective_seed(self, params: Dict[str, Any]) -> int:
+        vslug = str(params.get("vertical_slug") or "").strip().lower()
+        if not vslug:
+            return self.seed
+        offset = hashlib.sha256(vslug.encode("utf-8")).digest()[0]
+        return self.seed + offset
+
+    def _pick_google_font(
+        self,
+        preferred_keys: List[str],
+        used_in_run: Set[str],
+        offset: int = 0,
+        category_filter: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        all_keys = list(GOOGLE_FONTS_CATALOG.keys())
+        rotated = preferred_keys + all_keys
+        if offset and len(preferred_keys) > 1:
+            rot = offset % len(preferred_keys)
+            rotated = preferred_keys[rot:] + preferred_keys[:rot] + all_keys
+
+        # Deduplicate preserving order
+        ordered: List[str] = []
+        for k in rotated:
+            if k in GOOGLE_FONTS_CATALOG and k not in ordered:
+                ordered.append(k)
+
+        def _matches_cat(item: Dict[str, Any]) -> bool:
+            return not category_filter or item.get("category") == category_filter
+
+        # Pass 1: exclude both sibling candidates & current run + match category
+        for k in ordered:
+            item = GOOGLE_FONTS_CATALOG[k]
+            fam_l = item["family"].lower()
+            if _matches_cat(item) and fam_l not in used_in_run and fam_l not in self.excluded_google_families:
+                used_in_run.add(fam_l)
+                return item
+
+        # Pass 2: exclude sibling *locked/selected* fonts & current run + match category
+        for k in ordered:
+            item = GOOGLE_FONTS_CATALOG[k]
+            fam_l = item["family"].lower()
+            if _matches_cat(item) and fam_l not in used_in_run and fam_l not in self.hard_excluded_google_families:
+                used_in_run.add(fam_l)
+                return item
+
+        # Pass 3: exclude only current run (any category)
+        for k in ordered:
+            item = GOOGLE_FONTS_CATALOG[k]
+            fam_l = item["family"].lower()
+            if fam_l not in used_in_run and fam_l not in self.hard_excluded_google_families:
+                used_in_run.add(fam_l)
+                return item
+
+        for k in ordered:
+            item = GOOGLE_FONTS_CATALOG[k]
+            fam_l = item["family"].lower()
+            if fam_l not in used_in_run:
+                used_in_run.add(fam_l)
+                return item
+        return GOOGLE_FONTS_CATALOG[ordered[0]]
+
     def build_ecosystems(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
         mc_sign = params.get("mc_sign", "Virgo")
         day_master = params.get("day_master", "Wu")
@@ -838,58 +1124,131 @@ class FontgenEngine:
         scale_ratio = MODALITY_SCALE_RATIOS.get(mc_mod, 1.333)
         bazi_info = BAZI_MODULATIONS.get(day_master, BAZI_MODULATIONS["Wu"])
         nak_info = NAKSHATRA_FEATURES.get(nakshatra, {"feature": "liga 1", "lord": "Mars"})
+        eff_seed = self._compute_effective_seed(params)
+        used_google_run: Set[str] = set()
+
+        def _pick_spec_variant(variants: List[Tuple[str, str, str, str, str]]) -> Tuple[str, str, str, str, str]:
+            return variants[eff_seed % len(variants)]
 
         if style_profile == "cosmic_archetypal":
+            p1 = _pick_spec_variant([
+                ("editorial modern", "modern high contrast editorial serif", "serif", "serif", "commune_inktrap_serif"),
+                ("serif", "contemporary high contrast editorial serif", "serif", "serif", "maire_editorial"),
+                ("didone", "luxury modern sculptural serif", "serif", "serif", "korolis_serif"),
+            ])
+            a1 = _pick_spec_variant([
+                ("modern", "minimalist serif monogram", "serif", "display", "maire_editorial"),
+                ("geometric", "geometric brand monogram", "sans-serif", "display", "arteon_arch"),
+            ])
+            p2 = _pick_spec_variant([
+                ("geometric", "geometric experimental sans typeface", "sans-serif", "sans", "mtry_experimental"),
+                ("futuristic", "architectural geometric sans", "sans-serif", "sans", "arteon_arch"),
+            ])
+            a2 = _pick_spec_variant([
+                ("monospace", "geometric monospace sans", "sans-serif", "display", "lenia_mono"),
+                ("minimal", "technical monospace display", "sans-serif", "display", "qobar_grotesk"),
+            ])
+            p3 = _pick_spec_variant([
+                ("serif", "cinematic sculptural serif font", "serif", "serif", "pierre_robe_cinematic"),
+                ("editorial", "sharp modern literary serif", "serif", "serif", "korolis_serif"),
+            ])
+            a3 = _pick_spec_variant([
+                ("editorial", "contemporary classic serif display", "serif", "display", "korolis_serif"),
+                ("inktrap", "editorial inktrap serif", "serif", "display", "commune_inktrap_serif"),
+            ])
             specs = [
-                ("eco-1", f"Observatorio Celestial Editorial ({mc_elem} · MC {mc_sign})",
-                 "editorial modern", "modern high contrast editorial serif", "serif", "serif", "commune_inktrap_serif",
-                 "modern", "minimalist serif monogram", "serif", "display", "maire_editorial",
-                 GOOGLE_FONTS_CATALOG["plus_jakarta_sans"], GOOGLE_FONTS_CATALOG["newsreader"]),
-                ("eco-2", f"Geometría Experimental & Monospace ({day_master} · Sideral {params.get('sidereal_mc_sign') or mc_sign})",
-                 "geometric", "geometric experimental sans typeface", "sans-serif", "sans", "mtry_experimental",
-                 "monospace", "geometric monospace sans", "sans-serif", "display", "lenia_mono",
-                 GOOGLE_FONTS_CATALOG["dm_sans"], GOOGLE_FONTS_CATALOG["space_grotesk"]),
-                ("eco-3", f"Alta Tipografía Simbólica (Nakshatra {nakshatra} · {nak_info['lord']})",
-                 "serif", "cinematic sculptural serif font", "serif", "serif", "pierre_robe_cinematic",
-                 "editorial", "contemporary classic serif display", "serif", "display", "korolis_serif",
-                 GOOGLE_FONTS_CATALOG["manrope"], GOOGLE_FONTS_CATALOG["spectral"]),
+                ("eco-1", f"Observatorio Celestial Editorial ({mc_elem} · MC {mc_sign})", *p1, *a1,
+                 ["sora", "outfit", "plus_jakarta_sans", "onest", "albert_sans"], ["newsreader", "literata", "spectral"]),
+                ("eco-2", f"Geometría Experimental & Monospace ({day_master} · Sideral {params.get('sidereal_mc_sign') or mc_sign})", *p2, *a2,
+                 ["hanken_grotesk", "figtree", "dm_sans", "work_sans"], ["syne", "space_grotesk", "red_hat_display"]),
+                ("eco-3", f"Alta Tipografía Simbólica (Nakshatra {nakshatra} · {nak_info['lord']})", *p3, *a3,
+                 ["manrope", "ibm_plex_sans", "archivo"], ["literata", "spectral", "newsreader"]),
             ]
         elif style_profile in ("design_system_atelier", "editorial_manifesto"):
+            p1 = _pick_spec_variant([
+                ("editorial", "inktrap editorial serif font", "serif", "serif", "commune_inktrap_serif"),
+                ("serif", "architectural editorial serif", "serif", "serif", "pierre_robe_cinematic"),
+            ])
+            a1 = _pick_spec_variant([
+                ("grotesk", "neo grotesque monogram font", "sans-serif", "display", "xenon_nue"),
+                ("sans-serif", "modern structural grotesk", "sans-serif", "display", "qobar_grotesk"),
+            ])
+            p2 = _pick_spec_variant([
+                ("grotesk", "swiss neo grotesque sans family", "sans-serif", "sans", "helvena_grotesk"),
+                ("condensed", "modern swiss condensed sans", "sans-serif", "sans", "qobar_grotesk"),
+            ])
+            a2 = _pick_spec_variant([
+                ("monospace", "geometric monospace sans font", "sans-serif", "display", "lenia_mono"),
+                ("geometric", "minimalist modular sans", "sans-serif", "display", "arteon_arch"),
+            ])
+            p3 = _pick_spec_variant([
+                ("editorial modern", "refined editorial serif", "serif", "serif", "maire_editorial"),
+                ("serif", "crisp contemporary serif", "serif", "serif", "korolis_serif"),
+            ])
+            a3 = _pick_spec_variant([
+                ("minimal", "minimalist architectural logo sans", "sans-serif", "display", "arteon_arch"),
+                ("grotesk", "corporate neo grotesk sans", "sans-serif", "display", "gatger_corporate"),
+            ])
             specs = [
-                ("eco-1", f"Atelier Tipográfico Vanguardia ({mc_elem} · MC {mc_sign})",
-                 "editorial", "inktrap editorial serif font", "serif", "serif", "commune_inktrap_serif",
-                 "grotesk", "neo grotesque monogram font", "sans-serif", "display", "xenon_nue",
-                 GOOGLE_FONTS_CATALOG["plus_jakarta_sans"], GOOGLE_FONTS_CATALOG["newsreader"]),
-                ("eco-2", f"Sistema Suizo Mono/Grotesk ({day_master} · Mes {params.get('bazi_month_element') or 'Metal'})",
-                 "grotesk", "swiss neo grotesque sans family", "sans-serif", "sans", "helvena_grotesk",
-                 "monospace", "geometric monospace sans font", "sans-serif", "display", "lenia_mono",
-                 GOOGLE_FONTS_CATALOG["dm_sans"], GOOGLE_FONTS_CATALOG["space_grotesk"]),
-                ("eco-3", f"Edición Clásica Cortante (Nakshatra {nakshatra})",
-                 "editorial modern", "refined editorial serif", "serif", "serif", "maire_editorial",
-                 "minimal", "minimalist architectural logo sans", "sans-serif", "display", "arteon_arch",
-                 GOOGLE_FONTS_CATALOG["instrument_sans"], GOOGLE_FONTS_CATALOG["spectral"]),
+                ("eco-1", f"Atelier Tipográfico Vanguardia ({mc_elem} · MC {mc_sign})", *p1, *a1,
+                 ["onest", "albert_sans", "plus_jakarta_sans", "sora"], ["newsreader", "literata", "spectral"]),
+                ("eco-2", f"Sistema Suizo Mono/Grotesk ({day_master} · Mes {params.get('bazi_month_element') or 'Metal'})", *p2, *a2,
+                 ["ibm_plex_sans", "archivo", "dm_sans", "hanken_grotesk"], ["space_grotesk", "syne", "red_hat_display"]),
+                ("eco-3", f"Edición Clásica Cortante (Nakshatra {nakshatra})", *p3, *a3,
+                 ["figtree", "work_sans", "instrument_sans", "outfit"], ["spectral", "literata", "newsreader"]),
             ]
         else:
-            # architectural_b2b & general: Swiss/Inktrap Neo-Grotesk display first (taste-skill §4.1), 1 sharp editorial alternative
+            # architectural_b2b & general: rotate vanguard query terms + fallback order across sibling verticals
+            p1 = _pick_spec_variant([
+                ("inktrap", "inktrap modern grotesque sans font", "sans-serif", "sans", "nority_inktrap"),
+                ("neo grotesque", "neo grotesque display sans", "sans-serif", "sans", "xenon_nue"),
+                ("swiss", "swiss architectural sans family", "sans-serif", "sans", "qobar_grotesk"),
+                ("condensed", "editorial condensed grotesk sans", "sans-serif", "sans", "arteon_arch"),
+            ])
+            a1 = _pick_spec_variant([
+                ("grotesk", "swiss neo grotesque family sans", "sans-serif", "display", "xenon_nue"),
+                ("geometric", "modern structural geometric sans", "sans-serif", "display", "arteon_arch"),
+                ("minimal", "corporate minimalist display sans", "sans-serif", "display", "gatger_corporate"),
+            ])
+            p2 = _pick_spec_variant([
+                ("grotesk", "corporate geometric grotesk sans family", "sans-serif", "sans", "helvena_grotesk"),
+                ("modern", "precision geometric sans family", "sans-serif", "sans", "gatger_corporate"),
+                ("brutalist", "brutalist architectural sans", "sans-serif", "sans", "qobar_grotesk"),
+                ("geometric", "contemporary geometric display sans", "sans-serif", "sans", "mtry_experimental"),
+            ])
+            a2 = _pick_spec_variant([
+                ("monospace", "geometric monospace sans font", "sans-serif", "display", "lenia_mono"),
+                ("technica", "technical modular sans display", "sans-serif", "display", "mtry_experimental"),
+                ("condensed", "condensed corporate monogram sans", "sans-serif", "display", "nority_inktrap"),
+            ])
+            p3 = _pick_spec_variant([
+                ("inktrap", "modern inktrap editorial serif", "serif", "serif", "commune_inktrap_serif"),
+                ("editorial", "sharp modern executive serif", "serif", "serif", "korolis_serif"),
+                ("serif", "contemporary crisp editorial serif", "serif", "serif", "maire_editorial"),
+            ])
+            a3 = _pick_spec_variant([
+                ("minimal", "corporate display branding family sans", "sans-serif", "display", "gatger_corporate"),
+                ("cinematic", "sculptural executive serif", "serif", "display", "pierre_robe_cinematic"),
+                ("grotesk", "clean architectural sans display", "sans-serif", "display", "helvena_grotesk"),
+            ])
             specs = [
-                ("eco-1", f"Neo-Grotesca Vanguardia B2B ({mc_elem} · MC {mc_sign} / Inktrap)",
-                 "inktrap", "inktrap modern grotesque sans font", "sans-serif", "sans", "nority_inktrap",
-                 "grotesk", "swiss neo grotesque family sans", "sans-serif", "display", "xenon_nue",
-                 GOOGLE_FONTS_CATALOG["plus_jakarta_sans"], GOOGLE_FONTS_CATALOG["space_grotesk"]),
-                ("eco-2", f"Precisión Corporativa & Mono (BaZi {day_master} {bazi_info['element']} · Mes {params.get('bazi_month_element') or 'Metal'})",
-                 "grotesk", "corporate geometric grotesk sans family", "sans-serif", "sans", "helvena_grotesk",
-                 "monospace", "geometric monospace sans font", "sans-serif", "display", "lenia_mono",
-                 GOOGLE_FONTS_CATALOG["dm_sans"], GOOGLE_FONTS_CATALOG["bricolage_grotesque"]),
-                ("eco-3", f"Editorial Inktrap Ejecutivo (Nakshatra {nakshatra} · {nak_info['lord']})",
-                 "inktrap", "modern inktrap editorial serif", "serif", "serif", "commune_inktrap_serif",
-                 "minimal", "corporate display branding family sans", "sans-serif", "display", "gatger_corporate",
-                 GOOGLE_FONTS_CATALOG["instrument_sans"], GOOGLE_FONTS_CATALOG["newsreader"]),
+                ("eco-1", f"Neo-Grotesca Vanguardia B2B ({mc_elem} · MC {mc_sign} / Inktrap)", *p1, *a1,
+                 ["sora", "hanken_grotesk", "ibm_plex_sans", "onest", "albert_sans", "plus_jakarta_sans"],
+                 ["space_grotesk", "syne", "red_hat_display", "archivo"]),
+                ("eco-2", f"Precisión Corporativa & Mono (BaZi {day_master} {bazi_info['element']} · Mes {params.get('bazi_month_element') or 'Metal'})", *p2, *a2,
+                 ["figtree", "archivo", "work_sans", "outfit", "dm_sans", "manrope"],
+                 ["bricolage_grotesque", "red_hat_display", "space_grotesk", "syne"]),
+                ("eco-3", f"Editorial Inktrap Ejecutivo (Nakshatra {nakshatra} · {nak_info['lord']})", *p3, *a3,
+                 ["albert_sans", "onest", "ibm_plex_sans", "hanken_grotesk", "instrument_sans", "sora"],
+                 ["literata", "newsreader", "spectral"]),
             ]
 
         ecosystems: List[Dict[str, Any]] = []
-        for eid, ename, el_t1, app_q1, cat_slug1, cat_lbl1, fb1, el_t2, app_q2, cat_slug2, cat_lbl2, fb2, body_gf, bridge_gf in specs:
-            prim = self._search_live_envato_fonts(el_t1, app_q1, cat_slug1, cat_lbl1) or self._get_fallback_envato_font(fb1)
-            acc = self._search_live_envato_fonts(el_t2, app_q2, cat_slug2, cat_lbl2) or self._get_fallback_envato_font(fb2)
+        for idx_s, (eid, ename, el_t1, app_q1, cat_slug1, cat_lbl1, fb1, el_t2, app_q2, cat_slug2, cat_lbl2, fb2, body_prefs, bridge_prefs) in enumerate(specs):
+            prim = self._search_live_envato_fonts(el_t1, app_q1, cat_slug1, cat_lbl1, seed_override=eff_seed + idx_s) or self._get_fallback_envato_font(fb1)
+            acc = self._search_live_envato_fonts(el_t2, app_q2, cat_slug2, cat_lbl2, seed_override=eff_seed + idx_s + 3) or self._get_fallback_envato_font(fb2)
+            body_gf = self._pick_google_font(body_prefs, used_google_run, offset=eff_seed + idx_s, category_filter="sans")
+            bridge_gf = self._pick_google_font(bridge_prefs, used_google_run, offset=eff_seed + idx_s)
             ecosystems.append({
                 "id": eid,
                 "name": ename,
@@ -1012,8 +1371,10 @@ class FontgenEngine:
                 "ui_buttons": selected_clean["layers"]["ui"],
             },
             "metadata": {
-                "generator": "fontgen_engine.py v4.1 (Vanguard Dual-Sort + Multi-Vertical)",
+                "generator": "fontgen_engine.py v4.2 (Vanguard Dual-Sort + Sibling-Disjoint Multi-Vertical)",
                 "sort_mode": self.sort_mode,
+                "effective_seed": self._compute_effective_seed(params),
+                "excluded_sibling_fonts": sorted(self.excluded_envato_families | self.excluded_google_families),
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "inputs_used": params,
                 "astrological_grounding": {
@@ -1114,6 +1475,8 @@ def derive_agnostic_typography(
     selected_eco_id: str = "eco-1",
     use_live_search: bool = True,
     allow_default: bool = False,
+    sibling_workspaces_dir: Optional[Path] = None,
+    exclude_fonts: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     engine = FontgenEngine(
         brand=brand,
@@ -1123,13 +1486,15 @@ def derive_agnostic_typography(
         output_dir=output_dir,
         use_live_search=use_live_search,
         allow_default=allow_default,
+        sibling_workspaces_dir=sibling_workspaces_dir,
+        exclude_fonts=exclude_fonts,
     )
     manifest, _ = engine.run(selected_eco_id=selected_eco_id, dry_run=False)
     return manifest
 
 
 def run_unit_tests() -> int:
-    print("Running fontgen_engine v4.1 offline unit tests...")
+    print("Running fontgen_engine v4.2 offline unit tests...")
     assert normalize_zodiac_sign("Géminis") == "Gemini"
     assert normalize_zodiac_sign("Tauro") == "Taurus"
     ef = FontgenEngine("TEST", use_live_search=False)
@@ -1138,42 +1503,66 @@ def run_unit_tests() -> int:
     assert ef._is_noisy_title("Nority - Inktrap Bold Font") is False
     assert ef._score_candidate("Nority - Inktrap Bold Font", True, True, "latest") > ef._score_candidate("Generic Logo", False, False, "popular")
 
-    with tempfile.TemporaryDirectory(prefix="fontgen_v41_test_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="fontgen_v42_test_") as tmp:
         tp = Path(tmp)
         shards_p = tp / "client_dumps_15_shards.json"
-        vert_b2b = tp / "acme-b2b.json"
+        ws_root = tp / "workspaces"
+        vert_alpha = tp / "alpha-b2b.json"
+        vert_beta = tp / "beta-b2b.json"
         vert_cos = tp / "orion-cosmic.json"
-        out_b2b = tp / "b2b"
-        out_cos = tp / "cos"
+        out_alpha = ws_root / "alpha-b2b" / "brand"
+        out_beta = ws_root / "beta-b2b" / "brand"
+        ws_cos = tp / "standalone_cos" / "brand"
         shards_p.write_text(json.dumps({
             "shard_01": {"data": {"tripod_of_iron": {"sun": {"sign": "Gemini"}, "midheaven_house_10": {"sign": "Gemini"}}}},
             "shard_02": {"data": {"fagan_bradley": {"midheaven": {"sign": "Taurus"}}}},
             "shard_03": {"data": {"shadbala": {"dominant_planet": "Sun"}, "nakshatra": {"name": "Chitra Pada 4", "lord": "Mars"}}},
             "shard_04": {"data": {"day_master": {"name": "Jia", "element": "Wood"}, "four_pillars": {"month": {"element": "Metal"}}}},
         }), encoding="utf-8")
-        vert_b2b.write_text(json.dumps({
-            "vertical_slug": "acme-b2b",
+        vert_alpha.write_text(json.dumps({
+            "vertical_slug": "alpha-b2b",
             "display_name": "Consultoría B2B e IA",
             "role_in_ecosystem": "Otra vertical derivada de Orion y Sabidurías Cósmicas.",
         }), encoding="utf-8")
+        vert_beta.write_text(json.dumps({
+            "vertical_slug": "beta-b2b",
+            "display_name": "Firma Unipersonal B2B Automatizada",
+        }), encoding="utf-8")
         vert_cos.write_text(json.dumps({"vertical_slug": "orion-cosmic", "display_name": "Orion — Sabidurías Cósmicas & Arquetipos Vocacionales"}), encoding="utf-8")
 
-        m_b2b, _ = FontgenEngine("TESTCORP", shards_path=shards_p, vertical_json_path=vert_b2b, output_dir=out_b2b, use_live_search=False).run()
-        m_cos, _ = FontgenEngine("TESTCORP", shards_path=shards_p, vertical_json_path=vert_cos, output_dir=out_cos, use_live_search=False).run()
+        m_alpha, _ = FontgenEngine("TESTCORP", shards_path=shards_p, vertical_json_path=vert_alpha, output_dir=out_alpha, use_live_search=False).run()
+        m_beta, _ = FontgenEngine("TESTCORP", shards_path=shards_p, vertical_json_path=vert_beta, output_dir=out_beta, use_live_search=False).run()
+        m_cos, _ = FontgenEngine("TESTCORP", shards_path=shards_p, vertical_json_path=vert_cos, output_dir=ws_cos, use_live_search=False).run()
 
-        assert m_b2b["style_profile"] == "architectural_b2b"
+        assert m_alpha["style_profile"] == "architectural_b2b"
+        assert m_beta["style_profile"] == "architectural_b2b"
         assert m_cos["style_profile"] == "cosmic_archetypal"
-        assert m_b2b["selected_ecosystem"]["tokens"]["display_primary"]["$value"] != m_cos["selected_ecosystem"]["tokens"]["display_primary"]["$value"]
-        assert m_b2b["web_ready_bridge"]["display_fallback_family"] not in ("Fraunces", "Instrument Serif")
-        assert m_cos["web_ready_bridge"]["display_fallback_family"] not in ("Fraunces", "Instrument Serif")
-        assert len(m_b2b["candidate_ecosystems"][0]["shortlist_candidates"]["display_alternatives"]) >= 1
+        # Same archetype siblings must NOT duplicate selected or Google body fonts!
+        alpha_envato = {
+            tok["$value"].lower()
+            for eco in m_alpha["candidate_ecosystems"]
+            for rk, tok in eco["tokens"].items() if rk in ("display_primary", "accent_brand")
+        }
+        beta_envato = {
+            tok["$value"].lower()
+            for eco in m_beta["candidate_ecosystems"]
+            for rk, tok in eco["tokens"].items() if rk in ("display_primary", "accent_brand")
+        }
+        assert alpha_envato.isdisjoint(beta_envato), f"Sibling B2B Envato overlap: {alpha_envato & beta_envato}"
+        alpha_gf = {eco["tokens"]["ui_secondary"]["$value"].lower() for eco in m_alpha["candidate_ecosystems"]}
+        beta_gf = {eco["tokens"]["ui_secondary"]["$value"].lower() for eco in m_beta["candidate_ecosystems"]}
+        assert alpha_gf.isdisjoint(beta_gf), f"Sibling B2B Google font overlap: {alpha_gf & beta_gf}"
+        assert m_alpha["selected_ecosystem"]["tokens"]["display_primary"]["$value"] != m_cos["selected_ecosystem"]["tokens"]["display_primary"]["$value"]
+        for m in (m_alpha, m_beta, m_cos):
+            assert m["web_ready_bridge"]["display_fallback_family"] not in ("Fraunces", "Instrument Serif", "Inter")
+            assert len(m["candidate_ecosystems"][0]["shortlist_candidates"]["display_alternatives"]) >= 1
     assert not Path("/mnt/localstorage/TESTCORP").exists()
-    print("✅ FONTGEN ENGINE v4.1 UNIT TESTS PASSED (Dual-Sort scorer, multi-vertical differentiation, 0 noise/Fraunces, 0 phantom dirs)")
+    print("✅ FONTGEN ENGINE v4.2 UNIT TESTS PASSED (20-font GF catalog, sibling-disjoint Envato + Google Fonts, 0 noise/Fraunces, 0 phantom dirs)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Fontgen Engine v4.1 — Verified Vanguard Typographic Synthesizer")
+    parser = argparse.ArgumentParser(description="Fontgen Engine v4.2 — Verified Sibling-Disjoint Typographic Synthesizer")
     parser.add_argument("--brand", default="BRAND")
     parser.add_argument("--shards", type=Path, default=None)
     parser.add_argument("--brief", type=Path, default=None)
@@ -1181,6 +1570,8 @@ def main() -> int:
     parser.add_argument("--style-profile", default="auto", choices=["auto", "architectural_b2b", "cosmic_archetypal", "design_system_atelier", "editorial_manifesto", "editorial_brand"])
     parser.add_argument("--sort", default="hybrid", choices=["hybrid", "latest", "popular"])
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--sibling-workspaces-dir", type=Path, default=None)
+    parser.add_argument("--exclude-fonts", default="", help="Comma-separated font families to exclude")
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--eco", default="eco-1", choices=["eco-1", "eco-2", "eco-3"])
     parser.add_argument("--dry-run", action="store_true")
@@ -1203,6 +1594,7 @@ def main() -> int:
         "nakshatra": args.nakshatra, "dominant_element": args.dominant_element,
     }.items() if v}
 
+    excl = [x.strip() for x in args.exclude_fonts.split(",") if x.strip()] if args.exclude_fonts else None
     engine = FontgenEngine(
         brand=args.brand,
         shards_path=args.shards,
@@ -1216,10 +1608,12 @@ def main() -> int:
         style_profile=args.style_profile,
         sort_mode=args.sort,
         seed=args.seed,
+        sibling_workspaces_dir=args.sibling_workspaces_dir,
+        exclude_fonts=excl,
     )
     manifest, _ = engine.run(selected_eco_id=args.eco, dry_run=args.dry_run)
     sel = manifest["selected_ecosystem"]["tokens"]
-    print(f"✅ FONTGEN ENGINE v4.1 COMPLETED FOR: {manifest['brand']}/{manifest['vertical_slug']} ({manifest['selected_ecosystem_id']}, profile={manifest['style_profile']}, sort={args.sort})")
+    print(f"✅ FONTGEN ENGINE v4.2 COMPLETED FOR: {manifest['brand']}/{manifest['vertical_slug']} ({manifest['selected_ecosystem_id']}, profile={manifest['style_profile']}, sort={args.sort})")
     print(f"  • Display: {sel['display_primary']['$value']} ({sel['display_primary']['url']})")
     print(f"  • Body UI: {sel['ui_secondary']['$value']} ({sel['ui_secondary']['url']})")
     print(f"  • Accent:  {sel['accent_brand']['$value']} ({sel['accent_brand']['url']})")

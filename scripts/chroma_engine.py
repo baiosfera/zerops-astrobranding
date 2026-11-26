@@ -12,10 +12,13 @@ Complies with W3C DTCG 2025.10, Display P3, Tailwind CSS v4 @theme, Impeccable &
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html as html_lib
 import json
 import math
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -481,6 +484,53 @@ def classify_vertical_archetype(vblob: str, vertical_slug: str = "") -> str:
 # Signal Extraction: Oráculo 15-Shards + Vertical JSON + Brief Markdown
 # -----------------------------------------------------------------------------
 
+SPANISH_SIGN_MAP = {
+    "aries": "Aries",
+    "tauro": "Taurus", "taurus": "Taurus",
+    "geminis": "Gemini", "géminis": "Gemini", "gemini": "Gemini",
+    "cancer": "Cancer", "cáncer": "Cancer",
+    "leo": "Leo",
+    "virgo": "Virgo",
+    "libra": "Libra",
+    "escorpio": "Scorpio", "scorpio": "Scorpio",
+    "sagitario": "Sagittarius", "sagittarius": "Sagittarius",
+    "capricornio": "Capricorn", "capricorn": "Capricorn",
+    "acuario": "Aquarius", "aquarius": "Aquarius",
+    "piscis": "Pisces", "pisces": "Pisces",
+}
+
+
+def _norm_sign(raw: str, default: str = "") -> str:
+    tok = re.sub(r"[^a-zA-ZáéíóúÁÉÍÓÚ]", "", str(raw or "").strip()).lower()
+    return SPANISH_SIGN_MAP.get(tok, default or (str(raw or "").strip().title()))
+
+
+def _collect_sibling_chroma_info(sibling_workspaces_dir: Optional[Path], own_output_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
+    info: List[Dict[str, Any]] = []
+    if not sibling_workspaces_dir or not sibling_workspaces_dir.is_dir():
+        return info
+    own_res = own_output_dir.resolve() if own_output_dir else None
+    for child in sorted(sibling_workspaces_dir.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        brand_dir = (child / "brand").resolve()
+        if own_res and brand_dir == own_res:
+            continue
+        cm_path = brand_dir / "chroma_manifest.json"
+        if not cm_path.is_file():
+            continue
+        try:
+            cm = json.loads(cm_path.read_text(encoding="utf-8"))
+            sel_id = str(cm.get("selected_ecosystem_id") or "")
+            arch = str(cm.get("vertical_archetype") or "")
+            p_hex = cm.get("themes", {}).get("dark", {}).get("primary", {}).get("hex") or cm.get("themes", {}).get("light", {}).get("primary", {}).get("hex") or ""
+            p_hue = hex_to_oklch(p_hex)[2] if p_hex else None
+            info.append({"vertical": child.name, "selected_id": sel_id, "archetype": arch, "primary_hue": p_hue})
+        except Exception:
+            pass
+    return info
+
+
 def extract_oraculo_and_vertical_signals(
     brief_path: Optional[Path] = None,
     shards_path: Optional[Path] = None,
@@ -516,6 +566,9 @@ def extract_oraculo_and_vertical_signals(
     shards_had_ys = False
     shards_had_el = False
     shards_had_sun = False
+    shards_had_mc = False
+    shards_had_dm = False
+    shards_had_nak = False
 
     if shards_path and shards_path.is_file():
         sdata = json.loads(shards_path.read_text(encoding="utf-8"))
@@ -535,24 +588,26 @@ def extract_oraculo_and_vertical_signals(
             sig["sun_lon"] = float(tripod["sun"]["longitude"])
             shards_had_sun = True
         if tripod.get("sun", {}).get("sign"):
-            sig["sun_sign"] = str(tripod["sun"]["sign"])
+            sig["sun_sign"] = _norm_sign(str(tripod["sun"]["sign"]), "Scorpio")
+            shards_had_sun = True
         if tripod.get("midheaven_house_10", {}).get("sign"):
-            sig["mc_sign"] = str(tripod["midheaven_house_10"]["sign"])
+            sig["mc_sign"] = _norm_sign(str(tripod["midheaven_house_10"]["sign"]), "Leo")
+            shards_had_mc = True
         if planets.get("Venus", {}).get("longitude") is not None:
             sig["venus_deg"] = float(planets["Venus"]["longitude"])
         if planets.get("Venus", {}).get("sign"):
-            sig["venus_sign"] = str(planets["Venus"]["sign"])
+            sig["venus_sign"] = _norm_sign(str(planets["Venus"]["sign"]), "Scorpio")
         if arroyo.get("dominant_element"):
             sig["dominant_element"] = _norm_element(arroyo["dominant_element"], "Earth")
             shards_had_el = True
 
         fb = s2.get("fagan_bradley", {})
         if fb.get("sun", {}).get("sign") or fb.get("planets", {}).get("Sun", {}).get("sign"):
-            sig["sidereal_sun_sign"] = str((fb.get("sun") or fb.get("planets", {}).get("Sun", {})).get("sign", ""))
+            sig["sidereal_sun_sign"] = _norm_sign(str((fb.get("sun") or fb.get("planets", {}).get("Sun", {})).get("sign", "")))
         if fb.get("midheaven", {}).get("sign"):
-            sig["sidereal_mc_sign"] = str(fb["midheaven"]["sign"])
+            sig["sidereal_mc_sign"] = _norm_sign(str(fb["midheaven"]["sign"]))
         if fb.get("ascendant", {}).get("sign"):
-            sig["sidereal_asc_sign"] = str(fb["ascendant"]["sign"])
+            sig["sidereal_asc_sign"] = _norm_sign(str(fb["ascendant"]["sign"]))
 
         sh = s3.get("shadbala", {})
         if sh.get("dominant_planet"):
@@ -562,12 +617,14 @@ def extract_oraculo_and_vertical_signals(
         nk = s3.get("nakshatra", {})
         if nk.get("name"):
             sig["nakshatra"] = str(nk["name"]).split()[0]
+            shards_had_nak = True
         if nk.get("lord") or nk.get("ruler"):
             sig["nakshatra_lord"] = str(nk.get("lord") or nk.get("ruler"))
 
         dm = s4.get("day_master", {})
         if dm.get("name"):
             sig["bazi_day_master"] = str(dm["name"]).split()[0]
+            shards_had_dm = True
         if dm.get("element"):
             sig["bazi_day_element"] = _norm_element(dm["element"], "Earth")
         fp = s4.get("four_pillars", {})
@@ -582,9 +639,28 @@ def extract_oraculo_and_vertical_signals(
         sig["sources"].append(f"brief:{brief_path.name}")
         txt = brief_path.read_text(encoding="utf-8", errors="replace")
         if not shards_had_sun:
-            m_sun = re.search(r"Longitud solar[^:\n]*:\s*([\d.]+)", txt, re.IGNORECASE)
-            if m_sun:
-                sig["sun_lon"] = float(m_sun.group(1))
+            m_sun_l = re.search(r"Longitud solar[^:\n]*:\s*([\d.]+)", txt, re.IGNORECASE)
+            if m_sun_l:
+                sig["sun_lon"] = float(m_sun_l.group(1))
+            m_sun_s = re.search(r"\|\s*\*\*Sol Natal\*\*\s*\|\s*\*\*([A-Za-zÁÉÍÓÚáéíóú]+)", txt) or re.search(
+                r"(?:Sun Natal|Sol Natal|Sol)[\s:\*|]+(?:en\s+\*\*)?([A-Za-zÁÉÍÓÚáéíóú]+)", txt, re.IGNORECASE
+            )
+            if m_sun_s:
+                sig["sun_sign"] = _norm_sign(m_sun_s.group(1), sig["sun_sign"])
+        if not shards_had_mc:
+            m_mc = re.search(r"\|\s*\*\*Medio Cielo[^*]*\*\*\s*\|\s*\*\*([A-Za-zÁÉÍÓÚáéíóú]+)", txt) or re.search(
+                r"(?:Midheaven|Medio Cielo)[\s:\*|]+(?:en\s+\*\*)?([A-Za-zÁÉÍÓÚáéíóú]+)", txt, re.IGNORECASE
+            )
+            if m_mc:
+                sig["mc_sign"] = _norm_sign(m_mc.group(1), sig["mc_sign"])
+        if not shards_had_nak:
+            m_nak = re.search(r"\*\*Nakshatra[^:\n]*:\*\*\s*([A-Za-z]+)", txt)
+            if m_nak:
+                sig["nakshatra"] = m_nak.group(1).strip()
+        if not shards_had_dm:
+            m_dm = re.search(r"\*\*Day Master:\*\*\s*([A-Za-z]+)", txt)
+            if m_dm:
+                sig["bazi_day_master"] = m_dm.group(1).strip()
         if not shards_had_el:
             m_el = re.search(r"Elemento dominante[^:\n]*:\s*([A-Za-zÁÉÍÓÚáéíóú]+)", txt, re.IGNORECASE)
             if m_el:
@@ -615,10 +691,14 @@ def extract_oraculo_and_vertical_signals(
     return sig
 
 
-def synthesize_multiaxis_ecosystems(sig: Dict[str, Any]) -> List[Dict[str, Any]]:
+def synthesize_multiaxis_ecosystems(
+    sig: Dict[str, Any],
+    sibling_info: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
     """
     Synthesizes 3 differentiated visual worlds calibrated BOTH to Oráculo coordinates
-    AND the vertical's commercial/psychological archetype (`vertical_archetype`).
+    AND the vertical's commercial/psychological archetype (`vertical_archetype`),
+    applying deterministic per-vertical hue shifts and sibling rotation when siblings share an archetype.
     """
     ys = sig.get("yong_shen", "Water")
     dom_el = sig.get("dominant_element", "Earth")
@@ -628,6 +708,11 @@ def synthesize_multiaxis_ecosystems(sig: Dict[str, Any]) -> List[Dict[str, Any]]
     sun_lon = float(sig.get("sun_lon", 79.0))
     venus_deg = float(sig.get("venus_deg", 77.3))
     arch = sig.get("vertical_archetype", "editorial_brand")
+    vslug = str(sig.get("vertical_slug") or "").strip().lower()
+    sibs = sibling_info or []
+    same_arch_sibs = [s for s in sibs if s.get("archetype") == arch]
+    v_hash = hashlib.sha256(vslug.encode("utf-8")).digest()[0] if vslug else 0
+    hue_shift = ((v_hash % 5) * 18.0) if same_arch_sibs else 0.0
 
     if arch == "cosmic_archetypal":
         # Eco 1 (Dark-first nocturnal observatory: refined astral indigo slate, zero AI-cyan & zero neon purple)
@@ -707,9 +792,8 @@ def synthesize_multiaxis_ecosystems(sig: Dict[str, Any]) -> List[Dict[str, Any]]
                 "bazi_day_master": f"{sig['bazi_day_master']} ({bazi_day})",
             },
         )
-        return [eco1, eco2, eco3]
-
-    if arch in ("design_system_atelier", "editorial_manifesto"):
+        ecos = [eco1, eco2, eco3]
+    elif arch in ("design_system_atelier", "editorial_manifesto"):
         mode_1 = "light" if arch == "editorial_manifesto" else "dark"
         h1 = 248.0 if arch == "editorial_manifesto" else 224.0
         eco1 = _compose_intentional_ecosystem(
@@ -749,96 +833,104 @@ def synthesize_multiaxis_ecosystems(sig: Dict[str, Any]) -> List[Dict[str, Any]]
             neutral_chroma=0.012,
             derivation_params={"vertical_archetype": arch, "bazi_day_master": sig["bazi_day_master"]},
         )
-        return [eco1, eco2, eco3]
+        ecos = [eco1, eco2, eco3]
+    else:
+        # Default / architectural_b2b (Light-first cool porcelain + deep cobalt; Carbon+Mars; Viridian+Bone)
+        ys_hue = ELEMENT_BASE_HUES.get(ys, 236.0)
+        h1_prim = 262.0 if ys == "Water" and sig.get("vertical_is_b2b") else (ys_hue + (sun_lon % 18.0) - 9.0) % 360.0
+        h1_prim = (h1_prim + hue_shift) % 360.0
+        h1_neutral = (h1_prim - 6.0) % 360.0
+        eco1 = _compose_intentional_ecosystem(
+            eco_id="eco_1_porcelain_cobalt",
+            name=f"Porcelana Mineral & Cobalto Profundo ({sig['mc_sign']} MC · {ys})",
+            concept=(
+                f"Mundo visual claro de alta legibilidad ejecutiva B2B (Sol {sig['sun_sign']} / MC {sig['mc_sign']} balanceado por "
+                f"Yong Shen {ys} sobre papel frío mineral)."
+            ),
+            recommended_mode="light",
+            primary_hue=h1_prim,
+            primary_chroma=0.145,
+            accent_hue=(h1_prim - 14.0) % 360.0,
+            neutral_hue=h1_neutral,
+            neutral_chroma=0.012,
+            dark_bg_l=0.135,
+            light_bg_l=0.986,
+            light_bg_c=0.004,
+            light_surf_l=0.954,
+            derivation_params={
+                "vertical_archetype": arch,
+                "axes": ["tropical_mc", "yong_shen", "vertical_context"],
+                "mc_sign": sig["mc_sign"],
+                "yong_shen": ys,
+            },
+        )
 
-    # Default / architectural_b2b (Light-first cool porcelain + deep cobalt; Carbon+Mars; Viridian+Bone)
-    ys_hue = ELEMENT_BASE_HUES.get(ys, 236.0)
-    h1_prim = 262.0 if ys == "Water" and sig.get("vertical_is_b2b") else (ys_hue + (sun_lon % 18.0) - 9.0) % 360.0
-    h1_neutral = (h1_prim - 6.0) % 360.0
-    eco1 = _compose_intentional_ecosystem(
-        eco_id="eco_1_porcelain_cobalt",
-        name=f"Porcelana Mineral & Cobalto Profundo ({sig['mc_sign']} MC · {ys})",
-        concept=(
-            f"Mundo visual claro de alta legibilidad ejecutiva B2B (Sol {sig['sun_sign']} / MC {sig['mc_sign']} balanceado por "
-            f"Yong Shen {ys} sobre papel frío mineral)."
-        ),
-        recommended_mode="light",
-        primary_hue=h1_prim,
-        primary_chroma=0.145,
-        accent_hue=(h1_prim - 14.0) % 360.0,
-        neutral_hue=h1_neutral,
-        neutral_chroma=0.012,
-        dark_bg_l=0.135,
-        light_bg_l=0.986,
-        light_bg_c=0.004,
-        light_surf_l=0.954,
-        derivation_params={
-            "vertical_archetype": arch,
-            "axes": ["tropical_mc", "yong_shen", "vertical_context"],
-            "mc_sign": sig["mc_sign"],
-            "yong_shen": ys,
-        },
-    )
+        lord_hue = PLANET_HUE_SHIFTS.get(nak_lord, 26.0)
+        if abs((lord_hue - h1_prim + 180) % 360 - 180) < 45.0:
+            lord_hue = (h1_prim + 130.0) % 360.0
+        eco2 = _compose_intentional_ecosystem(
+            eco_id="eco_2_carbon_signal",
+            name=f"Carbón Arquitectónico & Señal {nak_lord} (Védico {sh_planet} · {sig['nakshatra']})",
+            concept=(
+                f"Mundo oscuro neutro sin tinte azulado AI: grafito de precisión ({sig['bazi_month_element']}) "
+                f"con único acento activo regido por {nak_lord} ({sig['nakshatra']}) y Shadbala {sh_planet}."
+            ),
+            recommended_mode="dark",
+            primary_hue=lord_hue,
+            primary_chroma=0.155,
+            accent_hue=(lord_hue + 10.0) % 360.0,
+            neutral_hue=255.0,
+            neutral_chroma=0.004,
+            dark_bg_l=0.125,
+            light_bg_l=0.985,
+            light_bg_c=0.003,
+            light_surf_l=0.950,
+            derivation_params={
+                "vertical_archetype": arch,
+                "axes": ["vedic_shadbala", "nakshatra_lord", "bazi_month_element"],
+                "vedic_shadbala": f"{sh_planet} ({sig['vedic_shadbala_rupas']} Rupas)",
+                "nakshatra": f"{sig['nakshatra']} (Lord: {nak_lord})",
+                "bazi_month_element": sig["bazi_month_element"],
+            },
+        )
 
-    lord_hue = PLANET_HUE_SHIFTS.get(nak_lord, 26.0)
-    if abs((lord_hue - h1_prim + 180) % 360 - 180) < 45.0:
-        lord_hue = (h1_prim + 130.0) % 360.0
-    eco2 = _compose_intentional_ecosystem(
-        eco_id="eco_2_carbon_signal",
-        name=f"Carbón Arquitectónico & Señal {nak_lord} (Védico {sh_planet} · {sig['nakshatra']})",
-        concept=(
-            f"Mundo oscuro neutro sin tinte azulado AI: grafito de precisión ({sig['bazi_month_element']}) "
-            f"con único acento activo regido por {nak_lord} ({sig['nakshatra']}) y Shadbala {sh_planet}."
-        ),
-        recommended_mode="dark",
-        primary_hue=lord_hue,
-        primary_chroma=0.155,
-        accent_hue=(lord_hue + 10.0) % 360.0,
-        neutral_hue=255.0,
-        neutral_chroma=0.004,
-        dark_bg_l=0.125,
-        light_bg_l=0.985,
-        light_bg_c=0.003,
-        light_surf_l=0.950,
-        derivation_params={
-            "vertical_archetype": arch,
-            "axes": ["vedic_shadbala", "nakshatra_lord", "bazi_month_element"],
-            "vedic_shadbala": f"{sh_planet} ({sig['vedic_shadbala_rupas']} Rupas)",
-            "nakshatra": f"{sig['nakshatra']} (Lord: {nak_lord})",
-            "bazi_month_element": sig["bazi_month_element"],
-        },
-    )
+        h3_prim = ELEMENT_BASE_HUES.get(bazi_day, 162.0)
+        if abs((h3_prim - h1_prim + 180) % 360 - 180) < 40.0 or abs((h3_prim - lord_hue + 180) % 360 - 180) < 40.0:
+            h3_prim = 164.0
+        h3_prim = (h3_prim + ((venus_deg % 10.0) - 5.0)) % 360.0
+        eco3 = _compose_intentional_ecosystem(
+            eco_id="eco_3_mineral_viridian",
+            name=f"Basalto Mineral & Viridiano ({sig['bazi_day_master']} {bazi_day} · Sideral {sig.get('sidereal_sun_sign') or 'Earth'})",
+            concept=(
+                f"Síntesis entre Day Master {sig['bazi_day_master']} ({bazi_day}) y Venus sideral "
+                f"({sig.get('sidereal_sun_sign') or sig['venus_sign']}): piedra mineral verde-grafito y hueso glacial."
+            ),
+            recommended_mode="light" if dom_el in ("Earth", "Air") else "dark",
+            primary_hue=h3_prim,
+            primary_chroma=0.115,
+            accent_hue=(h3_prim + 12.0) % 360.0,
+            neutral_hue=(h3_prim + 8.0) % 360.0,
+            neutral_chroma=0.014,
+            dark_bg_l=0.145,
+            light_bg_l=0.984,
+            light_bg_c=0.005,
+            light_surf_l=0.948,
+            derivation_params={
+                "vertical_archetype": arch,
+                "axes": ["bazi_day_master", "sidereal_sun_venus"],
+                "bazi_day_master": f"{sig['bazi_day_master']} ({bazi_day})",
+                "sidereal_sun": sig.get("sidereal_sun_sign") or sig["sun_sign"],
+            },
+        )
+        ecos = [eco1, eco2, eco3]
 
-    h3_prim = ELEMENT_BASE_HUES.get(bazi_day, 162.0)
-    if abs((h3_prim - h1_prim + 180) % 360 - 180) < 40.0 or abs((h3_prim - lord_hue + 180) % 360 - 180) < 40.0:
-        h3_prim = 164.0
-    h3_prim = (h3_prim + ((venus_deg % 10.0) - 5.0)) % 360.0
-    eco3 = _compose_intentional_ecosystem(
-        eco_id="eco_3_mineral_viridian",
-        name=f"Basalto Mineral & Viridiano ({sig['bazi_day_master']} {bazi_day} · Sideral {sig.get('sidereal_sun_sign') or 'Earth'})",
-        concept=(
-            f"Síntesis entre Day Master {sig['bazi_day_master']} ({bazi_day}) y Venus sideral "
-            f"({sig.get('sidereal_sun_sign') or sig['venus_sign']}): piedra mineral verde-grafito y hueso glacial."
-        ),
-        recommended_mode="light" if dom_el in ("Earth", "Air") else "dark",
-        primary_hue=h3_prim,
-        primary_chroma=0.115,
-        accent_hue=(h3_prim + 12.0) % 360.0,
-        neutral_hue=(h3_prim + 8.0) % 360.0,
-        neutral_chroma=0.014,
-        dark_bg_l=0.145,
-        light_bg_l=0.984,
-        light_bg_c=0.005,
-        light_surf_l=0.948,
-        derivation_params={
-            "vertical_archetype": arch,
-            "axes": ["bazi_day_master", "sidereal_sun_venus"],
-            "bazi_day_master": f"{sig['bazi_day_master']} ({bazi_day})",
-            "sidereal_sun": sig.get("sidereal_sun_sign") or sig["sun_sign"],
-        },
-    )
-
-    return [eco1, eco2, eco3]
+    used_sel_ids = {s.get("selected_id") for s in sibs if s.get("selected_id")}
+    if same_arch_sibs and ecos[0]["id"] in used_sel_ids:
+        for alt_i in range(1, len(ecos)):
+            if ecos[alt_i]["id"] not in used_sel_ids:
+                ecos = ecos[alt_i:] + ecos[:alt_i]
+                break
+    return ecos
 
 
 # -----------------------------------------------------------------------------
@@ -1081,7 +1173,14 @@ def compose_ecosystems_from_seed_hex(seed_hex: str, bg_hex: Optional[str] = None
         primary_hue=comp_h, primary_chroma=max(0.13, c_comp),
         accent_hue=h, neutral_hue=comp_h, neutral_chroma=0.010,
     )
-    return [eco1, eco2, eco3]
+    ecos = [eco1, eco2, eco3]
+    used_sel_ids = {s.get("selected_id") for s in sibs if s.get("selected_id")}
+    if same_arch_sibs and ecos[0]["id"] in used_sel_ids:
+        for alt_i in range(1, len(ecos)):
+            if ecos[alt_i]["id"] not in used_sel_ids:
+                ecos = ecos[alt_i:] + ecos[:alt_i]
+                break
+    return ecos
 
 
 def build_css_blocks(selected: Dict[str, Any]) -> Dict[str, str]:
@@ -1141,12 +1240,25 @@ def build_css_blocks(selected: Dict[str, Any]) -> Dict[str, str]:
 
 def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
     brand_esc = html_lib.escape(str(manifest.get("brand", "BRAND")))
+    inputs = manifest.get("inputs_used") or {}
     vslug = html_lib.escape(str(manifest.get("vertical_slug") or manifest.get("brand", "")))
+    vdisp = html_lib.escape(str(inputs.get("vertical_display_name") or vslug))
     varch = html_lib.escape(str(manifest.get("vertical_archetype") or "editorial_brand"))
     sel_id = manifest.get("selected_ecosystem_id", "")
-    sections: List[str] = []
 
-    for eco in manifest.get("ecosystems", []):
+    oraculo_badge = html_lib.escape(
+        f"Sol {inputs.get('sun_sign','-')} · MC {inputs.get('mc_sign','-')} · "
+        f"Sideral {inputs.get('sidereal_mc_sign') or inputs.get('mc_sign','-')} · "
+        f"Shadbala {inputs.get('vedic_shadbala_planet','-')} · Nakshatra {inputs.get('nakshatra','-')} · "
+        f"BaZi {inputs.get('bazi_day_master','-')} (Mes {inputs.get('bazi_month_element','-')}) · "
+        f"Yong Shen {inputs.get('yong_shen','-')}"
+    )
+
+    sections: List[str] = []
+    eco_buttons: List[str] = []
+    ecos = manifest.get("ecosystems", [])
+
+    for eco in ecos:
         eid = html_lib.escape(eco["id"])
         ename = html_lib.escape(eco["name"])
         econ = html_lib.escape(eco["concept"])
@@ -1154,6 +1266,7 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
         badge = " · SELECCIONADO" if eco["id"] == sel_id else ""
         audit = eco.get("audit", {})
         params_json = html_lib.escape(json.dumps(eco.get("derivation_parameters", {}), ensure_ascii=False))
+        eco_buttons.append(f'<button type="button" class="ctrl-btn eco-btn" data-eco-filter="{eid}">{ename}</button>')
 
         mode_cards: List[str] = []
         order = ("light", "dark") if eco.get("recommended_mode") == "light" else ("dark", "light")
@@ -1170,21 +1283,22 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
 
             swatches = []
             for role, tok in theme.items():
+                hex_val = html_lib.escape(tok["hex"])
                 swatches.append(
-                    f'<div class="swatch">'
-                    f'<div class="chip" style="background:{html_lib.escape(tok["hex"])}"></div>'
+                    f'<button type="button" class="swatch copy-swatch" data-hex="{hex_val}" title="Copiar {hex_val}">'
+                    f'<div class="chip" style="background:{hex_val}"></div>'
                     f'<div class="meta"><strong>{html_lib.escape(role)}</strong>'
-                    f'<span>{html_lib.escape(tok["hex"])} · {html_lib.escape(tok["$value"])}</span></div></div>'
+                    f'<span>{hex_val} · {html_lib.escape(tok["$value"])}</span></div></button>'
                 )
 
             mode_cards.append(
-                f'<div class="mode-card" style="background:{bg};color:{txt};border-color:{mut}44">'
+                f'<div class="mode-card" data-mode="{mode_name}" style="background:{bg};color:{txt};border-color:{mut}44">'
                 f'<div class="mode-head"><span>{mode_name.upper()} MODE</span>'
                 f'<span class="metrics">Texto {maud.get("body_to_bg_ratio", audit.get("wcag_aaa_ratio"))}:1 · Botón {maud.get("button_to_bg_ratio", "4.5+")}:1 · APCA Lc {maud.get("body_lc", audit.get("apca_lc"))}</span></div>'
                 f'<div class="sample-ui" style="background:{surf};border-color:{mut}33">'
                 f'<h3 style="color:{txt}">Muestra tipográfica y jerarquía ({vslug})</h3>'
                 f'<p style="color:{mut}">Ejemplo real de contraste y elevación sin resplandor AI ni relleno artificial.</p>'
-                f'<button style="background:{prim};color:{on_prim}">Acción principal</button> '
+                f'<button type="button" style="background:{prim};color:{on_prim}">Acción principal</button> '
                 f'<span class="pill" style="border:1px solid {acc};color:{acc}">Estado</span>'
                 f'</div>'
                 f'<div class="swatches">{"".join(swatches)}</div>'
@@ -1192,7 +1306,7 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
             )
 
         sections.append(
-            f'<section class="eco-block" id="{eid}">'
+            f'<section class="eco-block" id="{eid}" data-eco-id="{eid}">'
             f'<h2>{ename}<span class="tag">{badge} · Recomendado: {rmode}</span></h2>'
             f'<p class="concept">{econ}</p>'
             f'<p class="params">Parámetros Oráculo/Vertical: <code>{params_json}</code></p>'
@@ -1204,13 +1318,19 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
 <html lang="es">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Chroma v5.0 OKLCH Preview — {brand_esc} / {vslug}</title>
+<title>Chroma v5.1 OKLCH Preview — {vdisp} ({brand_esc})</title>
 <style>
   body {{ font-family: system-ui, -apple-system, sans-serif; background:#101216; color:#f1f5f9; margin:0; padding:32px 24px; }}
-  .wrap {{ max-width:1280px; margin:0 auto; display:flex; flex-direction:column; gap:28px; }}
+  .wrap {{ max-width:1280px; margin:0 auto; display:flex; flex-direction:column; gap:24px; }}
   h1 {{ margin:0 0 6px; font-size:24px; }}
-  .sub {{ color:#94a3b8; font-size:14px; margin:0; }}
+  .sub {{ color:#cbd5e1; font-size:14px; margin:0 0 8px; }}
+  .oraculo-line {{ font-size:12px; color:#93c5fd; background:#172030; border:1px solid #2b3a55; padding:8px 12px; border-radius:8px; display:inline-block; }}
+  .controls {{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 14px; background:#171a21; border:1px solid #262b36; border-radius:12px; }}
+  .ctrl-btn {{ background:#222733; color:#e2e8f0; border:1px solid #334155; border-radius:8px; padding:7px 12px; font-size:12px; font-weight:600; cursor:pointer; }}
+  .ctrl-btn.active {{ background:#e2e8f0; color:#0f172a; border-color:#f8fafc; }}
+  .sep {{ width:1px; height:22px; background:#334155; margin:0 4px; }}
   .eco-block {{ background:#171a21; border:1px solid #262b36; border-radius:14px; padding:24px; }}
+  .eco-block.is-hidden, .mode-card.is-hidden {{ display:none; }}
   .eco-block h2 {{ margin:0 0 6px; font-size:18px; }}
   .tag {{ font-size:12px; color:#a3b8ff; font-weight:700; margin-left:6px; }}
   .concept {{ color:#cbd5e1; font-size:14px; margin:0 0 6px; }}
@@ -1221,22 +1341,78 @@ def render_chroma_preview_html(manifest: Dict[str, Any]) -> str:
   .sample-ui {{ padding:16px; border-radius:10px; border:1px solid; }}
   .sample-ui h3 {{ margin:0 0 6px; font-size:16px; }}
   .sample-ui p {{ margin:0 0 12px; font-size:13px; line-height:1.5; }}
-  .sample-ui button {{ border:none; border-radius:6px; padding:8px 14px; font-weight:700; font-size:12px; }}
+  .sample-ui button {{ border:none; border-radius:6px; padding:8px 14px; font-weight:700; font-size:12px; cursor:pointer; }}
   .pill {{ display:inline-block; border-radius:999px; padding:4px 10px; font-size:12px; font-weight:600; }}
   .swatches {{ display:grid; grid-template-columns:1fr; gap:8px; }}
-  .swatch {{ display:flex; align-items:center; gap:10px; font-size:12px; }}
+  .swatch {{ display:flex; align-items:center; gap:10px; font-size:12px; background:transparent; border:1px solid transparent; border-radius:6px; padding:3px 4px; color:inherit; text-align:left; cursor:pointer; width:100%; }}
+  .swatch:hover {{ border-color:rgba(148,163,184,.4); }}
   .chip {{ width:28px; height:28px; border-radius:6px; border:1px solid rgba(128,128,128,.35); flex-shrink:0; }}
   .meta {{ display:flex; flex-direction:column; line-height:1.25; }}
+  .static-notice {{ background:#2a2010; color:#fde68a; border:1px solid #92400e; padding:10px 14px; border-radius:8px; font-size:13px; }}
+  .toast {{ position:fixed; bottom:20px; right:20px; background:#0f172a; color:#f8fafc; border:1px solid #475569; padding:8px 14px; border-radius:8px; font-size:12px; display:none; }}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Chroma Engine v5.0 — {brand_esc} / {vslug} ({varch})</h1>
-    <p class="sub">Dirección de Arte Curada + Auditoría WCAG 2.2 AAA (≥7:1 texto, ≥4.5:1 botón on_primary) + APCA (Lc ≥75).</p>
+    <h1>Chroma Engine v5.1 — {vdisp} ({varch})</h1>
+    <p class="sub">Marca base: {brand_esc} · Auditoría WCAG 2.2 AAA (≥7:1 texto, ≥4.5:1 botón on_primary) + APCA (Lc ≥75).</p>
+    <div class="oraculo-line">Coordenadas Oráculo: {oraculo_badge}</div>
   </header>
+  <div id="chromaNoJsNotice" class="static-notice">
+    Vista estática detectada (p. ej. visor embebido sin JavaScript): se muestran todos los ecosistemas en modo claro y oscuro. Para filtrar o copiar hexes con 1 clic, descarga y abre el archivo en tu navegador.
+  </div>
+  <div class="controls" id="chromaControls">
+    <button type="button" class="ctrl-btn eco-btn active" data-eco-filter="all">Todos ({len(ecos)})</button>
+    {"".join(eco_buttons)}
+    <span class="sep"></span>
+    <button type="button" class="ctrl-btn mode-btn active" data-mode-filter="all">Ambos Modos</button>
+    <button type="button" class="ctrl-btn mode-btn" data-mode-filter="light">Solo Light</button>
+    <button type="button" class="ctrl-btn mode-btn" data-mode-filter="dark">Solo Dark</button>
+  </div>
   {"".join(sections)}
 </div>
+<div id="copyToast" class="toast"></div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {{
+  const notice = document.getElementById('chromaNoJsNotice');
+  if (notice) notice.style.display = 'none';
+  let activeEco = 'all';
+  let activeMode = 'all';
+  const applyFilters = () => {{
+    document.querySelectorAll('.eco-block').forEach(el => {{
+      const eid = el.getAttribute('data-eco-id');
+      el.classList.toggle('is-hidden', activeEco !== 'all' && eid !== activeEco);
+    }});
+    document.querySelectorAll('.mode-card').forEach(card => {{
+      const m = card.getAttribute('data-mode');
+      card.classList.toggle('is-hidden', activeMode !== 'all' && m !== activeMode);
+    }});
+  }};
+  document.querySelectorAll('.eco-btn').forEach(btn => {{
+    btn.addEventListener('click', () => {{
+      activeEco = btn.getAttribute('data-eco-filter') || 'all';
+      document.querySelectorAll('.eco-btn').forEach(b => b.classList.toggle('active', b === btn));
+      applyFilters();
+    }});
+  }});
+  document.querySelectorAll('.mode-btn').forEach(btn => {{
+    btn.addEventListener('click', () => {{
+      activeMode = btn.getAttribute('data-mode-filter') || 'all';
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+      applyFilters();
+    }});
+  }});
+  document.querySelectorAll('.copy-swatch').forEach(sw => {{
+    sw.addEventListener('click', () => {{
+      const hx = sw.getAttribute('data-hex') || '';
+      if (navigator.clipboard && hx) navigator.clipboard.writeText(hx).catch(() => {{}});
+      const t = document.getElementById('copyToast');
+      if (t) {{ t.textContent = 'Copiado: ' + hx; t.style.display = 'block'; setTimeout(() => {{ t.style.display = 'none'; }}, 1400); }}
+    }});
+  }});
+}});
+</script>
 </body>
 </html>"""
 
@@ -1254,9 +1430,17 @@ def generate_chroma_manifest(
     seed_hex: Optional[str] = None,
     bg_hex: Optional[str] = None,
     accent_hex: Optional[str] = None,
+    sibling_workspaces_dir: Optional[Path] = None,
+    output_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     brand_upper = re.sub(r"[^a-zA-Z0-9_-]+", "", brand.strip()).upper() or "BRAND"
     signals = extract_oraculo_and_vertical_signals(brief_path, shards_path, vertical_json_path, vertical_slug=vertical_slug)
+    sib_root = sibling_workspaces_dir
+    if not sib_root and output_dir:
+        od_res = Path(output_dir).resolve()
+        if od_res.name == "brand" and od_res.parent.parent.name == "workspaces":
+            sib_root = od_res.parent.parent
+    sib_info = _collect_sibling_chroma_info(sib_root, own_output_dir=output_dir)
 
     if brand_brief_path and brand_brief_path.is_file():
         bb_raw = json.loads(brand_brief_path.read_text(encoding="utf-8"))
@@ -1285,11 +1469,11 @@ def generate_chroma_manifest(
         ecosystems = parse_ecosystems_from_brief(brief_path.read_text(encoding="utf-8", errors="replace"))
         source_ssot = f"{brief_path.name} §3 (literal)"
     else:
-        ecosystems = synthesize_multiaxis_ecosystems(signals)
+        ecosystems = synthesize_multiaxis_ecosystems(signals, sibling_info=sib_info)
         source_ssot = " + ".join(signals["sources"]) or "oraculo_multiaxis_synthesizer"
 
     if not ecosystems:
-        ecosystems = synthesize_multiaxis_ecosystems(signals)
+        ecosystems = synthesize_multiaxis_ecosystems(signals, sibling_info=sib_info)
         source_ssot = "oraculo_multiaxis_synthesizer"
 
     selected = next((e for e in ecosystems if e["id"] == selected_eco_id), ecosystems[0])
@@ -1300,7 +1484,7 @@ def generate_chroma_manifest(
         "$schema": "https://www.designtokens.org/tr/2025.10/color/",
         "brand": brand_upper,
         "vertical_archetype": signals["vertical_archetype"],
-        "engine": "chroma_engine.py v5.0 (Art-Direction + Oráculo-Optional + Contrast Guard)",
+        "engine": "chroma_engine.py v5.1 (Art-Direction + Sibling-Aware + Oráculo-Grounded)",
         "color_space": "oklch",
         "selected_ecosystem_id": selected["id"],
         "recommended_mode": selected.get("recommended_mode", "light"),
@@ -1396,14 +1580,26 @@ def run_unit_tests() -> int:
                     for tok in t.values():
                         assert tok["hex"].lower() not in BANNED_SLOP_HEXES, f"Banned slop hex {tok['hex']}"
 
-        assert "Chroma Engine v5.0" in render_chroma_preview_html(m_cur)
+        html_out = render_chroma_preview_html(m_cur)
+        assert "Chroma Engine v5.1" in html_out and "chromaControls" in html_out
+        if shutil.which("node"):
+            for i, s_body in enumerate(re.findall(r"<script[^>]*>(.*?)</script>", html_out, re.S)):
+                js_tmp = tp / f"chroma_{i}.js"
+                js_tmp.write_text(s_body, encoding="utf-8")
+                res = subprocess.run(["node", "--check", str(js_tmp)], capture_output=True, text=True)
+                assert res.returncode == 0, f"JS syntax error in chroma_preview: {res.stderr}"
+        # Brief-only parsing check (no Scorpio/Rohini stale defaults)
+        brief_full = tp / "astrobranding_fullbrief.md"
+        brief_full.write_text("# Brief\n| **Sol Natal** | **Géminis** |\n| **Medio Cielo** | **Géminis** |\n**Day Master:** Jia\n**Nakshatra:** Chitra\n", encoding="utf-8")
+        sig_bf = extract_oraculo_and_vertical_signals(brief_path=brief_full)
+        assert sig_bf["sun_sign"] == "Gemini" and sig_bf["mc_sign"] == "Gemini" and sig_bf["nakshatra"] == "Chitra"
     assert not Path("/mnt/localstorage/TESTCORP").exists()
-    print("✅ CHROMA ENGINE v5.0 UNIT TESTS PASSED (Curated hex fidelity, Oráculo-optional, on_primary contrast, 0 slop hexes, 0 phantom dirs)")
+    print("✅ CHROMA ENGINE v5.1 UNIT TESTS PASSED (Curated hex fidelity, interactive preview HTML, brief fallback, 0 slop hexes, 0 phantom dirs)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Chroma Engine v5.0 — Art Direction & OKLCH Contrast Synthesizer")
+    parser = argparse.ArgumentParser(description="Chroma Engine v5.1 — Art Direction & OKLCH Contrast Synthesizer")
     parser.add_argument("--brand", default="BRAND")
     parser.add_argument("--vertical", default=None)
     parser.add_argument("--brief", type=Path, default=None)
@@ -1411,6 +1607,7 @@ def main() -> int:
     parser.add_argument("--vertical-json", type=Path, default=None)
     parser.add_argument("--brand-brief", type=Path, default=None)
     parser.add_argument("--palette-json", type=Path, default=None)
+    parser.add_argument("--sibling-workspaces-dir", type=Path, default=None)
     parser.add_argument("--seed-hex", default=None)
     parser.add_argument("--bg-hex", default=None)
     parser.add_argument("--accent-hex", default=None)
@@ -1438,6 +1635,8 @@ def main() -> int:
         seed_hex=args.seed_hex,
         bg_hex=args.bg_hex,
         accent_hex=args.accent_hex,
+        sibling_workspaces_dir=args.sibling_workspaces_dir,
+        output_dir=args.output_dir,
     )
 
     if args.dry_run:
@@ -1451,7 +1650,7 @@ def main() -> int:
         (out_dir / "chroma_preview.html").write_text(render_chroma_preview_html(manifest), encoding="utf-8")
 
     audit = manifest["accessibility_audit"]
-    print(f"✅ CHROMA ENGINE v5.0 COMPLETED FOR: {manifest['brand']}/{manifest.get('vertical_slug', 'root')} (arch={manifest['vertical_archetype']}, selected={manifest['selected_ecosystem_id']}, default={manifest['recommended_mode']})")
+    print(f"✅ CHROMA ENGINE v5.1 COMPLETED FOR: {manifest['brand']}/{manifest.get('vertical_slug', 'root')} (arch={manifest['vertical_archetype']}, selected={manifest['selected_ecosystem_id']}, default={manifest['recommended_mode']})")
     print(f"  • Source SSoT: {manifest['source_ssot']}")
     print(f"  • WCAG 2.2 AAA: {audit['wcag_2_2_compliance']['body_to_bg_ratio']}:1 | Btn: {audit['wcag_2_2_compliance']['button_to_bg_ratio']}:1 | APCA Lc: {audit['apca_compliance']['body_lc']}")
     print(f"  • Output: {out_dir / 'chroma_manifest.json'}")
