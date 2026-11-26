@@ -1,7 +1,7 @@
 {
   "name": "brand-studio",
-  "version": "1.1.0",
-  "description": "5-Phase Playbook-First Brand Studio Workflow (Con o Sin Oráculo · Hub Multirrama · Live SERP · Art Direction Full-Color · Smart-VSL & Simulador · Afiliados PB16 · Concatenation Matrix · Parallel Copy Squad · Blind Adversarial Critic)",
+  "version": "1.2.0",
+  "description": "5-Phase Holistic Playbook-First Brand Studio Workflow (Con o Sin Oráculo · Hub Multirrama · Live SERP + Schema/WebP Gates · Art Direction Full-Color · Smart-VSL / Lazy Facade · 4 Arquetipos de Oferta · Cross-Domain CAPI Bridge + IG/FB Escape · Afiliados PB16 · Concatenation Matrix · Parallel Copy Squad · Blind Adversarial Critic)",
   "entry": "brand_studio.wf",
   "argsSchema": {
     "type": "object",
@@ -27,9 +27,15 @@
       },
       "vsl_mode": {
         "type": "string",
-        "enum": ["hybrid_smart_vsl", "short_explainer", "long_vsl", "text_only"],
+        "enum": ["hybrid_smart_vsl", "lazy_facade_video", "short_explainer", "long_vsl", "text_only"],
         "default": "hybrid_smart_vsl",
-        "description": "Modo de video y simulador en landing (por defecto Smart-VSL 4 min + página híbrida interactiva)"
+        "description": "Modo de video: Smart-VSL autoplay mudo o fachada WebP lazy-loaded hasta el clic"
+      },
+      "offer_archetype": {
+        "type": "string",
+        "enum": ["auto", "multi_branch_hub", "high_ticket_evaluation", "saas_trial_tiers", "transformational_product", "community_membership"],
+        "default": "auto",
+        "description": "Arquetipo holístico de oferta y garantía (detectado o declarado explícitamente)"
       },
       "stop_after_phase": {
         "type": "string",

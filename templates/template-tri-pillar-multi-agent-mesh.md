@@ -77,7 +77,7 @@ Canonical architecture blueprint for bootstrapping an autonomous, self-healing, 
    - **Conversational Task Operations**: Hermes exposes `paperclip_list_tasks` and `paperclip_create_task` so users can inspect and manage Paperclip Kanban issues directly from Telegram chat without opening a browser.
 10. **Vertical Workspaces & Bounded Contexts Invariant**:
     - The development workspace (`/mnt/localstorage/{project}/dev/`) is organized as a Vertical-First hierarchy:
-      * `_shared/`: Global ecosystem topology (`ecosystem.json`) and core brandbook tokens.
+      * `ecosystem.json` (directly under `/mnt/localstorage/{project}/dev/`): Single SSoT for global ecosystem topology (no `_shared/` duplicate).
       * `verticals/`: Declarative SSoT specifications (`<vertical-slug>.json`, e.g. `brand-core.json`, `service-a.json`).
       * `workspaces/{vertical_slug}/`: Bounded context per vertical with strictly isolated sub-layers: `brand/` (design tokens, theme.css), `strategy/` (dossier.md, seo.md, psychology), `copy/` (landings, offers, emails), and `web/` (page specs and component contracts for PiDev).
     - Prevents multi-brand token contamination and eliminates recursive directory scanning token waste across autonomous swarms.

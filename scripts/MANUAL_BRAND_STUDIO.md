@@ -1,4 +1,4 @@
-# Manual Práctico de `brand-studio` 360° (Con o Sin Oráculo · Playbooks Obligatorios · Smart-VSL · UTMs · Afiliados)
+# Manual Práctico de `brand-studio` 360° (Con o Sin Oráculo · Playbooks Obligatorios · Smart-VSL · Cross-Domain CAPI · Afiliados)
 
 > **Audiencia:** Fundadores, estrategas y operadores en cualquier proyecto Zerops (`zcp`). Escrito en lenguaje directo y práctico, sin asumir conocimientos de programación.
 
@@ -8,13 +8,13 @@
 
 ```mermaid
 flowchart TD
-    IN["1. Entrada: Con Oráculo O Cuestionario Simple (brand_brief.json) + URLs de Referencia"] --> F1["Fase 1: Posicionamiento, Hub Multirrama + Keyword Research SERP en vivo"]
-    F1 --> F2["Fase 2: Dirección de Arte (3 Paletas Vivas + Envato Full-Color + Acentos Editoriales)"]
+    IN["1. Entrada: Con Oráculo O Cuestionario Simple (brand_brief.json) + URLs de Referencia"] --> F1["Fase 1: Posicionamiento, Hub Multirrama + Keyword Research SERP + Reglas SEO"]
+    F1 --> F2["Fase 2: Dirección de Arte (3 Paletas Vivas + Envato Full-Color + Contraste WCAG + 100% WebP)"]
     F2 --> GATE{"PAUSA HUMANA: ¿Te gustan los colores y fuentes?"}
     GATE -- "Ajustar / Otras URLs" --> F2
-    GATE -- "Aprobado" --> F3["Fase 3: Embudo Inverso + Smart-VSL + UTMs + Píxeles + Afiliados (apotelos validate-chain)"]
-    F3 --> F4["Fase 4: Escuadrón de Copy sobre 18 Playbooks -> copy/*.md (SSoT humana)"]
-    F4 --> F5["Fase 5: Juez Adversario Ciego (Auditoría real sin checklist-theater)"]
+    GATE -- "Aprobado" --> F3["Fase 3: Embudo Inverso + VSL/Fachada + CAPI Cross-Domain + UTMs + Afiliados (apotelos validate-chain)"]
+    F3 --> F4["Fase 4: Escuadrón de Copy sobre 18 Playbooks -> copy/*.md (SSoT humana) + JSON-LD"]
+    F4 --> F5["Fase 5: Juez Adversario Ciego (Auditoría SEO/CRO/Visual sin checklist-theater)"]
     F5 --> WEB["astro-web: Compila web, Schema @graph, /llms.txt, Píxeles y Referidos (?ref=)"]
 ```
 
@@ -34,7 +34,9 @@ El sistema acepta **dos caminos de entrada** y ambos producen la misma estructur
    - Tu rol principal (por ejemplo: *Estratega Digital*, *Mentor de Marcas*).
    - Términos o siglas propias que **sí quieres enseñar al público** (`public_brand_concepts`, por ejemplo `OPB`, `CO1`).
    - Qué vendes, a quién y tus precios base.
-   - Entre **2 y 4 URLs de páginas de referencia** (solo para entender tensión de color, ritmo visual o mecánica de embudo, nunca para copiarles).
+   - Entre **2 y 5 URLs de páginas de referencia** (solo para entender tensión de color, ritmo visual o mecánica de embudo, nunca para copiarles).
+
+> **Fuente Única de Verdad (`ecosystem.json`):** Todo proyecto guarda su mapa global exclusivamente en `/mnt/localstorage/<Proyecto>/dev/ecosystem.json`. Nunca se crean copias paralelas en `_shared/`.
 
 ### Cortafuegos de lenguaje: Interno vs. Público
 En conversaciones internas entre fundador y agente usamos conceptos operativos como *verticales*, *DIY*, *DWY*, *DFY*, *BANT*, *PWYW* u *Order Bump*. **Ninguno de esos términos técnicos debe filtrarse al texto público que lee el cliente final** (salvo siglas estratégicas autorizadas expresamente en `public_brand_concepts`). El verificador `anti-slop-linter` bloquea cualquier fuga antes de compilar la web.
@@ -44,10 +46,10 @@ En conversaciones internas entre fundador y agente usamos conceptos operativos c
 ## 3. Cómo Trabajar la Fase Visual (Colores Reales y Fuentes de Envato)
 
 ### Paletas con carácter real (`chroma_engine v5.0`)
-- Puedes pasar colores curados (`--palette-json`) o un color principal exacto (`--seed-hex "#F50023"`). El motor **conserva intacto tu color** (sin apagarlo a tonos pastel) y calcula automáticamente si el texto encima del botón debe ser negro puro (`#0a0a0a`) o blanco (`#ffffff`) para máxima legibilidad y contraste.
+- Puedes pasar colores curados (`--palette-json`) o un color principal exacto (`--seed-hex "#F50023"`). El motor **conserva intacto tu color** (sin apagarlo a tonos pastel) y calcula automáticamente si el texto encima del botón debe ser negro puro (`#0a0a0a`) o blanco (`#ffffff`) para cumplir WCAG (`>= 4.5:1`).
 
 ### Previsualización de fuentes Envato a color real (`envato_font_preview v4.0`)
-- Ya no ves solo letras negras o blancas aburridas. La galería HTML (`brand/previews/preview_gallery.html`) renderiza **4 tarjetas reales** para cada fuente:
+- La galería HTML (`brand/previews/preview_gallery.html`) renderiza **4 tarjetas reales** para cada fuente:
   1. Nombre de tu marca en **Color Primario** sobre el fondo.
   2. Nombre de tu marca en **Color Acento** sobre superficie secundaria.
   3. **Tarjeta Invertida de Marca** (fondo en color primario y marca encima con contraste real).
@@ -78,49 +80,54 @@ Dentro de `workspaces/<linea>/`:
 
 ---
 
-## 5. Guía Sencilla de UTMs, Píxeles y Concatenación Total
+## 5. Guía Sencilla de UTMs, Píxeles, CAPI Cross-Domain y Concatenación
 
 ### ¿Qué es un UTM y para qué sirve?
 Un **UTM** es una etiqueta invisible al final de un enlace que le dice a tu web y a tus reportes **qué campaña, qué plataforma y qué anuncio o video exacto trajo a ese cliente**. El visitante ve exactamente la misma página, pero tú puedes medir qué creativo produce citas y ventas reales (y cuáles solo traen clics vacíos).
 
-Sus 5 partes:
+Sus 5 partes (plus parámetros opcionales de conjunto/anuncio `utm_adset`, `utm_ad`):
 1. `utm_source`: de qué plataforma viene (`meta`, `google`, `instagram`, `youtube`, `linkedin`, `whatsapp`, `email`).
-2. `utm_medium`: cómo llegó (`paid_social` si es pauta en redes, `cpc` si es búsqueda en Google, `organic` si es contenido gratis, `email`).
+2. `utm_medium`: cómo llegó (`paid_social`, `cpc`, `organic`, `email`).
 3. `utm_campaign`: nombre de la campaña (ej. `captacion_consultores_co`).
-4. `utm_content`: **la más importante para vender** — identifica el video, imagen o ángulo exacto (ej. `video_nomina_3m_v1` vs `carrusel_ia_v2`).
+4. `utm_content`: identifica el video, imagen o ángulo exacto (ej. `video_nomina_3m_v1` vs `carrusel_ia_v2`).
 5. `utm_term`: la palabra buscada en Google Ads (ej. `mentor_de_marcas`).
 
 ### Regla de Oro: Dónde SÍ van y dónde NUNCA van
-- **SÍ VAN** en todo enlace **EXTERNO** que apunta hacia tu web: anuncios de Meta/Google/TikTok/LinkedIn, link de bio en Instagram/LinkedIn, descripciones de YouTube, botones de correos y enlaces enviados por WhatsApp.
-- **NUNCA VAN** en enlaces **INTERNOS** dentro de tu propia web (ej. botones que llevan del inicio `/` hacia `/ready-now` o `/checkout`), porque poner un UTM interno **sobrescribe y borra el anuncio original que te trajo al cliente**.
+- **SÍ VAN** en todo enlace **EXTERNO** que apunta hacia tu web: anuncios de Meta/Google/TikTok/LinkedIn, link de bio, YouTube, correos y mensajes de WhatsApp.
+- **NUNCA VAN** en enlaces **INTERNOS** dentro de tu propia web, porque poner un UTM interno **sobrescribe y borra el anuncio original que trajo al cliente**.
 
-### Cómo se concatena todo en `brand-studio` (Fase 3)
-Cada pieza se valida con `apotelos validate-chain strategy/concatenation_matrix.json` antes de construir la web:
-1. **Intención / Palabra Clave (`1 intención = 1 URL`)** → página exacta con `/llms.txt` y `Schema.org @graph` para Google y motores de IA.
-2. **Anuncio + UTM externo** → la persona entra y la web guarda su origen en una cookie propia de 90 días (`__attr_session`) junto al ID del clic (`fbclid`, `gclid`, `wbraid`, `gbraid`).
-3. **Copy + Oferta + Filtro** → si la persona califica, el servidor dispara el evento `Lead` por Browser Pixel + CAPI con el mismo `event_id` (sin duplicar, y usando variables aisladas por dominio, ej. `DOMINIO1_META_PIXEL_ID` vs `DOMINIO2_META_PIXEL_ID`).
-4. **Remarketing + Mensajería** → quienes no completan el siguiente paso entran a audiencias específicas de remarketing y secuencias congruentes de correo y WhatsApp.
+### Puente CAPI entre Dominios (`cross_domain_bridge`) y Escape de IG/FB
+Cuando el cliente hace clic para ir a un **subdominio o dominio externo de pago/app** (por ejemplo `tudominio.com` $\to$ `pagar.tudominio.com` o `otraweb.com`):
+- El navegador por sí solo pierde cookies de terceros entre dominios distintos. Por eso `brand-studio` modela el **`cross_domain_bridge`**: decora el botón saliente con `fbp`, `fbc`, `src` UUID, `event_source_url`, UTMs y `ref_code` de afiliado (o los envía juntos en el JSON hacia el checkout con validación previa de correo).
+- En botones que abren **Google Pay / Apple Pay desde Instagram o Facebook**, incluye un escape guiado (*"Abrir en Chrome"*) con respaldo a los 6 segundos si el navegador interno bloquea la billetera.
 
 ---
 
-## 6. Hub Multimarca, Smart-VSL de 4 Minutos, Demos Interactivas y Afiliados (`?ref=`)
+## 6. Hub Multimarca, Arquetipos de Oferta, Video, Afiliados (`?ref=`) y Puertas SEO
 
-### Hub General con Subrutas y Puentes a Dominios Futuros
-Cuando un fundador agrupa varias líneas bajo un dominio paraguas (por ejemplo `/` como puerta de entrada hacia subrutas especializadas `/academia`, `/mentoria`, `/agencia` que luego migran a dominios independientes):
-- `hub_branches` declara cada ruta, su nivel de acompañamiento y su dominio futuro sin duplicar contenido ni canibalizar palabras clave en Google.
-- La página principal orienta al visitante según su momento real (aprender por su cuenta, acompañamiento guiado o implementación llave en mano) con lenguaje humano, nunca con siglas operativas internas.
+### 6.1 Hub General con Subrutas y Guía Flotante
+Cuando un fundador agrupa varias líneas bajo un dominio paraguas (`/` $\to$ subrutas `/academia`, `/mentoria`, `/agencia` que luego migran a dominios propios):
+- `hub_branches` declara cada ruta, nivel de acompañamiento y dominio futuro sin canibalizar palabras clave.
+- Opcionalmente, un widget orientador flotante (*"¿Te ayudo a elegir?"*) guía al visitante según su etapa hacia la línea exacta sin saturar la portada.
 
-### Smart-VSL de 4 Minutos + Simulador Interactivo + Formulario de 3 Pasos
-Para ofertas de ticket medio/alto y servicios B2B/B2C de automatización:
-- **Smart-VSL Híbrido:** Video corto (~4 min) que arranca en silencio para no espantar en móvil, invita con un botón grande a activar el sonido desde el segundo 0, usa una barra de progreso visual rápida al inicio para retener atención y dispara un evento propio de retargeting tras **90 segundos con sonido** (`VslWatched90s`) para crear audiencias de altísima intención.
-- **Compuerta Suave al Aplicar:** Si alguien pulsa *Aplicar* sin haber visto 60 segundos del video, aparece un aviso amable ofreciendo verlo primero o continuar al formulario sin bloquear la venta.
-- **Simulador de 3 Pestañas + Contraste Financiero en 3 Cajas:** En lugar de prometer en abstracto, muestra 3 casos reales interactivos de cómo trabaja el sistema (etiquetados claramente como datos de ejemplo) junto al comparativo financiero concreto (`Hoy -> Con sistema -> Ganancia adicional al año`).
-- **Formulario en 3 Micro-Pasos (~30s):** El Paso 1 solo pide tocar 1 opción (cero escritura) para bajar la fricción inicial; los datos de contacto se piden en los Pasos 2 y 3.
+### 6.2 Arquetipos Holísticos de Oferta y Garantía (`offer_archetype`)
+`brand-studio` adapta automáticamente estructura y prueba social según la naturaleza real del producto o servicio:
+- **Evaluación High-Ticket / Mentoría 1:1:** barra de autoridad, reencuadre cognitivo del problema, progresión por etapas, inversión pre-encuadrada antes del calendario y **Garantía condicional de extensión** (*si cumples las prácticas acordadas sin avance medible, extendemos el acompañamiento*).
+- **Plataforma / Membresía / Academia con Planes:** narrativa de dolor día a día (*Lunes a Viernes*), **3 planes con paridad del 100 % de acceso** donde el plan intermedio destaca en ahorro (*Paga 2, lleva 3*), **prueba de `$0 hoy`** por 5–7 días y capturas reales sin maquillar.
+- **Producto o Kit Transformacional:** **3 objeciones principales resueltas arriba del todo**, definición etimológica/filosófica del mecanismo, **Stack de Valor 10× con ancla en moneda local** y cierre empático sin culpa.
+- **Servicio Llave en Mano / Agencia:** **Smart-VSL híbrido de 4 minutos**, simulador interactivo de 3 pestañas (*Datos de ejemplo*), contraste financiero en 3 cajas (`Hoy -> Con sistema -> Anual`) y formulario en 3 pasos (Paso 1 solo botones).
 
-### Programa Soberano de Referidos y Afiliados (`?ref=socio`)
-`brand-studio` integra las reglas del Módulo 6 de `16_personal_branding_authority_and_communities.md`:
-- Los enlaces de afiliados usan `?ref=<codigo_socio>` en paralelo a los UTMs dentro de la misma cookie de 90 días, **sin borrar la atribución del canal** y bloqueando autocompras (`self_referral_blocked: true`).
-- `apotelos validate-chain` verifica antes de lanzar que existan escalones de comisión claros, ventana mínima de 30–90 días, retención preventiva de pago (30 días para cubrir garantías) y pisos mínimos rentables (`EPC >= $1.00 USD` y `EPL >= $2.00 USD`).
+### 6.3 Smart-VSL de 4 Minutos vs. Fachada Lazy de Video (`lazy_facade_video`)
+- **`hybrid_smart_vsl`:** video que arranca en silencio con cartel A/B invitando a activar el sonido, barra de progreso rápida (`1 - (1 - t)^2.2`), aviso suave *"¿Ya viste el video?"* si pulsan Aplicar antes de 60s y evento `VslWatched90s` tras 90 segundos con sonido.
+- **`lazy_facade_video`:** cuando prima la velocidad extrema en móvil, muestra una portada WebP nítida (`Ver video · M:SS`) que **no descarga ni carga el reproductor hasta que el usuario hace clic**.
+
+### 6.4 Programa Soberano de Referidos y Afiliados (`?ref=socio`)
+`brand-studio` integra el Módulo 6 de `16_personal_branding_authority_and_communities.md`:
+- Los enlaces de afiliados usan `?ref=<codigo_socio>` junto a los UTMs en la misma cookie de 90 días (y en el payload de checkout junto a `ref_code`), **sin borrar la atribución del anuncio** y bloqueando autocompras (`self_referral_blocked: true`).
+- `apotelos validate-chain` exige escalones de comisión claros, ventana `>= 30–90 días`, retención preventiva de pago (30 días) y pisos rentables (`EPC >= $1.00 USD` y `EPL >= $2.00 USD`).
+
+### 6.5 Gates Automáticos contra Anti-Patrones Técnicos
+Al auditar URLs externas reales es común hallar errores graves que `brand-studio` bloquea desde la raíz: cero `noindex` accidental en landings de adquisición, idioma `<html lang>` coherente, jerarquía real `H1 > H2 > body`, **`JSON-LD @graph` no vacío**, imágenes **`100 % WebP/AVIF`** y contraste WCAG `>= 4.5:1` en botones.
 
 ---
 
@@ -129,4 +136,4 @@ Para ofertas de ticket medio/alto y servicios B2B/B2C de automatización:
 En cualquier proyecto o servidor ZCP recién creado:
 1. Ejecuta `iniciar.sh --update` (instala todas las skills, Playbooks `00..17`, `orchesbrand`, `apotelos`, `brand-play`, `brand_studio.wf` y este manual en `/var/www/artifacts/blueprints/`).
 2. Verifica que el sistema está sano con `ssot-parity-check --with-tests` y `skills-suite-validate --strict-budget --with-tests`.
-3. Pídele al agente activar `brand-studio` indicando proyecto, rama/línea, país y (opcional) tus URLs de referencia, ramas del Hub y enlaces de Envato.
+3. Pídele al agente activar `brand-studio` indicando proyecto, rama/línea, país y (opcional) tus URLs de referencia, arquetipo de oferta, ramas del Hub y enlaces de Envato.

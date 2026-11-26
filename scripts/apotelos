@@ -223,6 +223,19 @@ class HubBranchRoute(BaseModel):
     public_label: str = Field(..., min_length=2)
 
 
+class CrossDomainBridgeContract(BaseModel):
+    enabled: bool = False
+    target_domains: List[str] = Field(default_factory=list)
+    forward_params: List[str] = Field(
+        default_factory=lambda: [
+            "fbp", "fbc", "src", "event_source_url", "ref",
+            "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+        ]
+    )
+    inapp_browser_escape: bool = Field(default=True)
+    checkout_email_precheck: bool = Field(default=True)
+
+
 class MasterConcatenationMatrix(BaseModel):
     brand_slug: str = Field(..., min_length=2)
     canonical_domain: str = Field(..., min_length=4)
@@ -230,6 +243,7 @@ class MasterConcatenationMatrix(BaseModel):
     links: List[ConcatenationLink] = Field(..., min_length=1)
     hub_branches: List[HubBranchRoute] = Field(default_factory=list)
     affiliate_program: Optional[AffiliateProgramContract] = None
+    cross_domain_bridge: Optional[CrossDomainBridgeContract] = None
 
 
 def validate_concatenation_matrix(raw: Dict[str, Any]) -> Tuple[bool, List[str]]:
@@ -276,6 +290,15 @@ def validate_concatenation_matrix(raw: Dict[str, Any]) -> Tuple[bool, List[str]]
             errors.append("Programa de afiliados bajo pisos mínimos PB16 Módulo 6.3 (EPC >= $1.00 y EPL >= $2.00).")
         if len(ap.commission_tiers) < 1:
             errors.append("Programa de afiliados activo requiere al menos 1 nivel en commission_tiers.")
+
+    if m.cross_domain_bridge and m.cross_domain_bridge.enabled:
+        cb = m.cross_domain_bridge
+        if len(cb.target_domains) < 1:
+            errors.append("Cross-domain CAPI bridge activo requiere al menos 1 dominio destino en target_domains.")
+        if "fbp" not in cb.forward_params:
+            errors.append("Cross-domain CAPI bridge requiere 'fbp' en forward_params.")
+        if "event_source_url" not in cb.forward_params and "src" not in cb.forward_params:
+            errors.append("Cross-domain CAPI bridge requiere 'event_source_url' o 'src' en forward_params.")
 
     return len(errors) == 0, errors
 
@@ -2319,6 +2342,13 @@ def cmd_test(args):
                 "enabled": True, "ref_param": "ref", "cookie_window_days": 90, "payout_hold_days": 30,
                 "self_referral_blocked": True, "min_epc_usd": 1.0, "min_epl_usd": 2.0,
                 "commission_tiers": [{"tier": "digital_entry", "commission_pct": 40, "tier2_override_pct": 5}]
+            },
+            "cross_domain_bridge": {
+                "enabled": True,
+                "target_domains": ["pay.aureliusvance.com"],
+                "forward_params": ["fbp", "fbc", "src", "event_source_url", "ref", "utm_source", "utm_medium", "utm_campaign", "utm_content"],
+                "inapp_browser_escape": True,
+                "checkout_email_precheck": True
             }
         })
         if not ok_chain:
@@ -2361,6 +2391,25 @@ def cmd_test(args):
         })
         if bad_aff_ok:
             errors.append("validate_concatenation_matrix debe rechazar hub_branches duplicadas y affiliate_program bajo pisos PB16 o sin anti-self-referral")
+
+        bad_bridge_ok, _ = validate_concatenation_matrix({
+            "brand_slug": "aurelius-vance", "canonical_domain": "aureliusvance.com",
+            "topic_clusters": [{"cluster_id": "c1", "search_intent": "i1", "primary_keyword": "k1", "landing_route": "/", "funnel_stage": "bofu"}],
+            "links": [{
+                "link_id": "l1", "cluster_id": "c1", "ad_angle": "x",
+                "utm": {"utm_source": "meta", "utm_medium": "cpc", "utm_campaign": "c", "utm_content": "v"},
+                "landing_route": "/", "offer_hook": "offer",
+                "pixel_events": [{"event_name": "Lead", "trigger_condition": "always", "host_env_prefix": "X_", "shared_event_id": True}],
+                "remarketing_audience": "all", "followup_flow": "wa"
+            }],
+            "cross_domain_bridge": {
+                "enabled": True,
+                "target_domains": [],
+                "forward_params": ["utm_source"]
+            }
+        })
+        if bad_bridge_ok:
+            errors.append("validate_concatenation_matrix debe rechazar cross_domain_bridge sin target_domains o sin fbp/event_source_url")
 
         if errors:
             print("❌ APOTELOS AGNOSTIC INTEGRITY SENSOR FAILED:")

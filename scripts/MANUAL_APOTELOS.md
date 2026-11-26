@@ -143,11 +143,10 @@ Para evitar que todas las verticales se vean idénticas y compartan los mismos c
 │   ├── font_manifest.json         <- Catálogo con los 3 ecosistemas tipográficos calculados
 │   ├── astrobranding_*.md         <- Documento rector de identidad y psicología arquetípica
 │   ├── system_prompt.md           <- Prompt base del sistema
-│   └── ecosystem.json             <- Topología de marcas
+│   ├── ecosystem.json             <- Única SSoT global de topología multirrama (nunca duplicar en `_shared/`)
 │   ⚠️ REGLA DE ORO: Esta raíz NUNCA SE BORRA. Es la SSoT que zcp-sync sincroniza
 │      de forma bidireccional entre Google Drive y Local Storage para mantener paridad física.
 │
-├── _shared/                       <- Topología global cross-vertical (ecosystem.json)
 ├── verticals/                     <- Contratos declarativos de dominio (Blackboard SSoT)
 │
 └── workspaces/                    <- [Capa 1: Bifurcación Especializada por Vertical]
