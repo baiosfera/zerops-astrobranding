@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-brand-play — Sovereign Downstream Playbook Transmutation & Slot Hydration Engine (v2.1)
+brand-play — Sovereign Downstream Playbook Transmutation & Slot Hydration Engine (v3.1)
 Standard: TYM (Type-YAML-Markdown) v1.0 & W3C DTCG Token Ingestion
 Governed by meta-script & 00-SUPREME-DIRECTIVE.md (v10.0).
 Features:
@@ -186,15 +186,19 @@ def load_brandbook_bundle(brand_slug: str, vertical_json: Optional[Path] = None,
                 bundle["brand"]["insignia_offer"]["title"] = po["structure"]
             pricing = po.get("pricing", {})
             cur = pricing.get("currency", "COP")
-            if pricing.get("pwyw_default_cop"):
-                bundle["brand"]["paid_discovery"]["price"] = f"${pricing['pwyw_default_cop']:,} {cur}".replace(",", ".")
+            default_cop = pricing.get("pwyw_default_cop") or pricing.get("flexible_contribution_default_cop")
+            if default_cop:
+                bundle["brand"]["paid_discovery"]["price"] = f"${default_cop:,} {cur}".replace(",", ".")
             elif pricing.get("amount"):
                 bundle["brand"]["paid_discovery"]["price"] = f"${pricing['amount']} {cur}"
-            slo = vdata.get("funnel_architecture", {}).get("unqualified_branch_slo", {})
+            slo = vdata.get("funnel_architecture", {}).get("unqualified_branch_slo") or vdata.get("funnel_architecture", {}).get("diagnostic_branch", {})
             if slo.get("product_name"):
                 bundle["brand"]["paid_discovery"]["title"] = slo["product_name"]
             if slo.get("route"):
                 bundle["metadata"]["cta_url"] = slo["route"]
+            timeline = vdata.get("offer_timeline", {})
+            if isinstance(timeline, dict) and timeline:
+                bundle["brand"]["offer_timeline"] = timeline
             icp = vdata.get("target_avatar", {}).get("icp")
             if icp:
                 bundle.setdefault("target_audience", {}).setdefault("primary_persona", {})["archetype"] = icp
@@ -589,9 +593,22 @@ def run_sync_copy(args: argparse.Namespace) -> int:
     if not args.skip_lint and md_files:
         linter = "/var/www/zerops-astrobranding/scripts/anti_slop_linter.py"
         if Path(linter).is_file():
+            lint_brand: Optional[str] = None
+            lint_vertical: Optional[str] = ws.name if ws.parent.name == "workspaces" else None
+            bb_ws = ws / "brand" / "brandbook.json"
+            if bb_ws.is_file():
+                try:
+                    lint_brand = json.loads(bb_ws.read_text(encoding="utf-8")).get("metadata", {}).get("brand_name")
+                except Exception:
+                    pass
+            cmd_base = [sys.executable, "-B", linter]
+            if lint_brand:
+                cmd_base.extend(["--brand", str(lint_brand)])
+            if lint_vertical:
+                cmd_base.extend(["--vertical", str(lint_vertical)])
             for f in md_files:
                 r = subprocess.run(
-                    [sys.executable, "-B", linter, "--file", str(f), "--quiet"],
+                    cmd_base + ["--file", str(f), "--quiet"],
                     capture_output=True, text=True,
                 )
                 if r.returncode != 0:

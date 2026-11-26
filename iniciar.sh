@@ -379,7 +379,7 @@ EOF_ENGRAM_SINGLETON
 
   [ -f "$CATALOG_DIR/.agents/hooks.json" ] && cp -f "$CATALOG_DIR/.agents/hooks.json" "$BASE_DIR/.agents/hooks.json"
   mkdir -p "$BASE_DIR/artifacts"
-  for dir_name in templates blueprints; do
+  for dir_name in templates blueprints workflows; do
     if [ -d "$CATALOG_DIR/$dir_name" ]; then
       if command -v rsync >/dev/null 2>&1; then
         mkdir -p "$BASE_DIR/artifacts/$dir_name"

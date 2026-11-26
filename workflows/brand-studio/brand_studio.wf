@@ -1,5 +1,5 @@
 """
-brand_studio.wf — Portable Antigravity `run_workflow` 5-Phase Playbook-First Brand Pipeline (v1.4).
+brand_studio.wf — Portable Antigravity `run_workflow` 5-Phase Playbook-First Brand Pipeline (v1.5).
 Compiled with Python top-level await (`ast.PyCF_ALLOW_TOP_LEVEL_AWAIT`) via `run_workflow(ScriptPath=..., Args=...)`.
 Hermes/CrewAI remain strictly reserved for post-launch 24/7 monitoring & ops.
 """
@@ -25,11 +25,11 @@ start_idx = phase_order.index(start_from)
 stop_idx = phase_order.index(stop_after)
 should_run = lambda name: start_idx <= phase_order.index(name) <= stop_idx
 
-log(f"Starting brand-studio v1.4 for {project}/{vertical} (intake={intake_mode}, archetype={offer_archetype}, vsl={vsl_mode}, mesh={enable_cross_funnel_mesh}, affiliates={enable_affiliate_layer}, start_from={start_from}, stop_after={stop_after})")
+log(f"Starting brand-studio v1.5 for {project}/{vertical} (intake={intake_mode}, archetype={offer_archetype}, vsl={vsl_mode}, mesh={enable_cross_funnel_mesh}, affiliates={enable_affiliate_layer}, start_from={start_from}, stop_after={stop_after})")
 
-# PHASE 1: Positioning + Live SERP Keyword Research (PB00 + PB06 + PB16)
+# PHASE 1: Positioning + Live SERP & Tech-Maturity Research (PB00 + PB06 + PB16)
 if should_run("phase_1_seo"):
-    phase("Phase 1: Posicionamiento, Hub Multirrama & Keyword Research SERP (PB00, PB06, PB16)")
+    phase("Phase 1: Posicionamiento, Hub Multirrama, Grounding Competitivo Vigente & Keyword Research SERP (PB00, PB06, PB16)")
     seo_schema = {
         "type": "object",
         "required": ["positioning_roles", "public_brand_concepts", "multi_domain_bridge", "topic_clusters", "files_written"],
@@ -60,10 +60,11 @@ if should_run("phase_1_seo"):
 - {PLAYBOOKS_DIR}/06_seo_aeo_geo_and_organic_content.md (Módulo 0 y Módulo 2 Keyword Research)
 - {PLAYBOOKS_DIR}/16_personal_branding_authority_and_communities.md
 Inspecciona el contexto real en {ws_dir} y /mnt/localstorage/{project}/dev/ (ecosystem.json como ÚNICA SSoT — nunca _shared/ecosystem.json —, vertical JSON, brand_brief.json o briefs Oráculo si intake_mode='{intake_mode}' es 'auto' u 'oraculo').
-Si hay ramas en hub_branches ({hub_branches}), modela la arquitectura de Hub multimarca asignando 1 intención SERP por ruta y documentando el puente hacia dominios futuros sin canibalización.
-Reglas SEO y accesibilidad obligatorias: toda landing pública declara `robots: index, follow` (PROHIBIDO `noindex` accidental), `<html lang>` coincidente con el copy, enlace `Skip to content`, jerarquía `H1 > H2 > body`, y `JSON-LD @graph` rico (`Service`/`SoftwareApplication` + `Organization` + `Offer` + `FAQPage`) + `/llms.txt`.
-Usa búsqueda web en vivo (exa / tavily / brave) orientada a '{target_country}' para validar demanda e intención real SERP en las palabras clave del cliente (NO inventes keywords).
-Cortafuegos terminológico obligatorio: NUNCA expongas al público jerga interna ('verticales', 'DIY', 'DWY', 'DFY', 'BANT', 'PWYW', 'Order Bump', 'AEO/GEO'), y respeta únicamente los roles del fundador y conceptos públicos declarados en public_brand_concepts.
+Si hay ramas en hub_branches ({hub_branches}), modela la arquitectura de Hub multimarca asignando 1 intención SERP por ruta y aplicando **1 ruta = 1 workspace SSoT** (el Hub delega rutas de ramas aisladas a `/mnt/localstorage/{project}/dev/workspaces/<rama>/` en vez de duplicar copy/01..08), documentando el puente hacia dominios futuros sin canibalización.
+Reglas SEO y accesibilidad obligatorias: toda landing pública declara `robots: index, follow` (PROHIBIDO `noindex` accidental), `<html lang>` coincidente con el copy, enlace `Skip to content`, jerarquía `H1 > H2 > body`, y `JSON-LD @graph` autocontenido por ruta (`Service`/`SoftwareApplication` + `Organization` + `Person` + `WebSite` + `WebPage` + `ImageObject` + `BreadcrumbList` + `Offer` + 5 FAQs únicas por URL) + `/llms.txt`.
+Anti-AMN obligatorio (año vigente vía `date -u`): usa búsqueda web en vivo (`exa` / `tavily` / `brave` + `jina:read_url`) orientada a '{target_country}' para: (1) validar demanda e intención real SERP en las palabras clave, (2) auditar ofertas/tiempos reales de competidores y madurez tecnológica/agéntica vigente (PROHIBIDO atacar hombres de paja obsoletos de años anteriores cuando el mercado ya adopta agentes/memoria nativa), y (3) verificar cifras macroeconómicas y legales vigentes.
+Respeta estrictamente las reglas de audiencia del vertical JSON (`target_avatar`, áreas amplias vs. `forbidden_audience_terms`) y la arquitectura temporal (`offer_timeline` vs. `deprecated_timelines`).
+Cortafuegos terminológico obligatorio: NUNCA expongas al público jerga interna ('verticales', 'DIY', 'DWY', 'DFY', 'BANT', 'PWYW', 'Order Bump', 'AEO/GEO'), tarifas privadas (`private_call_only_pricing`), y respeta únicamente los roles del fundador y conceptos públicos declarados en public_brand_concepts.
 Guarda {ws_dir}/strategy/seo_clusters.json y actualiza {ws_dir}/strategy/seo.md con fuentes verificadas y devuelve el JSON estructurado.""",
         schema=seo_schema,
         role="SEO & Positioning Strategist",
@@ -162,7 +163,7 @@ Valida cada archivo público con `anti-slop-linter --brand "{project}" --vertica
         ),
     )
     sync_ok = await agent(
-        f"Ejecuta `brand-play sync-copy --workspace {ws_dir}` para reconciliar checksums SHA-256 de copy/*.md -> web/copy_strings.es.json y confirma exit 0.",
+        f"Ejecuta `brand-play sync-copy --workspace {ws_dir} --all-files` para reconciliar checksums SHA-256 de copy/*.md -> web/copy_strings.es.json, verifica `anti-slop-linter --brand \"{project}\" --vertical \"{vertical}\"` y asegura un `web/astro_readiness_spec.md` unificado con selector `[data-brand]` para multi-tema sin colisiones antes de Fase 5. Confirma exit 0.",
         schema={"type": "boolean"},
         role="Copy SSoT Reconciler",
         model="flash",

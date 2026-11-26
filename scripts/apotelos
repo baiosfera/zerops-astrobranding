@@ -2181,18 +2181,18 @@ const schemaData = {schema_json};
     }})();
   </script>
 
-  <div class="relative overflow-hidden min-h-screen bg-[var(--brand-bg,#090d14)] text-[var(--brand-text,#f8fafc)]">
+  <div class="relative overflow-hidden min-h-screen bg-[var(--brand-bg)] text-[var(--brand-text)]">
     <!-- Navbar -->
     <nav class="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between border-b border-white/10">
       <div class="flex items-center gap-3">
-        <a href="/" class="font-extrabold text-lg tracking-tight hover:text-[var(--brand-primary,#38b6ff)] transition-colors">
+        <a href="/" class="font-extrabold text-lg tracking-tight hover:text-[var(--brand-primary)] transition-colors">
           {brand_title}
         </a>
         <span class="opacity-40">/</span>
-        <span class="text-[var(--brand-primary,#38b6ff)] text-sm font-semibold">{vert_title}</span>
+        <span class="text-[var(--brand-primary)] text-sm font-semibold">{vert_title}</span>
       </div>
       <div class="flex items-center gap-4">
-        <a href="#conversion" class="px-4 py-2 text-xs font-semibold rounded-lg bg-[var(--brand-primary,#38b6ff)] text-[var(--brand-bg,#090d14)] transition-all">
+        <a href="#conversion" class="px-4 py-2 text-xs font-semibold rounded-[var(--radius-control,0px)] bg-[var(--brand-primary)] text-[var(--brand-on-primary,var(--brand-bg))] transition-all">
           {cta_primary}
         </a>
       </div>
@@ -2200,8 +2200,8 @@ const schemaData = {schema_json};
 
     <!-- Hero Section -->
     <section class="max-w-5xl mx-auto px-6 pt-20 pb-20 text-center">
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--brand-surface,#121824)] border border-white/15 text-[var(--brand-primary,#38b6ff)] text-xs font-semibold mb-6">
-        <span class="w-2 h-2 rounded-full bg-[var(--brand-accent,#7be5ff)]"></span>
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-[var(--radius-control,0px)] bg-[var(--brand-surface)] border border-white/15 text-[var(--brand-primary)] text-xs font-semibold mb-6">
+        <span class="w-2 h-2 rounded-[var(--radius-control,0px)] bg-[var(--brand-accent)]"></span>
         {mechanism}
       </div>
 
@@ -2214,10 +2214,10 @@ const schemaData = {schema_json};
       </p>
 
       <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-        <a href="#conversion" class="w-full sm:w-auto px-8 py-4 text-base font-bold rounded-xl bg-[var(--brand-primary,#38b6ff)] text-[var(--brand-bg,#090d14)] transition-all">
+        <a href="#conversion" class="w-full sm:w-auto px-8 py-4 text-base font-bold rounded-[var(--radius-control,0px)] bg-[var(--brand-primary)] text-[var(--brand-on-primary,var(--brand-bg))] transition-all">
           {cta_primary}
         </a>
-        <a href="#mecanismo" class="w-full sm:w-auto px-6 py-4 text-base font-medium rounded-xl border border-white/15 opacity-90 hover:opacity-100 transition-all">
+        <a href="#mecanismo" class="w-full sm:w-auto px-6 py-4 text-base font-medium rounded-[var(--radius-control,0px)] border border-white/15 opacity-90 hover:opacity-100 transition-all">
           Cómo funciona
         </a>
       </div>
@@ -2226,7 +2226,7 @@ const schemaData = {schema_json};
     <!-- Propuesta Diferenciada -->
     <section id="mecanismo" class="max-w-5xl mx-auto px-6 py-20 border-t border-white/10">
       <div class="text-center max-w-3xl mx-auto">
-        <span class="text-xs font-bold uppercase tracking-widest text-[var(--brand-primary,#38b6ff)]">Método de trabajo</span>
+        <span class="text-xs font-bold uppercase tracking-widest text-[var(--brand-primary)]">Método de trabajo</span>
         <h2 class="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight">
           {mechanism}
         </h2>
@@ -2238,8 +2238,8 @@ const schemaData = {schema_json};
 
     <!-- Oferta y Siguiente Paso -->
     <section id="conversion" class="max-w-4xl mx-auto px-6 py-20 border-t border-white/10">
-      <div class="rounded-2xl bg-[var(--brand-surface,#121824)] border border-white/15 p-8 sm:p-12 text-center shadow-2xl">
-        <span class="text-xs font-bold uppercase tracking-widest text-[var(--brand-accent,#7be5ff)]">Siguiente paso</span>
+      <div class="rounded-[var(--radius-card,0px)] bg-[var(--brand-surface)] border border-white/15 p-8 sm:p-12 text-center shadow-2xl">
+        <span class="text-xs font-bold uppercase tracking-widest text-[var(--brand-accent)]">Siguiente paso</span>
         <h3 class="mt-2 text-3xl font-bold tracking-tight">
           {offer_struct}
         </h3>
@@ -2247,7 +2247,7 @@ const schemaData = {schema_json};
           {guarantee}
         </p>
         <div class="mt-8">
-          <a href="{checkout_url}" class="inline-block w-full sm:w-auto px-10 py-5 text-lg font-bold rounded-xl bg-[var(--brand-primary,#38b6ff)] text-[var(--brand-bg,#090d14)] transition-all">
+          <a href="{checkout_url}" class="inline-block w-full sm:w-auto px-10 py-5 text-lg font-bold rounded-[var(--radius-control,0px)] bg-[var(--brand-primary)] text-[var(--brand-on-primary,var(--brand-bg))] transition-all">
             {cta_primary}
           </a>
         </div>

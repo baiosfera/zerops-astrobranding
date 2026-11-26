@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Anti-Slop Strategic Linter & Brand Lexicon Gate (v2.0)
+Anti-Slop Strategic Linter & Brand Lexicon Gate (v2.1)
 Validates marketing copy, landing pages, and components against:
 1. Universal AI clichés (ES/EN)
 2. Dynamic brandbook.json & verticals/*.json taboos (case-insensitive workspace discovery)
 3. Client-facing quality gates (unless --allow-internal-jargon):
    - Unambiguous unaccented Spanish words (outside URLs/paths/code blocks)
-   - Leaked internal acronyms (OPB, CO1, BANT, AEO, GEO, PWYW, Order Bump, etc.)
+   - Leaked internal acronyms (BANT, AEO, GEO, PWYW, Order Bump, etc.)
    - Leaked UPPER_SNAKE_CASE state enums outside code blocks / env refs
+   - Obsolete AI framing clichés, forbidden narrow professions, deprecated timelines & private pricing leaks
 """
 
 from __future__ import annotations
@@ -154,20 +155,24 @@ class AntiSlopLinter:
         vertical: Optional[str] = None,
         extra_taboos: Optional[List[str]] = None,
         allow_internal_jargon: bool = False,
+        extra_roots: Optional[List[Path]] = None,
     ):
         self.brand = (brand or os.getenv("PROJECT_NAME") or "default").strip()
         self.vertical = (vertical or "").strip().lower()
         self.allow_internal_jargon = allow_internal_jargon
+        self.extra_roots = list(extra_roots or [])
         self.rules: List[AntiSlopRule] = []
+        self.private_pricing_rules: List[AntiSlopRule] = []
         self._load_rules(extra_taboos or [])
 
-    def _add_taboo(self, term: str, rule_type: str, label_prefix: str, suggestion: str) -> None:
+    def _add_taboo(self, term: str, rule_type: str, label_prefix: str, suggestion: str, is_regex: bool = False) -> None:
         clean = term.strip()
         if len(clean) < 2:
             return
+        pat_str = clean if is_regex else rf"\b{re.escape(clean)}\b"
         self.rules.append(
             AntiSlopRule(
-                pattern=re.compile(rf"\b{re.escape(clean)}\b", re.IGNORECASE),
+                pattern=re.compile(pat_str, re.IGNORECASE),
                 rule_type=rule_type,
                 label=f"{label_prefix}: {clean}",
                 suggestion=suggestion,
@@ -192,7 +197,7 @@ class AntiSlopLinter:
         bb_paths: List[Path] = []
         vert_paths: List[Path] = []
         target_low = self.brand.lower()
-        roots = [Path("/mnt/localstorage"), Path("/var/www/localstorage"), Path("/var/www/baiosfera/PROYECTOS")]
+        roots = self.extra_roots + [Path("/mnt/localstorage"), Path("/var/www/localstorage"), Path("/var/www/baiosfera/PROYECTOS")]
         for root in roots:
             if not root.exists():
                 continue
@@ -265,6 +270,7 @@ class AntiSlopLinter:
                 pass
 
         if not self.allow_internal_jargon:
+            seen_priv_pats: Set[str] = set()
             for vf in vert_paths:
                 try:
                     vdata = json.loads(vf.read_text(encoding="utf-8"))
@@ -274,12 +280,51 @@ class AntiSlopLinter:
                             if isinstance(term, str) and term.lower() not in seen_terms and term.lower() not in public_allowlist:
                                 seen_terms.add(term.lower())
                                 self._add_taboo(term, "vertical_jargon_ban", "Restricción vertical", f"Término vetado por {vf.name}.")
+                    for key, rtype, prefix, hint in (
+                        ("forbidden_ai_cliches", "obsolete_ai_framing", "Narrativa IA obsoleta", "Actualiza al problema vigente de diferenciación CO1 y junturas de conversión."),
+                        ("forbidden_audience_terms", "forbidden_audience_term", "Profesión cerrada vetada", "Reemplaza profesiones puntuales por Marcas Personales y áreas amplias (salud, legal, psicología, finanzas)."),
+                        ("deprecated_timelines", "deprecated_timeline", "Plazo obsoleto", "Actualiza a instalación inicial < 15 días + acompañamiento 90 días + continuidad desde mes 4."),
+                    ):
+                        for term in (vdata.get(key, []) or []) + (cat.get(key, []) or []):
+                            if isinstance(term, str) and term.lower() not in seen_terms and term.lower() not in public_allowlist:
+                                seen_terms.add(term.lower())
+                                self._add_taboo(term, rtype, prefix, f"{hint} ({vf.name}).")
+                    priv = vdata.get("private_call_only_pricing", {})
+                    if isinstance(priv, dict) and priv.get("public_page_exposure") is False:
+                        for pat in priv.get("blocked_public_patterns", []) or []:
+                            if isinstance(pat, str) and pat not in seen_priv_pats:
+                                seen_priv_pats.add(pat)
+                                self.private_pricing_rules.append(
+                                    AntiSlopRule(
+                                        pattern=re.compile(pat, re.IGNORECASE),
+                                        rule_type="private_pricing_leak",
+                                        label=f"Tarifa privada expuesta ({vf.name})",
+                                        suggestion="Las tarifas privadas de llamada solo pueden mostrarse en copy/00_* y copy/06_*.",
+                                    )
+                                )
                 except Exception:
                     pass
 
-    def lint_text(self, text: str) -> List[Violation]:
+            for bb in bb_paths:
+                try:
+                    data = json.loads(bb.read_text(encoding="utf-8"))
+                    lex = data.get("lexicon", {})
+                    for key, rtype, prefix, hint in (
+                        ("forbidden_ai_cliches", "obsolete_ai_framing", "Narrativa IA obsoleta", "Actualiza a diferenciación CO1 y sistema conectado."),
+                        ("forbidden_audience_terms", "forbidden_audience_term", "Profesión cerrada vetada", "Habla de Marcas Personales y áreas amplias sin nombrar profesiones."),
+                        ("deprecated_timelines", "deprecated_timeline", "Plazo obsoleto", "Usa < 15 días de montaje + 90 días de acompañamiento + continuidad mes 4."),
+                    ):
+                        for term in (lex.get(key, []) or []) + (data.get(key, []) or []):
+                            if isinstance(term, str) and term.lower() not in seen_terms and term.lower() not in public_allowlist:
+                                seen_terms.add(term.lower())
+                                self._add_taboo(term, rtype, prefix, f"{hint} ({bb.name}).")
+                except Exception:
+                    pass
+
+    def lint_text(self, text: str, source_name: str = "") -> List[Violation]:
         violations: List[Violation] = []
         in_fenced_block = False
+        is_private_doc = Path(source_name).name.startswith(("00_", "06_")) if source_name else False
 
         for line_idx, raw_line in enumerate(text.splitlines(), start=1):
             stripped = raw_line.strip()
@@ -291,12 +336,24 @@ class AntiSlopLinter:
 
             # Ignore inline code, URLs, and filesystem paths when scanning orthography & enum leaks
             clean_line = URL_OR_PATH_RE.sub(" ", raw_line)
+            no_url_line = re.sub(r"https?://\S+", " ", raw_line)
 
             for rule in self.rules:
-                m = rule.pattern.search(clean_line if rule.rule_type in ("internal_jargon_leak", "vertical_jargon_ban") else raw_line)
+                target_str = (
+                    clean_line
+                    if rule.rule_type in ("internal_jargon_leak", "vertical_jargon_ban")
+                    else (no_url_line if rule.rule_type == "forbidden_audience_term" else raw_line)
+                )
+                m = rule.pattern.search(target_str)
                 if m:
                     snippet = stripped[:80]
                     violations.append(Violation(line_idx, rule.rule_type, m.group(0), snippet, rule.suggestion))
+
+            if not self.allow_internal_jargon and not is_private_doc:
+                for prule in self.private_pricing_rules:
+                    pm = prule.pattern.search(no_url_line)
+                    if pm:
+                        violations.append(Violation(line_idx, prule.rule_type, pm.group(0), stripped[:80], prule.suggestion))
 
             if not self.allow_internal_jargon:
                 # 1. Check UPPER_SNAKE_CASE leaked state enums
@@ -335,12 +392,13 @@ class AntiSlopLinter:
     def lint_file(self, file_path: Path) -> List[Violation]:
         if not file_path.is_file():
             raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
-        return self.lint_text(file_path.read_text(encoding="utf-8", errors="replace"))
+        return self.lint_text(file_path.read_text(encoding="utf-8", errors="replace"), source_name=file_path.name)
 
 
 def run_unit_tests() -> int:
+    import tempfile
     print("============================================================")
-    print("  🧪 RUNNING ANTI-SLOP LINTER v2.0 UNIT TESTS")
+    print("  🧪 RUNNING ANTI-SLOP LINTER v2.1 UNIT TESTS")
     print("============================================================")
 
     linter = AntiSlopLinter(brand="acme-club")
@@ -380,8 +438,33 @@ def run_unit_tests() -> int:
     assert len(v7) == 0
     print("✓ Test 7: --allow-internal-jargon suppresses client-only rules cleanly.")
 
+    with tempfile.TemporaryDirectory() as tmpd:
+        tmp_root = Path(tmpd)
+        proj = tmp_root / "TestBrand" / "dev"
+        (proj / "verticals").mkdir(parents=True)
+        (proj / "verticals" / "solopro.json").write_text(
+            json.dumps({
+                "forbidden_ai_cliches": ["chats sueltos"],
+                "forbidden_audience_terms": ["abogados", "médicos"],
+                "deprecated_timelines": ["60 días", "desde el mes 3"],
+                "private_call_only_pricing": {
+                    "public_page_exposure": False,
+                    "blocked_public_patterns": [r"\$599\b"],
+                },
+            }),
+            encoding="utf-8",
+        )
+        dl = AntiSlopLinter(brand="TestBrand", vertical="solopro", extra_roots=[tmp_root])
+        bad = "Para abogados y médicos: deja chats sueltos en 60 días desde el mes 3 por $599."
+        v8 = dl.lint_text(bad, source_name="01_landing.md")
+        rtypes = {v.rule_type for v in v8}
+        assert {"obsolete_ai_framing", "forbidden_audience_term", "deprecated_timeline", "private_pricing_leak"}.issubset(rtypes), rtypes
+        v8_script = dl.lint_text("Inversión privada $599 en llamada.", source_name="06_script.md")
+        assert len(v8_script) == 0, v8_script
+    print("✓ Test 8: Dynamic vertical guardrails (obsolete AI, professions, timelines, private pricing) verified cleanly.")
+
     print("============================================================")
-    print("🎉 All 7 unit tests PASSED successfully (Exit 0)!")
+    print("🎉 All 8 unit tests PASSED successfully (Exit 0)!")
     return 0
 
 

@@ -237,7 +237,7 @@ done
 if [ -d "$SKILLS_REPO/fontgen/scripts" ] && [ -f "$CATALOG_REPO/scripts/fontgen_engine.py" ]; then
     compare_files "fontgen_engine.py (repo <-> skill)" "$CATALOG_REPO/scripts/fontgen_engine.py" "$SKILLS_REPO/fontgen/scripts/fontgen_engine.py"
 fi
-for art_dir in blueprints templates; do
+for art_dir in blueprints templates workflows; do
     if [ -d "$CATALOG_REPO/$art_dir" ] && [ -d "$LOCAL_BASE/artifacts/$art_dir" ]; then
         if diff -rq "$CATALOG_REPO/$art_dir" "$LOCAL_BASE/artifacts/$art_dir" >/dev/null 2>&1; then
             echo "✓ Parity verified: artifacts/$art_dir"
