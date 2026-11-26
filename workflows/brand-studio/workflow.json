@@ -1,19 +1,36 @@
 {
   "name": "brand-studio",
-  "version": "1.0.0",
-  "description": "5-Phase Playbook-First Brand Studio Workflow (Con o Sin Oráculo · Live SERP · Art Direction Full-Color · Human Visual Gate · Concatenation Matrix · Parallel Copy Squad · Blind Adversarial Critic)",
+  "version": "1.1.0",
+  "description": "5-Phase Playbook-First Brand Studio Workflow (Con o Sin Oráculo · Hub Multirrama · Live SERP · Art Direction Full-Color · Smart-VSL & Simulador · Afiliados PB16 · Concatenation Matrix · Parallel Copy Squad · Blind Adversarial Critic)",
   "entry": "brand_studio.wf",
   "argsSchema": {
     "type": "object",
     "required": ["project", "vertical", "workspace_dir"],
     "properties": {
       "project": { "type": "string", "description": "Nombre del proyecto en /mnt/localstorage/<Project>" },
-      "vertical": { "type": "string", "description": "Slug de la vertical en dev/verticals/<vertical>.json" },
+      "vertical": { "type": "string", "description": "Slug de la rama en dev/verticals/<vertical>.json" },
       "workspace_dir": { "type": "string", "description": "Ruta absoluta a /mnt/localstorage/<Project>/dev/workspaces/<vertical>" },
       "intake_mode": { "type": "string", "enum": ["auto", "oraculo", "client"], "default": "auto" },
       "target_country": { "type": "string", "default": "Colombia y Latinoamérica" },
       "reference_urls": { "type": "array", "items": { "type": "string" }, "default": [] },
       "envato_urls": { "type": "array", "items": { "type": "string" }, "default": [] },
+      "hub_branches": {
+        "type": "array",
+        "items": { "type": "object" },
+        "default": [],
+        "description": "Ramas opcionales cuando el proyecto opera como Hub multimarca con subrutas y dominios futuros"
+      },
+      "enable_affiliate_layer": {
+        "type": "boolean",
+        "default": true,
+        "description": "Activa contrato de referidos (?ref=) y pisos EPC/EPL (PB16 Módulo 6) en Fase 3 y Fase 4"
+      },
+      "vsl_mode": {
+        "type": "string",
+        "enum": ["hybrid_smart_vsl", "short_explainer", "long_vsl", "text_only"],
+        "default": "hybrid_smart_vsl",
+        "description": "Modo de video y simulador en landing (por defecto Smart-VSL 4 min + página híbrida interactiva)"
+      },
       "stop_after_phase": {
         "type": "string",
         "enum": ["phase_1_seo", "phase_2_art_direction", "phase_3_concatenation", "phase_4_copy", "phase_5_critic"],

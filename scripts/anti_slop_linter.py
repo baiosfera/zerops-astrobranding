@@ -130,6 +130,10 @@ CLIENT_INTERNAL_JARGON: List[Tuple[str, str]] = [
     (r"\bContext\s+Vault\b", "Evita anglicismo técnico ('Context Vault'); escribe 'memoria real de tu negocio'."),
     (r"\bBreak-Even\s+CPA\b", "Evita jerga de pauta ('Break-Even CPA'); escribe 'costo máximo por cliente rentable'."),
     (r"\bserver-side\b", "Evita jerga técnica ('server-side'); describe el beneficio comercial directo."),
+    (r"\bDIY\b", "Evita jerga interna ('DIY'); describe 'a tu ritmo', 'por tu cuenta' o 'academia y comunidad'."),
+    (r"\bDWY\b", "Evita jerga interna ('DWY'); describe 'acompañamiento guiado' o 'mentoría aplicada'."),
+    (r"\bDFY\b", "Evita jerga interna ('DFY'); describe 'implementación llave en mano' o 'lo construimos por ti'."),
+    (r"\b(?:verticales|nuestra\s+vertical|la\s+vertical|esta\s+vertical|mi\s+vertical|cada\s+vertical)\b", "Evita jerga interna ('vertical/verticales'); usa 'línea', 'programa', 'área' o el nombre comercial directo."),
 ]
 
 ALLOWED_UPPER_SNAKE = {
@@ -137,7 +141,7 @@ ALLOWED_UPPER_SNAKE = {
     "GA4_ID", "GTM_ID", "JSON_LD", "WCAG_AAA", "UTF_8",
 }
 
-URL_OR_PATH_RE = re.compile(r"https?://\S+|/[A-Za-z0-9_./-]+|`[^`]+`")
+URL_OR_PATH_RE = re.compile(r"https?://\S+|(?:(?<=^)|(?<=[\s(\"'\[,=:\-]))/[A-Za-z0-9_./-]+|`[^`]+`")
 SNAKE_ENUM_RE = re.compile(r"\b[A-Z]{2,}(?:_[A-Z0-9]{2,})+\b")
 
 
@@ -362,10 +366,10 @@ def run_unit_tests() -> int:
     assert len([v for v in v4 if v.rule_type == "spanish_orthography"]) >= 4
     print("✓ Test 4: Unaccented Spanish words detected accurately.")
 
-    v5 = linter.lint_text("Con nuestro Order Bump y PWYW vas a ver BANT.")
-    assert len([v for v in v5 if v.rule_type == "internal_jargon_leak"]) >= 3
-    assert len(linter.lint_text("Aprende el modelo OPB y CO1 con claridad.")) == 0, "Public strategic acronyms should not be universally banned!"
-    print("✓ Test 5: Backend jargon leaks caught while strategic category terms allowed.")
+    v5 = linter.lint_text("Con nuestro Order Bump, PWYW, modelo DIY/DWY/DFY y nuevas verticales vas a ver BANT.")
+    assert len([v for v in v5 if v.rule_type == "internal_jargon_leak"]) >= 7
+    assert len(linter.lint_text("Aprende el modelo OPB y CO1 con un video vertical claro.")) == 0, "Public strategic acronyms and legitimate geometry terms should pass!"
+    print("✓ Test 5: Backend jargon leaks (incl. DIY/DWY/DFY/verticales) caught while strategic category terms and 'video vertical' allowed.")
 
     v6 = linter.lint_text("Estado actual: READY_NOW_QUALIFIED en pantalla.")
     assert any(v.rule_type == "upper_snake_enum_leak" for v in v6)

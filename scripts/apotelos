@@ -204,11 +204,32 @@ class ConcatenationLink(BaseModel):
     followup_flow: str = Field(..., min_length=3)
 
 
+class AffiliateProgramContract(BaseModel):
+    enabled: bool = False
+    ref_param: str = Field(default="ref", min_length=1)
+    cookie_window_days: int = Field(default=90, ge=1)
+    payout_hold_days: int = Field(default=30, ge=0)
+    self_referral_blocked: bool = Field(default=True)
+    min_epc_usd: float = Field(default=1.0)
+    min_epl_usd: float = Field(default=2.0)
+    commission_tiers: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class HubBranchRoute(BaseModel):
+    branch_slug: str = Field(..., min_length=2)
+    route_path: str = Field(..., min_length=1)
+    future_domain: Optional[str] = None
+    delivery_tier: str = Field(..., pattern="^(diy|dwy|dfy|ecosystem_entry|editorial)$")
+    public_label: str = Field(..., min_length=2)
+
+
 class MasterConcatenationMatrix(BaseModel):
     brand_slug: str = Field(..., min_length=2)
     canonical_domain: str = Field(..., min_length=4)
     topic_clusters: List[TopicClusterSpec] = Field(..., min_length=1)
     links: List[ConcatenationLink] = Field(..., min_length=1)
+    hub_branches: List[HubBranchRoute] = Field(default_factory=list)
+    affiliate_program: Optional[AffiliateProgramContract] = None
 
 
 def validate_concatenation_matrix(raw: Dict[str, Any]) -> Tuple[bool, List[str]]:
@@ -234,6 +255,28 @@ def validate_concatenation_matrix(raw: Dict[str, Any]) -> Tuple[bool, List[str]]
         for ev in lk.pixel_events:
             if not ev.shared_event_id:
                 errors.append(f"Link '{lk.link_id}' evento '{ev.event_name}' sin event_id compartido Browser↔CAPI.")
+
+    branch_slugs: set[str] = set()
+    branch_routes: set[str] = set()
+    for br in m.hub_branches:
+        if br.branch_slug in branch_slugs:
+            errors.append(f"Hub branch duplicado: '{br.branch_slug}'.")
+        branch_slugs.add(br.branch_slug)
+        if br.route_path in branch_routes:
+            errors.append(f"Ruta de hub duplicada: '{br.route_path}'.")
+        branch_routes.add(br.route_path)
+
+    if m.affiliate_program and m.affiliate_program.enabled:
+        ap = m.affiliate_program
+        if not ap.self_referral_blocked:
+            errors.append("Programa de afiliados debe bloquear autocompra/self-referral (PB04/PB16).")
+        if ap.cookie_window_days < 30:
+            errors.append("Ventana de atribución de afiliados debe ser >= 30 días (recomendado 90d).")
+        if ap.min_epc_usd < 1.0 or ap.min_epl_usd < 2.0:
+            errors.append("Programa de afiliados bajo pisos mínimos PB16 Módulo 6.3 (EPC >= $1.00 y EPL >= $2.00).")
+        if len(ap.commission_tiers) < 1:
+            errors.append("Programa de afiliados activo requiere al menos 1 nivel en commission_tiers.")
+
     return len(errors) == 0, errors
 
 
@@ -2267,7 +2310,16 @@ def cmd_test(args):
                 "landing_route": "/", "offer_hook": "Diagnóstico sin costo",
                 "pixel_events": [{"event_name": "Lead", "trigger_condition": "qualified === true", "host_env_prefix": "AURELIUS_", "shared_event_id": True}],
                 "remarketing_audience": "Visitantes / sin Agenda 14d", "followup_flow": "WA T+0 + Email 3 pasos"
-            }]
+            }],
+            "hub_branches": [
+                {"branch_slug": "core", "route_path": "/", "delivery_tier": "ecosystem_entry", "public_label": "Arquitectura Cloud"},
+                {"branch_slug": "academy", "route_path": "/academy", "future_domain": "aureliusacademy.com", "delivery_tier": "diy", "public_label": "Academia Cloud"}
+            ],
+            "affiliate_program": {
+                "enabled": True, "ref_param": "ref", "cookie_window_days": 90, "payout_hold_days": 30,
+                "self_referral_blocked": True, "min_epc_usd": 1.0, "min_epl_usd": 2.0,
+                "commission_tiers": [{"tier": "digital_entry", "commission_pct": 40, "tier2_override_pct": 5}]
+            }
         })
         if not ok_chain:
             errors.extend(chain_errs)
@@ -2288,6 +2340,27 @@ def cmd_test(args):
         })
         if bad_chain_ok:
             errors.append("validate_concatenation_matrix debe rechazar canibalización, cluster roto, UTM interno y shared_event_id=False")
+
+        bad_aff_ok, _ = validate_concatenation_matrix({
+            "brand_slug": "aurelius-vance", "canonical_domain": "aureliusvance.com",
+            "topic_clusters": [{"cluster_id": "c1", "search_intent": "i1", "primary_keyword": "k1", "landing_route": "/", "funnel_stage": "bofu"}],
+            "links": [{
+                "link_id": "l1", "cluster_id": "c1", "ad_angle": "x",
+                "utm": {"utm_source": "meta", "utm_medium": "cpc", "utm_campaign": "c", "utm_content": "v"},
+                "landing_route": "/", "offer_hook": "offer",
+                "pixel_events": [{"event_name": "Lead", "trigger_condition": "always", "host_env_prefix": "X_", "shared_event_id": True}],
+                "remarketing_audience": "all", "followup_flow": "wa"
+            }],
+            "hub_branches": [
+                {"branch_slug": "b1", "route_path": "/a", "delivery_tier": "diy", "public_label": "A"},
+                {"branch_slug": "b2", "route_path": "/a", "delivery_tier": "dwy", "public_label": "B"}
+            ],
+            "affiliate_program": {
+                "enabled": True, "self_referral_blocked": False, "min_epc_usd": 0.5, "min_epl_usd": 1.0, "commission_tiers": []
+            }
+        })
+        if bad_aff_ok:
+            errors.append("validate_concatenation_matrix debe rechazar hub_branches duplicadas y affiliate_program bajo pisos PB16 o sin anti-self-referral")
 
         if errors:
             print("❌ APOTELOS AGNOSTIC INTEGRITY SENSOR FAILED:")
