@@ -263,6 +263,7 @@ link_bin() {
     sudo ln -sfn "$LOCAL_BIN/orchesbrand" "/usr/local/bin/orchesbrand" 2>/dev/null || true
   fi
   for pair in \
+    "ad-library:ad_library.py" \
     "anti-slop-linter:anti_slop_linter.py" \
     "mega-downloader:mega_downloader.py" \
     "chroma-engine:chroma_engine.py" \

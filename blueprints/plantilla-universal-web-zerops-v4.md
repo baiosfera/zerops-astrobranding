@@ -955,6 +955,20 @@ Los productos o servicios se tipifican en 6 arquetipos (`offerings.ts`), mapeán
 - **Persistencia Atómica:** La tienda guarda pedidos y señales en `task_outbox` en la misma transacción ACID de PostgreSQL 18.
 - **Cero Bloqueo:** El worker `drainTaskOutbox` procesa las tareas asíncronamente. Si Frappe Cloud está en mantenimiento, en espera de activación o responde 403/502, el checkout jamás se interrumpe y las tareas se reintentan con retroceso exponencial.
 
+---
+
+## 25. Capa Dinámica Ads-First (`/[vertical]/lp/[slug].astro`) & Prueba Interactiva Polimórfica
+
+Para escalar campañas y ángulos sin ensuciar las rutas orgánicas `SEO/AEO/GEO` ni programar cada página a mano, `template-astro-web` incorpora:
+- **Contratos Zod (`@astrobranding/contracts/campaigns`):** `CampaignLandingSpecSchema` + `InteractiveProofSpecSchema` (`mechanism`: `none | freedom_leverage_index | diagnostic_quiz | roi_cost_gap | commission_simulator | resource_guide | micro_trial`).
+- **Ruta SSR Dinámica (`src/pages/[vertical]/lp/[slug].astro`):**
+  - Lee contratos JSON desde `CAMPAIGNS_DATA_DIR` (o `src/data/campaigns/`).
+  - Emite `X-Robots-Tag: noindex, follow` por defecto (`index, follow` únicamente cuando existe `seo_cluster_id` explícito).
+  - Hereda tokens `[data-brand={campaign.brand_slug}]`, propaga `campaign_slug`, UTMs y `?ref=`, y habilita `ViewContent` en ruta de captación.
+- **Componente Polimórfico Opcional (`src/components/InteractiveProofCalculator.astro`):**
+  - **No se renderiza cuando `mechanism === "none"`** (ninguna vertical ni cliente está obligado a mostrar calculadora).
+  - Cuando `mechanism` es interactivo, construye controles (`range`, `select`, `number`, `toggle`) y salidas tabulares (`font-mono tabular-nums`) de forma 100 % agnóstica usando variables CSS `--brand-*`.
+
 
 
 

@@ -1,7 +1,7 @@
 {
   "name": "brand-studio",
-  "version": "1.5.0",
-  "description": "5-Phase Holistic Playbook-First Brand Studio Workflow (Con o Sin Oráculo · Anti-AMN Año Vigente + Madurez Agéntica · Hub 1-Ruta=1-SSoT · Entrelazado Secuencial Web+WA+Email · Route-Scoped ViewContent + Multi-Theme Astro Readiness · Cross-Domain CAPI Bridge + IG/FB Escape · Diagnóstico Cero-Fricción · Afiliados PB18 · Orchesbrand v4.1 · Concatenation Matrix · Parallel Copy Squad · Blind Adversarial Critic)",
+  "version": "2.0.0",
+  "description": "5-Phase Playbook-First Brand Studio Workflow (Con o Sin Oráculo · Comprador Ideal + CO1 por Contraste · Oferta 1->N por Anillos · Mecanismo Lead Magnet Polimórfico Opcional · Núcleo SEO/AEO/GEO + Reserva Ads-First /[vertical]/lp/[slug] · Route-Scoped ViewContent + Multi-Theme Astro Readiness · Afiliados PB18 · Blind Adversarial Critic)",
   "entry": "brand_studio.wf",
   "argsSchema": {
     "type": "object",
@@ -29,6 +29,23 @@
         "type": "boolean",
         "default": true,
         "description": "Activa entrelazado lógico secuencial entre embudos presentes y futuros (Web tras FAQ + Thank-You + Email/WA Días 8+) con anti-colisión"
+      },
+      "enable_ads_first_layer": {
+        "type": "boolean",
+        "default": true,
+        "description": "Reserva y conecta la capa dinámica Ads-First /[vertical]/lp/[slug] junto al núcleo orgánico SEO/AEO/GEO"
+      },
+      "lead_magnet_mechanism": {
+        "type": "string",
+        "enum": ["auto", "none", "freedom_leverage_index", "diagnostic_quiz", "roi_cost_gap", "commission_simulator", "resource_guide", "micro_trial"],
+        "default": "auto",
+        "description": "Mecanismo interactivo opcional y polimórfico; nunca obliga calculadora si 'none' o si otro formato convierte mejor"
+      },
+      "offer_model": {
+        "type": "string",
+        "enum": ["auto", "one_to_n_rings", "multi_branch_hub", "direct_checkout", "saas_tiers"],
+        "default": "auto",
+        "description": "Arquitectura de oferta (por defecto 1->N por anillos de cercanía/velocidad cuando aplica)"
       },
       "vsl_mode": {
         "type": "string",

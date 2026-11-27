@@ -1,0 +1,182 @@
+"""
+ad_campaign_factory.wf — Token-Frugal Ads-First Campaign Factory (v1.0).
+1) Runs `ad-library` in pure Python (0 LLM tokens for HTML cleanup -> compact <3KB JSON).
+2) Designs contrarian Ads-First specs (hook, primary text, headline, UTM, polymorphic lead_magnet).
+3) Fans out in parallel to hydrate 1:1 message-matched `campaigns/<slug>.json` (`CampaignLandingSpec`).
+4) Runs deterministic `apotelos validate-campaign`, `anti-slop-linter`, and `brand-play sync-copy`.
+5) Audits message match, CO1 contrast, and zero-jargon compliance via Blind Critic.
+"""
+PLAYBOOKS_DIR = "/mnt/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"
+
+project = args["project"]
+vertical = args["vertical"]
+ws_dir = args["workspace_dir"].rstrip("/")
+search_queries = args.get("search_queries", [])
+country = args.get("country", "CO")
+min_days_active = args.get("min_days_active", 14)
+angles_count = args.get("angles_count", 3)
+target_avatars = args.get("target_avatars", [])
+offer_ring = args.get("offer_ring", "core")
+lead_magnet_mechanism = args.get("lead_magnet_mechanism", "auto")
+barista_rotation_window = args.get("barista_rotation_window", "")
+auto_approve_angles = args.get("auto_approve_angles", False)
+start_from = args.get("start_from_phase", "phase_1_ad_library_intel")
+stop_after = args.get("stop_after_phase", "phase_2_ad_angles" if not auto_approve_angles else "phase_5_blind_critic")
+
+phase_order = [
+    "phase_1_ad_library_intel",
+    "phase_2_ad_angles",
+    "phase_3_landing_hydration",
+    "phase_4_deterministic_gate",
+    "phase_5_blind_critic",
+]
+start_idx = phase_order.index(start_from)
+stop_idx = phase_order.index(stop_after)
+should_run = lambda name: start_idx <= phase_order.index(name) <= stop_idx
+
+log(
+    f"Starting ad-campaign-factory v1.0 for {project}/{vertical} "
+    f"(country={country}, min_days={min_days_active}, angles={angles_count}, "
+    f"mechanism={lead_magnet_mechanism}, start={start_from}, stop={stop_after})"
+)
+
+if should_run("phase_1_ad_library_intel"):
+    phase("Phase 1: Meta Ad Library Intel (ad-library 0-token extractor + jina destination check)")
+    intel_schema = {
+        "type": "object",
+        "required": ["brief_path", "ads_analyzed", "winning_hooks", "voc_phrases", "market_gaps"],
+        "properties": {
+            "brief_path": {"type": "string"},
+            "ads_analyzed": {"type": "integer"},
+            "winning_hooks": {"type": "array", "items": {"type": "string"}},
+            "voc_phrases": {"type": "array", "items": {"type": "string"}},
+            "market_gaps": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+    intel_res = await agent(
+        f"""Eres el extractor de inteligencia de anuncios (bajo consumo de tokens).
+1. Lee `/mnt/localstorage/{project}/dev/verticals/{vertical}.json` para obtener consultas clave si `search_queries` ({search_queries}) viene vacío.
+2. Ejecuta `ad-library fetch --query "<consulta>" --country "{country}" --min-days {min_days_active} --limit 15 --out {ws_dir}/strategy/ad_library_brief.json` (si `fetch` falla por falta de key HTTP directa, usa `firecrawl_scrape` MCP una sola vez sobre la URL de Meta Ad Library, guarda el markdown crudo en un temporal y pásalo por `ad-library parse --input-file ... --out {ws_dir}/strategy/ad_library_brief.json` — NUNCA metas los ~65KB crudos en tu respuesta).
+3. Si el brief trae URLs destino ganadoras, lee máximo 2 o 3 páginas con `jina:read_url(url=..., question="oferta principal, precio, prueba social y objeción que responde")` para completar huecos reales de mercado.
+Devuelve el resumen compacto en el esquema JSON.""",
+        schema=intel_schema,
+        role="Ad Library Intel Extractor",
+        model="flash",
+    )
+    log("Phase 1 Ad Library brief:", intel_res)
+
+if should_run("phase_2_ad_angles"):
+    phase("Phase 2: Diseño de Anuncios & Ángulos Ads-First (Comprador Ideal + Contraste CO1)")
+    angles_schema = {
+        "type": "object",
+        "required": ["draft_path", "angles"],
+        "properties": {
+            "draft_path": {"type": "string"},
+            "angles": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["campaign_slug", "angle_name", "contrarian_idea", "hook_first_3s", "recommended_mechanism"],
+                    "properties": {
+                        "campaign_slug": {"type": "string"},
+                        "angle_name": {"type": "string"},
+                        "contrarian_idea": {"type": "string"},
+                        "hook_first_3s": {"type": "string"},
+                        "recommended_mechanism": {"type": "string"},
+                    },
+                },
+            },
+        },
+    }
+    angles_res = await agent(
+        f"""Eres el Director Creativo Ads-First: Lee {PLAYBOOKS_DIR}/02_copywriting_and_neurosales.md, {PLAYBOOKS_DIR}/08_instagram_growth_reels_and_funnels.md y {PLAYBOOKS_DIR}/13_meta_ads_media_buying_and_scaling.md.
+Inspecciona {ws_dir}/strategy/ad_library_brief.json, {ws_dir}/brand/brandbook.json y /mnt/localstorage/{project}/dev/verticals/{vertical}.json.
+Diseña exactamente {angles_count} ángulos ganadores primero desde el ANUNCIO (antes de escribir landings):
+- Avatares/enfoques prioritarios: {target_avatars if target_avatars else 'derivar del vertical JSON y ad_library_brief.json'}.
+- Cada ángulo debe apuntar al **Comprador Ideal** (criterio, margen, libertad = beneficios/horas, no solo escasez), usar **contraste CO1 polarizante** y conectar con el anillo `{offer_ring}` (`barista_rotation_window='{barista_rotation_window}'`).
+- Selecciona `recommended_mechanism` según `{lead_magnet_mechanism}` (si es `'auto'`, decide honestamente entre `'none'`, `'freedom_leverage_index'`, `'diagnostic_quiz'`, `'roi_cost_gap'`, `'resource_guide'` o `'micro_trial'`; PROHIBIDO forzar calculadora donde un video/evaluación directa convierte mejor).
+- Define UTMs externos reales (`utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `allow_on_internal_links=false`) y el `hook_first_3s`, `primary_text`, `headline` y `cta_label`.
+Guarda el borrador completo en {ws_dir}/campaigns/draft_angles.json y devuelve el resumen.""",
+        schema=angles_schema,
+        role="Ads-First Creative Strategist",
+        model="pro",
+    )
+    log("Phase 2 Ad Angles drafted:", angles_res)
+
+if should_run("phase_3_landing_hydration"):
+    phase("Phase 3: Hidratación Paralela 1:1 de Landings Dinámicas (campaigns/<slug>.json)")
+    draft_reader = await agent(
+        f"Lee {ws_dir}/campaigns/draft_angles.json y devuelve exclusivamente la lista de objetos `angles` (con `campaign_slug`, `angle_name`, `recommended_mechanism`).",
+        schema={
+            "type": "object",
+            "required": ["angles"],
+            "properties": {"angles": {"type": "array", "items": {"type": "object"}}},
+        },
+        role="Draft Angles Loader",
+        model="flash",
+    )
+    hydration_schema = {
+        "type": "object",
+        "required": ["campaign_slug", "file_path", "route_path", "mechanism"],
+        "properties": {
+            "campaign_slug": {"type": "string"},
+            "file_path": {"type": "string"},
+            "route_path": {"type": "string"},
+            "mechanism": {"type": "string"},
+        },
+    }
+    hydrated = await parallel(
+        draft_reader["angles"],
+        lambda a: agent(
+            f"""Hidrata la landing 1:1 para el ángulo `{a.get('campaign_slug')}` dentro de {ws_dir}/campaigns/{a.get('campaign_slug')}.json cumpliendo exactamente el esquema `CampaignLandingSpec` de `apotelos`:
+1. Lee el ángulo completo en {ws_dir}/campaigns/draft_angles.json, {ws_dir}/brand/brandbook.json y {ws_dir}/strategy/concatenation_matrix.json.
+2. **Message Match Total**: `hero_h1` y `hero_subheadline` deben continuar literalmente la promesa y palabras clave (`message_match_keywords`) de `ad_creative.hook_first_3s` y `headline`.
+3. **Aislamiento SEO**: `route_path="/{vertical}/lp/{a.get('campaign_slug')}"`, `robots="noindex, follow"` (salvo que exista un `seo_cluster_id` explícito en `seo_clusters.json`), `view_content_allowed=true`, `wa_email_campaign_tag="camp:{vertical}:{a.get('campaign_slug')}"`.
+4. **Lead Magnet Polimórfico**: usa el `recommended_mechanism` del ángulo (`none` => sin calculadora; si es calculadora/quiz, define `inputs` y `outputs` claros en español natural).
+5. **Cortafuegos Léxico**: cero jerga interna hacia el visitante (`DIY`, `DWY`, `DFY`, `verticales`, `BANT`, `PWYW`, `Order Bump`, `Rotación Barista`, `Ads-First`, `Comprador Ideal`, `UPPER_SNAKE_CASE`), cero precios privados si `private_call_only_pricing` aplica, y ortografía española completa con tildes y `ñ`.
+6. Añade la micro-secuencia de entrega/rescate etiquetada con `camp:{vertical}:{a.get('campaign_slug')}` en {ws_dir}/copy/10_campaign_microsequences.md (sin colisionar con otras secuencias).""",
+            schema=hydration_schema,
+            role=f"Landing Hydrator: {a.get('campaign_slug')}",
+            model="pro",
+        ),
+    )
+    log("Phase 3 Landings hydrated:", hydrated)
+
+if should_run("phase_4_deterministic_gate"):
+    phase("Phase 4: Validación Determinista (apotelos validate-campaign + anti-slop-linter + brand-play sync-copy)")
+    gate_ok = await agent(
+        f"""Ejecuta y corrige hasta Exit 0:
+1. `apotelos validate-campaign {ws_dir}/campaigns/`
+2. Para cada archivo en `{ws_dir}/campaigns/*.json` (excepto `draft_angles.json`) y `{ws_dir}/copy/10_campaign_microsequences.md`: ejecuta `anti-slop-linter --brand "{project}" --vertical "{vertical}" --file <archivo>`. Si reporta violaciones, corrige los textos públicos afectados manteniendo el esquema exacto.
+3. Ejecuta `brand-play sync-copy --workspace {ws_dir} --all-files` para registrar los checksums SHA-256 en `web/copy_strings.es.json`.
+Devuelve `true` solo cuando los 3 comandos pasen con exit 0.""",
+        schema={"type": "boolean"},
+        role="Deterministic Gate & SSoT Sync",
+        model="flash",
+    )
+    log("Phase 4 Deterministic Gate passed:", gate_ok)
+
+if should_run("phase_5_blind_critic"):
+    phase("Phase 5: Crítico Ciego Ads-First (Message Match, Contraste CO1 y Pureza Técnica)")
+    critic_schema = {
+        "type": "object",
+        "required": ["verdict", "message_match_score", "critical_gaps", "actionable_fixes"],
+        "properties": {
+            "verdict": {"type": "string", "enum": ["APPROVED", "NEEDS_REVISION"]},
+            "message_match_score": {"type": "integer"},
+            "critical_gaps": {"type": "array", "items": {"type": "string"}},
+            "actionable_fixes": {"type": "array", "items": {"type": "string"}},
+        },
+    }
+    critic = await agent(
+        f"""Crítico Ciego (solo lectura): audita todos los archivos en {ws_dir}/campaigns/*.json y {ws_dir}/copy/10_campaign_microsequences.md:
+1. ¿Cada `hero_h1` hace match literal con `ad_creative.hook_first_3s` y `headline`?
+2. ¿Cada campaña comunica contraste CO1 y habla al Comprador Ideal sin sonar a plantilla ni forzar calculadora si `mechanism == 'none'`?
+3. ¿Las variantes sin clúster SEO propio declaran `robots='noindex, follow'` y `view_content_allowed=true`?
+4. ¿Hay cero fugas de jerga interna y cero tarifas privadas expuestas?
+Emite APPROVED o NEEDS_REVISION con lista honesta de ajustes.""",
+        schema=critic_schema,
+        role="Blind Ads-First Critic",
+        model="pro",
+    )
+    log("Phase 5 Blind Critic:", critic)

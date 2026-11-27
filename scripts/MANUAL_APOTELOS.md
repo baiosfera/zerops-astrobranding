@@ -230,6 +230,10 @@ apotelos scaffold --vertical=activewear --route-mode=subroute
 apotelos scaffold --vertical=activewear --as-root
 # O en modo subdominio (activewear.tudominio.com):
 apotelos scaffold --vertical=activewear --route-mode=subdomain
+
+# 7. Validar matriz de concatenación y landings dinámicas Ads-First (campaigns/*.json)
+apotelos validate-chain /mnt/localstorage/<Proyecto>/dev/workspaces/<vertical>/strategy/concatenation_matrix.json
+apotelos validate-campaign /mnt/localstorage/<Proyecto>/dev/workspaces/<vertical>/campaigns/
 ```
 
 ---

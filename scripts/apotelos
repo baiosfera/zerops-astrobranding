@@ -257,6 +257,95 @@ class OmnichannelInterlacePolicy(BaseModel):
     state_tags_required: bool = Field(default=True)
 
 
+class LeadMagnetMechanismType(str, Enum):
+    NONE = "none"
+    FREEDOM_LEVERAGE_INDEX = "freedom_leverage_index"
+    DIAGNOSTIC_QUIZ = "diagnostic_quiz"
+    ROI_COST_GAP = "roi_cost_gap"
+    COMMISSION_SIMULATOR = "commission_simulator"
+    RESOURCE_GUIDE = "resource_guide"
+    MICRO_TRIAL = "micro_trial"
+
+
+class InteractiveProofInputSpec(BaseModel):
+    id: str = Field(..., min_length=1)
+    label: str = Field(..., min_length=2)
+    type: str = Field(..., pattern="^(range|select|number|toggle)$")
+    min_val: Optional[float] = None
+    max_val: Optional[float] = None
+    step: Optional[float] = None
+    default_value: Any = None
+    options: List[Dict[str, str]] = Field(default_factory=list)
+    unit: Optional[str] = None
+    optional_toggle: bool = False
+
+
+class InteractiveProofOutputSpec(BaseModel):
+    id: str = Field(..., min_length=1)
+    label: str = Field(..., min_length=2)
+    formula_key: str = Field(..., min_length=1)
+    format: str = Field(..., pattern="^(currency|number|hours|percent|ratio|text)$")
+    emphasis: str = Field(default="secondary", pattern="^(primary|secondary)$")
+
+
+class InteractiveProofSpec(BaseModel):
+    mechanism: LeadMagnetMechanismType = Field(default=LeadMagnetMechanismType.NONE)
+    title: str = Field(default="")
+    subtitle: str = Field(default="")
+    formula_profile: str = Field(default="none")
+    inputs: List[InteractiveProofInputSpec] = Field(default_factory=list)
+    outputs: List[InteractiveProofOutputSpec] = Field(default_factory=list)
+    share_card_enabled: bool = False
+    wa_form_rescue: bool = True
+    post_submit_route: Optional[str] = None
+
+
+class OfferRingSpec(BaseModel):
+    ring_id: str = Field(..., min_length=1)
+    ring_level: str = Field(..., pattern="^(entry|core|inner_circle|done_for_you)$")
+    public_label: str = Field(..., min_length=2)
+    price_display: str = Field(..., min_length=1)
+    private_call_only: bool = False
+    cta_route: str = Field(..., min_length=1)
+
+
+class AdCreativeSpec(BaseModel):
+    ad_id: str = Field(..., min_length=2)
+    platform: str = Field(..., pattern="^(meta|google|tiktok|linkedin|youtube)$")
+    format: str = Field(..., pattern="^(video_short|vsl_ad|static_card|carousel)$")
+    angle_name: str = Field(..., min_length=2)
+    contrarian_idea: str = Field(..., min_length=5)
+    target_buyer_profile: str = Field(..., min_length=5)
+    hook_first_3s: str = Field(..., min_length=5)
+    primary_text: str = Field(..., min_length=10)
+    headline: str = Field(..., min_length=3)
+    cta_label: str = Field(..., min_length=2)
+    utm: UtmContract
+    source_ad_library_refs: List[str] = Field(default_factory=list)
+
+
+class CampaignLandingSpec(BaseModel):
+    campaign_slug: str = Field(..., min_length=2, pattern=r"^[a-z0-9-]+$")
+    vertical_slug: str = Field(..., min_length=2, pattern=r"^[a-z0-9-]+$")
+    brand_slug: str = Field(..., min_length=2)
+    route_path: str = Field(..., min_length=4)
+    robots: str = Field(default="noindex, follow", pattern=r"^(noindex|index),\s*(follow|nofollow)$")
+    seo_cluster_id: Optional[str] = None
+    barista_rotation_window: Optional[str] = None
+    offer_ring: str = Field(..., min_length=1)
+    ad_creative: AdCreativeSpec
+    hero_h1: str = Field(..., min_length=5)
+    hero_subheadline: str = Field(..., min_length=10)
+    message_match_keywords: List[str] = Field(..., min_length=1)
+    contrarian_proof_points: List[str] = Field(..., min_length=2)
+    lead_magnet: InteractiveProofSpec = Field(default_factory=InteractiveProofSpec)
+    primary_cta_label: str = Field(..., min_length=2)
+    primary_cta_href: str = Field(..., min_length=1)
+    wa_email_campaign_tag: str = Field(..., min_length=3)
+    view_content_allowed: bool = True
+    faq_items: List[Dict[str, str]] = Field(default_factory=list)
+
+
 class MasterConcatenationMatrix(BaseModel):
     brand_slug: str = Field(..., min_length=2)
     canonical_domain: str = Field(..., min_length=4)
@@ -267,6 +356,8 @@ class MasterConcatenationMatrix(BaseModel):
     cross_domain_bridge: Optional[CrossDomainBridgeContract] = None
     cross_funnel_bridges: List[CrossFunnelBridgeContract] = Field(default_factory=list)
     omnichannel_anti_collision: Optional[OmnichannelInterlacePolicy] = None
+    offer_rings: List[OfferRingSpec] = Field(default_factory=list)
+    dynamic_campaign_routes: List[str] = Field(default_factory=list)
 
 
 def validate_concatenation_matrix(raw: Dict[str, Any]) -> Tuple[bool, List[str]]:
@@ -344,6 +435,46 @@ def validate_concatenation_matrix(raw: Dict[str, Any]) -> Tuple[bool, List[str]]
             errors.append("OmnichannelInterlacePolicy requiere cross_channel_suppression_hours >= 12.")
         if not op.state_tags_required:
             errors.append("OmnichannelInterlacePolicy requiere state_tags_required == True.")
+
+    return len(errors) == 0, errors
+
+
+def validate_campaign_landing(raw: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """Deterministic Pydantic v2 gate for Ads-First CampaignLandingSpec payloads."""
+    errors: List[str] = []
+    try:
+        spec = CampaignLandingSpec.model_validate(raw)
+    except Exception as ex:
+        return False, [str(ex)]
+
+    if not spec.route_path.startswith("/"):
+        errors.append("route_path debe comenzar por '/'.")
+    for forbidden_prefix in ("/checkout", "/app", "/admin", "/gracias"):
+        if spec.route_path == forbidden_prefix or spec.route_path.startswith(forbidden_prefix + "/"):
+            errors.append(f"route_path '{spec.route_path}' colisiona con ruta privada/transaccional '{forbidden_prefix}'.")
+
+    if spec.ad_creative.utm.allow_on_internal_links:
+        errors.append("ad_creative.utm.allow_on_internal_links debe ser False (prohibido UTM interno).")
+
+    if spec.robots.startswith("index") and not (spec.seo_cluster_id and spec.seo_cluster_id.strip()):
+        errors.append("Campaña con robots='index, follow' requiere seo_cluster_id explícito para evitar canibalización SEO.")
+
+    lm = spec.lead_magnet
+    if lm.mechanism in (
+        LeadMagnetMechanismType.FREEDOM_LEVERAGE_INDEX,
+        LeadMagnetMechanismType.DIAGNOSTIC_QUIZ,
+        LeadMagnetMechanismType.ROI_COST_GAP,
+        LeadMagnetMechanismType.COMMISSION_SIMULATOR,
+    ):
+        if len(lm.inputs) < 1:
+            errors.append(f"lead_magnet '{lm.mechanism.value}' requiere al menos 1 entrada en inputs.")
+        if len(lm.outputs) < 1:
+            errors.append(f"lead_magnet '{lm.mechanism.value}' requiere al menos 1 salida en outputs.")
+        if not lm.title.strip():
+            errors.append(f"lead_magnet '{lm.mechanism.value}' requiere title.")
+
+    if not spec.wa_email_campaign_tag.startswith(("camp:", "entered:")):
+        errors.append("wa_email_campaign_tag debe iniciar con 'camp:' o 'entered:' para segmentación sin colisiones.")
 
     return len(errors) == 0, errors
 
@@ -2498,6 +2629,112 @@ def cmd_test(args):
         if bad_interlace_ok:
             errors.append("validate_concatenation_matrix debe rechazar self-loop, delay_days < 7 en lifecycle_nurture y omnichannel_anti_collision laxo")
 
+        # Validate CampaignLandingSpec (polymorphic: none + freedom_leverage_index + invalid guards)
+        ok_camp_none, camp_none_errs = validate_campaign_landing({
+            "campaign_slug": "direct-vsl-angle",
+            "vertical_slug": "advisory",
+            "brand_slug": "aurelius-vance",
+            "route_path": "/advisory/lp/direct-vsl-angle",
+            "robots": "noindex, follow",
+            "offer_ring": "core",
+            "ad_creative": {
+                "ad_id": "ad_01",
+                "platform": "meta",
+                "format": "video_short",
+                "angle_name": "margen sin equipo",
+                "contrarian_idea": "Más horas de reunión no escalan tu criterio.",
+                "target_buyer_profile": "Consultores consolidados que buscan libertad real",
+                "hook_first_3s": "Si tu ingreso cae cuando apagas el teléfono, no tienes sistema.",
+                "primary_text": "Instala tu sistema comercial propio sin sumar nómina rígida ni depender de agencias opacas.",
+                "headline": "Criterio propio + sistema conectado",
+                "cta_label": "Ver evaluación",
+                "utm": {"utm_source": "meta", "utm_medium": "paid_social", "utm_campaign": "advisory_q4", "utm_content": "vsl_01"},
+            },
+            "hero_h1": "Convierte tu criterio en sistema sin vender más horas",
+            "hero_subheadline": "Arquitectura comercial conectada en menos de 15 días con calibración real durante 90 días.",
+            "message_match_keywords": ["sistema", "criterio"],
+            "contrarian_proof_points": ["Ideas claras atraen; ofertas ordenadas filtran.", "Menos fricción operativa y más margen por hora."],
+            "lead_magnet": {"mechanism": "none"},
+            "primary_cta_label": "Solicitar evaluación",
+            "primary_cta_href": "/advisory/ready-now",
+            "wa_email_campaign_tag": "camp:advisory:direct-vsl-angle",
+            "view_content_allowed": True,
+        })
+        if not ok_camp_none:
+            errors.extend(camp_none_errs)
+
+        ok_camp_calc, camp_calc_errs = validate_campaign_landing({
+            "campaign_slug": "freedom-index-angle",
+            "vertical_slug": "advisory",
+            "brand_slug": "aurelius-vance",
+            "route_path": "/advisory/lp/freedom-index-angle",
+            "robots": "noindex, follow",
+            "offer_ring": "entry",
+            "ad_creative": {
+                "ad_id": "ad_02",
+                "platform": "meta",
+                "format": "static_card",
+                "angle_name": "indice libertad",
+                "contrarian_idea": "Facturar más trabajando 60 horas no es libertad.",
+                "target_buyer_profile": "Especialistas con alta demanda buscando palanca 1 a N",
+                "hook_first_3s": "¿Cuánto vale realmente cada hora tuya después de fricción?",
+                "primary_text": "Calcula en 30 segundos tu índice de libertad y cuántas horas recuperas al ordenar tu oferta.",
+                "headline": "Calcula tu Índice de Libertad",
+                "cta_label": "Calcular ahora",
+                "utm": {"utm_source": "meta", "utm_medium": "paid_social", "utm_campaign": "advisory_q4", "utm_content": "card_02"},
+            },
+            "hero_h1": "Calcula tu Índice de Libertad y Palanca Real",
+            "hero_subheadline": "Mide tu valor por hora actual y proyecta cuánto margen liberas al pasar de entregas 1 a 1 a un sistema 1 a N.",
+            "message_match_keywords": ["libertad", "valor por hora"],
+            "contrarian_proof_points": ["Libertad = Beneficios / Horas reales.", "Un solo núcleo con anillos de acceso."],
+            "lead_magnet": {
+                "mechanism": "freedom_leverage_index",
+                "title": "Índice de Libertad y Palanca",
+                "subtitle": "Cuatro datos reales para medir tu margen por hora.",
+                "formula_profile": "freedom_leverage_v1",
+                "inputs": [
+                    {"id": "net_monthly_profit", "label": "Beneficio neto mensual", "type": "number", "default_value": 12000000},
+                    {"id": "weekly_hours", "label": "Horas reales por semana", "type": "range", "min_val": 10, "max_val": 80, "step": 1, "default_value": 45},
+                ],
+                "outputs": [
+                    {"id": "real_hourly_rate", "label": "Valor real por hora", "formula_key": "real_hourly_rate", "format": "currency", "emphasis": "primary"},
+                ],
+            },
+            "primary_cta_label": "Ver mi resultado",
+            "primary_cta_href": "/advisory/diagnostico",
+            "wa_email_campaign_tag": "camp:advisory:freedom-index-angle",
+            "view_content_allowed": True,
+        })
+        if not ok_camp_calc:
+            errors.extend(camp_calc_errs)
+
+        bad_camp_ok, _ = validate_campaign_landing({
+            "campaign_slug": "bad-index",
+            "vertical_slug": "advisory",
+            "brand_slug": "aurelius-vance",
+            "route_path": "/advisory/lp/bad-index",
+            "robots": "index, follow",
+            "offer_ring": "core",
+            "ad_creative": {
+                "ad_id": "ad_bad", "platform": "meta", "format": "video_short",
+                "angle_name": "x", "contrarian_idea": "Contraste minimo valido",
+                "target_buyer_profile": "Comprador valido", "hook_first_3s": "Hook valido 3s",
+                "primary_text": "Texto principal suficiente para pasar esquema.",
+                "headline": "Titular", "cta_label": "Ir",
+                "utm": {"utm_source": "meta", "utm_medium": "cpc", "utm_campaign": "c", "utm_content": "v", "allow_on_internal_links": True},
+            },
+            "hero_h1": "Titular sin seo cluster",
+            "hero_subheadline": "Subtitulo suficientemente largo para validar.",
+            "message_match_keywords": ["titular"],
+            "contrarian_proof_points": ["Punto 1", "Punto 2"],
+            "lead_magnet": {"mechanism": "freedom_leverage_index", "title": ""},
+            "primary_cta_label": "Ir",
+            "primary_cta_href": "/checkout",
+            "wa_email_campaign_tag": "invalid_tag",
+        })
+        if bad_camp_ok:
+            errors.append("validate_campaign_landing debe rechazar index sin seo_cluster_id, UTM interno, calculadora vacía y tag inválido")
+
         if errors:
             print("❌ APOTELOS AGNOSTIC INTEGRITY SENSOR FAILED:")
             for e in errors:
@@ -2889,6 +3126,29 @@ def main():
             print(f"  • {e}")
         sys.exit(1)
     p_vc.set_defaults(func=_cmd_validate_chain)
+
+    # validate-campaign
+    p_vcamp = subparsers.add_parser("validate-campaign", help="Valida contratos Ads-First CampaignLandingSpec (archivo o directorio campaigns/)")
+    p_vcamp.add_argument("campaign_path", help="Ruta a campaigns/<slug>.json o al directorio campaigns/")
+    def _cmd_validate_campaign(a):
+        target = Path(a.campaign_path)
+        files = sorted(f for f in target.glob("*.json") if f.name != "draft_angles.json") if target.is_dir() else [target]
+        if not files:
+            print(f"❌ No se encontraron archivos de campaña en {target}")
+            sys.exit(1)
+        all_ok = True
+        for f in files:
+            raw = json.loads(f.read_text(encoding="utf-8"))
+            ok, errs = validate_campaign_landing(raw)
+            if ok:
+                print(f"✅ Campaña válida: {f.name} ({raw.get('route_path')} · mechanism={raw.get('lead_magnet', {}).get('mechanism', 'none')})")
+            else:
+                all_ok = False
+                print(f"❌ Fallas en {f}:")
+                for e in errs:
+                    print(f"  • {e}")
+        sys.exit(0 if all_ok else 1)
+    p_vcamp.set_defaults(func=_cmd_validate_campaign)
 
     # test
     p_test = subparsers.add_parser("test", help="Ejecuta el sensor físico de verificación funcional de Apotelos")

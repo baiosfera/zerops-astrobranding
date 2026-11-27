@@ -135,6 +135,9 @@ CLIENT_INTERNAL_JARGON: List[Tuple[str, str]] = [
     (r"\bDWY\b", "Evita jerga interna ('DWY'); describe 'acompañamiento guiado' o 'mentoría aplicada'."),
     (r"\bDFY\b", "Evita jerga interna ('DFY'); describe 'implementación llave en mano' o 'lo construimos por ti'."),
     (r"\b(?:verticales|nuestra\s+vertical|la\s+vertical|esta\s+vertical|mi\s+vertical|cada\s+vertical)\b", "Evita jerga interna ('vertical/verticales'); usa 'línea', 'programa', 'área' o el nombre comercial directo."),
+    (r"\bRotaci[oó]n\s+Barista\b", "Evita jerga interna ('Rotación Barista'); presenta el ángulo de temporada o enfoque vigente en lenguaje natural."),
+    (r"\bAds-First\b", "Evita jerga interna ('Ads-First'); nunca expongas arquitectura de pauta al cliente."),
+    (r"\bComprador\s+Ideal\b", "Evita jerga interna ('Comprador Ideal'); habla en segunda persona directa al lector."),
 ]
 
 ALLOWED_UPPER_SNAKE = {
@@ -389,10 +392,54 @@ class AntiSlopLinter:
 
         return violations
 
-    def lint_file(self, file_path: Path) -> List[Violation]:
+    def lint_file(self, file_path: Path, json_public_only: Optional[bool] = None) -> List[Violation]:
         if not file_path.is_file():
             raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
-        return self.lint_text(file_path.read_text(encoding="utf-8", errors="replace"), source_name=file_path.name)
+        raw = file_path.read_text(encoding="utf-8", errors="replace")
+        auto_json = file_path.suffix.lower() == ".json" and (
+            file_path.parent.name == "campaigns" or file_path.name.startswith("copy_strings")
+        )
+        use_json_public = auto_json if json_public_only is None else json_public_only
+        if use_json_public and file_path.suffix.lower() == ".json":
+            return self.lint_campaign_or_copy_json(raw, source_name=file_path.name)
+        return self.lint_text(raw, source_name=file_path.name)
+
+    def lint_campaign_or_copy_json(self, raw_json: str, source_name: str = "") -> List[Violation]:
+        """Audits only user-facing string fields inside campaign/copy JSON files while ignoring internal keys/enums."""
+        INTERNAL_KEYS = {
+            "campaign_slug", "vertical_slug", "brand_slug", "route_path", "robots",
+            "seo_cluster_id", "barista_rotation_window", "offer_ring", "ad_id",
+            "platform", "format", "angle_name", "contrarian_idea", "target_buyer_profile",
+            "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+            "allow_on_internal_links", "source_ad_library_refs", "wa_email_campaign_tag",
+            "view_content_allowed", "mechanism", "formula_profile", "formula_key",
+            "id", "type", "unit", "value", "post_submit_route", "primary_cta_href",
+            "authoritative_source", "source_checksums", "campaign_checksums", "last_synced_at",
+            "templateRef", "key", "slug", "ctaHref", "href", "src",
+        }
+        try:
+            data = json.loads(raw_json)
+        except Exception:
+            return self.lint_text(raw_json, source_name=source_name)
+
+        public_lines: List[str] = []
+
+        def _collect(node: Any, key_name: str = "") -> None:
+            if key_name in INTERNAL_KEYS:
+                return
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    _collect(v, str(k))
+            elif isinstance(node, list):
+                for item in node:
+                    _collect(item, key_name)
+            elif isinstance(node, str) and node.strip():
+                if node.startswith(("/", "http://", "https://", "#")):
+                    return
+                public_lines.append(node)
+
+        _collect(data)
+        return self.lint_text("\n".join(public_lines), source_name=source_name)
 
 
 def run_unit_tests() -> int:
@@ -463,18 +510,45 @@ def run_unit_tests() -> int:
         assert len(v8_script) == 0, v8_script
     print("✓ Test 8: Dynamic vertical guardrails (obsolete AI, professions, timelines, private pricing) verified cleanly.")
 
+    bad_campaign_json = json.dumps({
+        "campaign_slug": "barista-angle",
+        "barista_rotation_window": "2026-W48",
+        "wa_email_campaign_tag": "camp:demo:barista-angle",
+        "hero_h1": "Rotación Barista con Order Bump exclusivo",
+        "hero_subheadline": "Esta campaña publica un metodo sin tilde para el Comprador Ideal.",
+        "lead_magnet": {"mechanism": "freedom_leverage_index", "title": "Calcula tu margen"},
+    }, ensure_ascii=False)
+    v9 = linter.lint_campaign_or_copy_json(bad_campaign_json, source_name="barista-angle.json")
+    v9_texts = {v.matched_text.lower() for v in v9}
+    assert any("rotación barista" in t for t in v9_texts), v9
+    assert any("order bump" in t for t in v9_texts), v9
+    assert "metodo" in v9_texts, v9
+    assert not any("freedom_leverage_index" in t for t in v9_texts), v9
+    clean_campaign_json = json.dumps({
+        "campaign_slug": "clean-angle",
+        "barista_rotation_window": "2026-W48",
+        "wa_email_campaign_tag": "camp:demo:clean-angle",
+        "hero_h1": "Ordena tu sistema comercial sin vender más horas",
+        "hero_subheadline": "Instala una oferta clara en menos de 15 días con acompañamiento real.",
+        "lead_magnet": {"mechanism": "freedom_leverage_index", "title": "Índice de Libertad y Palanca"},
+    }, ensure_ascii=False)
+    v9_clean = linter.lint_campaign_or_copy_json(clean_campaign_json, source_name="clean-angle.json")
+    assert len(v9_clean) == 0, v9_clean
+    print("✓ Test 9: JSON public-only campaign audit flags leaked jargon/orthography while ignoring internal schema keys.")
+
     print("============================================================")
-    print("🎉 All 8 unit tests PASSED successfully (Exit 0)!")
+    print("🎉 All 9 unit tests PASSED successfully (Exit 0)!")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Anti-Slop Strategic Linter & Brand Lexicon Gate v2.0")
+    parser = argparse.ArgumentParser(description="Anti-Slop Strategic Linter & Brand Lexicon Gate v2.2")
     parser.add_argument("--file", "-f", type=Path, help="Path to file to lint (.astro, .md, .json, .ts)")
     parser.add_argument("--text", "-t", type=str, help="Raw text string to lint")
     parser.add_argument("--brand", "-b", type=str, help="Brand identifier")
     parser.add_argument("--vertical", "-v", type=str, help="Optional vertical slug inside workspaces/")
     parser.add_argument("--allow-internal-jargon", action="store_true", help="Relax client-facing jargon/orthography gate for internal specs")
+    parser.add_argument("--json-public-only", action="store_true", help="Audit only public string values inside JSON payloads (auto-enabled for campaigns/*.json and copy_strings*.json)")
     parser.add_argument("--test", action="store_true", help="Run self-contained physical unit tests")
     parser.add_argument("--quiet", "-q", action="store_true", help="Quiet mode (exit code only)")
     args = parser.parse_args()
@@ -486,7 +560,11 @@ def main() -> int:
         return 1
 
     linter = AntiSlopLinter(brand=args.brand, vertical=args.vertical, allow_internal_jargon=args.allow_internal_jargon)
-    violations = linter.lint_file(args.file) if args.file else linter.lint_text(args.text)
+    violations = (
+        linter.lint_file(args.file, json_public_only=(True if args.json_public_only else None))
+        if args.file
+        else linter.lint_text(args.text)
+    )
 
     if not violations:
         if not args.quiet:

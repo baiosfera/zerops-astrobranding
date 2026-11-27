@@ -185,6 +185,7 @@ LINK_PAIRS=(
     "apotelos:$CATALOG_REPO/scripts/apotelos"
     "brand-play:$CATALOG_REPO/scripts/brand-play"
     "orchesbrand:$CATALOG_REPO/bin/orchesbrand"
+    "ad-library:$CATALOG_REPO/scripts/ad_library.py"
     "anti-slop-linter:$CATALOG_REPO/scripts/anti_slop_linter.py"
     "chroma-engine:$CATALOG_REPO/scripts/chroma_engine.py"
     "fontgen-engine:$CATALOG_REPO/scripts/fontgen_engine.py"
@@ -260,7 +261,7 @@ fi
 
 if [ "$WITH_TESTS" = true ]; then
     echo "--- [Optional] Behavioral CLI Self-Tests (--with-tests) ---"
-    for cli_cmd in "apotelos test" "brand-play test" "anti-slop-linter --test" "chroma-engine --test" "fontgen-engine --test" "envato-font-preview --test" "orchesbrand --test" "mega-downloader --test"; do
+    for cli_cmd in "ad-library --test" "apotelos test" "brand-play test" "anti-slop-linter --test" "chroma-engine --test" "fontgen-engine --test" "envato-font-preview --test" "orchesbrand --test" "mega-downloader --test"; do
         bin_name="${cli_cmd%% *}"
         if command -v "$bin_name" >/dev/null; then
             if out=$(PYTHONDONTWRITEBYTECODE=1 $cli_cmd 2>&1); then

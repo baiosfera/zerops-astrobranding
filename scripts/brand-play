@@ -567,9 +567,10 @@ def run_list(args: argparse.Namespace) -> int:
 
 
 def run_sync_copy(args: argparse.Namespace) -> int:
-    """Checks or reconciles _ssot_policy.source_checksums in web/copy_strings.es.json against editable copy/*.md."""
+    """Checks or reconciles _ssot_policy checksums in web/copy_strings.es.json against copy/*.md and campaigns/*.json."""
     ws = Path(args.workspace).resolve()
     copy_dir = ws / "copy"
+    campaigns_dir = ws / "campaigns"
     json_path = ws / "web" / "copy_strings.es.json"
     if not copy_dir.is_dir() or not json_path.is_file():
         print(f"❌ Falta copy/ o web/copy_strings.es.json en {ws}", file=sys.stderr)
@@ -579,18 +580,31 @@ def run_sync_copy(args: argparse.Namespace) -> int:
         f for f in copy_dir.glob("*.md")
         if args.all_files or not (f.name.startswith("00_") or f.name.startswith("08_"))
     )
+    campaign_files = sorted(
+        f for f in campaigns_dir.glob("*.json")
+        if f.name != "draft_angles.json"
+    ) if campaigns_dir.is_dir() else []
+
     current_hashes: Dict[str, str] = {
         f.name: hashlib.sha256(f.read_bytes()).hexdigest()
         for f in md_files
     }
+    current_campaign_hashes: Dict[str, str] = {
+        f.name: hashlib.sha256(f.read_bytes()).hexdigest()
+        for f in campaign_files
+    }
+
     data = json.loads(json_path.read_text(encoding="utf-8"))
     policy = data.get("_ssot_policy") or {}
     saved_hashes = policy.get("source_checksums") or {}
+    saved_campaign_hashes = policy.get("campaign_checksums") or {}
 
     changed = [name for name, h in current_hashes.items() if saved_hashes.get(name) != h]
     removed = [name for name in saved_hashes if name not in current_hashes]
+    camp_changed = [name for name, h in current_campaign_hashes.items() if saved_campaign_hashes.get(name) != h]
+    camp_removed = [name for name in saved_campaign_hashes if name not in current_campaign_hashes]
 
-    if not args.skip_lint and md_files:
+    if not args.skip_lint and (md_files or campaign_files):
         linter = "/var/www/zerops-astrobranding/scripts/anti_slop_linter.py"
         if Path(linter).is_file():
             lint_brand: Optional[str] = None
@@ -606,7 +620,7 @@ def run_sync_copy(args: argparse.Namespace) -> int:
                 cmd_base.extend(["--brand", str(lint_brand)])
             if lint_vertical:
                 cmd_base.extend(["--vertical", str(lint_vertical)])
-            for f in md_files:
+            for f in md_files + campaign_files:
                 r = subprocess.run(
                     cmd_base + ["--file", str(f), "--quiet"],
                     capture_output=True, text=True,
@@ -615,18 +629,26 @@ def run_sync_copy(args: argparse.Namespace) -> int:
                     print(f"⚠️ Anti-slop alerta en {f.name} (ejecutá anti-slop-linter --file {f} para ver detalle)")
 
     if args.check:
-        if changed or removed:
-            print(f"⚠️ NEEDS_RECONCILIATION: cambios humanos en copy/*.md -> changed={changed}, removed={removed}")
+        if changed or removed or camp_changed or camp_removed:
+            print(
+                f"⚠️ NEEDS_RECONCILIATION: cambios humanos detectados -> "
+                f"copy_changed={changed}, copy_removed={removed}, "
+                f"campaigns_changed={camp_changed}, campaigns_removed={camp_removed}"
+            )
             return 2
-        print(f"✅ copy/*.md y web/copy_strings.es.json sincronizados ({len(current_hashes)} archivos).")
+        print(f"✅ copy/*.md ({len(current_hashes)}) y campaigns/*.json ({len(current_campaign_hashes)}) sincronizados.")
         return 0
 
-    policy["authoritative_source"] = "copy/*.md (el fundador edita copy/*.md; web/copy_strings.es.json es diccionario derivado)"
+    policy["authoritative_source"] = "copy/*.md + campaigns/*.json (el fundador edita copy/*.md y campaigns/*.json; web/copy_strings.es.json es diccionario derivado)"
     policy["source_checksums"] = current_hashes
+    policy["campaign_checksums"] = current_campaign_hashes
     policy["last_synced_at"] = datetime.now(timezone.utc).isoformat()
     data["_ssot_policy"] = policy
     json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"✅ _ssot_policy actualizado ({len(current_hashes)} checksums SHA-256). Cambios registrados: {changed or ['ninguno']}")
+    print(
+        f"✅ _ssot_policy actualizado ({len(current_hashes)} copy/*.md, {len(current_campaign_hashes)} campaigns/*.json). "
+        f"Cambios: copy={changed or ['ninguno']}, campaigns={camp_changed or ['ninguno']}"
+    )
     return 0
 
 
@@ -669,7 +691,9 @@ def run_test() -> int:
         (ws / "web").mkdir(parents=True, exist_ok=True)
         (ws / "brand" / "brandbook.json").write_text(json.dumps({"metadata": {"brand_name": "Aurelius Studio"}}), encoding="utf-8")
         (ws / "copy" / "01_landing.md").write_text("# Titular humano editado\n", encoding="utf-8")
-        (ws / "web" / "copy_strings.es.json").write_text(json.dumps({"_ssot_policy": {"source_checksums": {}}}), encoding="utf-8")
+        (ws / "campaigns").mkdir(parents=True, exist_ok=True)
+        (ws / "campaigns" / "angle-a.json").write_text(json.dumps({"campaign_slug": "angle-a", "hero_h1": "Titular de prueba"}), encoding="utf-8")
+        (ws / "web" / "copy_strings.es.json").write_text(json.dumps({"_ssot_policy": {"source_checksums": {}, "campaign_checksums": {}}}), encoding="utf-8")
 
         sync_args = argparse.Namespace(workspace=str(ws), check=True, all_files=False, skip_lint=True)
         assert run_sync_copy(sync_args) == 2, "Expected drift detection code 2"
@@ -677,6 +701,8 @@ def run_test() -> int:
         assert run_sync_copy(sync_args) == 0
         sync_args.check = True
         assert run_sync_copy(sync_args) == 0
+        synced_json = json.loads((ws / "web" / "copy_strings.es.json").read_text(encoding="utf-8"))
+        assert "angle-a.json" in synced_json["_ssot_policy"]["campaign_checksums"]
 
         bundle, _ = load_brandbook_bundle("alpha-line", vertical_json=vfile, explicit_ws=ws)
         assert bundle["brand"]["signature_mechanism"] == "Sistema Alpha"

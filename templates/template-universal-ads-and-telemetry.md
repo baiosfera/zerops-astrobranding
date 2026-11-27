@@ -229,3 +229,15 @@ CREATE TABLE IF NOT EXISTS campaign_agent_audit_log (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
+
+---
+
+## 10. Capa Dinámica Ads-First (`/[vertical]/lp/[slug]`) & Inteligencia `ad-library`
+
+1. **Separación Orgánico vs. Pauta Pagada:**
+   - Las rutas orgánicas (`/` y páginas pilar) conservan `robots: index, follow` con 1 intención SERP = 1 URL.
+   - Las landings dinámicas generadas por `ad-campaign-factory` en `/[vertical]/lp/[slug]` emiten por defecto `X-Robots-Tag: noindex, follow` (y `<meta name="robots" content="noindex, follow">`), habilitando `index, follow` únicamente cuando declaran un `seo_cluster_id` propio en `CampaignLandingSpec`.
+2. **Pureza de `ViewContent` y Propagación de `campaign_slug`:**
+   - `ViewContent` se dispara en la landing dinámica igual que en las landings principales (nunca en `/checkout`, `/app`, `/admin` o `/gracias`), adjuntando `campaign_slug`, `ad_angle`, UTMs reales y `?ref=`.
+3. **Extracción `ad-library` Sin Desperdicio de Contexto:**
+   - Usar `ad-library` CLI para obtener los anuncios ganadores (`>= 14` días activos) en JSON `< 3 KB` y complementar únicamente las URLs destino ganadoras con `meta-research` (`jina:read_url`).

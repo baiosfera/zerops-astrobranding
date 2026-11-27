@@ -1,0 +1,47 @@
+{
+  "name": "ad-campaign-factory",
+  "version": "1.0.0",
+  "description": "Token-Frugal Ads-First Campaign Factory (ad-library 0-token Meta Ad Library intel -> Contrarian Ad Angles -> Parallel 1:1 Message-Matched CampaignLandingSpec hydration -> Deterministic apotelos & anti-slop gates -> Blind Critic)",
+  "entry": "ad_campaign_factory.wf",
+  "argsSchema": {
+    "type": "object",
+    "required": ["project", "vertical", "workspace_dir"],
+    "properties": {
+      "project": { "type": "string", "description": "Nombre del proyecto en /mnt/localstorage/<Project>" },
+      "vertical": { "type": "string", "description": "Slug de la línea en dev/verticals/<vertical>.json" },
+      "workspace_dir": { "type": "string", "description": "Ruta absoluta a /mnt/localstorage/<Project>/dev/workspaces/<vertical>" },
+      "search_queries": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Consultas para espiar Meta Ad Library vía `ad-library` (auto-derivadas si está vacío)"
+      },
+      "country": { "type": "string", "default": "CO" },
+      "min_days_active": { "type": "integer", "default": 14 },
+      "angles_count": { "type": "integer", "default": 3, "minimum": 1, "maximum": 5 },
+      "target_avatars": { "type": "array", "items": { "type": "string" }, "default": [] },
+      "offer_ring": { "type": "string", "default": "core" },
+      "lead_magnet_mechanism": {
+        "type": "string",
+        "enum": ["auto", "none", "freedom_leverage_index", "diagnostic_quiz", "roi_cost_gap", "commission_simulator", "resource_guide", "micro_trial"],
+        "default": "auto"
+      },
+      "barista_rotation_window": { "type": "string", "default": "" },
+      "auto_approve_angles": {
+        "type": "boolean",
+        "default": false,
+        "description": "Si es false (recomendado), detiene tras Fase 2 para visto bueno humano de ángulos/guiones antes de hidratar landings"
+      },
+      "start_from_phase": {
+        "type": "string",
+        "enum": ["phase_1_ad_library_intel", "phase_2_ad_angles", "phase_3_landing_hydration", "phase_4_deterministic_gate", "phase_5_blind_critic"],
+        "default": "phase_1_ad_library_intel"
+      },
+      "stop_after_phase": {
+        "type": "string",
+        "enum": ["phase_1_ad_library_intel", "phase_2_ad_angles", "phase_3_landing_hydration", "phase_4_deterministic_gate", "phase_5_blind_critic"],
+        "default": "phase_5_blind_critic"
+      }
+    }
+  }
+}

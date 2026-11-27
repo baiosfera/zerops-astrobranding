@@ -209,3 +209,10 @@ flowchart TD
     P4["Plan 4: Desarrollo Web Astro 5 SSR<br>Pidev con gentle-pi materializa páginas y actions"] --> Live["Ecosistema en Producción"]
     P5["Plan 5: Omnicanal Marketing & Retención<br>WhatsApp, Email, BullMQ, NATS, CAPI y Anti-Colisión"] --> Live
 ```
+
+---
+
+## 5. Capa Dual Ads-First + Lead Magnet Polimórfico (Soberanía Zero-Token)
+- **Extracción de Pauta (`ad-library`):** CLI Python determinista (`scripts/ad_library.py`) que ingesta Meta Ad Library (`meta-api` / `firecrawl` / `jina` / `file`) y reduce ~65 KB de HTML a `< 3 KB` de JSON (`0` tokens LLM) filtrado por `days_active >= 14`.
+- **Fábrica `ad-campaign-factory`:** workflow portable (`workflows/ad-campaign-factory/ad_campaign_factory.wf`) que diseña primero el anuncio (`AdCreativeSpec`), luego hidrata `campaigns/<slug>.json` (`CampaignLandingSpec`) bajo la ruta dinámica `/[vertical]/lp/[slug].astro` (`noindex, follow` por defecto, `ViewContent` activo y tag `camp:<vertical>:<slug>`), validado con `apotelos validate-campaign` y `anti-slop-linter`.
+- **Lead Magnet Polimórfico (`InteractiveProofSpec`):** las calculadoras nunca son obligatorias; cada landing o campaña declara `mechanism` entre `none`, `freedom_leverage_index`, `diagnostic_quiz`, `roi_cost_gap`, `commission_simulator`, `resource_guide` o `micro_trial`.
