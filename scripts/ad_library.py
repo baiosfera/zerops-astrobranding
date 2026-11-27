@@ -76,7 +76,7 @@ STARTED_DATE_RE = re.compile(
     re.IGNORECASE,
 )
 VARIANTS_RE = re.compile(
-    r"(\d+)\s+(?:ads?\s+use\s+this\s+creative|anuncios?\s+usan\s+este\s+contenido)",
+    r"(\d+)\s+\*{0,2}(?:ads?|anuncios?)\*{0,2}\s+(?:use\s+this\s+creative|usan\s+este\s+contenido)",
     re.IGNORECASE,
 )
 URL_RE = re.compile(r"https?://[^\s\)\]>\"']+")
@@ -189,17 +189,22 @@ def _clean_destination_url(raw_url: str) -> Optional[str]:
 
 
 def _is_noise_line(line: str) -> bool:
-    s = line.strip()
+    s = line.strip(" *_`#>")
     if not s:
         return True
     low = s.lower()
     noise_exact = {
         "active", "activo", "inactive", "inactivo", "sponsored", "publicidad",
-        "platforms", "plataformas", "see ad details", "ver detalles del anuncio",
+        "platforms", "plataformas", "facebook", "instagram", "audience network",
+        "messenger", "threads", "see ad details", "ver detalles del anuncio",
+        "see summary details", "ver detalles del resumen", "learn more",
+        "sorry, we're having trouble playing this video.",
         "open dropdown", "filters", "filtros", "ad library", "biblioteca de anuncios",
         "about ads and data use", "privacy", "terms", "cookies", "log in", "iniciar sesión",
     }
     if low in noise_exact:
+        return True
+    if VARIANTS_RE.search(s):
         return True
     if low.startswith(("library id:", "identificador de la biblioteca:", "started running on", "en circulación desde", "![")):
         return True
@@ -279,16 +284,22 @@ def parse_meta_ad_library_markdown(
                 continue
             if _is_noise_line(ln):
                 continue
-            # Clean markdown link formatting `[Label](url)` -> `Label`
+            # Clean markdown link formatting `[Label](url)` -> `Label` and strip leading boilerplate
             ln_clean = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", ln).strip(" *#>")
+            ln_clean = re.sub(r"^(?:See summary details|Ver detalles del resumen|Sponsored|Publicidad)\s+", "", ln_clean, flags=re.IGNORECASE).strip()
+            ln_clean = re.sub(r"\s+Sponsored$", "", ln_clean, flags=re.IGNORECASE).strip()
             if not ln_clean or len(ln_clean) < 3:
                 continue
             clean_lines.append(ln_clean)
 
         advertiser = clean_lines[0][:90] if clean_lines else "Unknown"
         body_lines = clean_lines[1:] if len(clean_lines) > 1 else []
-        hook = body_lines[0][:180] if body_lines else advertiser[:180]
-        body = " ".join(body_lines)[:600]
+        raw_body = " ".join(body_lines)
+        raw_body = re.sub(r"^(?:See summary details|Ver detalles del resumen|Sponsored|Publicidad)\s+", "", raw_body, flags=re.IGNORECASE).strip()
+        raw_body = re.sub(r"Sorry, we're having trouble playing this video\.?", "", raw_body, flags=re.IGNORECASE).strip()
+        first_sentence = re.split(r"(?<=[.!?])\s+|\n", raw_body)[0] if raw_body else advertiser
+        hook = (first_sentence or advertiser)[:180]
+        body = raw_body[:600]
 
         dedup_sig = hashlib.sha1(f"{advertiser.lower()}::{hook.lower()[:80]}".encode("utf-8")).hexdigest()[:12]
         if lib_id in seen_keys or dedup_sig in seen_keys:
@@ -524,8 +535,12 @@ Started running on Nov 1, 2026
 Platforms
 Facebook
 Active
-Marca Clara CO
+4 ads** use this creative and text
+See summary details
+Marca Clara CO Sponsored
+Sponsored
 Construye una oferta única imposible de comparar con propuestas genéricas.
+Sorry, we're having trouble playing this video.
 Más información
 https://marcaclara.example.com/reto
 """
@@ -537,6 +552,9 @@ https://marcaclara.example.com/reto
     assert brief["ads"][0]["variants_count"] == 12
     assert brief["ads"][0]["destination_url"] == "https://studionorte.example.com/diagnostico"
     assert brief["ads"][1]["days_active"] == 26
+    assert brief["ads"][1]["variants_count"] == 4
+    assert brief["ads"][1]["advertiser"] == "Marca Clara CO", f"Unexpected advertiser: {brief['ads'][1]['advertiser']}"
+    assert brief["ads"][1]["hook"].startswith("Construye una oferta"), f"Unexpected hook: {brief['ads'][1]['hook']}"
     compact_size = len(json.dumps(brief, ensure_ascii=False))
     assert compact_size < 3072, f"Expected <3KB compact brief, got {compact_size} bytes"
 
