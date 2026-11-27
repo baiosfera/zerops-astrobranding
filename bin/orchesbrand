@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-orchesbrand — Sovereign Agnostic Brand Pipeline CLI (v3.0) for Zerops Astrobranding.
-100% Brand-Agnostic | Non-Destructive Brandbook Merge | Zero Phantom Directories.
-Coordinates chroma_engine.py, fontgen_engine.py, envato_font_preview.py, and brandbook CSS/JSON.
+orchesbrand — Sovereign Agnostic Brand Pipeline CLI (v4.5) for Zerops Astrobranding.
+100% Brand-Agnostic | Two-Stage Art-Direction Specs (chroma_spec.json / font_spec.json) -> Compilers v8.0/v7.0.
+Coordinates chroma_engine.py (v8.0), fontgen_engine.py (v7.0), envato_font_preview.py (v5.1), and brandbook CSS/JSON.
 """
 
 from __future__ import annotations
@@ -174,40 +174,75 @@ def merge_brandbook_non_destructive(
     color_patch: Dict[str, Any] = {}
     selected_color_eco = None
     vertical_archetype = None
+    color_strategy = None
+    surface_geometry: Dict[str, Any] = {}
+    color_dtcg: Dict[str, Any] = {}
     css_root = ""
     tailwind_block = ""
     if chroma_file.is_file():
         cdata = json.loads(chroma_file.read_text(encoding="utf-8"))
         selected_color_eco = cdata.get("selected_ecosystem_id")
         vertical_archetype = cdata.get("vertical_archetype")
+        color_strategy = cdata.get("color_strategy")
+        surface_geometry = cdata.get("surface_geometry", {})
+        color_dtcg = cdata.get("dtcg_tokens", {})
         themes = cdata.get("themes", {})
         dark_t = themes.get("dark", {})
         light_t = themes.get("light", {})
         color_patch = {
             "selected_ecosystem_id": selected_color_eco,
             "recommended_mode": cdata.get("recommended_mode", "light"),
+            **({"color_strategy": color_strategy} if color_strategy else {}),
+            **({"surface_geometry": surface_geometry} if surface_geometry else {}),
             "dark": {k: {"$value": v["$value"], "$type": "color", "hex": v["hex"], "p3": v.get("p3", "")} for k, v in dark_t.items() if isinstance(v, dict) and "$value" in v},
             "light": {k: {"$value": v["$value"], "$type": "color", "hex": v["hex"], "p3": v.get("p3", "")} for k, v in light_t.items() if isinstance(v, dict) and "$value" in v},
             "accessibility": cdata.get("accessibility_audit", {}),
         }
+        rec_t = light_t if cdata.get("recommended_mode", "light") == "light" else dark_t
+        synced_brand_colors = [
+            {"name": rec_t.get(rk, {}).get("$description", lbl), "hex": rec_t[rk]["hex"], "role": role}
+            for rk, role, lbl in (
+                ("primary", "primary", "Primario"),
+                ("secondary", "secondary", "Secundario"),
+                ("accent", "accent", "Acento"),
+                ("background", "background", "Fondo"),
+                ("surface", "surface", "Superficie"),
+                ("text_primary", "text", "Texto"),
+                ("text_muted", "muted", "Silenciado"),
+            )
+            if isinstance(rec_t.get(rk), dict) and rec_t[rk].get("hex")
+        ]
         css_root = cdata.get("css_integration", {}).get("css_variables_root", "")
         tailwind_block = cdata.get("css_integration", {}).get("tailwind_v4_theme_block", "")
+    else:
+        synced_brand_colors = []
 
     font_patch: Dict[str, Any] = {}
     selected_font_eco = None
-    disp_font, body_font, acc_font = "Space Grotesk", "Plus Jakarta Sans", "JetBrains Mono"
-    disp_cat, acc_cat = "sans", "sans"
+    disp_font, body_font, acc_font = "Bricolage Grotesque", "Onest", "Source Serif 4"
+    css_disp_font, css_body_font, css_acc_font = disp_font, body_font, acc_font
+    disp_cat, acc_cat = "sans", "serif"
+    astro_typo_css = ""
+    typo_dtcg: Dict[str, Any] = {}
+    astro_web_ready: Dict[str, Any] = {}
     if font_file.is_file():
         fdata = json.loads(font_file.read_text(encoding="utf-8"))
         selected_font_eco = fdata.get("selected_ecosystem_id")
         sel_eco = fdata.get("selected_ecosystem") or (fdata.get("candidate_ecosystems") or [{}])[0]
         tokens = sel_eco.get("tokens", {})
+        bridge = fdata.get("web_ready_bridge", {})
+        astro_web_ready = fdata.get("astro_web_ready", {})
+        astro_typo_css = astro_web_ready.get("css_typography_system", "")
+        typo_dtcg = fdata.get("dtcg_tokens", {})
         disp_font = tokens.get("display_primary", {}).get("$value", disp_font)
         body_font = tokens.get("ui_secondary", {}).get("$value", body_font)
         acc_font = tokens.get("accent_brand", {}).get("$value", acc_font)
+        # CSS resolves self-hosted verified families (zero phantom Envato fonts unless .woff2 is present)
+        css_disp_font = bridge.get("display_fallback_family") or disp_font
+        css_body_font = bridge.get("body_family") or body_font
+        css_acc_font = bridge.get("editorial_italic_family") or acc_font
         disp_cat = tokens.get("display_primary", {}).get("category", "sans")
-        acc_cat = tokens.get("accent_brand", {}).get("category", "sans")
-        bridge = fdata.get("web_ready_bridge", {})
+        acc_cat = tokens.get("accent_brand", {}).get("category", "serif")
         font_patch = {
             "selected_ecosystem_id": selected_font_eco,
             "style_profile": fdata.get("style_profile"),
@@ -215,6 +250,7 @@ def merge_brandbook_non_destructive(
             "ui_secondary": {"$value": body_font, "$type": "fontFamily", "url": tokens.get("ui_secondary", {}).get("url", "")},
             "accent_brand": {"$value": acc_font, "$type": "fontFamily", "url": tokens.get("accent_brand", {}).get("url", "")},
             "web_ready_bridge": bridge,
+            **({"astro_web_ready": astro_web_ready} if astro_web_ready else {}),
             "inheritance": fdata.get("inheritance", {}),
         }
 
@@ -244,9 +280,11 @@ def merge_brandbook_non_destructive(
             **({"vertical_slug": vertical} if vertical else {}),
             **({"vertical_archetype": vertical_archetype} if vertical_archetype else {}),
         },
+        **({"brand_colors": synced_brand_colors} if synced_brand_colors else {}),
         "design_system": {
             "colors": color_patch,
             "typography": font_patch,
+            **({"dtcg_tokens": {**color_dtcg, **typo_dtcg}} if (color_dtcg or typo_dtcg) else {}),
         },
     }
     if vertical_ctx:
@@ -259,20 +297,24 @@ def merge_brandbook_non_destructive(
 
     disp_gen = "serif" if disp_cat == "serif" else "sans-serif"
     acc_gen = "serif" if acc_cat == "serif" else "sans-serif"
+    typo_block = astro_typo_css or (
+        ":root {\n"
+        f'  --font-display: "{css_disp_font}", {disp_gen};\n'
+        f'  --font-body: "{css_body_font}", system-ui, sans-serif;\n'
+        f'  --font-accent: "{css_acc_font}", {acc_gen};\n'
+        "}"
+    )
     css_lines = [
         f"/* Tailwind CSS v4 Brand Theme Tokens — {brand}" + (f" / {vertical}" if vertical else "") + " */",
         '@import "tailwindcss";',
         "",
-        tailwind_block or "@theme {\n  --color-brand-primary: var(--brand-primary);\n}",
+        tailwind_block or "@theme inline {\n  --color-brand-primary: var(--brand-primary);\n}",
         "",
-        "  /* Typography variables merged cleanly */",
+        "  /* Color & surface geometry tokens merged cleanly */",
         css_root or "",
         "",
-        ":root {",
-        f'  --font-display: "{disp_font}", {disp_gen};',
-        f'  --font-body: "{body_font}", system-ui, sans-serif;',
-        f'  --font-accent: "{acc_font}", {acc_gen};',
-        "}",
+        "  /* Self-hosted PB19 typography & CLS=0 fallback tokens */",
+        typo_block,
     ]
     css_path = target_dir / "brandbook-theme.css"
     css_path.write_text("\n".join(css_lines).strip() + "\n", encoding="utf-8")
@@ -324,6 +366,8 @@ def run_pipeline(
     seed: int = 0,
     brand_brief_path: Optional[Path] = None,
     palette_json_path: Optional[Path] = None,
+    chroma_spec_path: Optional[Path] = None,
+    font_spec_path: Optional[Path] = None,
     seed_hex: Optional[str] = None,
     bg_hex: Optional[str] = None,
     accent_hex: Optional[str] = None,
@@ -332,6 +376,8 @@ def run_pipeline(
     target_dir.mkdir(parents=True, exist_ok=True)
     results: Dict[str, Any] = {"brand": brand, "vertical": vertical, "target_dir": str(target_dir), "generated": []}
     sib_dir = (project_dir / "workspaces") if project_dir and (project_dir / "workspaces").is_dir() else None
+    resolved_chroma_spec = chroma_spec_path if (chroma_spec_path and chroma_spec_path.is_file()) else (target_dir / "chroma_spec.json" if (target_dir / "chroma_spec.json").is_file() else None)
+    resolved_font_spec = font_spec_path if (font_spec_path and font_spec_path.is_file()) else (target_dir / "font_spec.json" if (target_dir / "font_spec.json").is_file() else None)
 
     run_all = "all" in phases
     if run_all or "chroma" in phases:
@@ -339,6 +385,8 @@ def run_pipeline(
             sys.executable, "-B", str(resolve_script("chroma_engine.py")),
             "--brand", brand, "--output-dir", str(target_dir), "--mode", chroma_mode,
         ]
+        if resolved_chroma_spec:
+            cmd.extend(["--spec", str(resolved_chroma_spec)])
         if vertical:
             cmd.extend(["--vertical", vertical])
         if brief_path:
@@ -368,14 +416,18 @@ def run_pipeline(
             "--brand", brand, "--output-dir", str(target_dir),
             "--style-profile", style_profile, "--sort", sort_mode, "--seed", str(seed),
         ]
+        if resolved_font_spec:
+            cmd.extend(["--spec", str(resolved_font_spec)])
         if brief_path:
             cmd.extend(["--brief", str(brief_path)])
-        elif not shards_path:
-            cmd.append("--allow-default")
+        if brand_brief_path:
+            cmd.extend(["--brand-brief", str(brand_brief_path)])
         if shards_path:
             cmd.extend(["--shards", str(shards_path)])
         if vertical_json_path:
             cmd.extend(["--vertical-json", str(vertical_json_path)])
+        if not brief_path and not shards_path and not brand_brief_path and not vertical_json_path and not resolved_font_spec:
+            cmd.append("--allow-default")
         if sib_dir:
             cmd.extend(["--sibling-workspaces-dir", str(sib_dir)])
         if no_live:
@@ -391,7 +443,7 @@ def run_pipeline(
             sys.executable, "-B", str(resolve_script("envato_font_preview.py")),
             "--texts", texts,
             "--out", str(target_dir / "previews"),
-            "--title", f"Galería Full-Color Envato + Google Fonts — {title_label} ({brand.upper()})",
+            "--title", f"Sistema Tipográfico PB19 (Astro WOFF2 + Envato) — {title_label} ({brand.upper()})",
         ]
         if (target_dir / "font_manifest.json").exists():
             cmd.extend(["--from-manifest", str(target_dir / "font_manifest.json")])
@@ -443,7 +495,7 @@ def audit_target(target_dir: Path, phases: List[str]) -> Tuple[bool, List[str]]:
 
 
 def run_unit_tests() -> int:
-    print("Running orchesbrand v4.1 multi-vertical agnostic offline unit tests...")
+    print("Running orchesbrand v4.5 multi-vertical agnostic offline unit tests...")
     with tempfile.TemporaryDirectory(prefix="orchesbrand_v41_test_") as tmp:
         tp = Path(tmp)
         proj_dev = tp / "TestProjAlias" / "dev"
@@ -511,31 +563,37 @@ def run_unit_tests() -> int:
         pal_p.write_text(json.dumps([{"id": "eco_1_vivid", "name": "Bermellón Editorial", "recommended_mode": "light", "background": "#f9f7f1", "surface": "#efece3", "primary": "#f50023", "accent": "#121212"}]), encoding="utf-8")
         run_pipeline("VIVID", ws_noor, ["chroma", "fontgen", "brandbook"], project_dir=proj_dev, vertical="vivid-client", no_live=True, brand_brief_path=bb_client, palette_json_path=pal_p)
         cm_noor = json.loads((ws_noor / "chroma_manifest.json").read_text(encoding="utf-8"))
+        bb_noor = json.loads((ws_noor / "brandbook.json").read_text(encoding="utf-8"))
         css_noor = (ws_noor / "brandbook-theme.css").read_text(encoding="utf-8")
         assert cm_noor["themes"]["light"]["primary"]["hex"] == "#f50023"
         assert "--brand-on-primary" in css_noor
+        assert "Space Grotesk" not in css_noor and "Plus Jakarta Sans" not in css_noor
+        assert "dtcg_tokens" in bb_noor["design_system"]
+        assert "astro_web_ready" in bb_noor["design_system"]["typography"]
     assert not Path("/mnt/localstorage/TESTCORP").exists()
-    print("✅ ORCHESBRAND v4.1 UNIT TESTS PASSED (brand_slug resolution, sibling-disjoint B2B fonts, non-leaking preview texts, vivid hexes, 0 phantom dirs)")
+    print("✅ ORCHESBRAND v4.5 UNIT TESTS PASSED (Two-Stage Spec + Opt-In Oráculo, sibling-disjoint fonts, PB19 DTCG + CLS=0 CSS, 0 phantom/slop)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="orchesbrand", description="Sovereign Agnostic Brand Pipeline CLI (v4.0)")
+    parser = argparse.ArgumentParser(prog="orchesbrand", description="Sovereign Agnostic Brand Pipeline CLI (v4.5)")
     parser.add_argument("--brand", default=None, help="Umbrella brand slug (e.g. AURELIUS)")
     parser.add_argument("--vertical", default=None, help="Vertical slug inside workspaces/<vertical>/brand")
     parser.add_argument("--project-dir", type=Path, default=None, help="Project dev root (e.g. /mnt/localstorage/<Project>/dev)")
     parser.add_argument("--output-dir", type=Path, default=None, help="Explicit output directory")
-    parser.add_argument("--brief", type=Path, default=None, help="Explicit astrobranding_<brand>.md path")
-    parser.add_argument("--shards", type=Path, default=None, help="Explicit client_dumps_15_shards.json path")
+    parser.add_argument("--brief", type=Path, default=None, help="Explicit astrobranding_<brand>.md path (Oráculo opt-in only)")
+    parser.add_argument("--shards", type=Path, default=None, help="Explicit client_dumps_15_shards.json path (Oráculo opt-in only)")
     parser.add_argument("--vertical-json", type=Path, default=None, help="Explicit verticals/<vertical>.json path")
     parser.add_argument("--brand-brief", type=Path, default=None, help="Oráculo-optional client brand_brief.json")
     parser.add_argument("--palette-json", type=Path, default=None, help="Art-direction curated palettes JSON")
+    parser.add_argument("--chroma-spec", type=Path, default=None, help="Stage-1 Art-Director chroma_spec.json (chroma v8.0)")
+    parser.add_argument("--font-spec", type=Path, default=None, help="Stage-1 Art-Director font_spec.json (fontgen v7.0)")
     parser.add_argument("--seed-hex", default=None, help="Exact primary seed hex (e.g. #F50023)")
     parser.add_argument("--bg-hex", default=None, help="Optional canvas background hex")
     parser.add_argument("--accent-hex", default=None, help="Optional accent hex")
     parser.add_argument("--envato-urls", default="", help="Comma-separated user Envato Elements URLs/UUIDs")
     parser.add_argument("--chroma-mode", default="auto", choices=["auto", "synthesize", "brief"])
-    parser.add_argument("--style-profile", default="auto", choices=["auto", "architectural_b2b", "cosmic_archetypal", "design_system_atelier", "editorial_manifesto", "editorial_brand"])
+    parser.add_argument("--style-profile", default="auto", choices=["auto", "architectural_b2b", "luxury_editorial", "organic_wellness", "bold_brutalist", "fintech_clinical", "warm_hospitality", "creative_playful", "cosmic_archetypal", "design_system_atelier", "editorial_manifesto", "editorial_brand"])
     parser.add_argument("--sort", default="hybrid", choices=["hybrid", "latest", "popular"], help="Envato Elements discovery sort order")
     parser.add_argument("--include-shortlist", action="store_true", help="Include ranked runner-up Envato fonts in preview gallery")
     parser.add_argument("--seed", type=int, default=0, help="Rotate ranked Envato font hits across iterations")
@@ -590,6 +648,7 @@ def main() -> int:
             chroma_mode=args.chroma_mode, style_profile=args.style_profile,
             sort_mode=args.sort, include_shortlist=args.include_shortlist, seed=args.seed,
             brand_brief_path=args.brand_brief, palette_json_path=args.palette_json,
+            chroma_spec_path=args.chroma_spec, font_spec_path=args.font_spec,
             seed_hex=args.seed_hex, bg_hex=args.bg_hex, accent_hex=args.accent_hex, envato_urls=args.envato_urls,
         )
         if args.audit:

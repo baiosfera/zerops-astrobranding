@@ -29,12 +29,19 @@ USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
 UUID_RE = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.IGNORECASE)
 
 
+SERIF_FAMILIES = {"source serif 4", "literata", "eb garamond", "bodoni moda", "spectral", "bitter"}
+
+
 def sanitize_filename(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", name).strip("_") or "font"
 
 
-def sanitize_inline_svg(svg_content: str, prefix: str) -> str:
-    """Namespaces duplicate SVG IDs and strips inline fill overrides so brand CSS tokens apply cleanly."""
+def sanitize_inline_svg(svg_content: str, prefix: str, default_fill: str = "", label: str = "") -> str:
+    """
+    Namespaces duplicate SVG IDs, strips inline fill overrides, and injects explicit
+    viewBox-derived width/height + preserveAspectRatio + concrete fallback fill so
+    SVGs never collapse to 0x0 in Firefox/Safari/WebViews or render black in sandboxed viewers.
+    """
     if not svg_content or "<svg" not in svg_content.lower():
         return svg_content
     ids = re.findall(r'\bid="([^"]+)"', svg_content)
@@ -44,8 +51,31 @@ def sanitize_inline_svg(svg_content: str, prefix: str) -> str:
         out = out.replace(f'id="{old_id}"', f'id="{new_id}"')
         out = out.replace(f"url(#{old_id})", f"url(#{new_id})")
         out = out.replace(f'href="#{old_id}"', f'href="#{new_id}"')
-    # Remove explicit inline fill colors inside style="" attributes on inline vectors
+    # Remove explicit inline fill colors on shapes and style attributes
     out = re.sub(r'(\bstyle="[^"]*?)\bfill\s*:[^;"]+;?', r"\1", out, flags=re.IGNORECASE)
+    out = re.sub(r'\s+fill="(?:#0+|black|currentColor)"', "", out, flags=re.IGNORECASE)
+
+    vb_m = re.search(r'viewBox="([^"]+)"', out, flags=re.IGNORECASE)
+    w_attr, h_attr = 320, 72
+    if vb_m:
+        nums = re.findall(r"[-+]?\d*\.?\d+", vb_m.group(1))
+        if len(nums) == 4:
+            vb_w, vb_h = float(nums[2]), float(nums[3])
+            if vb_w > 0 and vb_h > 0:
+                w_attr = max(1, int(round(vb_w)))
+                h_attr = max(1, int(round(vb_h)))
+
+    def _rewrite_open_svg(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        tag = re.sub(r'\s+(?:width|height|preserveAspectRatio|fill|aria-hidden)="[^"]*"', "", tag, flags=re.IGNORECASE)
+        extra = f' width="{w_attr}" height="{h_attr}" preserveAspectRatio="xMidYMid meet"'
+        if default_fill:
+            extra += f' fill="{html.escape(default_fill)}"'
+        if label:
+            extra += f' role="img" aria-label="{html.escape(label)}"'
+        return tag[:-1] + extra + ">"
+
+    out = re.sub(r"<svg\b[^>]*>", _rewrite_open_svg, out, count=1, flags=re.IGNORECASE)
     return out
 
 
@@ -204,9 +234,19 @@ def generate_gallery_html(
     items: List[Dict[str, Any]],
     output_file: str,
     chroma_path: Optional[Path] = None,
-    gallery_title: str = "Visualizador de Fuentes Envato + Google Fonts",
+    gallery_title: str = "Sistema Tipográfico PB19 (Astro Self-Hosted WOFF2 + Envato Display)",
+    web_pairs: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     dark_vars, light_vars, palettes_map, default_eco, default_mode = _extract_chroma_palettes(chroma_path)
+    init_vars = (palettes_map.get(default_eco, {}) or {}).get(default_mode) or {
+        "--bg": "#080c14",
+        "--surface": "#121824",
+        "--text": "#f2f6fa",
+        "--muted": "#8e9cb0",
+        "--primary": "#38b6ff",
+        "--on-primary": "#050b0f",
+        "--accent": "#7be5ff",
+    }
     eco_options = "".join(
         f'<option value="{html.escape(eid)}"{" selected" if eid == default_eco else ""}>{html.escape(pdata["name"])}</option>'
         for eid, pdata in palettes_map.items()
@@ -226,6 +266,42 @@ def generate_gallery_html(
         if gf_url and gf_url not in seen_gf:
             seen_gf.add(gf_url)
             google_links.append(f'<link rel="stylesheet" href="{html.escape(gf_url)}">')
+    for wp in (web_pairs or []):
+        for ukey in ("display_v2_url", "body_v2_url"):
+            u_val = wp.get(ukey)
+            if u_val and u_val not in seen_gf:
+                seen_gf.add(u_val)
+                google_links.append(f'<link rel="stylesheet" href="{html.escape(u_val)}">')
+
+    web_pairs_html = ""
+    if web_pairs:
+        wp_cards = []
+        for wp in web_pairs:
+            d_fam = html.escape(wp.get("display_family") or "Bricolage Grotesque")
+            b_fam = html.escape(wp.get("body_family") or "Albert Sans")
+            d_gen = "serif" if (wp.get("display_family") or "").strip().lower() in SERIF_FAMILIES else "system-ui, sans-serif"
+            e_name = html.escape(wp.get("eco_name") or wp.get("eco_id") or "")
+            e_id = html.escape(wp.get("eco_id") or "")
+            scale_r = html.escape(str(wp.get("scale_ratio") or "1.250"))
+            sample_h = html.escape(wp.get("sample_headline") or "Arquitectura de marca con criterio propio")
+            wp_cards.append(f"""
+            <div class="web-pair-card" style="background:var(--bg, {html.escape(init_vars['--bg'])});color:var(--text, {html.escape(init_vars['--text'])})">
+              <div class="badges"><span class="eco-pill">{e_id.upper()} · {e_name}</span><span class="role-pill">Astro WOFF2 CLS=0 · Ratio {scale_r}</span></div>
+              <h3 class="wp-headline" data-orig-text="{sample_h}" style="font-family:'{d_fam}', {d_gen}">{sample_h}</h3>
+              <p class="wp-body" style="font-family:'{b_fam}', system-ui, sans-serif">Display activo: <strong>{d_fam}</strong> + Cuerpo UI: <strong>{b_fam}</strong>. Compilado en build-time como WOFF2 local con fallbacks métricos <code>size-adjust</code>.</p>
+              <div class="wp-cta-row" style="font-family:'{b_fam}', system-ui, sans-serif">
+                <span class="cta-sample">Explorar sistema →</span>
+                <span class="wp-meta">Display: {d_fam} · Body: {b_fam}</span>
+              </div>
+            </div>""")
+        web_pairs_html = f"""
+        <section class="web-pairs-panel" style="background:var(--surface, {html.escape(init_vars['--surface'])});color:var(--text, {html.escape(init_vars['--text'])})">
+          <div class="wp-header">
+            <h2>Pares Web Activos (astro-web WOFF2 · CLS=0)</h2>
+            <p>Tipografías reales que se empaquetan en producción dentro de <code>astro.config.mjs</code> (≤ 2 familias activas). Los SVGs inferiores muestran las fuentes Display/Monograma de Envato Elements como mejora opcional cuando subas sus <code>.woff2</code>.</p>
+          </div>
+          <div class="web-pairs-grid">{''.join(wp_cards)}</div>
+        </section>"""
 
     eco_ids_present: List[str] = []
     has_shortlist = any(bool(it.get("is_shortlist")) for it in items)
@@ -259,9 +335,9 @@ def generate_gallery_html(
             svg_url = html.escape(v["svgUrl"])
             rel_svg = html.escape(v.get("filename", ""))
             variant_id = html.escape(str(v.get("variantId") or ""))
-            svg_p1 = sanitize_inline_svg(v["svgContent"], f"svg_{idx}_{v_idx}_p")
-            svg_p2 = sanitize_inline_svg(v["svgContent"], f"svg_{idx}_{v_idx}_a")
-            svg_p3 = sanitize_inline_svg(v["svgContent"], f"svg_{idx}_{v_idx}_o")
+            svg_p1 = sanitize_inline_svg(v["svgContent"], f"svg_{idx}_{v_idx}_p", default_fill=init_vars["--primary"], label=f"{item['title']} — {item['text']}")
+            svg_p2 = sanitize_inline_svg(v["svgContent"], f"svg_{idx}_{v_idx}_a", default_fill=init_vars["--accent"], label=f"{item['title']} — {item['text']}")
+            svg_p3 = sanitize_inline_svg(v["svgContent"], f"svg_{idx}_{v_idx}_o", default_fill=init_vars["--on-primary"], label=f"{item['title']} — {item['text']}")
 
             card = f"""
             <div class="variant-card">
@@ -273,19 +349,19 @@ def generate_gallery_html(
                     </div>
                 </div>
                 <div class="brand-lockup-grid">
-                    <div class="lockup lockup-primary">
+                    <div class="lockup lockup-primary" style="background:var(--bg, {html.escape(init_vars['--bg'])});color:var(--text, {html.escape(init_vars['--text'])})">
                         <small>1. Primario sobre Fondo</small>
                         <div class="svg-container svg-primary" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="primary">{svg_p1}</div>
                     </div>
-                    <div class="lockup lockup-accent">
+                    <div class="lockup lockup-accent" style="background:var(--surface, {html.escape(init_vars['--surface'])});color:var(--text, {html.escape(init_vars['--text'])})">
                         <small>2. Acento sobre Superficie</small>
                         <div class="svg-container svg-accent" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="accent">{svg_p2}</div>
                     </div>
-                    <div class="lockup lockup-card">
+                    <div class="lockup lockup-card" style="background:var(--primary, {html.escape(init_vars['--primary'])});color:var(--on-primary, {html.escape(init_vars['--on-primary'])})">
                         <small>3. Tarjeta Invertida de Marca</small>
                         <div class="svg-container svg-on-primary" data-uuid="{item_uuid}" data-variant="{variant_id}" data-tone="on-primary">{svg_p3}</div>
                     </div>
-                    <div class="lockup lockup-hero">
+                    <div class="lockup lockup-hero" style="background:var(--surface, {html.escape(init_vars['--surface'])});color:var(--text, {html.escape(init_vars['--text'])})">
                         <small>4. Mini Hero + Botón CTA Real ({body_fam})</small>
                         <div class="mini-hero" style="font-family:'{body_fam}', system-ui, sans-serif">
                             <p>Sistemas comerciales con identidad propia, sin fórmulas genéricas.</p>
@@ -300,7 +376,7 @@ def generate_gallery_html(
         if item.get("body_family"):
             body_sample_html = (
                 f'<div class="body-pair" style="font-family:\'{body_fam}\', system-ui, sans-serif">'
-                f'<small>Pareo Body UI (Google Fonts): <strong>{body_fam}</strong></small>'
+                f'<small>Pareo Body UI (Astro WOFF2 / Fontsource): <strong>{body_fam}</strong></small>'
                 f'<p>Diseñamos sistemas claros para profesionales independientes: captación medible, asistentes conectados y finanzas en orden.</p>'
                 f'</div>'
             )
@@ -337,8 +413,8 @@ def generate_gallery_html(
   #noscript-dark:checked ~ .gallery-shell {{ {dark_vars} background:var(--bg); color:var(--text); }}
   #noscript-light:checked ~ .gallery-shell {{ {light_vars} background:var(--bg); color:var(--text); }}
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 28px 24px; }}
-  .gallery-shell {{ background: var(--bg); color: var(--text); }}
+  body {{ background: var(--bg, {html.escape(init_vars['--bg'])}); color: var(--text, {html.escape(init_vars['--text'])}); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 28px 24px; }}
+  .gallery-shell {{ background: var(--bg, {html.escape(init_vars['--bg'])}); color: var(--text, {html.escape(init_vars['--text'])}); }}
   .header {{ max-width: 1260px; margin: 0 auto 20px; display: flex; flex-direction: column; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 18px; }}
   .header-top {{ display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; }}
   .header h1 {{ font-size: 22px; font-weight: 700; }}
@@ -379,8 +455,8 @@ def generate_gallery_html(
   .lockup-hero {{ background: var(--surface); justify-content: space-between; }}
   .mini-hero p {{ font-size: 13px; line-height: 1.45; margin-bottom: 10px; color: var(--text); }}
   .cta-sample {{ display: inline-block; background: var(--primary); color: var(--on-primary); padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; }}
-  .svg-container {{ min-height: 88px; display: flex; align-items: center; justify-content: center; padding: 10px; overflow-x: auto; }}
-  .svg-container svg {{ max-width: 100%; height: auto; max-height: var(--preview-h); display: block; }}
+  .svg-container {{ min-height: 92px; width: 100%; display: flex; align-items: center; justify-content: center; padding: 12px; overflow: hidden; }}
+  .svg-container svg {{ width: 100%; height: var(--preview-h); max-width: 100%; max-height: var(--preview-h); flex: 0 1 auto; display: block; }}
   .svg-primary svg, .svg-primary svg * {{ fill: var(--primary) !important; stroke: none; }}
   .svg-accent svg, .svg-accent svg * {{ fill: var(--accent) !important; stroke: none; }}
   .svg-on-primary svg, .svg-on-primary svg * {{ fill: var(--on-primary) !important; stroke: none; }}
@@ -392,6 +468,15 @@ def generate_gallery_html(
   .body-pair {{ margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text); }}
   .body-pair small {{ color: var(--muted); display: block; margin-bottom: 4px; }}
   .body-pair p {{ font-size: 15px; line-height: 1.55; max-width: 72ch; }}
+  .web-pairs-panel {{ max-width: 1260px; margin: 0 auto 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }}
+  .wp-header h2 {{ font-size: 17px; font-weight: 700; margin-bottom: 4px; color: var(--text); }}
+  .wp-header p {{ font-size: 13px; color: var(--muted); margin-bottom: 16px; }}
+  .web-pairs-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }}
+  .web-pair-card {{ background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }}
+  .wp-headline {{ font-size: 24px; line-height: 1.15; letter-spacing: -0.02em; color: var(--text); }}
+  .wp-body {{ font-size: 14px; line-height: 1.55; color: var(--muted); }}
+  .wp-cta-row {{ display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; }}
+  .wp-meta {{ font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; }}
 </style>
 </head>
 <body>
@@ -406,7 +491,7 @@ def generate_gallery_html(
     <div class="header-top">
       <div>
         <h1>{html.escape(gallery_title)}</h1>
-        <p>Vectores SVG Envato + Colores Reales de Marca (<code>--primary</code>, <code>--accent</code>, <code>--on-primary</code>) · Ecosistemas deduplicados y aislados.</p>
+        <p>Pares web activos auto-hospedados (<code>astro.config.mjs</code> · CLS=0) + Vectores SVG Envato con colores reales de marca (<code>--primary</code>, <code>--accent</code>, <code>--on-primary</code>).</p>
       </div>
       <div class="status-chips">
         <span id="modeStatusBadge" class="mode-badge">{'OSCURO' if default_mode == 'dark' else 'CLARO'}</span>
@@ -429,6 +514,7 @@ def generate_gallery_html(
     </div>
     <div class="filter-tabs" id="filterTabs">{eco_filter_tabs}</div>
   </div>
+  {web_pairs_html}
   <div class="container" id="galleryContainer">{''.join(cards_html)}</div>
 </div>
   <script>
@@ -492,6 +578,7 @@ def generate_gallery_html(
     function updateLivePreviews() {{
       const txt = (document.getElementById('liveText')?.value || '').trim();
       if (!txt) return;
+      document.querySelectorAll('.wp-headline').forEach(h => {{ h.textContent = txt; }});
       document.querySelectorAll('.svg-container[data-uuid]').forEach(el => {{
         const uuid = el.getAttribute('data-uuid');
         if (!uuid) return;
@@ -502,11 +589,16 @@ def generate_gallery_html(
         img.className = 'live-img';
         img.alt = txt;
         img.loading = 'lazy';
+        img.onerror = () => {{ if (ORIGINAL_SVGS.has(el)) el.innerHTML = ORIGINAL_SVGS.get(el); }};
         img.src = 'https://elements.envato.com/font-preview.svg?' + params.toString();
         el.replaceChildren(img);
       }});
     }}
     function resetOriginalPreviews() {{
+      document.querySelectorAll('.wp-headline').forEach(h => {{
+        const orig = h.getAttribute('data-orig-text');
+        if (orig) h.textContent = orig;
+      }});
       document.querySelectorAll('.svg-container[data-uuid]').forEach(el => {{
         if (ORIGINAL_SVGS.has(el)) el.innerHTML = ORIGINAL_SVGS.get(el);
       }});
@@ -583,6 +675,34 @@ def entries_from_urls(raw_urls: List[str], texts: List[str]) -> List[Dict[str, A
     return entries
 
 
+def web_pairs_from_manifest(manifest_path: Path, headline_hint: str = "") -> List[Dict[str, Any]]:
+    """Extracts active self-hosted web font pairs (display + body UI) per ecosystem for the top gallery specimen."""
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    out: List[Dict[str, Any]] = []
+    for eco in data.get("candidate_ecosystems", []):
+        tokens = eco.get("tokens", {})
+        ui = tokens.get("ui_secondary", {})
+        wp = eco.get("web_pair") or {}
+        disp_fam = wp.get("display_family") or ""
+        disp_url = wp.get("display_v2_url") or ""
+        if not disp_fam:
+            # Fallback parse from layers.h1 or astro_web_ready if old manifest format
+            disp_fam = str(eco.get("layers", {}).get("h1", "")).split("(")[0].strip() or ui.get("$value", "Albert Sans")
+        body_fam = wp.get("body_family") or ui.get("$value", "Albert Sans")
+        body_url = wp.get("body_v2_url") or ui.get("google_fonts_v2_url", "")
+        out.append({
+            "eco_id": eco.get("id", "eco"),
+            "eco_name": eco.get("name", eco.get("id", "Ecosistema")),
+            "display_family": disp_fam,
+            "display_v2_url": disp_url,
+            "body_family": body_fam,
+            "body_v2_url": body_url,
+            "scale_ratio": f"{float(eco.get('scale_ratio', 1.25)):.3f}",
+            "sample_headline": headline_hint or "Estrategia con arquitectura propia",
+        })
+    return out
+
+
 def entries_from_manifest(manifest_path: Path, texts: List[str], include_shortlist: bool = False) -> List[Dict[str, Any]]:
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     ecos = data.get("candidate_ecosystems", [])
@@ -652,7 +772,8 @@ def process_batch(
     chroma_path: Optional[Path] = None,
     svg_fetcher=fetch_svg_preview,
     page_fetcher=fetch_page_data,
-    gallery_title: str = "Visualizador de Fuentes Envato + Google Fonts",
+    gallery_title: str = "Sistema Tipográfico PB19 (Astro Self-Hosted WOFF2 + Envato Display)",
+    web_pairs: Optional[List[Dict[str, Any]]] = None,
 ) -> Path:
     out_p = Path(output_dir)
     out_p.mkdir(parents=True, exist_ok=True)
@@ -713,14 +834,14 @@ def process_batch(
             print(f"❌ Error procesando {url}: {e}", file=sys.stderr)
 
     gallery_path = Path(output_dir) / "preview_gallery.html"
-    generate_gallery_html(all_gallery_items, str(gallery_path), chroma_path=chroma_path, gallery_title=gallery_title)
+    generate_gallery_html(all_gallery_items, str(gallery_path), chroma_path=chroma_path, gallery_title=gallery_title, web_pairs=web_pairs)
     manifest_out = Path(output_dir) / "manifest.json"
     manifest_out.write_text(json.dumps(all_gallery_items, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return gallery_path
 
 
 def run_unit_tests() -> int:
-    print("Running envato_font_preview v4.1 offline + headless Chrome unit tests...")
+    print("Running envato_font_preview v5.0 offline + headless Chrome unit tests...")
     with tempfile.TemporaryDirectory(prefix="envato_preview_test_") as tmp:
         tp = Path(tmp)
         fm_path = tp / "font_manifest.json"
@@ -733,6 +854,8 @@ def run_unit_tests() -> int:
                 {
                     "id": "eco-1",
                     "name": "Test Editorial",
+                    "scale_ratio": 1.250,
+                    "web_pair": {"display_family": "Source Serif 4", "body_family": "Manrope", "display_v2_url": "https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400..700&display=swap", "body_v2_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&display=swap"},
                     "tokens": {
                         "display_primary": {"$value": "Domani", "source": "envato", "url": "https://app.envato.com/fonts/1de94cfa-3ac9-4fd1-b5b2-113405506be3"},
                         "ui_secondary": {"$value": "Manrope", "source": "google_fonts", "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&display=swap"},
@@ -742,6 +865,8 @@ def run_unit_tests() -> int:
                 {
                     "id": "eco-2",
                     "name": "Duplicate UUID Check",
+                    "scale_ratio": 1.333,
+                    "web_pair": {"display_family": "Red Hat Display", "body_family": "Sora", "display_v2_url": "", "body_v2_url": ""},
                     "tokens": {
                         "display_primary": {"$value": "Domani", "source": "envato", "url": "https://elements.envato.com/fonts/domani-1de94cfa-3ac9-4fd1-b5b2-113405506be3"},
                         "ui_secondary": {"$value": "Sora", "source": "google_fonts", "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Sora:wght@400..700&display=swap"},
@@ -776,8 +901,8 @@ def run_unit_tests() -> int:
         }), encoding="utf-8")
 
         entries = entries_from_manifest(fm_path, ["AURELIUS", "NEXUS"])
+        web_pairs = web_pairs_from_manifest(fm_path, headline_hint="AURELIUS")
         custom_entries = entries_from_urls(["https://app.envato.com/fonts/1de94cfa-3ac9-4fd1-b5b2-113405506be3"], ["AURELIUS"])
-        # eco-1: Domani(2), Monogram Holder(2); eco-2: Domani skipped (same UUID!), Nority(2) => 6 entries total
         assert len(entries) == 6 and len(custom_entries) == 1, f"Expected deduplicated 6 entries, got {len(entries)}"
 
         mock_page = lambda url, title_hint="": {
@@ -787,10 +912,17 @@ def run_unit_tests() -> int:
             "url": url,
         }
         mock_svg = lambda uuid, text, vid, ref: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 30"><defs><clipPath id="dupclip"><rect width="10" height="10"/></clipPath></defs><path clip-path="url(#dupclip)" style="fill:#111111" d="M0 0h10v10"/></svg>'
-        gal = process_batch(entries, str(out_dir), chroma_path=cm_path, svg_fetcher=mock_svg, page_fetcher=mock_page)
+        gal = process_batch(entries, str(out_dir), chroma_path=cm_path, svg_fetcher=mock_svg, page_fetcher=mock_page, web_pairs=web_pairs)
         assert gal.exists()
         html_out = gal.read_text(encoding="utf-8")
         assert "#f50023" in html_out and "--on-primary" in html_out and "brand-lockup-grid" in html_out
+        assert "web-pairs-panel" in html_out and "Source Serif 4" in html_out
+        assert "font-family:'Red Hat Display', system-ui, sans-serif" in html_out
+        assert "font-family:'Source Serif 4', serif" in html_out
+        for inline_svg in re.findall(r"<svg\b[^>]*>", html_out):
+            assert 'width="' in inline_svg and 'height="' in inline_svg, f"Missing width/height in {inline_svg}"
+            assert 'preserveAspectRatio="xMidYMid meet"' in inline_svg, f"Missing preserveAspectRatio in {inline_svg}"
+            assert 'fill="#' in inline_svg, f"Missing concrete fallback fill in {inline_svg}"
         assert "live-img" in html_out and "url(''" not in html_out and "filter: invert(1)" not in html_out
         assert 'id="dupclip"' not in html_out, "Duplicate raw SVG IDs must be namespaced!"
         assert (out_dir / "manifest.json").exists()
@@ -810,11 +942,15 @@ window.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     const out = { errs: window.__TEST_ERRS || [] };
     const snap = () => {
+      const svgs = Array.from(document.querySelectorAll('.svg-container svg'));
+      const rects = svgs.map(s => s.getBoundingClientRect());
       const p = document.querySelector('.svg-primary svg path');
       return {
         bodyBg: getComputedStyle(document.body).backgroundColor,
         svgFill: p ? getComputedStyle(p).fill : null,
         visibleSections: Array.from(document.querySelectorAll('.font-section')).filter(s => getComputedStyle(s).display !== 'none').length,
+        minSvgW: rects.length ? Math.min(...rects.map(r => r.width)) : 0,
+        minSvgH: rects.length ? Math.min(...rects.map(r => r.height)) : 0,
       };
     };
     out.init = snap();
@@ -848,16 +984,17 @@ window.addEventListener('DOMContentLoaded', () => {
             assert m_res, "Headless Chrome E2E probe missing output"
             e2e = json.loads(html.unescape(m_res.group(1)))
             assert e2e["errs"] == [], f"JS errors in headless Chrome: {e2e['errs']}"
+            assert e2e["init"]["minSvgW"] >= 40 and e2e["init"]["minSvgH"] >= 30, f"Collapsed SVGs in headless Chrome: {e2e['init']}"
             assert e2e["init"]["bodyBg"] != e2e["afterEco2"]["bodyBg"], f"ecoSelect did not change bodyBg: {e2e}"
             assert e2e["afterEco2"]["bodyBg"] != e2e["afterTheme"]["bodyBg"], f"themeToggleBtn did not change bodyBg: {e2e}"
             assert e2e["afterTheme"]["svgFill"] != e2e["afterNeutral"]["svgFill"], f"brandToneSelect did not change SVG fill: {e2e}"
             assert e2e["afterFilterEco1"]["visibleSections"] < e2e["init"]["visibleSections"], f"Eco filter tab did not reduce sections: {e2e}"
-    print("✅ ENVATO FONT PREVIEW v4.1 UNIT + HEADLESS CHROME E2E TESTS PASSED (deduped UUIDs, namespaced SVGs, live palette/theme/tone/filter view switches verified)")
+    print("✅ ENVATO FONT PREVIEW v5.1 UNIT + HEADLESS CHROME E2E TESTS PASSED (explicit SVG dimensions/fills + web pairs CLS=0 + live view switches)")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Envato Elements Full-Color Brand Previewer v4.0")
+    parser = argparse.ArgumentParser(description="Sistema Tipográfico PB19 — Astro WOFF2 + Envato Gallery v5.0")
     parser.add_argument("url", nargs="?", help="URL de fuente Envato (app.envato.com o elements.envato.com) o UUID")
     parser.add_argument("text", nargs="?", help="Texto a previsualizar")
     parser.add_argument("--out", "-o", default="./font_previews", help="Carpeta de salida")
@@ -867,7 +1004,7 @@ def main() -> int:
     parser.add_argument("--chroma", type=Path, default=None, help="Chroma manifest JSON para aplicar colores reales de marca")
     parser.add_argument("--texts", default="BRAND,MARCA", help="Textos separados por coma para --from-manifest o --envato-urls")
     parser.add_argument("--include-shortlist", action="store_true", help="Incluir alternativas vanguardia de shortlist_candidates")
-    parser.add_argument("--title", default="Visualizador Full-Color Envato + Google Fonts", help="Título HTML de la galería")
+    parser.add_argument("--title", default="Sistema Tipográfico PB19 (Astro Self-Hosted WOFF2 + Envato Display)", help="Título HTML de la galería")
     parser.add_argument("--test", action="store_true", help="Ejecutar pruebas unitarias offline")
     args = parser.parse_args()
 
@@ -875,9 +1012,11 @@ def main() -> int:
         return run_unit_tests()
 
     items: List[Dict[str, Any]] = []
+    web_pairs: List[Dict[str, Any]] = []
     texts = [t.strip() for t in args.texts.split(",") if t.strip()] or ["MARCA"]
     if args.from_manifest:
         items.extend(entries_from_manifest(args.from_manifest, texts, include_shortlist=args.include_shortlist))
+        web_pairs = web_pairs_from_manifest(args.from_manifest, headline_hint=texts[0])
     if args.envato_urls:
         raw_urls = [u.strip() for u in args.envato_urls.split(",") if u.strip()]
         items.extend(entries_from_urls(raw_urls, texts))
@@ -889,8 +1028,8 @@ def main() -> int:
         parser.print_help()
         return 1
 
-    gal = process_batch(items, args.out, chroma_path=args.chroma, gallery_title=args.title)
-    print(f"✅ Galería HTML Full-Color Envato v4.0 generada en: {gal}")
+    gal = process_batch(items, args.out, chroma_path=args.chroma, gallery_title=args.title, web_pairs=web_pairs or None)
+    print(f"✅ Galería PB19 Astro WOFF2 + Envato v5.0 generada en: {gal}")
     return 0
 
 
