@@ -424,7 +424,7 @@ class AntiSlopLinter:
                 # 3. Anti-Parroting Audience Laundry-List Gate (>= 5 comma/conjunction roles/areas in one audience phrase)
                 if not stripped.startswith(("|", "#")) and not stripped.endswith("?"):
                     for am in re.finditer(
-                        r"(?i)\b(?:para|ayud[ao]\s+a|dirigid[oa]s?\s+a|acompañ[ao]\s+a|enfocad[oa]s?\s+en|en\s+áreas\s+como)\b([^.!?]{25,})",
+                        r"(?i)\b(?:para\s+(?:marcas|profesionales|fundadores|emprendedores|especialistas|personas|quienes|consultores|mentores|coaches|negocios|empresas|clientes|equipos)|ayud[ao]\s+a|dirigid[oa]s?\s+a|acompañ[ao]\s+a|enfocad[oa]s?\s+en|en\s+áreas\s+como)\b([^.!?]{25,})",
                         clean_line,
                     ):
                         clause = am.group(1)
