@@ -1,10 +1,10 @@
 """
-ad_campaign_factory.wf — Token-Frugal Ads-First Campaign Factory (v1.0).
+ad_campaign_factory.wf — Token-Frugal Ads-First Campaign Factory (v1.2).
 1) Runs `ad-library` in pure Python (0 LLM tokens for HTML cleanup -> compact <3KB JSON).
 2) Designs contrarian Ads-First specs (hook, primary text, headline, UTM, polymorphic lead_magnet).
 3) Fans out in parallel to hydrate 1:1 message-matched `campaigns/<slug>.json` (`CampaignLandingSpec`).
-4) Runs deterministic `apotelos validate-campaign`, `anti-slop-linter`, and `brand-play sync-copy`.
-5) Audits message match, CO1 contrast, and zero-jargon compliance via Blind Critic.
+4) Runs deterministic `apotelos validate-campaign`, `anti-slop-linter` (mechanical invariants), and `brand-play sync-copy`.
+5) Audits message match, CO1 contrast, editorial craft, and zero-jargon compliance via Blind Critic.
 """
 PLAYBOOKS_DIR = "/mnt/localstorage/knowledge_hub/02_PLAYBOOKS_MAESTROS"
 
@@ -35,7 +35,7 @@ stop_idx = phase_order.index(stop_after)
 should_run = lambda name: start_idx <= phase_order.index(name) <= stop_idx
 
 log(
-    f"Starting ad-campaign-factory v1.0 for {project}/{vertical} "
+    f"Starting ad-campaign-factory v1.2 for {project}/{vertical} "
     f"(country={country}, min_days={min_days_active}, angles={angles_count}, "
     f"mechanism={lead_magnet_mechanism}, start={start_from}, stop={stop_after})"
 )
@@ -55,8 +55,8 @@ if should_run("phase_1_ad_library_intel"):
     }
     intel_res = await agent(
         f"""Eres el extractor de inteligencia de anuncios (bajo consumo de tokens).
-1. Lee `/mnt/localstorage/{project}/dev/verticals/{vertical}.json` para obtener consultas clave si `search_queries` ({search_queries}) viene vacío.
-2. Ejecuta `ad-library fetch --query "<consulta>" --country "{country}" --min-days {min_days_active} --limit 15 --out {ws_dir}/strategy/ad_library_brief.json` (si `fetch` falla por falta de key HTTP directa, usa `firecrawl_scrape` MCP una sola vez sobre la URL de Meta Ad Library, guarda el markdown crudo en un temporal y pásalo por `ad-library parse --input-file ... --out {ws_dir}/strategy/ad_library_brief.json` — NUNCA metas los ~65KB crudos en tu respuesta).
+1. Lee `/mnt/localstorage/{project}/dev/verticals/{vertical}.json` para obtener consultas clave cuando `search_queries` ({search_queries}) venga vacío.
+2. Ejecuta `ad-library fetch --query "<consulta>" --country "{country}" --min-days {min_days_active} --limit 15 --out {ws_dir}/strategy/ad_library_brief.json` (si `fetch` requiere fallback MCP, usa `firecrawl_scrape` una vez sobre la URL de Meta Ad Library, guarda el markdown crudo en un archivo temporal y procésalo con `ad-library parse --input-file ... --out {ws_dir}/strategy/ad_library_brief.json` entregando exclusivamente el resumen compacto).
 3. Si el brief trae URLs destino ganadoras, lee máximo 2 o 3 páginas con `jina:read_url(url=..., question="oferta principal, precio, prueba social y objeción que responde")` para completar huecos reales de mercado.
 Devuelve el resumen compacto en el esquema JSON.""",
         schema=intel_schema,
@@ -90,14 +90,14 @@ if should_run("phase_2_ad_angles"):
     }
     angles_res = await agent(
         f"""Eres el Director Creativo Ads-First: Lee {PLAYBOOKS_DIR}/02_copywriting_and_neurosales.md, {PLAYBOOKS_DIR}/08_instagram_growth_reels_and_funnels.md y {PLAYBOOKS_DIR}/13_meta_ads_media_buying_and_scaling.md.
-Inspecciona {ws_dir}/strategy/ad_library_brief.json, {ws_dir}/brand/brandbook.json, /mnt/localstorage/{project}/dev/verticals/{vertical}.json y (si existe) `/mnt/localstorage/{project}/dev/astrobranding_*.md` (Tríada Casa 7 Descendente / Casa 8 / Venus).
-Diseña exactamente {angles_count} ángulos ganadores primero desde el ANUNCIO (antes de escribir landings):
+Inspecciona `{ws_dir}/strategy/ad_library_brief.json`, `{ws_dir}/brand/brandbook.json`, `/mnt/localstorage/{project}/dev/verticals/{vertical}.json` y (si existe) `/mnt/localstorage/{project}/dev/astrobranding_*.md` (Tríada Casa 7 Descendente, Casa 8, Casa 11 y Venus).
+Diseña exactamente {angles_count} ángulos ganadores primero desde el ANUNCIO:
 - Avatares/enfoques prioritarios: {target_avatars if target_avatars else 'derivar del vertical JSON, Oráculo Casa 7 (si existe) y ad_library_brief.json'}.
-- **Filtro Playbook + Anti-Parroting:** Pasa todo input por `PB00` (Anclaje Semántico: disciplina humana reconocible antes que cualquier nombre inventado) y `PB02` (Código Simbólico + Top 3 Botones Reptilianos). PROHIBIDO repetir listas de 5+ profesiones o hablarle "a todo el mundo".
-- Cada ángulo debe apuntar al **Comprador Ideal** (criterio, margen, libertad = beneficios/horas, no solo escasez), usar **contraste CO1 polarizante** y conectar con el anillo `{offer_ring}` (`barista_rotation_window='{barista_rotation_window}'`).
-- Selecciona `recommended_mechanism` según `{lead_magnet_mechanism}` (si es `'auto'`, decide honestamente entre `'none'`, `'freedom_leverage_index'`, `'diagnostic_quiz'`, `'roi_cost_gap'`, `'resource_guide'` o `'micro_trial'`; PROHIBIDO forzar calculadora donde un video/evaluación directa convierte mejor).
-- Define UTMs externos reales (`utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `allow_on_internal_links=false`) y el `hook_first_3s`, `primary_text`, `headline` y `cta_label`.
-Guarda el borrador completo en {ws_dir}/campaigns/draft_angles.json y devuelve el resumen.""",
+- **Destilación Editorial (`PB00` + `PB02`):** Pasa todo input por `PB00` (disciplina humana comprensible antes de cualquier nombre propio) y `PB02` (Código Simbólico + Top 3 Botones Reptilianos) enfocando cada ángulo en 1 arquetipo/mindset nítido.
+- Apunta cada ángulo al perfil comprador de mayor criterio (`Beneficios / Horas`, margen real), usa contraste `CO1` polarizante y conéctalo con el anillo `{offer_ring}` (`barista_rotation_window='{barista_rotation_window}'`).
+- Elige `recommended_mechanism` acorde a `{lead_magnet_mechanism}` (cuando sea `'auto'`, selecciona con criterio de conversión entre `'none'` para video/evaluación directa, `'freedom_leverage_index'`, `'diagnostic_quiz'`, `'roi_cost_gap'`, `'resource_guide'` o `'micro_trial'`).
+- Define UTMs externos reales (`utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `allow_on_internal_links=false`) junto con `hook_first_3s`, `primary_text`, `headline` y `cta_label`.
+Guarda el borrador completo en `{ws_dir}/campaigns/draft_angles.json` y devuelve el resumen.""",
         schema=angles_schema,
         role="Ads-First Creative Strategist",
         model="pro",
@@ -129,13 +129,13 @@ if should_run("phase_3_landing_hydration"):
     hydrated = await parallel(
         draft_reader["angles"],
         lambda a: agent(
-            f"""Hidrata la landing 1:1 para el ángulo `{a.get('campaign_slug')}` dentro de {ws_dir}/campaigns/{a.get('campaign_slug')}.json cumpliendo exactamente el esquema `CampaignLandingSpec` de `apotelos`:
-1. Lee el ángulo completo en {ws_dir}/campaigns/draft_angles.json, {ws_dir}/brand/brandbook.json y {ws_dir}/strategy/concatenation_matrix.json.
-2. **Message Match Total**: `hero_h1` y `hero_subheadline` deben continuar literalmente la promesa y palabras clave (`message_match_keywords`) de `ad_creative.hook_first_3s` y `headline`.
-3. **Aislamiento SEO**: `route_path="/{vertical}/lp/{a.get('campaign_slug')}"`, `robots="noindex, follow"` (salvo que exista un `seo_cluster_id` explícito en `seo_clusters.json`), `view_content_allowed=true`, `wa_email_campaign_tag="camp:{vertical}:{a.get('campaign_slug')}"`.
-4. **Lead Magnet Polimórfico**: usa el `recommended_mechanism` del ángulo (`none` => sin calculadora; si es calculadora/quiz, define `inputs` y `outputs` claros en español natural).
-5. **Cortafuegos Léxico & Anclaje Semántico (`PB00`):** Cero listas de 5+ profesiones, todo término propio anclado en disciplina real para un visitante frío, cero jerga interna (`DIY`, `DWY`, `DFY`, `verticales`, `BANT`, `PWYW`, `Order Bump`, `Rotación Barista`, `Ads-First`, `Comprador Ideal`, `UPPER_SNAKE_CASE`), cero precios privados si `private_call_only_pricing` aplica, y ortografía española completa.
-6. Añade la micro-secuencia de entrega/rescate etiquetada con `camp:{vertical}:{a.get('campaign_slug')}` en {ws_dir}/copy/10_campaign_microsequences.md (sin colisionar con otras secuencias).""",
+            f"""Hidrata la landing 1:1 para el ángulo `{a.get('campaign_slug')}` dentro de `{ws_dir}/campaigns/{a.get('campaign_slug')}.json` cumpliendo el esquema `CampaignLandingSpec` de `apotelos`:
+1. Lee el ángulo completo en `{ws_dir}/campaigns/draft_angles.json`, `{ws_dir}/brand/brandbook.json` y `{ws_dir}/strategy/concatenation_matrix.json`.
+2. **Message Match Total:** `hero_h1` y `hero_subheadline` continúan literalmente la promesa y palabras clave (`message_match_keywords`) de `ad_creative.hook_first_3s` y `headline`.
+3. **Aislamiento SEO:** `route_path="/{vertical}/lp/{a.get('campaign_slug')}"`, `robots="noindex, follow"` (salvo que exista un `seo_cluster_id` explícito en `seo_clusters.json`), `view_content_allowed=true`, `wa_email_campaign_tag="camp:{vertical}:{a.get('campaign_slug')}"`.
+4. **Lead Magnet Polimórfico:** implementa el `recommended_mechanism` del ángulo (`none` para paso directo sin calculadora; si es calculadora o quiz, define `inputs` y `outputs` claros en español natural).
+5. **Pureza Léxica & Anclaje Semántico (`PB00`):** Redacta para 1 arquetipo nítido en español completo y natural, presentando la disciplina humana antes de cualquier término propio y mencionando protocolos internos solo en 1 frase afirmativa cuando aporten respaldo. Mantén la jerga interna y tarifas privadas fuera del alcance público.
+6. Añade la micro-secuencia de entrega/rescate etiquetada con `camp:{vertical}:{a.get('campaign_slug')}` en `{ws_dir}/copy/10_campaign_microsequences.md` aislada por campaña.""",
             schema=hydration_schema,
             role=f"Landing Hydrator: {a.get('campaign_slug')}",
             model="pro",
@@ -148,9 +148,9 @@ if should_run("phase_4_deterministic_gate"):
     gate_ok = await agent(
         f"""Ejecuta y corrige hasta Exit 0:
 1. `apotelos validate-campaign {ws_dir}/campaigns/`
-2. Para cada archivo en `{ws_dir}/campaigns/*.json` (excepto `draft_angles.json`) y `{ws_dir}/copy/10_campaign_microsequences.md`: ejecuta `anti-slop-linter --brand "{project}" --vertical "{vertical}" --file <archivo>`. Si reporta violaciones, corrige los textos públicos afectados manteniendo el esquema exacto.
+2. Para cada archivo en `{ws_dir}/campaigns/*.json` (excluyendo `draft_angles.json`) y `{ws_dir}/copy/10_campaign_microsequences.md`: ejecuta `anti-slop-linter --brand "{project}" --vertical "{vertical}" --file <archivo>` y corrige cualquier fallo mecánico preservando el esquema exacto.
 3. Ejecuta `brand-play sync-copy --workspace {ws_dir} --all-files` para registrar los checksums SHA-256 en `web/copy_strings.es.json`.
-Devuelve `true` solo cuando los 3 comandos pasen con exit 0.""",
+Devuelve `true` cuando los 3 comandos completen con exit 0.""",
         schema={"type": "boolean"},
         role="Deterministic Gate & SSoT Sync",
         model="flash",
@@ -170,12 +170,12 @@ if should_run("phase_5_blind_critic"):
         },
     }
     critic = await agent(
-        f"""Crítico Ciego (solo lectura): audita todos los archivos en {ws_dir}/campaigns/*.json y {ws_dir}/copy/10_campaign_microsequences.md:
-1. ¿Cada `hero_h1` hace match literal con `ad_creative.hook_first_3s` y `headline`?
-2. ¿Pasa la Prueba del Desconocido en 5s (`PB00` Anclaje Semántico), respeta Casa 7 / PB02 sin listas de 5+ profesiones, y mantiene `mechanism == 'none'` donde corresponde?
+        f"""Crítico Ciego (solo lectura): audita todos los archivos en `{ws_dir}/campaigns/*.json` y `{ws_dir}/copy/10_campaign_microsequences.md`:
+1. ¿Cada `hero_h1` mantiene match literal con `ad_creative.hook_first_3s` y `headline`?
+2. ¿Supera la Prueba del Desconocido en 5s (`PB00` Anclaje Semántico), habla a 1 arquetipo nítido desde Casa 7 / `PB02` y respeta `mechanism` (`none` cuando aplica)?
 3. ¿Las variantes sin clúster SEO propio declaran `robots='noindex, follow'` y `view_content_allowed=true`?
-4. ¿Hay cero fugas de jerga interna y cero tarifas privadas expuestas?
-Emite APPROVED o NEEDS_REVISION con lista honesta de ajustes.""",
+4. ¿Todo el texto público emplea español natural limpio y respeta el alcance de tarifas privadas?
+Emite `APPROVED` o `NEEDS_REVISION` con lista honesta de ajustes.""",
         schema=critic_schema,
         role="Blind Ads-First Critic",
         model="pro",

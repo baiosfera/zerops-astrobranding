@@ -1,5 +1,5 @@
 """
-brand_studio.wf — Portable Antigravity `run_workflow` 5-Phase Playbook-First Brand Pipeline (v2.0).
+brand_studio.wf — Portable Antigravity `run_workflow` 5-Phase Playbook-First Brand Pipeline (v2.2).
 Compiled with Python top-level await (`ast.PyCF_ALLOW_TOP_LEVEL_AWAIT`) via `run_workflow(ScriptPath=..., Args=...)`.
 Hermes/CrewAI remain strictly reserved for post-launch 24/7 monitoring & ops.
 """
@@ -29,7 +29,7 @@ stop_idx = phase_order.index(stop_after)
 should_run = lambda name: start_idx <= phase_order.index(name) <= stop_idx
 
 log(
-    f"Starting brand-studio v2.0 for {project}/{vertical} "
+    f"Starting brand-studio v2.2 for {project}/{vertical} "
     f"(intake={intake_mode}, archetype={offer_archetype}, offer_model={offer_model}, "
     f"lead_magnet={lead_magnet_mechanism}, ads_first={enable_ads_first_layer}, "
     f"vsl={vsl_mode}, mesh={enable_cross_funnel_mesh}, affiliates={enable_affiliate_layer}, "
@@ -64,24 +64,24 @@ if should_run("phase_1_seo"):
         }
     }
     seo_res = await agent(
-        f"""Fase 1 Strategist: Lee obligatoriamente los módulos clave de:
+        f"""Fase 1 Strategist: Lee íntegramente los módulos clave de:
 - {PLAYBOOKS_DIR}/00_category_of_one.md
 - {PLAYBOOKS_DIR}/06_seo_aeo_geo_and_organic_content.md (Módulo 0 y Módulo 2 Keyword Research)
 - {PLAYBOOKS_DIR}/16_personal_branding_authority_and_communities.md
-Inspecciona el contexto real en {ws_dir} y /mnt/localstorage/{project}/dev/ (ecosystem.json como ÚNICA SSoT — nunca _shared/ecosystem.json —, vertical JSON, brand_brief.json o archivos Oráculo como astrobranding_*.md y fase0_author_psychology.md si intake_mode='{intake_mode}' es 'auto' u 'oraculo').
-Reglas obligatorias de destilación (Anti-Parroting, Oráculo Casa 7 y Separación Protocolo vs. Oferta):
-- **NUNCA repitas ni parafrasees el brief del usuario como copy final.** Las notas del usuario son alcance crudo; pásalas siempre por `PB00` + `PB02` (Avatar 360°, Código Simbólico y Top 3 Botones Reptilianos). Prohibido listar 5+ profesiones/áreas en titulares o subtítulos (efecto "le ayudo a todo el mundo"): sintetiza 1 arquetipo/mindset nítido.
-- **Integración Oráculo (`Casa 7 Descendente`, `Casa 8`, `Casa 11`, `Venus`):** Si existen artefactos de Oráculo, lee obligatoriamente la **Tríada del Avatar (Casa 7 Descendente / espejo relacional + Casa 8 + Casa 11)** y **Venus** para definir el tono emocional, el rito de paso y la psicología exacta de conversión del comprador.
-- **Anclaje Semántico (`PB00` Módulo 1.1 · Prueba de 50 Palabras):** Todo nombre propio o metodología inventada debe presentarse primero desde la disciplina/categoría que un desconocido ya entiende (ej. astrología, numerología, automatización, mentoría), y construir el mapa `proprietary_terms_anchors` en `ecosystem.json` / `seo_clusters.json`.
-- **Separación `entity_role`:** Distingue estrictamente `commercial_offer` (lo que el cliente compra) de `operating_protocol` (el protocolo interno con el que trabaja el fundador — se explica como respaldo metodológico en su propia sección, nunca dentro del selector de ofertas comerciales).
-Posicionamiento estratégico obligatorio (SIN filtrar etiquetas técnicas al público):
-- Define al **Comprador Ideal** (brecha entre capacidad top y libertad/estatus actual, no solo emergencia/dolor).
-- Formula diferenciación **Category of One (CO1) por contraste polarizante** (las ideas atraen; las ofertas filtran).
-- Modela **Oferta 1 -> N** (`offer_model='{offer_model}'`) y separa las 2 capas web cuando `enable_ads_first_layer={enable_ads_first_layer}`: 1) **Núcleo Orgánico (`SEO/AEO/GEO`)** `index, follow` (1 intención = 1 URL), y 2) **Capa Dinámica Ads-First** `/{vertical}/lp/[slug]` (`noindex, follow` salvo clúster propio).
-Si hay ramas en hub_branches ({hub_branches}), aplica **1 ruta = 1 workspace SSoT** sin duplicar copy/01..08 entre Hub y ramas aisladas.
-Anti-AMN obligatorio (año vigente vía `date -u`): usa búsqueda web en vivo (`exa` / `tavily` / `brave` + `jina:read_url`) orientada a '{target_country}' para validar intención SERP real, ofertas vigentes y madurez agéntica actual (cero hombres de paja obsoletos).
-Cortafuegos terminológico obligatorio: NUNCA expongas al público jerga interna ('verticales', 'DIY', 'DWY', 'DFY', 'BANT', 'PWYW', 'Order Bump', 'AEO/GEO', 'Rotación Barista', 'Ads-First', 'Comprador Ideal'), ni tarifas privadas (`private_call_only_pricing`).
-Guarda {ws_dir}/strategy/seo_clusters.json y actualiza {ws_dir}/strategy/seo.md con fuentes verificadas y devuelve el JSON estructurado.""",
+Inspecciona el contexto real en {ws_dir} y /mnt/localstorage/{project}/dev/ (`ecosystem.json` como única SSoT, vertical JSON, `brand_brief.json`, y artefactos de Oráculo como `astrobranding_*.md` y `fase0_author_psychology.md` cuando `intake_mode='{intake_mode}'` sea `'auto'` u `'oraculo'`).
+Criterios de destilación estratégica (Pure Positive Guidance):
+- **Síntesis de Arquetipo Único (`PB00` + `PB02`):** Traduce las notas crudas del usuario en 1 arquetipo/mindset nítido desde Avatar 360°, Código Simbólico y Top 3 Botones Reptilianos, expresando con precisión a quién sirve la marca sin enumeraciones genéricas de múltiples oficios.
+- **Integración Oráculo (`Casa 7 Descendente`, `Casa 8`, `Casa 11`, `Venus`):** Cuando existan artefactos de Oráculo, lee la Tríada del Avatar y Venus para calibrar el tono emocional, el rito de paso y la psicología de conversión del comprador.
+- **Anclaje Semántico (`PB00` Módulo 1.1 · Prueba de 50 Palabras):** Introduce primero la disciplina o categoría humana reconocible por cualquier visitante frío (astrología, numerología, automatización, mentoría) antes de nombrar cualquier término propio o metodología de marca, y registra `proprietary_terms_anchors` en `ecosystem.json` / `seo_clusters.json`.
+- **Separación `entity_role`:** Coloca las líneas adquiribles (`commercial_offer`) dentro de los selectores de compra, y presenta cualquier protocolo operativo interno (`operating_protocol`) en 1 frase afirmativa como el método de fondo que respalda el trabajo propio y el de los clientes.
+Posicionamiento estratégico:
+- Define al cliente estratégico objetivo desde la brecha entre su capacidad actual y la libertad/estatus que busca.
+- Formula diferenciación **Category of One (CO1)** por contraste claro y memorable.
+- Modela Oferta `1 -> N` (`offer_model='{offer_model}'`) y separa las 2 capas web cuando `enable_ads_first_layer={enable_ads_first_layer}`: 1) Núcleo Orgánico (`index, follow`, 1 intención = 1 URL), y 2) Capa Dinámica `/{vertical}/lp/[slug]` (`noindex, follow` por defecto salvo clúster propio).
+Si existen ramas en `hub_branches` ({hub_branches}), mantén `1 ruta = 1 workspace SSoT` entre el Hub y las ramas aisladas.
+Grounding en vivo (`date -u`): valida intención SERP, ofertas vigentes y madurez agéntica actual en `{target_country}` vía `exa` / `tavily` / `brave` + `jina:read_url`.
+Cortafuegos terminológico: mantén los nombres de frameworks internos y tarifas privadas exclusivamente dentro de `strategy/` y `copy/00_*` / `copy/06_*`, usando español natural directo en todo artefacto público.
+Guarda `{ws_dir}/strategy/seo_clusters.json` y actualiza `{ws_dir}/strategy/seo.md` con fuentes verificadas y el JSON estructurado.""",
         schema=seo_schema,
         role="SEO & Positioning Strategist",
         model="pro",
@@ -102,14 +102,14 @@ if should_run("phase_2_art_direction"):
     }
     envato_flag = f' --envato-urls "{",".join(envato_urls)}"' if envato_urls else ""
     art_res = await agent(
-        f"""Fase 2 Art Director: Lee design-taste-frontend y impeccable.
-Si hay URLs de referencia ({reference_urls}), inspecciónalas con firecrawl_scrape(formats=['branding', 'markdown']) para extraer psicología visual, contraste de temperatura, geometría intencional y formato media `100% WebP/AVIF` SIN copiar la identidad de ninguna referencia.
-Inspecciona también `/mnt/localstorage/{project}/dev/ecosystem.json` y los workspaces hermanos en `/mnt/localstorage/{project}/dev/workspaces/*/brand` para asegurar diferenciación real de paletas y tipografías entre ramas.
-Si intake_mode ('{intake_mode}') es 'auto' u 'oraculo', orchesbrand v4.1 resolverá automáticamente `brand_slug` desde `ecosystem.json` para cargar `client_dumps_15_shards.json` y `astrobranding_<brand_slug>.md` junto con tu `--palette-json`.
-Diseña 3 ecosistemas cromáticos de alta convicción (contraste botón primario WCAG >= 4.5:1 garantizado, cero pasteles lavados ni clichés AI) en {ws_dir}/brand/art_direction_palettes.json (cada uno con light/dark, background, surface, primary, accent, text_primary).
-Deriva `--preview-texts` desde el nombre público de la línea o marca (PROHIBIDO imprimir el nombre interno del proyecto como texto de muestra SVG).
-Luego ejecuta: `orchesbrand --brand "{project}" --vertical "{vertical}" --project-dir "/mnt/localstorage/{project}/dev" --output-dir "{ws_dir}/brand" --palette-json "{ws_dir}/brand/art_direction_palettes.json" --preview-texts "<MARCA PUBLICA>,<MÉTODO>" {envato_flag} --audit`
-Verifica que `chroma_preview.html` y `previews/preview_gallery.html` muestran los colores reales (`--primary`, `--accent`, `--on-primary` + Mini Hero CTA) y permiten cambiar ecosistemas y modo claro/oscuro sin errores. No escribas copy en esta fase.""",
+        f"""Fase 2 Art Director: Lee `design-taste-frontend` e `impeccable`.
+Si existen URLs de referencia ({reference_urls}), inspecciónalas con `firecrawl_scrape(formats=['branding', 'markdown'])` para extraer psicología visual, contraste de temperatura, geometría intencional y presupuesto multimedia `100% WebP/AVIF` creando una identidad original propia.
+Inspecciona también `/mnt/localstorage/{project}/dev/ecosystem.json` y los workspaces hermanos en `/mnt/localstorage/{project}/dev/workspaces/*/brand` para diferenciar paletas y tipografías entre ramas.
+Si `intake_mode` ('{intake_mode}') es `'auto'` u `'oraculo'`, `orchesbrand` v4.1 resolverá automáticamente `brand_slug` desde `ecosystem.json` para cargar `client_dumps_15_shards.json` y `astrobranding_<brand_slug>.md` junto con tu `--palette-json`.
+Diseña 3 ecosistemas cromáticos de alta convicción (contraste de botón primario `WCAG >= 4.5:1`, con luz/oscuridad equilibradas y tono cromático intencional) en `{ws_dir}/brand/art_direction_palettes.json` (`light`/`dark`, `background`, `surface`, `primary`, `accent`, `text_primary`).
+Deriva `--preview-texts` exclusivamente del nombre público comercial de la marca o línea.
+Ejecuta: `orchesbrand --brand "{project}" --vertical "{vertical}" --project-dir "/mnt/localstorage/{project}/dev" --output-dir "{ws_dir}/brand" --palette-json "{ws_dir}/brand/art_direction_palettes.json" --preview-texts "<MARCA PUBLICA>,<MÉTODO>" {envato_flag} --audit`
+Verifica que `chroma_preview.html` y `previews/preview_gallery.html` rendericen los colores reales (`--primary`, `--accent`, `--on-primary` + Mini Hero CTA) y alternen ecosistemas y modo claro/oscuro limpiamente. Entrega exclusivamente los artefactos visuales para aprobación.""",
         schema=art_schema,
         role="Art Director",
         model="pro",
@@ -128,15 +128,15 @@ if should_run("phase_3_concatenation"):
         }
     }
     concat_res = await agent(
-        f"""Fase 3 Conversion & Telemetry Architect: Lee las secciones aplicables de PB01, PB03, PB04, PB05, PB07, PB09, PB12, PB13, PB14, PB16 (Módulo 6), {PLAYBOOKS_DIR}/18_affiliate_referral_and_partner_growth.md y la skill ad-telemetry.
-Construye {ws_dir}/strategy/concatenation_matrix.json cumpliendo MasterConcatenationMatrix (offer_archetype='{offer_archetype}', offer_model='{offer_model}', vsl_mode='{vsl_mode}', lead_magnet_mechanism='{lead_magnet_mechanism}'):
-- **Lead Magnet Polimórfico Opcional (`InteractiveProofSpec`)**: NUNCA fuerces una calculadora en toda landing. Elige según el Comprador Ideal y el ángulo de entrada: `none` (directo a VSL/evaluación/checkout), `freedom_leverage_index` (Libertad = Beneficios / Horas), `diagnostic_quiz` (con tarjeta compartible), `roi_cost_gap`, `commission_simulator`, `resource_guide` o `micro_trial`.
-- **Oferta `offer_rings` (`1 -> N`)**: modela anillos de acceso coherentes (`entry`, `core`, `inner_circle`, `done_for_you`) sin multiplicar marcas inconexas.
-- **Reserva `dynamic_campaign_routes`**: si enable_ads_first_layer={enable_ads_first_layer}, declara el patrón `/{vertical}/lp/<slug>` (`noindex, follow` por defecto) conectado a la misma pasarela, CAPI y UTMs.
-- **Regla crítica de telemetría**: `ViewContent` se dispara ÚNICAMENTE en landings de captación (incl. `/{vertical}/lp/[slug]`, NUNCA en `/checkout`, `/app`, `/admin`, `/gracias`). Configura `cross_domain_bridge` (con escape IG/FB), `allow_on_internal_links=false`, `shared_event_id=true`.
-- Si enable_affiliate_layer={enable_affiliate_layer}: incluye `affiliate_program` (`?ref=`, 90d, retención 30d, `self_referral_blocked: true`, `min_epc_usd >= 1.0`, `min_epl_usd >= 2.0`).
-- Si enable_cross_funnel_mesh={enable_cross_funnel_mesh}: modela `cross_funnel_bridges` (`bottom_section`, `post_conversion_thank_you`, `non_buyer_downsell`, `lifecycle_nurture` con `delay_days >= 7`) + `omnichannel_anti_collision` (`primary_focus_lock_days >= 7`, `max_active_bridge_sequences = 1`, `cross_channel_suppression_hours >= 24`).
-Valida físicamente ejecutando: `apotelos validate-chain {ws_dir}/strategy/concatenation_matrix.json`. No retornes hasta Exit 0.""",
+        f"""Fase 3 Conversion & Telemetry Architect: Lee las secciones aplicables de PB01, PB03, PB04, PB05, PB07, PB09, PB12, PB13, PB14, PB16 (Módulo 6), {PLAYBOOKS_DIR}/18_affiliate_referral_and_partner_growth.md y la skill `ad-telemetry`.
+Construye `{ws_dir}/strategy/concatenation_matrix.json` cumpliendo `MasterConcatenationMatrix` (`offer_archetype='{offer_archetype}'`, `offer_model='{offer_model}'`, `vsl_mode='{vsl_mode}'`, `lead_magnet_mechanism='{lead_magnet_mechanism}'`):
+- **Lead Magnet Polimórfico Opcional (`InteractiveProofSpec`):** Selecciona el mecanismo que mejor encaja con el perfil comprador y ángulo de entrada: `none` (directo a VSL/evaluación/checkout), `freedom_leverage_index` (Libertad = Beneficios / Horas), `diagnostic_quiz`, `roi_cost_gap`, `commission_simulator`, `resource_guide` o `micro_trial`.
+- **Oferta `offer_rings` (`1 -> N`):** modela anillos de acceso coherentes (`entry`, `core`, `inner_circle`, `done_for_you`) bajo una arquitectura unificada.
+- **Reserva `dynamic_campaign_routes`:** si `enable_ads_first_layer={enable_ads_first_layer}`, declara `/{vertical}/lp/<slug>` (`noindex, follow` por defecto) conectado a la pasarela, CAPI y UTMs.
+- **Regla de telemetría:** dispara `ViewContent` exclusivamente en landings públicas de captación (incl. `/{vertical}/lp/[slug]`), reservando `InitiateCheckout`/`Lead`/`Purchase` para pasos posteriores. Configura `cross_domain_bridge` (con escape IG/FB), `allow_on_internal_links=false`, `shared_event_id=true`.
+- Si `enable_affiliate_layer={enable_affiliate_layer}`: incluye `affiliate_program` (`?ref=`, 90d, retención 30d, `self_referral_blocked: true`, `min_epc_usd >= 1.0`, `min_epl_usd >= 2.0`).
+- Si `enable_cross_funnel_mesh={enable_cross_funnel_mesh}`: modela `cross_funnel_bridges` (`bottom_section`, `post_conversion_thank_you`, `non_buyer_downsell`, `lifecycle_nurture` con `delay_days >= 7`) + `omnichannel_anti_collision` (`primary_focus_lock_days >= 7`, `max_active_bridge_sequences = 1`, `cross_channel_suppression_hours >= 24`).
+Valida ejecutando `apotelos validate-chain {ws_dir}/strategy/concatenation_matrix.json` y confirma exit code 0.""",
         schema=concat_schema,
         role="Conversion & Telemetry Architect",
         model="pro",
@@ -146,9 +146,9 @@ Valida físicamente ejecutando: `apotelos validate-chain {ws_dir}/strategy/conca
 if should_run("phase_4_copy"):
     phase("Phase 4: Escuadrón Paralelo de Copy (Playbooks Íntegros 00..18 -> copy/*.md -> JSON)")
     copy_units = [
-        {"id": "landing_funnel_offer", "playbooks": "02_copywriting_and_neurosales.md, 03_irresistible_offers_and_pricing.md, 04_funnels_vsl_webinars_and_challenges.md, 05_web_cro_landings_and_ecommerce.md", "targets": "copy/01..04 + copy/07 (hablando directo al Comprador Ideal desde la brecha de libertad/criterio y CO1 por contraste, implementando el lead_magnet_mechanism elegido — o directo sin calculadora si es 'none' —, testimonios por objeción, FAQ incómodo, popup rescate WA, disclaimer anti-hype y entrelazado secuencial SOLO tras FAQ)"},
+        {"id": "landing_funnel_offer", "playbooks": "02_copywriting_and_neurosales.md, 03_irresistible_offers_and_pricing.md, 04_funnels_vsl_webinars_and_challenges.md, 05_web_cro_landings_and_ecommerce.md", "targets": "copy/01..04 + copy/07 (hablando directo al lector desde la brecha de libertad/criterio y CO1 por contraste, implementando el lead_magnet_mechanism elegido, testimonios por objeción, FAQ real, popup rescate WA, disclaimer honesto y entrelazado editorial tras FAQ)"},
         {"id": "lifecycle_email_wa_sales", "playbooks": "09_whatsapp_and_conversational_automation.md, 12_email_marketing_and_lifecycle_automation.md, 15_consultative_sales_and_high_ticket_closing.md", "targets": "copy/05..06 (secuencia omnicanal Email + WhatsApp por fases con tags por campaña `camp:<vertical>:<slug>`, Días 0-7 foco único, Días 8-14 pivote, Días 15-30+ puente lógico con máx. 1 secuencia activa y supresión 24h)"},
-        {"id": "ads_social_utm_affiliates", "playbooks": "08_instagram_growth_reels_and_funnels.md, 10_tiktok_and_shortform_video.md, 11_linkedin_b2b_authority_and_ads.md, 13_meta_ads_media_buying_and_scaling.md, 14_google_ads_and_youtube_growth.md, 16_personal_branding_authority_and_communities.md (Módulo 6), 18_affiliate_referral_and_partner_growth.md", "targets": "copy/08_ads_social_and_acquisition_plan.md (incl. guía de uso `ad-library` + `ad-campaign-factory` para iterar campañas Ads-First) + copy/09_affiliate_partner_kit.md si enable_affiliate_layer=True"},
+        {"id": "ads_social_utm_affiliates", "playbooks": "08_instagram_growth_reels_and_funnels.md, 10_tiktok_and_shortform_video.md, 11_linkedin_b2b_authority_and_ads.md, 13_meta_ads_media_buying_and_scaling.md, 14_google_ads_and_youtube_growth.md, 16_personal_branding_authority_and_communities.md (Módulo 6), 18_affiliate_referral_and_partner_growth.md", "targets": "copy/08_ads_social_and_acquisition_plan.md (incl. guía de uso `ad-library` + `ad-campaign-factory` para iterar campañas) + copy/09_affiliate_partner_kit.md si enable_affiliate_layer=True"},
         {"id": "geo_schema_web_dict", "playbooks": "06_seo_aeo_geo_and_organic_content.md, 07_ad_telemetry_ga4_gtm_and_metrics.md", "targets": "web/copy_strings.es.json, web/llms_txt_spec.md, web/schema_graph.json (con @graph JSON-LD completo incl. FAQPage+Offer para todas las rutas orgánicas, guardas route-scoped ViewContent y soporte `[data-brand]` + ruta dinámica `/[vertical]/lp/[slug]`)"},
     ]
     copy_unit_schema = {
@@ -163,14 +163,14 @@ if should_run("phase_4_copy"):
     copy_results = await parallel(
         copy_units,
         lambda u: agent(
-            f"""Especialista Copy/SEO ({u['id']}): Lee capítulos reales completos de {u['playbooks']} en {PLAYBOOKS_DIR} (en especial PB00 Módulo 1.1 Anclaje Semántico + Prueba de 50 Palabras y PB02 Módulo 0.3–1.1 Código Simbólico + Top 3 Botones Reptilianos + Avatar 360°; PROHIBIDO truncar a 4000 caracteres).
-Si existen en `/mnt/localstorage/{project}/dev/astrobranding_*.md`, lee también la **Tríada del Avatar (Casa 7 Descendente + Casa 8 + Casa 11 + Venus)** para calibrar la voz y resonancia psicológica del comprador.
-Redacta {u['targets']} dentro de {ws_dir} consumiendo {ws_dir}/brand/brandbook.json, {ws_dir}/strategy/seo_clusters.json y {ws_dir}/strategy/concatenation_matrix.json.
-Reglas irrompibles de redacción:
-1) PROHIBIDO copiar o parafrasear listas crudas del brief del usuario (cero enumeraciones de 5+ profesiones/áreas en hero o subtítulos).
-2) Todo nombre propio o metodología inventada debe anclarse primero en su disciplina humana real antes de presentar el nombre (`PB00`), y ningún `operating_protocol` se mezcla dentro del selector de ofertas comerciales.
-3) Ortografía española completa (tildes, ñ, ¿, ¡), cero jerga interna hacia el usuario final ('DIY', 'DWY', 'DFY', 'verticales', 'BANT', 'PWYW', 'Order Bump', 'Rotación Barista', 'Ads-First', 'Comprador Ideal', 'UPPER_SNAKE_CASE').
-Valida cada archivo público con `anti-slop-linter --brand "{project}" --vertical "{vertical}" --file <ruta>` y devuelve el resultado.""",
+            f"""Especialista Copy/SEO ({u['id']}): Lee capítulos reales completos de {u['playbooks']} en {PLAYBOOKS_DIR} (en especial PB00 Módulo 1.1 Anclaje Semántico + Prueba de 50 Palabras y PB02 Módulo 0.3–1.1 Código Simbólico + Top 3 Botones Reptilianos + Avatar 360°).
+Cuando existan archivos `/mnt/localstorage/{project}/dev/astrobranding_*.md`, lee la Tríada del Avatar (`Casa 7 Descendente`, `Casa 8`, `Casa 11`, `Venus`) para calibrar voz y resonancia psicológica.
+Redacta {u['targets']} dentro de {ws_dir} consumiendo `{ws_dir}/brand/brandbook.json`, `{ws_dir}/strategy/seo_clusters.json` y `{ws_dir}/strategy/concatenation_matrix.json`.
+Criterios de redacción afirmativa:
+1) Sintetiza 1 arquetipo/mindset nítido en hero y subtítulos, destilando la estrategia de `seo_clusters.json`.
+2) Presenta primero la disciplina humana comprensible antes de nombrar metodologías propias (`PB00`), y expresa cualquier protocolo interno en 1 frase afirmativa clara como el método de fondo que sustenta el trabajo del fundador y sus clientes.
+3) Redacta en español natural completo (tildes, ñ, ¿, ¡) enfocado en beneficios reales para el lector.
+Valida invariantes mecánicos en cada archivo público con `anti-slop-linter --brand "{project}" --vertical "{vertical}" --file <ruta>` y devuelve el resultado.""",
             schema=copy_unit_schema,
             role=f"Copy Specialist: {u['id']}",
             model="pro",
@@ -198,13 +198,13 @@ if should_run("phase_5_critic"):
         }
     }
     critic = await agent(
-        f"""Juez Adversario Ciego (solo lectura, mentalidad crítica senior): Audita SIN complacencia todos los artefactos de {ws_dir}:
-1. Prueba del Desconocido en 5s & Anti-Parroting: ¿Un visitante frío entiende de inmediato qué disciplinas reales vende la marca (todo nombre inventado anclado en español llano antes de nombrarse)? ¿Cero listas de 5+ profesiones/áreas ("le ayudo a todo el mundo")? ¿Están separados los protocolos operativos internos (`operating_protocol`) de las líneas comerciales (`commercial_offer`)?
-2. Oráculo Casa 7 + PB02 + Oferta: ¿El copy respira la psicología del Descendente/Avatar 360°, Código Simbólico y contraste CO1 sin forzar calculadoras cuando `mechanism == 'none'`?
-3. Arte & UX: ¿Contraste botón primario WCAG >= 4.5:1? ¿Especificación exige 100% WebP/AVIF y Skip-to-content?
-4. SEO Técnico & Dual-Layer: ¿Cero `noindex` en landings orgánicas y `noindex, follow` en landings Ads-First sin clúster propio? ¿`web/schema_graph.json` completo?
-5. Telemetría & Lexicon: ¿`ViewContent` restringido solo a landings? ¿UTMs + `ref_code` + puente CAPI intactos y cero fugas de jerga interna?
-Reporta honestamente APPROVED o NEEDS_REVISION con brechas concretas.""",
+        f"""Juez Adversario Ciego (solo lectura, mentalidad crítica senior): Audita con rigor técnico todos los artefactos de {ws_dir}:
+1. **Prueba del Desconocido en 5s & Síntesis Editorial:** ¿Un visitante frío comprende de inmediato la disciplina real antes de cualquier nombre propio (`PB00`)? ¿El hero habla a 1 arquetipo nítido en lugar de acumular listas genéricas de profesiones? ¿Los protocolos operativos internos se mencionan de forma concisa y afirmativa como método de fondo, separados de las ofertas adquiribles?
+2. **Oráculo Casa 7 + PB02 + Oferta:** ¿La voz respira la psicología del Descendente/Avatar 360°, Código Simbólico y contraste CO1, respetando `InteractiveProofSpec` según el ángulo (`none` cuando aplica)?
+3. **Arte & UX:** ¿El botón primario garantiza contraste `WCAG >= 4.5:1`, media `100% WebP/AVIF` y `Skip-to-content`?
+4. **SEO Técnico & Dual-Layer:** ¿Las landings orgánicas declaran `index, follow`, las dinámicas sin clúster propio `noindex, follow`, y `web/schema_graph.json` está completo?
+5. **Telemetría & Léxico:** ¿`ViewContent` dispara exclusivamente en landings públicas? ¿UTMs externos, `ref_code` y puente CAPI están íntegros y en español natural?
+Emite `APPROVED` o `NEEDS_REVISION` con brechas concretas y accionables.""",
         schema=critic_schema,
         role="Blind Adversarial Critic",
         model="pro",

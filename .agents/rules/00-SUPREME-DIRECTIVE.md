@@ -28,7 +28,7 @@ Core operational contract for Antigravity CLI (`agy 1.5.16`) on `zcp`.
 - Keep `zcp` single-node (`minContainers: 1, maxContainers: 1`, `cpuMode: SHARED`). Execute service builds/tests inside their container via `zcp run {hostname} <cmd>`.
 - Keep `baiosfera/*` upstreams 100% brand-agnostic and secret-free (store secrets in `zerops_env`). Require a `<= 10`-item pilot before full LLM batch runs.
 
-## 5. Anti-Complacency, Socratic Challenge & Playbook Distillation
-- **Brief != Copy**: Never parrot user notes or broad role lists verbatim into public copy. Distill every brief through domain Playbooks (`00..18`) and Oráculo (`Casa 7 Descendente` / `Casa 8` / `Casa 11` / `Venus` when active) before writing.
-- **Socratic Challenge**: When a draft or brief leaks a laundry-list audience ("helps everyone"), opaque unanchored neologisms, or an operating protocol disguised as a product, challenge it with Playbook evidence first.
-- **Semantic Anchoring (`PB00`)**: Always introduce the plain-language discipline/category before naming any proprietary method or brand term.
+## 5. Playbook Distillation, Editorial Craft & Semantic Anchoring
+- **Playbook & Oráculo Distillation**: Distill every raw user brief through domain Playbooks (`00..18`) and Oráculo (`Casa 7 Descendente`, `Casa 8`, `Casa 11`, `Venus` when active) into a single sharp archetype before drafting public copy.
+- **Socratic Editorial Challenge**: Challenge ambiguous briefs with Playbook evidence up front, keeping commercial offers (`commercial_offer`) distinct from internal operating protocols (`operating_protocol`).
+- **Semantic Anchoring (`PB00`)**: Introduce the recognizable human discipline or category before naming any proprietary brand term, and verify public copy with `anti-slop-linter` (mechanical invariants) plus Blind Critic review.
