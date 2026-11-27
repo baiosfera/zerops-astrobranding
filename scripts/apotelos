@@ -100,6 +100,7 @@ class DynamicVerticalSpec(BaseModel):
 
     vertical_slug: str = Field(..., description="Unique kebab-case slug for this business vertical")
     display_name: str = Field(..., description="Public human-readable title of the unit")
+    entity_role: str = Field(default="commercial_offer", pattern="^(commercial_offer|operating_protocol|editorial_pillar|hub_root)$")
     funnel_type: str = Field(default=CommercialFunnelType.DIRECT_CHECKOUT)
     domain_strategy: str = Field(default="subroute", description="Routing topology: 'multi_tenant_astro', 'isolated_runtime', 'subdomain', or 'subroute'")
     custom_domain: Optional[str] = Field(default=None, description="Custom domain or FQDN if attached (e.g. brand.com)")
@@ -219,6 +220,7 @@ class HubBranchRoute(BaseModel):
     branch_slug: str = Field(..., min_length=2)
     route_path: str = Field(..., min_length=1)
     future_domain: Optional[str] = None
+    entity_role: str = Field(default="commercial_offer", pattern="^(commercial_offer|operating_protocol|editorial_pillar|hub_root)$")
     delivery_tier: str = Field(..., pattern="^(diy|dwy|dfy|ecosystem_entry|editorial)$")
     public_label: str = Field(..., min_length=2)
 
@@ -393,6 +395,10 @@ def validate_concatenation_matrix(raw: Dict[str, Any]) -> Tuple[bool, List[str]]
         if br.route_path in branch_routes:
             errors.append(f"Ruta de hub duplicada: '{br.route_path}'.")
         branch_routes.add(br.route_path)
+        if br.entity_role == "operating_protocol" and br.delivery_tier not in ("editorial", "ecosystem_entry"):
+            errors.append(
+                f"Hub branch '{br.branch_slug}' es 'operating_protocol' y no debe clasificarse en tier comercial '{br.delivery_tier}' (usa 'editorial' o 'ecosystem_entry')."
+            )
 
     if m.affiliate_program and m.affiliate_program.enabled:
         ap = m.affiliate_program
@@ -2734,6 +2740,24 @@ def cmd_test(args):
         })
         if bad_camp_ok:
             errors.append("validate_campaign_landing debe rechazar index sin seo_cluster_id, UTM interno, calculadora vacía y tag inválido")
+
+        bad_proto_ok, _ = validate_concatenation_matrix({
+            "brand_slug": "aurelius-vance",
+            "canonical_domain": "aureliusvance.com",
+            "topic_clusters": [{"cluster_id": "c1", "search_intent": "i1", "primary_keyword": "k1", "landing_route": "/", "funnel_stage": "bofu"}],
+            "links": [{
+                "link_id": "l1", "cluster_id": "c1", "ad_angle": "x",
+                "utm": {"utm_source": "meta", "utm_medium": "cpc", "utm_campaign": "c", "utm_content": "v"},
+                "landing_route": "/", "offer_hook": "offer",
+                "pixel_events": [{"event_name": "Lead", "trigger_condition": "always", "host_env_prefix": "X_", "shared_event_id": True}],
+                "remarketing_audience": "all", "followup_flow": "wa"
+            }],
+            "hub_branches": [
+                {"branch_slug": "proto", "route_path": "/proto", "entity_role": "operating_protocol", "delivery_tier": "dfy", "public_label": "Protocolo"}
+            ]
+        })
+        if bad_proto_ok:
+            errors.append("validate_concatenation_matrix debe rechazar entity_role='operating_protocol' con delivery_tier comercial ('dfy')")
 
         if errors:
             print("❌ APOTELOS AGNOSTIC INTEGRITY SENSOR FAILED:")

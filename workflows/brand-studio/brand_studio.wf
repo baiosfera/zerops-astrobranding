@@ -68,14 +68,16 @@ if should_run("phase_1_seo"):
 - {PLAYBOOKS_DIR}/00_category_of_one.md
 - {PLAYBOOKS_DIR}/06_seo_aeo_geo_and_organic_content.md (Módulo 0 y Módulo 2 Keyword Research)
 - {PLAYBOOKS_DIR}/16_personal_branding_authority_and_communities.md
-Inspecciona el contexto real en {ws_dir} y /mnt/localstorage/{project}/dev/ (ecosystem.json como ÚNICA SSoT — nunca _shared/ecosystem.json —, vertical JSON, brand_brief.json o briefs Oráculo si intake_mode='{intake_mode}' es 'auto' u 'oraculo').
-Posicionamiento estratégico obligatorio (para uso interno en estrategia, SIN filtrar etiquetas técnicas al público):
-- Define al **Comprador Ideal** (hablando a la brecha entre su capacidad top y su estatus/libertad actual, no solo a gente en emergencia o dolor pasivo).
+Inspecciona el contexto real en {ws_dir} y /mnt/localstorage/{project}/dev/ (ecosystem.json como ÚNICA SSoT — nunca _shared/ecosystem.json —, vertical JSON, brand_brief.json o archivos Oráculo como astrobranding_*.md y fase0_author_psychology.md si intake_mode='{intake_mode}' es 'auto' u 'oraculo').
+Reglas obligatorias de destilación (Anti-Parroting, Oráculo Casa 7 y Separación Protocolo vs. Oferta):
+- **NUNCA repitas ni parafrasees el brief del usuario como copy final.** Las notas del usuario son alcance crudo; pásalas siempre por `PB00` + `PB02` (Avatar 360°, Código Simbólico y Top 3 Botones Reptilianos). Prohibido listar 5+ profesiones/áreas en titulares o subtítulos (efecto "le ayudo a todo el mundo"): sintetiza 1 arquetipo/mindset nítido.
+- **Integración Oráculo (`Casa 7 Descendente`, `Casa 8`, `Casa 11`, `Venus`):** Si existen artefactos de Oráculo, lee obligatoriamente la **Tríada del Avatar (Casa 7 Descendente / espejo relacional + Casa 8 + Casa 11)** y **Venus** para definir el tono emocional, el rito de paso y la psicología exacta de conversión del comprador.
+- **Anclaje Semántico (`PB00` Módulo 1.1 · Prueba de 50 Palabras):** Todo nombre propio o metodología inventada debe presentarse primero desde la disciplina/categoría que un desconocido ya entiende (ej. astrología, numerología, automatización, mentoría), y construir el mapa `proprietary_terms_anchors` en `ecosystem.json` / `seo_clusters.json`.
+- **Separación `entity_role`:** Distingue estrictamente `commercial_offer` (lo que el cliente compra) de `operating_protocol` (el protocolo interno con el que trabaja el fundador — se explica como respaldo metodológico en su propia sección, nunca dentro del selector de ofertas comerciales).
+Posicionamiento estratégico obligatorio (SIN filtrar etiquetas técnicas al público):
+- Define al **Comprador Ideal** (brecha entre capacidad top y libertad/estatus actual, no solo emergencia/dolor).
 - Formula diferenciación **Category of One (CO1) por contraste polarizante** (las ideas atraen; las ofertas filtran).
-- Modela la arquitectura **Oferta 1 -> N** (`offer_model='{offer_model}'`): un núcleo claro con anillos de acceso por cercanía/velocidad en lugar de multiplicar productos desconectados.
-- Separa estrictamente las 2 capas web cuando `enable_ads_first_layer={enable_ads_first_layer}`:
-  1) **Núcleo Orgánico (`SEO/AEO/GEO`)**: rutas canónicas fijas `index, follow` (1 intención SERP = 1 URL), `/llms.txt`, `@graph` JSON-LD completo (`FAQPage`, `Offer`, `Organization`, `Person`/`Service` o `Product`).
-  2) **Capa Dinámica Ads-First**: reserva `/{vertical}/lp/[slug]` (`noindex, follow` por defecto salvo clúster SEO propio) para aterrizajes 1:1 de campañas generados con `ad-campaign-factory` sin contaminar el SEO canónico.
+- Modela **Oferta 1 -> N** (`offer_model='{offer_model}'`) y separa las 2 capas web cuando `enable_ads_first_layer={enable_ads_first_layer}`: 1) **Núcleo Orgánico (`SEO/AEO/GEO`)** `index, follow` (1 intención = 1 URL), y 2) **Capa Dinámica Ads-First** `/{vertical}/lp/[slug]` (`noindex, follow` salvo clúster propio).
 Si hay ramas en hub_branches ({hub_branches}), aplica **1 ruta = 1 workspace SSoT** sin duplicar copy/01..08 entre Hub y ramas aisladas.
 Anti-AMN obligatorio (año vigente vía `date -u`): usa búsqueda web en vivo (`exa` / `tavily` / `brave` + `jina:read_url`) orientada a '{target_country}' para validar intención SERP real, ofertas vigentes y madurez agéntica actual (cero hombres de paja obsoletos).
 Cortafuegos terminológico obligatorio: NUNCA expongas al público jerga interna ('verticales', 'DIY', 'DWY', 'DFY', 'BANT', 'PWYW', 'Order Bump', 'AEO/GEO', 'Rotación Barista', 'Ads-First', 'Comprador Ideal'), ni tarifas privadas (`private_call_only_pricing`).
@@ -161,9 +163,13 @@ if should_run("phase_4_copy"):
     copy_results = await parallel(
         copy_units,
         lambda u: agent(
-            f"""Especialista Copy/SEO ({u['id']}): Lee capítulos reales completos de {u['playbooks']} en {PLAYBOOKS_DIR} (PROHIBIDO truncar a 4000 caracteres).
+            f"""Especialista Copy/SEO ({u['id']}): Lee capítulos reales completos de {u['playbooks']} en {PLAYBOOKS_DIR} (en especial PB00 Módulo 1.1 Anclaje Semántico + Prueba de 50 Palabras y PB02 Módulo 0.3–1.1 Código Simbólico + Top 3 Botones Reptilianos + Avatar 360°; PROHIBIDO truncar a 4000 caracteres).
+Si existen en `/mnt/localstorage/{project}/dev/astrobranding_*.md`, lee también la **Tríada del Avatar (Casa 7 Descendente + Casa 8 + Casa 11 + Venus)** para calibrar la voz y resonancia psicológica del comprador.
 Redacta {u['targets']} dentro de {ws_dir} consumiendo {ws_dir}/brand/brandbook.json, {ws_dir}/strategy/seo_clusters.json y {ws_dir}/strategy/concatenation_matrix.json.
-Respeta ortografía española completa (tildes, ñ, ¿, ¡), permite únicamente public_brand_concepts declarados y PROHÍBE terminantemente jerga interna hacia el usuario final ('DIY', 'DWY', 'DFY', 'verticales', 'BANT', 'PWYW', 'Order Bump', 'Rotación Barista', 'Ads-First', 'Comprador Ideal', 'UPPER_SNAKE_CASE').
+Reglas irrompibles de redacción:
+1) PROHIBIDO copiar o parafrasear listas crudas del brief del usuario (cero enumeraciones de 5+ profesiones/áreas en hero o subtítulos).
+2) Todo nombre propio o metodología inventada debe anclarse primero en su disciplina humana real antes de presentar el nombre (`PB00`), y ningún `operating_protocol` se mezcla dentro del selector de ofertas comerciales.
+3) Ortografía española completa (tildes, ñ, ¿, ¡), cero jerga interna hacia el usuario final ('DIY', 'DWY', 'DFY', 'verticales', 'BANT', 'PWYW', 'Order Bump', 'Rotación Barista', 'Ads-First', 'Comprador Ideal', 'UPPER_SNAKE_CASE').
 Valida cada archivo público con `anti-slop-linter --brand "{project}" --vertical "{vertical}" --file <ruta>` y devuelve el resultado.""",
             schema=copy_unit_schema,
             role=f"Copy Specialist: {u['id']}",
@@ -193,11 +199,11 @@ if should_run("phase_5_critic"):
     }
     critic = await agent(
         f"""Juez Adversario Ciego (solo lectura, mentalidad crítica senior): Audita SIN complacencia todos los artefactos de {ws_dir}:
-1. Posicionamiento & Oferta: ¿El copy habla al Comprador Ideal desde contraste CO1 y libertad/palanca sin sonar genérico ni forzar calculadoras innecesarias?
-2. Arte & UX: ¿Contraste botón primario WCAG >= 4.5:1? ¿Especificación exige 100% WebP/AVIF y Skip-to-content?
-3. SEO Técnico & Dual-Layer: ¿Cero `noindex` en landings orgánicas y `noindex, follow` en landings Ads-First sin clúster propio? ¿`web/schema_graph.json` completo?
-4. Telemetría & Cross-Domain: ¿`ViewContent` restringido solo a landings? ¿UTMs + `ref_code` + puente CAPI y escape IG/FB intactos?
-5. Copy & Lexicon: ¿Cero fugas de DIY/DWY/DFY/verticales/BANT/PWYW/Order Bump/Rotación Barista/Ads-First/Comprador Ideal?
+1. Prueba del Desconocido en 5s & Anti-Parroting: ¿Un visitante frío entiende de inmediato qué disciplinas reales vende la marca (todo nombre inventado anclado en español llano antes de nombrarse)? ¿Cero listas de 5+ profesiones/áreas ("le ayudo a todo el mundo")? ¿Están separados los protocolos operativos internos (`operating_protocol`) de las líneas comerciales (`commercial_offer`)?
+2. Oráculo Casa 7 + PB02 + Oferta: ¿El copy respira la psicología del Descendente/Avatar 360°, Código Simbólico y contraste CO1 sin forzar calculadoras cuando `mechanism == 'none'`?
+3. Arte & UX: ¿Contraste botón primario WCAG >= 4.5:1? ¿Especificación exige 100% WebP/AVIF y Skip-to-content?
+4. SEO Técnico & Dual-Layer: ¿Cero `noindex` en landings orgánicas y `noindex, follow` en landings Ads-First sin clúster propio? ¿`web/schema_graph.json` completo?
+5. Telemetría & Lexicon: ¿`ViewContent` restringido solo a landings? ¿UTMs + `ref_code` + puente CAPI intactos y cero fugas de jerga interna?
 Reporta honestamente APPROVED o NEEDS_REVISION con brechas concretas.""",
         schema=critic_schema,
         role="Blind Adversarial Critic",

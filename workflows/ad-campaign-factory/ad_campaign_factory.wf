@@ -90,9 +90,10 @@ if should_run("phase_2_ad_angles"):
     }
     angles_res = await agent(
         f"""Eres el Director Creativo Ads-First: Lee {PLAYBOOKS_DIR}/02_copywriting_and_neurosales.md, {PLAYBOOKS_DIR}/08_instagram_growth_reels_and_funnels.md y {PLAYBOOKS_DIR}/13_meta_ads_media_buying_and_scaling.md.
-Inspecciona {ws_dir}/strategy/ad_library_brief.json, {ws_dir}/brand/brandbook.json y /mnt/localstorage/{project}/dev/verticals/{vertical}.json.
+Inspecciona {ws_dir}/strategy/ad_library_brief.json, {ws_dir}/brand/brandbook.json, /mnt/localstorage/{project}/dev/verticals/{vertical}.json y (si existe) `/mnt/localstorage/{project}/dev/astrobranding_*.md` (Tríada Casa 7 Descendente / Casa 8 / Venus).
 Diseña exactamente {angles_count} ángulos ganadores primero desde el ANUNCIO (antes de escribir landings):
-- Avatares/enfoques prioritarios: {target_avatars if target_avatars else 'derivar del vertical JSON y ad_library_brief.json'}.
+- Avatares/enfoques prioritarios: {target_avatars if target_avatars else 'derivar del vertical JSON, Oráculo Casa 7 (si existe) y ad_library_brief.json'}.
+- **Filtro Playbook + Anti-Parroting:** Pasa todo input por `PB00` (Anclaje Semántico: disciplina humana reconocible antes que cualquier nombre inventado) y `PB02` (Código Simbólico + Top 3 Botones Reptilianos). PROHIBIDO repetir listas de 5+ profesiones o hablarle "a todo el mundo".
 - Cada ángulo debe apuntar al **Comprador Ideal** (criterio, margen, libertad = beneficios/horas, no solo escasez), usar **contraste CO1 polarizante** y conectar con el anillo `{offer_ring}` (`barista_rotation_window='{barista_rotation_window}'`).
 - Selecciona `recommended_mechanism` según `{lead_magnet_mechanism}` (si es `'auto'`, decide honestamente entre `'none'`, `'freedom_leverage_index'`, `'diagnostic_quiz'`, `'roi_cost_gap'`, `'resource_guide'` o `'micro_trial'`; PROHIBIDO forzar calculadora donde un video/evaluación directa convierte mejor).
 - Define UTMs externos reales (`utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `allow_on_internal_links=false`) y el `hook_first_3s`, `primary_text`, `headline` y `cta_label`.
@@ -133,7 +134,7 @@ if should_run("phase_3_landing_hydration"):
 2. **Message Match Total**: `hero_h1` y `hero_subheadline` deben continuar literalmente la promesa y palabras clave (`message_match_keywords`) de `ad_creative.hook_first_3s` y `headline`.
 3. **Aislamiento SEO**: `route_path="/{vertical}/lp/{a.get('campaign_slug')}"`, `robots="noindex, follow"` (salvo que exista un `seo_cluster_id` explícito en `seo_clusters.json`), `view_content_allowed=true`, `wa_email_campaign_tag="camp:{vertical}:{a.get('campaign_slug')}"`.
 4. **Lead Magnet Polimórfico**: usa el `recommended_mechanism` del ángulo (`none` => sin calculadora; si es calculadora/quiz, define `inputs` y `outputs` claros en español natural).
-5. **Cortafuegos Léxico**: cero jerga interna hacia el visitante (`DIY`, `DWY`, `DFY`, `verticales`, `BANT`, `PWYW`, `Order Bump`, `Rotación Barista`, `Ads-First`, `Comprador Ideal`, `UPPER_SNAKE_CASE`), cero precios privados si `private_call_only_pricing` aplica, y ortografía española completa con tildes y `ñ`.
+5. **Cortafuegos Léxico & Anclaje Semántico (`PB00`):** Cero listas de 5+ profesiones, todo término propio anclado en disciplina real para un visitante frío, cero jerga interna (`DIY`, `DWY`, `DFY`, `verticales`, `BANT`, `PWYW`, `Order Bump`, `Rotación Barista`, `Ads-First`, `Comprador Ideal`, `UPPER_SNAKE_CASE`), cero precios privados si `private_call_only_pricing` aplica, y ortografía española completa.
 6. Añade la micro-secuencia de entrega/rescate etiquetada con `camp:{vertical}:{a.get('campaign_slug')}` en {ws_dir}/copy/10_campaign_microsequences.md (sin colisionar con otras secuencias).""",
             schema=hydration_schema,
             role=f"Landing Hydrator: {a.get('campaign_slug')}",
@@ -171,7 +172,7 @@ if should_run("phase_5_blind_critic"):
     critic = await agent(
         f"""Crítico Ciego (solo lectura): audita todos los archivos en {ws_dir}/campaigns/*.json y {ws_dir}/copy/10_campaign_microsequences.md:
 1. ¿Cada `hero_h1` hace match literal con `ad_creative.hook_first_3s` y `headline`?
-2. ¿Cada campaña comunica contraste CO1 y habla al Comprador Ideal sin sonar a plantilla ni forzar calculadora si `mechanism == 'none'`?
+2. ¿Pasa la Prueba del Desconocido en 5s (`PB00` Anclaje Semántico), respeta Casa 7 / PB02 sin listas de 5+ profesiones, y mantiene `mechanism == 'none'` donde corresponde?
 3. ¿Las variantes sin clúster SEO propio declaran `robots='noindex, follow'` y `view_content_allowed=true`?
 4. ¿Hay cero fugas de jerga interna y cero tarifas privadas expuestas?
 Emite APPROVED o NEEDS_REVISION con lista honesta de ajustes.""",

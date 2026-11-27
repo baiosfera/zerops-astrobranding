@@ -159,6 +159,7 @@ class AntiSlopLinter:
         extra_taboos: Optional[List[str]] = None,
         allow_internal_jargon: bool = False,
         extra_roots: Optional[List[Path]] = None,
+        proprietary_anchors: Optional[Dict[str, List[str]]] = None,
     ):
         self.brand = (brand or os.getenv("PROJECT_NAME") or "default").strip()
         self.vertical = (vertical or "").strip().lower()
@@ -166,6 +167,10 @@ class AntiSlopLinter:
         self.extra_roots = list(extra_roots or [])
         self.rules: List[AntiSlopRule] = []
         self.private_pricing_rules: List[AntiSlopRule] = []
+        self.proprietary_anchors: Dict[str, List[str]] = {
+            k: [a.strip().lower() for a in v if isinstance(a, str) and a.strip()]
+            for k, v in (proprietary_anchors or {}).items()
+        }
         self._load_rules(extra_taboos or [])
 
     def _add_taboo(self, term: str, rule_type: str, label_prefix: str, suggestion: str, is_regex: bool = False) -> None:
@@ -196,9 +201,10 @@ class AntiSlopLinter:
 
         self._load_dynamic_brandbook()
 
-    def _discover_brand_files(self) -> Tuple[List[Path], List[Path]]:
+    def _discover_brand_files(self) -> Tuple[List[Path], List[Path], List[Path]]:
         bb_paths: List[Path] = []
         vert_paths: List[Path] = []
+        eco_paths: List[Path] = []
         target_low = self.brand.lower()
         roots = self.extra_roots + [Path("/mnt/localstorage"), Path("/var/www/localstorage"), Path("/var/www/baiosfera/PROYECTOS")]
         for root in roots:
@@ -222,6 +228,8 @@ class AntiSlopLinter:
                     except Exception:
                         pass
                 if proj_match:
+                    if (dev / "ecosystem.json").is_file():
+                        eco_paths.append(dev / "ecosystem.json")
                     if (dev / "brandbook.json").is_file():
                         bb_paths.append(dev / "brandbook.json")
                     ws_root = dev / "workspaces"
@@ -236,16 +244,38 @@ class AntiSlopLinter:
                         for vf in v_dir.glob("*.json"):
                             if not self.vertical or vf.stem.lower() == self.vertical:
                                 vert_paths.append(vf)
-        return bb_paths, vert_paths
+        return bb_paths, vert_paths, eco_paths
+
+    def _merge_proprietary_anchors(self, raw_map: Any) -> None:
+        if not isinstance(raw_map, dict):
+            return
+        for term, anchors in raw_map.items():
+            if not isinstance(term, str) or not term.strip() or not isinstance(anchors, list):
+                continue
+            cleaned = [a.strip().lower() for a in anchors if isinstance(a, str) and a.strip()]
+            if not cleaned:
+                continue
+            existing = self.proprietary_anchors.setdefault(term.strip(), [])
+            for a in cleaned:
+                if a not in existing:
+                    existing.append(a)
 
     def _load_dynamic_brandbook(self) -> None:
-        bb_paths, vert_paths = self._discover_brand_files()
+        bb_paths, vert_paths, eco_paths = self._discover_brand_files()
         seen_terms: Set[str] = set()
         public_allowlist: Set[str] = set()
+
+        for ef in eco_paths:
+            try:
+                edata = json.loads(ef.read_text(encoding="utf-8"))
+                self._merge_proprietary_anchors(edata.get("proprietary_terms_anchors"))
+            except Exception:
+                pass
 
         for vf in vert_paths:
             try:
                 vdata = json.loads(vf.read_text(encoding="utf-8"))
+                self._merge_proprietary_anchors(vdata.get("proprietary_terms_anchors"))
                 for t in vdata.get("public_brand_concepts", []) or []:
                     if isinstance(t, str) and t.strip():
                         public_allowlist.add(t.strip().lower())
@@ -255,6 +285,7 @@ class AntiSlopLinter:
         for bb in bb_paths:
             try:
                 data = json.loads(bb.read_text(encoding="utf-8"))
+                self._merge_proprietary_anchors(data.get("proprietary_terms_anchors"))
                 for t in data.get("public_brand_concepts", []) or []:
                     if isinstance(t, str) and t.strip():
                         public_allowlist.add(t.strip().lower())
@@ -389,6 +420,72 @@ class AntiSlopLinter:
                                 f"Ortografía: usa '{UNACCENTED_SPANISH_MAP[word]}'.",
                             )
                         )
+
+                # 3. Anti-Parroting Audience Laundry-List Gate (>= 5 comma/conjunction roles/areas in one audience phrase)
+                if not stripped.startswith(("|", "#")) and not stripped.endswith("?"):
+                    for am in re.finditer(
+                        r"(?i)\b(?:para|ayud[ao]\s+a|dirigid[oa]s?\s+a|acompañ[ao]\s+a|enfocad[oa]s?\s+en|en\s+áreas\s+como)\b([^.!?]{25,})",
+                        clean_line,
+                    ):
+                        clause = am.group(1)
+                        parts = [p.strip(" :;—–-") for p in re.split(r",|\s+[yo]\s+", clause) if p.strip(" :;—–-")]
+                        short_parts = [p for p in parts if 1 <= len(p.split()) <= 5]
+                        if len(short_parts) >= 5:
+                            violations.append(
+                                Violation(
+                                    line_idx,
+                                    "audience_laundry_list",
+                                    am.group(0)[:70],
+                                    stripped[:80],
+                                    "Evita listar 5+ roles o áreas en una sola frase ('le ayudo a todo el mundo'); destila 1 arquetipo/mindset nítido aplicando PB02 Avatar 360° y (si aplica) Descendente de Oráculo.",
+                                )
+                            )
+                            break
+
+        # 4. PB00 Semantic Anchoring Gate for proprietary/invented terms
+        if not self.allow_internal_jargon and self.proprietary_anchors and not is_private_doc:
+            body_lines: List[Tuple[int, str]] = []
+            in_code = False
+            for line_idx, raw_line in enumerate(text.splitlines(), start=1):
+                st = raw_line.strip()
+                if st.startswith("```"):
+                    in_code = not in_code
+                    continue
+                if in_code or not st or st.startswith(("#", "**Ruta", "> **Regla", "- **Marca")):
+                    continue
+                cleaned = URL_OR_PATH_RE.sub(" ", raw_line).strip()
+                if len(cleaned.split()) >= 6:
+                    body_lines.append((line_idx, cleaned))
+
+            full_body = "\n".join(txt for _, txt in body_lines)
+            for term, anchors in self.proprietary_anchors.items():
+                if not anchors:
+                    continue
+                pat = re.compile(rf"\b{re.escape(term)}\b")
+                m = pat.search(full_body)
+                if not m:
+                    continue
+                win_start = max(0, m.start() - 420)
+                win_end = min(len(full_body), m.end() + 420)
+                window_low = full_body[win_start:win_end].lower()
+                if not any(anc in window_low for anc in anchors):
+                    # Locate approximate line number in body_lines
+                    err_line = 1
+                    acc = 0
+                    for ln_no, txt in body_lines:
+                        acc += len(txt) + 1
+                        if acc >= m.start():
+                            err_line = ln_no
+                            break
+                    violations.append(
+                        Violation(
+                            err_line,
+                            "unanchored_proprietary_term",
+                            term,
+                            m.group(0),
+                            f"Primera mención de '{term}' sin anclaje semántico (PB00): explica primero en español llano qué disciplina/categoría es ({', '.join(anchors[:4])}) antes de presentar el nombre propio.",
+                        )
+                    )
 
         return violations
 
@@ -536,8 +633,35 @@ def run_unit_tests() -> int:
     assert len(v9_clean) == 0, v9_clean
     print("✓ Test 9: JSON public-only campaign audit flags leaked jargon/orthography while ignoring internal schema keys.")
 
+    laundry_bad = (
+        "Para consultores, mentores, coaches, entrenadores, networkers y especialistas en salud, "
+        "finanzas, educación o diseño que quieren escalar."
+    )
+    v10 = linter.lint_text(laundry_bad)
+    assert any(v.rule_type == "audience_laundry_list" for v in v10), v10
+    crisp_subtitle = (
+        "Para fundadores de marcas personales con criterio profundo que quieren multiplicar su "
+        "libertad por hora sin depender de estructuras pesadas."
+    )
+    assert not any(v.rule_type == "audience_laundry_list" for v in linter.lint_text(crisp_subtitle))
+    print("✓ Test 10: Audience laundry-list gate catches generic multi-role dumps while allowing crisp single-mindset copy.")
+
+    anchor_linter = AntiSlopLinter(
+        brand="acme-oraculo",
+        proprietary_anchors={"Kairon": ["astrología", "numerología", "vocacional"]},
+    )
+    unanchored_copy = "Descubre hoy la plataforma Kairon para llevar tus decisiones de negocio al equilibrio."
+    v11_bad = anchor_linter.lint_text(unanchored_copy, source_name="01a_hub.md")
+    assert any(v.rule_type == "unanchored_proprietary_term" and v.matched_text == "Kairon" for v in v11_bad), v11_bad
+    anchored_copy = (
+        "Aplica astrología y numerología a tu claridad vocacional con Kairon en cinco minutos."
+    )
+    v11_ok = anchor_linter.lint_text(anchored_copy, source_name="01a_hub.md")
+    assert len(v11_ok) == 0, v11_ok
+    print("✓ Test 11: PB00 semantic anchoring gate catches opaque neologisms and passes when anchored in plain human discipline.")
+
     print("============================================================")
-    print("🎉 All 9 unit tests PASSED successfully (Exit 0)!")
+    print("🎉 All 11 unit tests PASSED successfully (Exit 0)!")
     return 0
 
 

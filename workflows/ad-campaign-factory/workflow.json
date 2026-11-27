@@ -1,7 +1,7 @@
 {
   "name": "ad-campaign-factory",
-  "version": "1.0.0",
-  "description": "Token-Frugal Ads-First Campaign Factory (ad-library 0-token Meta Ad Library intel -> Contrarian Ad Angles -> Parallel 1:1 Message-Matched CampaignLandingSpec hydration -> Deterministic apotelos & anti-slop gates -> Blind Critic)",
+  "version": "1.1.0",
+  "description": "Token-Frugal Ads-First Campaign Factory (ad-library 0-token Meta Ad Library intel -> Contrarian Ad Angles grounded in Oráculo Casa 7/PB02 & PB00 Semantic Anchoring -> Parallel 1:1 Message-Matched CampaignLandingSpec hydration -> Deterministic apotelos & anti-slop gates -> Blind Critic)",
   "entry": "ad_campaign_factory.wf",
   "argsSchema": {
     "type": "object",

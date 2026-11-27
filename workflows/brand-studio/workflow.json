@@ -1,7 +1,7 @@
 {
   "name": "brand-studio",
-  "version": "2.0.0",
-  "description": "5-Phase Playbook-First Brand Studio Workflow (Con o Sin Oráculo · Comprador Ideal + CO1 por Contraste · Oferta 1->N por Anillos · Mecanismo Lead Magnet Polimórfico Opcional · Núcleo SEO/AEO/GEO + Reserva Ads-First /[vertical]/lp/[slug] · Route-Scoped ViewContent + Multi-Theme Astro Readiness · Afiliados PB18 · Blind Adversarial Critic)",
+  "version": "2.1.0",
+  "description": "5-Phase Playbook-First Brand Studio Workflow (Con o Sin Oráculo Casa 7 Descendente · Filtro Anti-Complacencia & Anti-Parroting · Anclaje Semántico PB00 · Separación Protocolo Operativo vs Oferta Comercial · Comprador Ideal + CO1 por Contraste · Oferta 1->N · Lead Magnet Polimórfico · Núcleo SEO/AEO/GEO + Ads-First /[vertical]/lp/[slug] · Blind Adversarial Critic)",
   "entry": "brand_studio.wf",
   "argsSchema": {
     "type": "object",

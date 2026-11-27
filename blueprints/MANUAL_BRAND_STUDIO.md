@@ -29,10 +29,12 @@ flowchart TD
 
 ## 2. Pilares Estratégicos de `brand-studio` v2.0
 
-1. **Comprador Ideal (no solo "dolor por escasez"):** hablamos a la brecha entre la **capacidad real de la persona** y su **nivel actual de libertad y margen** (por ejemplo, `Libertad = Beneficios / Horas trabajadas`), atrayendo a quien tiene criterio y busca estructura, no solo soluciones de emergencia.
-2. **Category of One (`CO1`) por contraste polarizante:** *"las ideas atraen; las ofertas filtran"*. Tu marca no compite comparando precios: fija un criterio irrepetible y demuestra su método en vivo.
-3. **Oferta `1 → N` por anillos de cercanía/velocidad:** un solo núcleo de valor con distintos niveles de acompañamiento o acceso (`entrada` $\to$ `programa base` $\to$ `círculo cercano` $\to$ `llave en mano`), sin multiplicar productos desconectados.
-4. **Mecanismo de Captación Polimórfico y Opcional (`lead_magnet_mechanism`):** **NO todas las landings ni todos los clientes llevan calculadora.** Cada línea o campaña elige libremente:
+1. **Comprador Ideal (no solo "dolor por escasez"):** hablamos a la brecha entre la **capacidad real de la persona** y su **nivel actual de libertad y margen** (por ejemplo, `Libertad = Beneficios / Horas trabajadas`), destilando 1 arquetipo nítido a partir de `PB02` y —cuando existe Oráculo— la **Casa 7 (Descendente)**, **Casa 8/11** y **Venus**, en lugar de repetir listas de "le ayudo a todo el mundo".
+2. **Filtro Anti-Complacencia y Prueba del Desconocido en 5s (`PB00`):** tus notas de briefing son materia prima, nunca copy literal. Todo nombre propio o metodología inventada se ancla primero en la disciplina real que un desconocido ya entiende antes de nombrar el método.
+3. **Protocolo Operativo vs. Línea Comercial (`entity_role`):** lo que aplicas internamente en tu trabajo (`operating_protocol`) se explica con transparencia como respaldo, pero **no** se mezcla dentro del selector comercial de productos en venta (`commercial_offer`).
+4. **Category of One (`CO1`) por contraste polarizante:** *"las ideas atraen; las ofertas filtran"*. Tu marca no compite comparando precios: fija un criterio irrepetible y demuestra su método en vivo.
+5. **Oferta `1 → N` por anillos de cercanía/velocidad:** un solo núcleo de valor con distintos niveles de acompañamiento o acceso (`entrada` $\to$ `programa base` $\to$ `círculo cercano` $\to$ `llave en mano`), sin multiplicar productos desconectados.
+6. **Mecanismo de Captación Polimórfico y Opcional (`lead_magnet_mechanism`):** **NO todas las landings ni todos los clientes llevan calculadora.** Cada línea o campaña elige libremente:
    - `none` — directo a video, carta de ventas, evaluación o checkout (sin calculadora).
    - `freedom_leverage_index` — índice `Libertad = Beneficios / Horas` y escenario de palanca `1 → N`.
    - `diagnostic_quiz` — diagnóstico interactivo sin registro con tarjeta compartible.

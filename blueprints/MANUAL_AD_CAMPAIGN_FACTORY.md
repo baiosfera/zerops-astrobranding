@@ -32,7 +32,8 @@ Un scrape crudo de Meta Ad Library pesa ~65 KB llenos de selectores de 200 país
 - Luego, sobre las 2 o 3 URLs destino ganadoras, el agente lee oferta y objeciones reales usando `meta-research` (`jina:read_url`).
 
 ### Paso 2 — Primero el Anuncio, Después la Landing (`phase_2_ad_angles`)
-Antes de tocar una sola línea de página, el workflow redacta entre 1 y 5 propuestas de anuncio:
+Antes de tocar una sola línea de página, el workflow redacta entre 1 y 5 propuestas de anuncio filtradas obligatoriamente por los Playbooks (`PB00` y `PB02`) y por Oráculo Casa 7 (cuando existe):
+- **Filtro Anti-Parroting:** nunca copia listas crudas ni promete "ayudar a todo el mundo"; destila 1 perfil psicológico claro y pasa la **Prueba del Desconocido en 5 Segundos** (disciplina humana primero, nombre propio después).
 - **Enfoque al Comprador Ideal:** habla desde la brecha de libertad/margen y criterio, no desde la desesperación.
 - **Contraste `CO1`:** ataca un mito o práctica mediocre del mercado sin mencionar competidores por nombre.
 - **Elección honesta de Lead Magnet (`lead_magnet_mechanism`):** el workflow **no mete una calculadora a la fuerza**; decide si la campaña convierte mejor con:
