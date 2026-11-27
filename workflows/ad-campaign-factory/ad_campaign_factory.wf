@@ -131,7 +131,7 @@ if should_run("phase_3_landing_hydration"):
         lambda a: agent(
             f"""Hidrata la landing 1:1 para el ángulo `{a.get('campaign_slug')}` dentro de `{ws_dir}/campaigns/{a.get('campaign_slug')}.json` cumpliendo el esquema `CampaignLandingSpec` de `apotelos`:
 1. Lee el ángulo completo en `{ws_dir}/campaigns/draft_angles.json`, `{ws_dir}/brand/brandbook.json` y `{ws_dir}/strategy/concatenation_matrix.json`.
-2. **Message Match Total:** `hero_h1` y `hero_subheadline` continúan literalmente la promesa y palabras clave (`message_match_keywords`) de `ad_creative.hook_first_3s` y `headline`.
+2. **Message Match & Hero Punch Budget (`PB19`):** `hero_h1` (`6–14 palabras`, sin siglas entre paréntesis) y `hero_subheadline` (`<= 26 palabras`) continúan literalmente la promesa y palabras clave (`message_match_keywords`) de `ad_creative.hook_first_3s` y `headline`.
 3. **Aislamiento SEO:** `route_path="/{vertical}/lp/{a.get('campaign_slug')}"`, `robots="noindex, follow"` (salvo que exista un `seo_cluster_id` explícito en `seo_clusters.json`), `view_content_allowed=true`, `wa_email_campaign_tag="camp:{vertical}:{a.get('campaign_slug')}"`.
 4. **Lead Magnet Polimórfico:** implementa el `recommended_mechanism` del ángulo (`none` para paso directo sin calculadora; si es calculadora o quiz, define `inputs` y `outputs` claros en español natural).
 5. **Pureza Léxica & Anclaje Semántico (`PB00`):** Redacta para 1 arquetipo nítido en español completo y natural, presentando la disciplina humana antes de cualquier término propio y mencionando protocolos internos solo en 1 frase afirmativa cuando aporten respaldo. Mantén la jerga interna y tarifas privadas fuera del alcance público.
@@ -171,8 +171,8 @@ if should_run("phase_5_blind_critic"):
     }
     critic = await agent(
         f"""Crítico Ciego (solo lectura): audita todos los archivos en `{ws_dir}/campaigns/*.json` y `{ws_dir}/copy/10_campaign_microsequences.md`:
-1. ¿Cada `hero_h1` mantiene match literal con `ad_creative.hook_first_3s` y `headline`?
-2. ¿Supera la Prueba del Desconocido en 5s (`PB00` Anclaje Semántico), habla a 1 arquetipo nítido desde Casa 7 / `PB02` y respeta `mechanism` (`none` cuando aplica)?
+1. ¿Cada `hero_h1` (`6–14 palabras`) y `hero_subheadline` (`<= 26 palabras`) mantiene match literal y punch con `ad_creative.hook_first_3s` y `headline`?
+2. ¿Supera la Prueba del Desconocido en 5s (`PB00` Anclaje Semántico + `PB19`), habla a 1 arquetipo nítido desde Casa 7 / `PB02` y respeta `mechanism` (`none` cuando aplica)?
 3. ¿Las variantes sin clúster SEO propio declaran `robots='noindex, follow'` y `view_content_allowed=true`?
 4. ¿Todo el texto público emplea español natural limpio y respeta el alcance de tarifas privadas?
 Emite `APPROVED` o `NEEDS_REVISION` con lista honesta de ajustes.""",

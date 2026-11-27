@@ -4,9 +4,9 @@ description: "Core operational invariants for agy 1.5.16 on Zerops ZCP."
 trigger: always_on
 metadata:
   author: "Baiosfera"
-  version: "10.0"
+  version: "10.1"
 ---
-# SUPREME DIRECTIVE (v10.0)
+# SUPREME DIRECTIVE (v10.1)
 
 Core operational contract for Antigravity CLI (`agy 1.5.16`) on `zcp`.
 
@@ -29,6 +29,9 @@ Core operational contract for Antigravity CLI (`agy 1.5.16`) on `zcp`.
 - Keep `baiosfera/*` upstreams 100% brand-agnostic and secret-free (store secrets in `zerops_env`). Require a `<= 10`-item pilot before full LLM batch runs.
 
 ## 5. Playbook Distillation, Editorial Craft & Semantic Anchoring
-- **Playbook & Oráculo Distillation**: Distill every raw user brief through domain Playbooks (`00..18`) and Oráculo (`Casa 7 Descendente`, `Casa 8`, `Casa 11`, `Venus` when active) into a single sharp archetype before drafting public copy.
+- **Playbook & Oráculo Distillation**: Distill every raw user brief through domain Playbooks (`00..19`) and Oráculo (`Casa 7 Descendente`, `Casa 8`, `Casa 11`, `Venus` when active) into a single sharp archetype before drafting public copy.
 - **Socratic Editorial Challenge**: Challenge ambiguous briefs with Playbook evidence up front, keeping commercial offers (`commercial_offer`) distinct from internal operating protocols (`operating_protocol`).
 - **Semantic Anchoring (`PB00`)**: Introduce the recognizable human discipline or category before naming any proprietary brand term, and verify public copy with `anti-slop-linter` (mechanical invariants) plus Blind Critic review.
+
+## 6. Vibecoding Visual-World & Craft Gate (`PB19`)
+- Commit an original visual world per brand (`PRODUCT.md` -> `impeccable concept-seed` -> `DESIGN.md`) without cloning external reference URLs or arbitrary `0px`/template defaults; enforce `Hero Punch Budget` (`6–14`-word H1, `<= 26`-word subtitle, above-the-fold proof), physically bundled `@fontsource-variable/*` fonts (`0` overused/phantom faces), lazy 60fps GSAP/Lenis motion, and physical verification via `impeccable detect` + desktop/mobile browser captures.

@@ -89,32 +89,33 @@ Guarda `{ws_dir}/strategy/seo_clusters.json` y actualiza `{ws_dir}/strategy/seo.
     log("Phase 1 SEO clusters:", seo_res["topic_clusters"])
 
 if should_run("phase_2_art_direction"):
-    phase("Phase 2: Dirección de Arte (taste-skill + impeccable + Orchesbrand v4.1)")
+    phase("Phase 2: Dirección de Arte & Visual World (PB19 + taste-skill + impeccable + Orchesbrand)")
     art_schema = {
         "type": "object",
-        "required": ["palette_json_path", "gallery_html_path", "chromatic_directions", "font_candidates"],
+        "required": ["palette_json_path", "gallery_html_path", "design_md_path", "chromatic_directions", "font_candidates"],
         "properties": {
             "palette_json_path": {"type": "string"},
             "gallery_html_path": {"type": "string"},
+            "design_md_path": {"type": "string"},
             "chromatic_directions": {"type": "array", "items": {"type": "string"}},
             "font_candidates": {"type": "array", "items": {"type": "string"}}
         }
     }
     envato_flag = f' --envato-urls "{",".join(envato_urls)}"' if envato_urls else ""
     art_res = await agent(
-        f"""Fase 2 Art Director: Lee `design-taste-frontend` e `impeccable`.
-Si existen URLs de referencia ({reference_urls}), inspecciónalas con `firecrawl_scrape(formats=['branding', 'markdown'])` para extraer psicología visual, contraste de temperatura, geometría intencional y presupuesto multimedia `100% WebP/AVIF` creando una identidad original propia.
-Inspecciona también `/mnt/localstorage/{project}/dev/ecosystem.json` y los workspaces hermanos en `/mnt/localstorage/{project}/dev/workspaces/*/brand` para diferenciar paletas y tipografías entre ramas.
-Si `intake_mode` ('{intake_mode}') es `'auto'` u `'oraculo'`, `orchesbrand` v4.1 resolverá automáticamente `brand_slug` desde `ecosystem.json` para cargar `client_dumps_15_shards.json` y `astrobranding_<brand_slug>.md` junto con tu `--palette-json`.
-Diseña 3 ecosistemas cromáticos de alta convicción (contraste de botón primario `WCAG >= 4.5:1`, con luz/oscuridad equilibradas y tono cromático intencional) en `{ws_dir}/brand/art_direction_palettes.json` (`light`/`dark`, `background`, `surface`, `primary`, `accent`, `text_primary`).
-Deriva `--preview-texts` exclusivamente del nombre público comercial de la marca o línea.
-Ejecuta: `orchesbrand --brand "{project}" --vertical "{vertical}" --project-dir "/mnt/localstorage/{project}/dev" --output-dir "{ws_dir}/brand" --palette-json "{ws_dir}/brand/art_direction_palettes.json" --preview-texts "<MARCA PUBLICA>,<MÉTODO>" {envato_flag} --audit`
-Verifica que `chroma_preview.html` y `previews/preview_gallery.html` rendericen los colores reales (`--primary`, `--accent`, `--on-primary` + Mini Hero CTA) y alternen ecosistemas y modo claro/oscuro limpiamente. Entrega exclusivamente los artefactos visuales para aprobación.""",
+        f"""Fase 2 Art Director: Lee íntegramente `{PLAYBOOKS_DIR}/19_web_design_systems_craft_and_vibecoding.md`, `design-taste-frontend` e `impeccable` (`reference/new-work.md` y `reference/craft-floor.md`).
+1. Si falta `{ws_dir}/brand/PRODUCT.md`, créalo capturando verdad del producto, público, mecanismo comprobable y restricciones reales (sin cifras ni casos inventados).
+2. Ejecuta `.agents/skills/impeccable/scripts/impeccable concept-seed --scope direction --mode persuade` (leyendo `PRODUCT.md` y `{ws_dir}/strategy/seo_clusters.json`) para comprometer un **mundo visual propio e irrepetible** (nunca clonando `{reference_urls}` ni cayendo en estética genérica de plantilla). Si existen `{reference_urls}`, extrae solo estándar de acabado con `firecrawl_scrape(formats=['branding', 'markdown'])`.
+3. Inspecciona `/mnt/localstorage/{project}/dev/ecosystem.json` y los workspaces hermanos en `/mnt/localstorage/{project}/dev/workspaces/*/brand` para rotar matices y tipografías entre ramas.
+4. Diseña 3 ecosistemas cromáticos de alta convicción (estrategia cromática explícita: *Restrained*, *Committed*, *Full Palette* o *Drenched*; contraste de botón `WCAG >= 4.5:1`; neutros tintados en OKLCH; radios deliberados `12–16px` por defecto salvo mundo arquitectónico/brutalista `0px` justificado; elevación declarada una sola vez con borde sutil O sombra suave direccional) en `{ws_dir}/brand/art_direction_palettes.json`.
+5. Ejecuta: `orchesbrand --brand "{project}" --vertical "{vertical}" --project-dir "/mnt/localstorage/{project}/dev" --output-dir "{ws_dir}/brand" --palette-json "{ws_dir}/brand/art_direction_palettes.json" --preview-texts "<MARCA PUBLICA>,<MÉTODO>" {envato_flag} --audit`.
+6. Confirma que `font_manifest.json -> web_ready_bridge.fontsource_packages` resuelva únicamente familias `@fontsource-variable/*` reales no sobreusadas (cero `Plus Jakarta Sans`, `Space Grotesk`, `Inter`, `Fraunces`, `Instrument Serif`, `DM Sans`, `Outfit`, `Syne`) y escribe `{ws_dir}/brand/DESIGN.md` (bloque YAML con tokens exactos + racionalidad del mundo visual + refusals explícitos + criterios comprobables por viewport).
+Verifica `chroma_preview.html` y `previews/preview_gallery.html` antes de entregar para aprobación.""",
         schema=art_schema,
         role="Art Director",
         model="pro",
     )
-    log("Phase 2 Art Direction ready for human approval:", art_res["gallery_html_path"])
+    log("Phase 2 Art Direction + DESIGN.md ready for human approval:", art_res["gallery_html_path"])
 
 if should_run("phase_3_concatenation"):
     phase("Phase 3: Matriz de Concatenación, Lead Magnet Polimórfico, CAPI & Afiliados")
@@ -163,13 +164,14 @@ if should_run("phase_4_copy"):
     copy_results = await parallel(
         copy_units,
         lambda u: agent(
-            f"""Especialista Copy/SEO ({u['id']}): Lee capítulos reales completos de {u['playbooks']} en {PLAYBOOKS_DIR} (en especial PB00 Módulo 1.1 Anclaje Semántico + Prueba de 50 Palabras y PB02 Módulo 0.3–1.1 Código Simbólico + Top 3 Botones Reptilianos + Avatar 360°).
+            f"""Especialista Copy/SEO ({u['id']}): Lee capítulos reales completos de {u['playbooks']} y `{PLAYBOOKS_DIR}/19_web_design_systems_craft_and_vibecoding.md` en {PLAYBOOKS_DIR} (en especial PB00 Módulo 1.1 Anclaje Semántico, PB02 Código Simbólico + Avatar 360°, y PB19 Módulo 2 Hero Punch Budget).
 Cuando existan archivos `/mnt/localstorage/{project}/dev/astrobranding_*.md`, lee la Tríada del Avatar (`Casa 7 Descendente`, `Casa 8`, `Casa 11`, `Venus`) para calibrar voz y resonancia psicológica.
-Redacta {u['targets']} dentro de {ws_dir} consumiendo `{ws_dir}/brand/brandbook.json`, `{ws_dir}/strategy/seo_clusters.json` y `{ws_dir}/strategy/concatenation_matrix.json`.
+Redacta {u['targets']} dentro de {ws_dir} consumiendo `{ws_dir}/brand/brandbook.json`, `{ws_dir}/brand/DESIGN.md`, `{ws_dir}/strategy/seo_clusters.json` y `{ws_dir}/strategy/concatenation_matrix.json`.
 Criterios de redacción afirmativa:
 1) Sintetiza 1 arquetipo/mindset nítido en hero y subtítulos, destilando la estrategia de `seo_clusters.json`.
-2) Presenta primero la disciplina humana comprensible antes de nombrar metodologías propias (`PB00`), y expresa cualquier protocolo interno en 1 frase afirmativa clara como el método de fondo que sustenta el trabajo del fundador y sus clientes.
-3) Redacta en español natural completo (tildes, ñ, ¿, ¡) enfocado en beneficios reales para el lector.
+2) **Hero Punch Budget (PB19 Módulo 2):** En páginas de entrada, redacta un `H1` directo de **6 a 14 palabras** (opcionalmente marcando 2–4 palabras para contraste tipográfico/itálico), subtítulo máximo **26 palabras**, **cero definiciones de siglas entre paréntesis dentro del H1**, y sitúa el bloque de Respuesta Directa (`PB06`) y desglose educativo **debajo** del primer pantallazo.
+3) Presenta primero la disciplina humana comprensible antes de nombrar metodologías propias (`PB00`), y expresa cualquier protocolo interno en 1 frase afirmativa clara como el método de fondo que sustenta el trabajo del fundador y sus clientes.
+4) Redacta en español natural completo (tildes, ñ, ¿, ¡) enfocado en beneficios reales para el lector.
 Valida invariantes mecánicos en cada archivo público con `anti-slop-linter --brand "{project}" --vertical "{vertical}" --file <ruta>` y devuelve el resultado.""",
             schema=copy_unit_schema,
             role=f"Copy Specialist: {u['id']}",
@@ -199,9 +201,9 @@ if should_run("phase_5_critic"):
     }
     critic = await agent(
         f"""Juez Adversario Ciego (solo lectura, mentalidad crítica senior): Audita con rigor técnico todos los artefactos de {ws_dir}:
-1. **Prueba del Desconocido en 5s & Síntesis Editorial:** ¿Un visitante frío comprende de inmediato la disciplina real antes de cualquier nombre propio (`PB00`)? ¿El hero habla a 1 arquetipo nítido en lugar de acumular listas genéricas de profesiones? ¿Los protocolos operativos internos se mencionan de forma concisa y afirmativa como método de fondo, separados de las ofertas adquiribles?
-2. **Oráculo Casa 7 + PB02 + Oferta:** ¿La voz respira la psicología del Descendente/Avatar 360°, Código Simbólico y contraste CO1, respetando `InteractiveProofSpec` según el ángulo (`none` cuando aplica)?
-3. **Arte & UX:** ¿El botón primario garantiza contraste `WCAG >= 4.5:1`, media `100% WebP/AVIF` y `Skip-to-content`?
+1. **Hero Punch Budget & Síntesis Editorial (`PB19` + `PB00`):** ¿El `H1` mide 6–14 palabras sin acrónimos entre paréntesis, el subtítulo ≤ 26 palabras, y el primer pantallazo demuestra el mecanismo o ancla humana arriba del fold mientras `PB06` queda debajo? ¿El visitante frío comprende de inmediato la disciplina real antes de cualquier nombre propio?
+2. **Oráculo Casa 7 + `PB02` + Oferta:** ¿La voz respira la psicología del Descendente/Avatar 360°, Código Simbólico y contraste CO1, respetando `InteractiveProofSpec` según el ángulo (`none` cuando aplica)?
+3. **Arte, Fuentes Reales & `DESIGN.md`:** ¿Existe `{ws_dir}/brand/DESIGN.md` con mundo visual propio (sin clonar URLs externas), contraste `WCAG >= 4.5:1`, tipografías reales vía `web_ready_bridge.fontsource_packages` sin fuentes fantasma ni defaults sobreusados, radios deliberados (sin `0px` arbitrario) y media `100% WebP/AVIF`?
 4. **SEO Técnico & Dual-Layer:** ¿Las landings orgánicas declaran `index, follow`, las dinámicas sin clúster propio `noindex, follow`, y `web/schema_graph.json` está completo?
 5. **Telemetría & Léxico:** ¿`ViewContent` dispara exclusivamente en landings públicas? ¿UTMs externos, `ref_code` y puente CAPI están íntegros y en español natural?
 Emite `APPROVED` o `NEEDS_REVISION` con brechas concretas y accionables.""",

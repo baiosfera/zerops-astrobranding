@@ -183,6 +183,17 @@ ENVATO_VERIFIED_CATALOG: Dict[str, Dict[str, Any]] = {
     },
 }
 
+OVERUSED_AI_FONT_KEYS: Set[str] = {
+    "plus_jakarta_sans",
+    "space_grotesk",
+    "dm_sans",
+    "instrument_sans",
+    "outfit",
+    "newsreader",
+    "ibm_plex_sans",
+    "syne",
+}
+
 GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
     "plus_jakarta_sans": {
         "family": "Plus Jakarta Sans",
@@ -222,15 +233,17 @@ GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "bricolage_grotesque": {
         "family": "Bricolage Grotesque",
+        "fontsource_pkg": "@fontsource-variable/bricolage-grotesque",
         "url": "https://fonts.google.com/specimen/Bricolage+Grotesque",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&display=swap",
         "variable_axes": "opsz,wdth,wght@12..96,75..100,200..800",
         "weights": ["200", "300", "400", "500", "600", "700", "800"],
-        "category": "sans",
+        "category": "display",
         "cls": {"fallback": "Arial", "size_adjust": "97.5%", "ascent": "95.0%", "descent": "24.0%", "line_gap": "0%"}
     },
     "manrope": {
         "family": "Manrope",
+        "fontsource_pkg": "@fontsource-variable/manrope",
         "url": "https://fonts.google.com/specimen/Manrope",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap",
         "variable_axes": "wght@200..800",
@@ -258,11 +271,12 @@ GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "sora": {
         "family": "Sora",
+        "fontsource_pkg": "@fontsource-variable/sora",
         "url": "https://fonts.google.com/specimen/Sora",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Sora:wght@200..800&display=swap",
         "variable_axes": "wght@200..800",
         "weights": ["200", "300", "400", "500", "600", "700", "800"],
-        "category": "sans",
+        "category": "display",
         "cls": {"fallback": "Arial", "size_adjust": "97.8%", "ascent": "93.0%", "descent": "24.0%", "line_gap": "0%"}
     },
     "outfit": {
@@ -276,6 +290,7 @@ GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "onest": {
         "family": "Onest",
+        "fontsource_pkg": "@fontsource-variable/onest",
         "url": "https://fonts.google.com/specimen/Onest",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Onest:wght@200..800&display=swap",
         "variable_axes": "wght@200..800",
@@ -285,6 +300,7 @@ GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "albert_sans": {
         "family": "Albert Sans",
+        "fontsource_pkg": "@fontsource-variable/albert-sans",
         "url": "https://fonts.google.com/specimen/Albert+Sans",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,200..800;1,200..800&display=swap",
         "variable_axes": "ital,wght@0..1,200..800",
@@ -294,6 +310,7 @@ GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "hanken_grotesk": {
         "family": "Hanken Grotesk",
+        "fontsource_pkg": "@fontsource-variable/hanken-grotesk",
         "url": "https://fonts.google.com/specimen/Hanken+Grotesk",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,200..800;1,200..800&display=swap",
         "variable_axes": "ital,wght@0..1,200..800",
@@ -303,6 +320,7 @@ GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "figtree": {
         "family": "Figtree",
+        "fontsource_pkg": "@fontsource-variable/figtree",
         "url": "https://fonts.google.com/specimen/Figtree",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..800;1,300..800&display=swap",
         "variable_axes": "ital,wght@0..1,300..800",
@@ -312,20 +330,22 @@ GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "red_hat_display": {
         "family": "Red Hat Display",
+        "fontsource_pkg": "@fontsource-variable/red-hat-display",
         "url": "https://fonts.google.com/specimen/Red+Hat+Display",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Red+Hat+Display:ital,wght@0,300..800;1,300..800&display=swap",
         "variable_axes": "ital,wght@0..1,300..800",
         "weights": ["300", "400", "500", "600", "700", "800"],
-        "category": "sans",
+        "category": "display",
         "cls": {"fallback": "Arial", "size_adjust": "98.2%", "ascent": "93.0%", "descent": "24.0%", "line_gap": "0%"}
     },
     "archivo": {
         "family": "Archivo",
+        "fontsource_pkg": "@fontsource-variable/archivo",
         "url": "https://fonts.google.com/specimen/Archivo",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,75..100,200..800;1,75..100,200..800&display=swap",
         "variable_axes": "ital,wdth,wght@0..1,75..100,200..800",
         "weights": ["200", "300", "400", "500", "600", "700", "800"],
-        "category": "sans",
+        "category": "display",
         "cls": {"fallback": "Arial", "size_adjust": "98.4%", "ascent": "94.0%", "descent": "23.0%", "line_gap": "0%"}
     },
     "ibm_plex_sans": {
@@ -339,6 +359,7 @@ GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "work_sans": {
         "family": "Work Sans",
+        "fontsource_pkg": "@fontsource-variable/work-sans",
         "url": "https://fonts.google.com/specimen/Work+Sans",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,300..800;1,300..800&display=swap",
         "variable_axes": "ital,wght@0..1,300..800",
@@ -357,12 +378,83 @@ GOOGLE_FONTS_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "literata": {
         "family": "Literata",
+        "fontsource_pkg": "@fontsource-variable/literata",
         "url": "https://fonts.google.com/specimen/Literata",
         "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,200..800;1,7..72,200..800&display=swap",
         "variable_axes": "ital,opsz,wght@0..1,7..72,200..800",
         "weights": ["200", "300", "400", "500", "600", "700", "800"],
         "category": "serif",
         "cls": {"fallback": "Times New Roman", "size_adjust": "98.5%", "ascent": "93.5%", "descent": "24.5%", "line_gap": "0%"}
+    },
+    "schibsted_grotesk": {
+        "family": "Schibsted Grotesk",
+        "fontsource_pkg": "@fontsource-variable/schibsted-grotesk",
+        "url": "https://fonts.google.com/specimen/Schibsted+Grotesk",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&display=swap",
+        "variable_axes": "ital,wght@0..1,400..900",
+        "weights": ["400", "500", "600", "700", "800", "900"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "98.6%", "ascent": "93.5%", "descent": "23.5%", "line_gap": "0%"}
+    },
+    "familjen_grotesk": {
+        "family": "Familjen Grotesk",
+        "fontsource_pkg": "@fontsource-variable/familjen-grotesk",
+        "url": "https://fonts.google.com/specimen/Familjen+Grotesk",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&display=swap",
+        "variable_axes": "ital,wght@0..1,400..700",
+        "weights": ["400", "500", "600", "700"],
+        "category": "sans",
+        "cls": {"fallback": "Arial", "size_adjust": "98.4%", "ascent": "93.5%", "descent": "23.5%", "line_gap": "0%"}
+    },
+    "unbounded": {
+        "family": "Unbounded",
+        "fontsource_pkg": "@fontsource-variable/unbounded",
+        "url": "https://fonts.google.com/specimen/Unbounded",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Unbounded:wght@200..900&display=swap",
+        "variable_axes": "wght@200..900",
+        "weights": ["400", "500", "600", "700", "800", "900"],
+        "category": "display",
+        "cls": {"fallback": "Arial", "size_adjust": "95.5%", "ascent": "92.0%", "descent": "24.0%", "line_gap": "0%"}
+    },
+    "source_serif_4": {
+        "family": "Source Serif 4",
+        "fontsource_pkg": "@fontsource-variable/source-serif-4",
+        "url": "https://fonts.google.com/specimen/Source+Serif+4",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&display=swap",
+        "variable_axes": "ital,opsz,wght@0..1,8..60,200..900",
+        "weights": ["300", "400", "500", "600", "700", "800"],
+        "category": "serif",
+        "cls": {"fallback": "Times New Roman", "size_adjust": "99.0%", "ascent": "94.0%", "descent": "24.0%", "line_gap": "0%"}
+    },
+    "eb_garamond": {
+        "family": "EB Garamond",
+        "fontsource_pkg": "@fontsource-variable/eb-garamond",
+        "url": "https://fonts.google.com/specimen/EB+Garamond",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&display=swap",
+        "variable_axes": "ital,wght@0..1,400..800",
+        "weights": ["400", "500", "600", "700", "800"],
+        "category": "serif",
+        "cls": {"fallback": "Times New Roman", "size_adjust": "97.5%", "ascent": "93.0%", "descent": "24.5%", "line_gap": "0%"}
+    },
+    "bodoni_moda": {
+        "family": "Bodoni Moda",
+        "fontsource_pkg": "@fontsource-variable/bodoni-moda",
+        "url": "https://fonts.google.com/specimen/Bodoni+Moda",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&display=swap",
+        "variable_axes": "ital,opsz,wght@0..1,6..96,400..900",
+        "weights": ["400", "500", "600", "700", "800"],
+        "category": "serif",
+        "cls": {"fallback": "Times New Roman", "size_adjust": "98.0%", "ascent": "93.5%", "descent": "24.5%", "line_gap": "0%"}
+    },
+    "bitter": {
+        "family": "Bitter",
+        "fontsource_pkg": "@fontsource-variable/bitter",
+        "url": "https://fonts.google.com/specimen/Bitter",
+        "google_fonts_v2_url": "https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,200..800;1,200..800&display=swap",
+        "variable_axes": "ital,wght@0..1,200..800",
+        "weights": ["300", "400", "500", "600", "700", "800"],
+        "category": "serif",
+        "cls": {"fallback": "Times New Roman", "size_adjust": "98.8%", "ascent": "94.0%", "descent": "24.0%", "line_gap": "0%"}
     },
 }
 
@@ -1072,14 +1164,18 @@ class FontgenEngine:
             rot = offset % len(preferred_keys)
             rotated = preferred_keys[rot:] + preferred_keys[:rot] + all_keys
 
-        # Deduplicate preserving order
+        # Deduplicate preserving order while excluding overused AI defaults whenever verified non-overused alternatives exist
         ordered: List[str] = []
         for k in rotated:
-            if k in GOOGLE_FONTS_CATALOG and k not in ordered:
+            if k in GOOGLE_FONTS_CATALOG and k not in OVERUSED_AI_FONT_KEYS and k not in ordered:
                 ordered.append(k)
+        if not ordered:
+            ordered = [k for k in rotated if k in GOOGLE_FONTS_CATALOG]
 
         def _matches_cat(item: Dict[str, Any]) -> bool:
-            return not category_filter or item.get("category") == category_filter
+            if not category_filter:
+                return True
+            return item.get("category") == category_filter or (category_filter == "sans" and item.get("category") == "display")
 
         # Pass 1: exclude both sibling candidates & current run + match category
         for k in ordered:
@@ -1158,11 +1254,11 @@ class FontgenEngine:
             ])
             specs = [
                 ("eco-1", f"Observatorio Celestial Editorial ({mc_elem} · MC {mc_sign})", *p1, *a1,
-                 ["sora", "outfit", "plus_jakarta_sans", "onest", "albert_sans"], ["newsreader", "literata", "spectral"]),
+                 ["onest", "albert_sans", "figtree", "hanken_grotesk"], ["source_serif_4", "eb_garamond", "bodoni_moda", "literata"]),
                 ("eco-2", f"Geometría Experimental & Monospace ({day_master} · Sideral {params.get('sidereal_mc_sign') or mc_sign})", *p2, *a2,
-                 ["hanken_grotesk", "figtree", "dm_sans", "work_sans"], ["syne", "space_grotesk", "red_hat_display"]),
+                 ["hanken_grotesk", "figtree", "work_sans", "schibsted_grotesk"], ["bricolage_grotesque", "sora", "red_hat_display", "unbounded"]),
                 ("eco-3", f"Alta Tipografía Simbólica (Nakshatra {nakshatra} · {nak_info['lord']})", *p3, *a3,
-                 ["manrope", "ibm_plex_sans", "archivo"], ["literata", "spectral", "newsreader"]),
+                 ["manrope", "familjen_grotesk", "archivo", "albert_sans"], ["eb_garamond", "bodoni_moda", "bitter", "literata"]),
             ]
         elif style_profile in ("design_system_atelier", "editorial_manifesto"):
             p1 = _pick_spec_variant([
@@ -1191,11 +1287,11 @@ class FontgenEngine:
             ])
             specs = [
                 ("eco-1", f"Atelier Tipográfico Vanguardia ({mc_elem} · MC {mc_sign})", *p1, *a1,
-                 ["onest", "albert_sans", "plus_jakarta_sans", "sora"], ["newsreader", "literata", "spectral"]),
+                 ["onest", "albert_sans", "schibsted_grotesk", "manrope"], ["bricolage_grotesque", "source_serif_4", "eb_garamond"]),
                 ("eco-2", f"Sistema Suizo Mono/Grotesk ({day_master} · Mes {params.get('bazi_month_element') or 'Metal'})", *p2, *a2,
-                 ["ibm_plex_sans", "archivo", "dm_sans", "hanken_grotesk"], ["space_grotesk", "syne", "red_hat_display"]),
+                 ["figtree", "hanken_grotesk", "familjen_grotesk", "work_sans"], ["archivo", "red_hat_display", "unbounded"]),
                 ("eco-3", f"Edición Clásica Cortante (Nakshatra {nakshatra})", *p3, *a3,
-                 ["figtree", "work_sans", "instrument_sans", "outfit"], ["spectral", "literata", "newsreader"]),
+                 ["work_sans", "figtree", "schibsted_grotesk", "manrope"], ["bodoni_moda", "source_serif_4", "bitter"]),
             ]
         else:
             # architectural_b2b & general: rotate vanguard query terms + fallback order across sibling verticals
@@ -1233,31 +1329,36 @@ class FontgenEngine:
             ])
             specs = [
                 ("eco-1", f"Neo-Grotesca Vanguardia B2B ({mc_elem} · MC {mc_sign} / Inktrap)", *p1, *a1,
-                 ["sora", "hanken_grotesk", "ibm_plex_sans", "onest", "albert_sans", "plus_jakarta_sans"],
-                 ["space_grotesk", "syne", "red_hat_display", "archivo"]),
+                 ["hanken_grotesk", "onest", "albert_sans", "schibsted_grotesk", "figtree"],
+                 ["bricolage_grotesque", "sora", "red_hat_display", "archivo"]),
                 ("eco-2", f"Precisión Corporativa & Mono (BaZi {day_master} {bazi_info['element']} · Mes {params.get('bazi_month_element') or 'Metal'})", *p2, *a2,
-                 ["figtree", "archivo", "work_sans", "outfit", "dm_sans", "manrope"],
-                 ["bricolage_grotesque", "red_hat_display", "space_grotesk", "syne"]),
+                 ["figtree", "work_sans", "manrope", "familjen_grotesk", "onest"],
+                 ["archivo", "bricolage_grotesque", "red_hat_display", "unbounded"]),
                 ("eco-3", f"Editorial Inktrap Ejecutivo (Nakshatra {nakshatra} · {nak_info['lord']})", *p3, *a3,
-                 ["albert_sans", "onest", "ibm_plex_sans", "hanken_grotesk", "instrument_sans", "sora"],
-                 ["literata", "newsreader", "spectral"]),
+                 ["albert_sans", "onest", "hanken_grotesk", "schibsted_grotesk", "familjen_grotesk"],
+                 ["bricolage_grotesque", "source_serif_4", "eb_garamond", "bitter"]),
             ]
 
+        editorial_italic_pool = ["source_serif_4", "eb_garamond", "bodoni_moda", "bitter"]
         ecosystems: List[Dict[str, Any]] = []
         for idx_s, (eid, ename, el_t1, app_q1, cat_slug1, cat_lbl1, fb1, el_t2, app_q2, cat_slug2, cat_lbl2, fb2, body_prefs, bridge_prefs) in enumerate(specs):
             prim = self._search_live_envato_fonts(el_t1, app_q1, cat_slug1, cat_lbl1, seed_override=eff_seed + idx_s) or self._get_fallback_envato_font(fb1)
             acc = self._search_live_envato_fonts(el_t2, app_q2, cat_slug2, cat_lbl2, seed_override=eff_seed + idx_s + 3) or self._get_fallback_envato_font(fb2)
             body_gf = self._pick_google_font(body_prefs, used_google_run, offset=eff_seed + idx_s, category_filter="sans")
             bridge_gf = self._pick_google_font(bridge_prefs, used_google_run, offset=eff_seed + idx_s)
+            italic_key = editorial_italic_pool[(eff_seed + idx_s) % len(editorial_italic_pool)]
+            italic_gf = GOOGLE_FONTS_CATALOG[italic_key]
             ecosystems.append({
                 "id": eid,
                 "name": ename,
                 "archetype": f"Perfil {style_profile} · MC {mc_sign} · Shadbala {params.get('shadbala_dominant') or 'Sun'}",
                 "rationale": (
-                    f"Vanguardia Envato ({prim['family']}, {prim.get('style')}) en titulares, lectura fluida en "
-                    f"{body_gf['family']} (ratio {scale_ratio:.3f}, {mc_mod}) y sello en {acc['family']}."
+                    f"Vanguardia Envato ({prim['family']}, {prim.get('style')}) como mejora opcional cuando haya .woff2 local, "
+                    f"display web verificado {bridge_gf['family']}, lectura fluida en {body_gf['family']} (ratio {scale_ratio:.3f}, {mc_mod}) "
+                    f"y énfasis itálico opcional en {italic_gf['family']}."
                 ),
                 "web_fallback_display": bridge_gf,
+                "web_editorial_italic": italic_gf,
                 "tokens": self._pack_tokens(prim, body_gf, acc),
                 "shortlist_candidates": {
                     "display_alternatives": prim.get("shortlist", []),
@@ -1330,10 +1431,19 @@ class FontgenEngine:
         ecosystems = self.build_ecosystems(params)
         selected_eco = next((e for e in ecosystems if e["id"] == selected_eco_id), ecosystems[0])
 
-        disp_bridge = selected_eco.get("web_fallback_display", GOOGLE_FONTS_CATALOG["space_grotesk"])
+        disp_bridge = selected_eco.get("web_fallback_display", GOOGLE_FONTS_CATALOG["bricolage_grotesque"])
+        italic_bridge = selected_eco.get("web_editorial_italic", GOOGLE_FONTS_CATALOG["source_serif_4"])
         body_google = selected_eco["tokens"]["ui_secondary"]
+        body_pkg = next(
+            (v.get("fontsource_pkg") for v in GOOGLE_FONTS_CATALOG.values() if v["family"] == body_google["$value"]),
+            "",
+        )
+        disp_pkg = disp_bridge.get("fontsource_pkg", "")
+        italic_pkg = italic_bridge.get("fontsource_pkg", "")
+        mono_pkg = "@fontsource-variable/jetbrains-mono"
+        fontsource_packages = list(dict.fromkeys([p for p in (disp_pkg, body_pkg, italic_pkg, mono_pkg) if p]))
 
-        clean_ecosystems = [{k: v for k, v in e.items() if k != "web_fallback_display"} for e in ecosystems]
+        clean_ecosystems = [{k: v for k, v in e.items() if k not in ("web_fallback_display", "web_editorial_italic")} for e in ecosystems]
         selected_clean = next((e for e in clean_ecosystems if e["id"] == selected_eco["id"]), clean_ecosystems[0])
 
         return {
@@ -1345,13 +1455,25 @@ class FontgenEngine:
             "candidate_ecosystems": clean_ecosystems,
             "selected_ecosystem": selected_clean,
             "web_ready_bridge": {
-                "delivery": "astro_5_experimental_fonts_self_hosted",
+                "delivery": "fontsource_variable_self_hosted",
                 "display_fallback_family": disp_bridge["family"],
+                "display_fallback_pkg": disp_pkg,
                 "display_fallback_v2_url": disp_bridge["google_fonts_v2_url"],
                 "body_family": body_google["$value"],
+                "body_pkg": body_pkg,
                 "body_v2_url": body_google["google_fonts_v2_url"],
+                "editorial_italic_family": italic_bridge["family"],
+                "editorial_italic_pkg": italic_pkg,
                 "mono_family": "JetBrains Mono",
-                "anti_slop_bans_enforced": ["Fraunces", "Instrument Serif", "Inter", "wedding calligraphy", "retro 90s novelty"],
+                "mono_pkg": mono_pkg,
+                "fontsource_packages": fontsource_packages,
+                "envato_asset_policy": "optional_upgrade_only_when_woff2_present",
+                "anti_slop_bans_enforced": [
+                    "Inter", "Fraunces", "Instrument Serif", "Plus Jakarta Sans",
+                    "Space Grotesk", "DM Sans", "Instrument Sans", "Outfit", "Syne",
+                    "Playfair Display", "Newsreader", "IBM Plex", "Lora", "Cormorant",
+                    "Crimson", "wedding calligraphy", "retro 90s novelty"
+                ],
                 "envato_upgrade_targets": {
                     "display_primary": selected_clean["tokens"]["display_primary"]["$value"],
                     "display_url": selected_clean["tokens"]["display_primary"]["url"],
@@ -1371,7 +1493,7 @@ class FontgenEngine:
                 "ui_buttons": selected_clean["layers"]["ui"],
             },
             "metadata": {
-                "generator": "fontgen_engine.py v4.2 (Vanguard Dual-Sort + Sibling-Disjoint Multi-Vertical)",
+                "generator": "fontgen_engine.py v4.3 (Vanguard Dual-Sort + Impeccable-Aligned Non-Overused @fontsource-variable Bridge)",
                 "sort_mode": self.sort_mode,
                 "effective_seed": self._compute_effective_seed(params),
                 "excluded_sibling_fonts": sorted(self.excluded_envato_families | self.excluded_google_families),
@@ -1553,11 +1675,21 @@ def run_unit_tests() -> int:
         beta_gf = {eco["tokens"]["ui_secondary"]["$value"].lower() for eco in m_beta["candidate_ecosystems"]}
         assert alpha_gf.isdisjoint(beta_gf), f"Sibling B2B Google font overlap: {alpha_gf & beta_gf}"
         assert m_alpha["selected_ecosystem"]["tokens"]["display_primary"]["$value"] != m_cos["selected_ecosystem"]["tokens"]["display_primary"]["$value"]
+        overused_names = {
+            "Inter", "Fraunces", "Instrument Serif", "Plus Jakarta Sans",
+            "Space Grotesk", "DM Sans", "Instrument Sans", "Outfit", "Syne",
+            "Playfair Display", "Newsreader", "IBM Plex Sans",
+        }
         for m in (m_alpha, m_beta, m_cos):
-            assert m["web_ready_bridge"]["display_fallback_family"] not in ("Fraunces", "Instrument Serif", "Inter")
+            bridge = m["web_ready_bridge"]
+            assert bridge["display_fallback_family"] not in overused_names, bridge["display_fallback_family"]
+            assert bridge["body_family"] not in overused_names, bridge["body_family"]
+            assert bridge["envato_asset_policy"] == "optional_upgrade_only_when_woff2_present"
+            assert len(bridge["fontsource_packages"]) >= 2
+            assert all(pkg.startswith("@fontsource-variable/") for pkg in bridge["fontsource_packages"])
             assert len(m["candidate_ecosystems"][0]["shortlist_candidates"]["display_alternatives"]) >= 1
     assert not Path("/mnt/localstorage/TESTCORP").exists()
-    print("✅ FONTGEN ENGINE v4.2 UNIT TESTS PASSED (20-font GF catalog, sibling-disjoint Envato + Google Fonts, 0 noise/Fraunces, 0 phantom dirs)")
+    print("✅ FONTGEN ENGINE v4.3 UNIT TESTS PASSED (Non-overused @fontsource-variable bridge, sibling-disjoint Envato + GF, 0 phantom/overused fonts)")
     return 0
 
 
